@@ -1,4 +1,5 @@
 #include <multimedia/codec/video.hxx>
+#include <multimedia/property/hdr10.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/stream.hxx>
 
@@ -66,9 +67,47 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Get the size of the video.
 			 * @return The size of the video.
 			 */
-			const Property::Resolution& 						GetResolution() const noexcept;
+			const Property::Resolution& 				GetResolution() const noexcept;
+
+			/**
+			 * @brief Get the color primaries of the video.
+			 * @return The color primaries of the video.
+			 */
+			const std::optional<Property::Color>&		GetColor() const noexcept;
+
+			/**
+			 * @brief Set the color primaries of the video.
+			 * @param color The color primaries of the video.
+			 */
+			void 										SetColor(const Property::Color& color);
+
+			/**
+			 * @brief Set the color primaries of the video.
+			 * @param color The color primaries of the video.
+			 */
+			void 										SetColor(Property::Color&& color) noexcept;
+
+			/**
+			 * @brief Get the HDR10 properties of the video.
+			 * @return The HDR10 properties of the video.
+			 */
+			const std::optional<Property::HDR10>&		GetHDR10() const noexcept;
+			
+			/**
+			 * @brief Set the HDR10 properties of the video.
+			 * @param hdr10 The HDR10 properties of the video.
+			 */
+			void 										SetHDR10(const Property::HDR10& hdr10);
+
+			/**
+			 * @brief Set the HDR10 properties of the video.
+			 * @param hdr10 The HDR10 properties of the video.
+			 */
+			void 										SetHDR10(Property::HDR10&& hdr10) noexcept;
 
 		private:
 			Property::Resolution m_res; 						///< The resolution of the video.
+			std::optional<Property::Color> m_color;				///< The color primaries of the video.
+			std::optional<Property::HDR10> m_hdr10;				///< The HDR10 properties of the video.
 	};
 }
