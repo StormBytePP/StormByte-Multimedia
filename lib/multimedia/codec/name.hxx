@@ -20,7 +20,19 @@ namespace StormByte::Multimedia::Codec {
 		VP8,
 		AV1,
 		AVC,
+		MP3,
+		AAC,
+		AC3,
+		FLAC,
+		OPUS,
+		VORBIS,
+		PCM,
+		MJPEG,   // Motion JPEG
+		THEORA,  // Theora codec
+		DTS,     // DTS audio codec
+		EAC3     // Enhanced AC-3
 	};
+	
 
 	/**
 	 * @brief Converts a codec name to a string.

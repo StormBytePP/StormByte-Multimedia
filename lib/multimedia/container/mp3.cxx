@@ -3,6 +3,9 @@
 using namespace StormByte::Multimedia::Container;
 
 const CompatibleStreams	MP3::CompatStreams {Property::Type::Audio};
-const CompatibleCodecs	MP3::CompatCodecs {};
+const CompatibleCodecs MP3::CompatCodecs {
+    Codec::Name::MP3
+};
+
 
 MP3::MP3():Base(Type::MP3, "mp3") {}

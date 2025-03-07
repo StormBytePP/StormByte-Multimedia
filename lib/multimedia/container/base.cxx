@@ -15,17 +15,17 @@
 using namespace StormByte::Multimedia::Container;
 
 const Extensions Base::c_extensions = {
-	{ ".mkv", Type::Matroska },
-	{ ".mp4", Type::MP4 },
-	{ ".avi", Type::AVI },
-	{ ".webm", Type::WebM },
-	{ ".mp3", Type::MP3 },
-	{ ".wav", Type::WAV },
-	{ ".ogg", Type::OGG },
-	{ ".ogv", Type::OGG },
-	{ ".oga", Type::OGA },
-	{ ".opus", Type::Opus },
-	{ ".flac", Type::FLAC }
+	{ ".mkv", 	Type::Matroska },
+	{ ".mp4", 	Type::MP4 },
+	{ ".avi", 	Type::AVI },
+	{ ".webm", 	Type::WebM },
+	{ ".mp3", 	Type::MP3 },
+	{ ".wav", 	Type::WAV },
+	{ ".ogg", 	Type::OGG },
+	{ ".ogv", 	Type::OGG },
+	{ ".oga", 	Type::OGA },
+	{ ".opus", 	Type::Opus },
+	{ ".flac", 	Type::FLAC }
 };
 
 Base::Base(const Type& type, const std::string& extension):
@@ -99,10 +99,10 @@ void Base::CheckStreamAddition(const Stream::Base& stream) const {
 	if (!this->CanAddStreams()) {
 		throw CantAddStreams(m_type);
 	}
-	else if (IsStreamCompatible(stream)) {
+	else if (!IsStreamCompatible(stream)) {
 		throw StreamNotCompatible(m_type);
 	}
-	else if (IsCodecCompatible(stream.GetCodec())) {
+	else if (!IsCodecCompatible(stream.GetCodec())) {
 		throw CodecNotCompatible(stream.GetCodec().GetName(), TypeToString(m_type));
 	}
 }

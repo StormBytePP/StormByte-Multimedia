@@ -36,11 +36,14 @@ namespace StormByte::Multimedia::Container {
 	constexpr std::string STORMBYTE_MULTIMEDIA_PUBLIC TypeToString(const Type& type) noexcept {
 		switch (type) {
 			case Type::Matroska:	return "Matroska";
+			case Type::MP4:			return "MP4";
 			case Type::AVI:			return "AVI";
 			case Type::WebM:		return "WebM";
 			case Type::MP3:			return "MP3";
 			case Type::WAV:			return "WAV";
 			case Type::OGG:			return "OGG";
+			case Type::OGV:			return "OGV";
+			case Type::OGA:			return "OGA";
 			case Type::Opus:		return "Opus";
 			case Type::FLAC:		return "FLAC";
 			default:				return "Unknown";
