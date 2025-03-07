@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Audio
 	 * @brief The class for all audio codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Audio: public Codec {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -54,18 +54,6 @@ namespace StormByte::Multimedia::Codec {
 			/**
 			 * @brief Default destructor.
 			 */
-			~Audio() noexcept override 						= default;
-
-			/**
-			 * @brief Clones the codec.
-			 * @return The cloned codec.
-			 */
-			std::shared_ptr<Codec> 							Clone() const override;
-
-			/**
-			 * @brief Moves the codec.
-			 * @return The moved codec.
-			 */
-			std::shared_ptr<Codec> 							Move() noexcept override;
+			virtual ~Audio() noexcept override 				= default;
 	};
 }

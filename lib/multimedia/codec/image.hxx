@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Image
 	 * @brief The class for all image codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Image final: public Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Image: public Codec {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -54,18 +54,6 @@ namespace StormByte::Multimedia::Codec {
 			/**
 			 * @brief Default destructor.
 			 */
-			~Image() noexcept override						= default;
-
-			/**
-			 * @brief Clones the codec.
-			 * @return The cloned codec.
-			 */
-			std::shared_ptr<Codec> 							Clone() const override;
-
-			/**
-			 * @brief Moves the codec.
-			 * @return The moved codec.
-			 */
-			std::shared_ptr<Codec> 							Move() noexcept override;
+			virtual ~Image() noexcept override				= default;
 	};
 }
