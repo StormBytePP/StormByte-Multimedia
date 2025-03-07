@@ -55,5 +55,17 @@ namespace StormByte::Multimedia::Codec {
 			 * @brief Default destructor.
 			 */
 			~Video() noexcept override 						= default;
+
+			/**
+			 * @brief Clones the codec.
+			 * @return The cloned codec.
+			 */
+			std::shared_ptr<Codec> 							Clone() const override;
+
+			/**
+			 * @brief Moves the codec.
+			 * @return The moved codec.
+			 */
+			std::shared_ptr<Codec> 							Move() override;
 	};
 }

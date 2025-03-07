@@ -1,3 +1,4 @@
+#include <multimedia/codec/audio.hxx>
 #include <multimedia/property/duration.hxx>
 #include <multimedia/stream/stream.hxx>
 
@@ -16,17 +17,19 @@ namespace StormByte::Multimedia::Stream {
 		public:
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the audio.
 			 * @param dur The duration of the audio.
 			 * @param lang The language of the audio.
 			 */
-			Audio(const Property::Duration& dur, const std::optional<Property::Language>& lang = std::nullopt);
+			Audio(const Codec::Audio& codec, const Property::Duration& dur, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the audio.
 			 * @param dur The duration of the audio.
 			 * @param lang The language of the audio.
 			 */
-			Audio(Property::Duration&& dur, std::optional<Property::Language>&& lang) noexcept;
+			Audio(Codec::Audio&& codec, Property::Duration&& dur, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.

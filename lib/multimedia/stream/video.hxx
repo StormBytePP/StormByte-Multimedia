@@ -1,3 +1,4 @@
+#include <multimedia/codec/video.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/stream.hxx>
 
@@ -16,17 +17,19 @@ namespace StormByte::Multimedia::Stream {
 		public:
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the video.
 			 * @param res The resolution of the video.
 			 * @param lang The language of the video.
 			 */
-			Video(const Property::Resolution& res, const std::optional<Property::Language>& lang = std::nullopt);
+			Video(const Codec::Video& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the video.
 			 * @param res The resolution of the video.
 			 * @param lang The language of the video.
 			 */
-			Video(Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept;
+			Video(Codec::Video&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.

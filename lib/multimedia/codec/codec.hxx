@@ -1,5 +1,6 @@
 #pragma once
 
+#include <util/templates/clonable.hxx>
 #include <multimedia/type.hxx>
 
 #include <string>
@@ -9,7 +10,7 @@
  * @brief The namespace for all codecs.
  */
 namespace StormByte::Multimedia::Codec {
-	class STORMBYTE_MULTIMEDIA_PUBLIC Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Codec:public Util::Templates::Clonable<Codec> {
 		public:
 			/**
 			 * @brief Default constructor.

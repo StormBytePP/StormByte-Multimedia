@@ -1,6 +1,7 @@
-#include <multimedia/type.hxx>
+#include <multimedia/codec/codec.hxx>
 #include <multimedia/property/language.hxx>
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -18,16 +19,18 @@ namespace StormByte::Multimedia::Stream {
 			/**
 			 * @brief Default constructor.
 			 * @param type The type of the Stream.
+			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Type& type, const std::optional<Property::Language>& lang = std::nullopt);
+			Stream(const Type& type, const Codec::Codec& codec, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
 			 * @param type The type of the Stream.
+			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Type& type, std::optional<Property::Language>&& lang) noexcept;
+			Stream(const Type& type, Codec::Codec&& codec, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -84,8 +87,15 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			void 											SetLanguage(Property::Language&& lang) noexcept;
 
+			/**
+			 * @brief Get the codec of the Stream.
+			 * @return The codec of the Stream.
+			 */
+			std::shared_ptr<Codec::Codec> 					GetCodec() const noexcept;
+
 		protected:
 			Type m_type; 									///< The type of the Codec.
+			std::shared_ptr<Codec::Codec> m_codec;			///< The codec of the Stream.
 			std::optional<Property::Language> m_lang;		///< The language of the Stream.
 	};
 }

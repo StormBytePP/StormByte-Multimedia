@@ -1,3 +1,4 @@
+#include <multimedia/codec/image.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/stream.hxx>
 
@@ -16,15 +17,17 @@ namespace StormByte::Multimedia::Stream {
 		public:
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the image.
 			 * @param res The resolution of the image.
 			 */
-			Image(const Property::Resolution& res);
+			Image(const Codec::Image& codec, const Property::Resolution& res);
 
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the image.
 			 * @param res The resolution of the image.
 			 */
-			Image(Property::Resolution&& res) noexcept;
+			Image(Codec::Image&& codec, Property::Resolution&& res) noexcept;
 
 			/**
 			 * @brief Copy constructor.

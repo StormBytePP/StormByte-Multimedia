@@ -1,3 +1,4 @@
+#include <multimedia/codec/subtitle.hxx>
 #include <multimedia/stream/stream.hxx>
 
 #include <string>
@@ -15,15 +16,17 @@ namespace StormByte::Multimedia::Stream {
 		public:
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the subtitle.
 			 * @param lang The language of the subtitle.
 			 */
-			Subtitle(const std::optional<Property::Language>& lang = std::nullopt);
+			Subtitle(const Codec::Subtitle& codec, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
+			 * @param codec The codec of the subtitle.
 			 * @param lang The language of the subtitle.
 			 */
-			Subtitle(Property::Language&& lang) noexcept;
+			Subtitle(Codec::Subtitle&& codec, Property::Language&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
