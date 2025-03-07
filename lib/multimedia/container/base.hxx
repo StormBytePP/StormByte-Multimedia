@@ -1,13 +1,10 @@
 #pragma once
 
-#include <util/templates/iterator.hxx>
 #include <multimedia/container/alias.hxx>
 #include <multimedia/container/type.hxx>
-#include <multimedia/stream/base.hxx>
 #include <multimedia/property/size.hxx>
 
 #include <filesystem>
-#include <vector>
 
 /**
  * @namespace Container
@@ -20,10 +17,6 @@ namespace StormByte::Multimedia::Container {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Base {
 		public:
-			using Streams 			= std::vector<std::shared_ptr<Stream::Base>>;					///< Representation for a vector of streams.
-			using Iterator 			= Util::Templates::Iterator<Streams>;							///< Representation for an iterator of streams.
-			using ConstIterator		= Util::Templates::ConstIterator<Streams>;						///< Representation for a const iterator of streams.
-
 			/**
 			 * @brief Default constructor.
 			 * @param type The type of the container.

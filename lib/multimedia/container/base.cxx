@@ -35,27 +35,27 @@ const std::string& Base::GetExtension() const noexcept {
 	return m_extension;
 }
 
-Base::Iterator Base::Begin() noexcept {
+Iterator Base::Begin() noexcept {
 	return Iterator::Begin(m_streams);
 }
 
-Base::ConstIterator Base::CBegin() const noexcept {
+ConstIterator Base::CBegin() const noexcept {
 	return ConstIterator::Begin(m_streams);
 }
 
-Base::Iterator Base::End() noexcept {
+Iterator Base::End() noexcept {
 	return Iterator::End(m_streams);
 }
 
-Base::ConstIterator Base::CEnd() const noexcept {
+ConstIterator Base::CEnd() const noexcept {
 	return ConstIterator::End(m_streams);
 }
 
-Base::ConstIterator Base::Begin() const noexcept {
+ConstIterator Base::Begin() const noexcept {
 	return CBegin();
 }
 
-Base::ConstIterator Base::End() const noexcept {
+ConstIterator Base::End() const noexcept {
 	return CEnd();
 }
 
