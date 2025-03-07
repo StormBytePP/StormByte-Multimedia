@@ -2,9 +2,9 @@
 
 using namespace StormByte::Multimedia::Codec;
 
-Image::Image(const std::string& name):Codec(name, StormByte::Multimedia::Type::Image) {}
+Image::Image(const std::string& name):Codec(name, Property::Type::Image) {}
 
-Image::Image(std::string&& name) noexcept:Codec(std::move(name), StormByte::Multimedia::Type::Image) {}
+Image::Image(std::string&& name) noexcept:Codec(std::move(name), Property::Type::Image) {}
 
 std::shared_ptr<Codec> Image::Clone() const {
 	return std::make_shared<Image>(*this);

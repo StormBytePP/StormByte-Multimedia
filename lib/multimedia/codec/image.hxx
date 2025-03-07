@@ -66,6 +66,6 @@ namespace StormByte::Multimedia::Codec {
 			 * @brief Moves the codec.
 			 * @return The moved codec.
 			 */
-			std::shared_ptr<Codec> 							Move() override;
+			std::shared_ptr<Codec> 							Move() noexcept override;
 	};
 }

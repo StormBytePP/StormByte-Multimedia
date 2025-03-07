@@ -2,9 +2,9 @@
 
 using namespace StormByte::Multimedia::Codec;
 
-Audio::Audio(const std::string& name):Codec(name, StormByte::Multimedia::Type::Audio) {}
+Audio::Audio(const std::string& name):Codec(name, Property::Type::Audio) {}
 
-Audio::Audio(std::string&& name) noexcept:Codec(std::move(name), StormByte::Multimedia::Type::Audio) {}
+Audio::Audio(std::string&& name) noexcept:Codec(std::move(name), Property::Type::Audio) {}
 
 std::shared_ptr<Codec> Audio::Clone() const {
 	return std::make_shared<Audio>(*this);

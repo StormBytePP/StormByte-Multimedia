@@ -1,7 +1,7 @@
 #pragma once
 
 #include <util/templates/clonable.hxx>
-#include <multimedia/type.hxx>
+#include <multimedia/property/type.hxx>
 
 #include <string>
 
@@ -17,14 +17,14 @@ namespace StormByte::Multimedia::Codec {
 			 * @param name The name of the Codec.
 			 * @param type The type of the Codec.
 			 */
-			Codec(const std::string& name, const Type& type);
+			Codec(const std::string& name, const Property::Type& type);
 
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the Codec.
 			 * @param type The type of the Codec.
 			 */
-			Codec(std::string&& name, const Type& type) noexcept;
+			Codec(std::string&& name, const Property::Type& type) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -67,10 +67,10 @@ namespace StormByte::Multimedia::Codec {
 			 * @brief Get the type of the Codec.
 			 * @return The type of the Codec.
 			 */
-			const Type&									GetType() const noexcept;
+			const Property::Type&						GetType() const noexcept;
 
 		protected:
 			std::string m_name;							///< The name of the Codec.
-			Type m_type;								///< The type of the Codec.
+			Property::Type m_type;						///< The type of the Codec.
 	};
 }
