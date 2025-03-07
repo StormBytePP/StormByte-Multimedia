@@ -43,7 +43,7 @@ namespace StormByte::Multimedia::Container {
 			case Type::OGG:			return "OGG";
 			case Type::OPUS:		return "OPUS";
 			case Type::FLAC:		return "FLAC";
-			case Type::Unknown:		return "Unknown";
+			default:				return "Unknown";
 		}
 	};
 }
