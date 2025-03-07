@@ -6,11 +6,3 @@ const CompatibleStreams	Unknown::CompatStreams {Property::Type::Audio, Property:
 const CompatibleCodecs	Unknown::CompatCodecs {};
 
 Unknown::Unknown():Base(Type::Unknown, "???") {}
-
-const CompatibleStreams& Unknown::GetCompatibleStreams() const noexcept {
-	return CompatStreams;
-}
-
-const CompatibleCodecs& Unknown::GetCompatibleCodecs() const noexcept {
-	return CompatCodecs;
-}

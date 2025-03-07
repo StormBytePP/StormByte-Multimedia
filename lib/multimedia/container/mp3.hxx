@@ -53,13 +53,17 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Gets the compatible streams with the container.
 			 * @return The compatible streams with the container.
 			 */
-			const CompatibleStreams& 									GetCompatibleStreams() const noexcept override;
+			inline const CompatibleStreams& 							GetCompatibleStreams() const noexcept override {
+				return CompatStreams;
+			}
 
 			/**
 			 * @brief Gets the compatible codecs with the container.
 			 * @return The compatible codecs with the container.
 			 */
-			const CompatibleCodecs& 									GetCompatibleCodecs() const noexcept override;
+			inline const CompatibleCodecs& 								GetCompatibleCodecs() const noexcept override {
+				return CompatCodecs;
+			}
 
 		private:
 			static const CompatibleStreams 	CompatStreams;				///< The compatible streams with the container.

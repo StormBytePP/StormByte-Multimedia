@@ -22,11 +22,6 @@ namespace StormByte::Multimedia::Property {
 			using Point = std::pair<int, int>;			///< Representation for a point
 
 			/**
-			 * @brief Default constructor.
-			 */
-			Color()										= default;
-
-			/**
 			 * @brief Constructor.
 			 * @param primaries The primaries.
 			 * @param matrix The matrix.
@@ -79,73 +74,97 @@ namespace StormByte::Multimedia::Property {
 			 * @brief Gets the primaries.
 			 * @return The primaries.
 			 */
-			const std::optional<std::string>&			GetPrimaries() const noexcept;
+			inline const std::optional<std::string>&	GetPrimaries() const noexcept {
+				return m_prim;
+			}
 
 			/**
 			 * @brief Sets the primaries.
 			 * @param primaries The primaries.
 			 */
-			void										SetPrimaries(const std::string&);
+			inline void									SetPrimaries(const std::string& primaries) {
+				m_prim = primaries;
+			} 
 
 			/**
 			 * @brief Sets the primaries.
 			 * @param primaries The primaries.
 			 */
-			void										SetPrimaries(std::string&&) noexcept;
+			inline void									SetPrimaries(std::string&& primaries) noexcept {
+				m_prim = std::move(primaries);
+			}
 
 			/**
 			 * @brief Gets the matrix.
 			 * @return The matrix.
 			 */
-			const std::optional<std::string>& 			GetMatrix() const noexcept;
+			inline const std::optional<std::string>& 	GetMatrix() const noexcept {
+				return m_matrix;
+			}
 
 			/**
 			 * @brief Sets the matrix.
 			 * @param matrix The matrix.
 			 */
-			void										SetMatrix(const std::string&);
+			inline void									SetMatrix(const std::string& matrix) {
+				m_matrix = matrix;
+			}
 
 			/**
 			 * @brief Sets the matrix.
 			 * @param matrix The matrix.
 			 */
-			void										SetMatrix(std::string&&) noexcept;
+			inline void									SetMatrix(std::string&& matrix) noexcept {
+				m_matrix = std::move(matrix);
+			}
 
 			/**
 			 * @brief Gets the transfer.
 			 * @return The transfer.
 			 */
-			const std::optional<std::string>& 			GetTransfer() const noexcept;
+			inline const std::optional<std::string>& 	GetTransfer() const noexcept {
+				return m_transfer;
+			}
 
 			/**
 			 * @brief Sets the transfer.
 			 * @param transfer The transfer.
 			 */
-			void										SetTransfer(const std::string&);
+			inline void									SetTransfer(const std::string& transfer) {
+				m_transfer = transfer;
+			}
 
 			/**
 			 * @brief Sets the transfer.
 			 * @param transfer The transfer.
 			 */
-			void										SetTransfer(std::string&&) noexcept;
+			inline void									SetTransfer(std::string&& transfer) noexcept {
+				m_transfer = std::move(transfer);
+			}
 
 			/**
 			 * @brief Gets the pixel format.
 			 * @return The pixel format.
 			 */
-			const std::optional<std::string>&			GetPixelFormat() const noexcept;
+			inline const std::optional<std::string>&	GetPixelFormat() const noexcept {
+				return m_pix_fmt;
+			}
 
 			/**
 			 * @brief Sets the pixel format.
 			 * @param pix_fmt The pixel format.
 			 */
-			void										SetPixelFormat(const std::string&);
+			inline void									SetPixelFormat(const std::string& pix_fmt) {
+				m_pix_fmt = pix_fmt;
+			}
 
 			/**
 			 * @brief Sets the pixel format.
 			 * @param pix_fmt The pixel format.
 			 */
-			void										SetPixelFormat(std::string&&) noexcept;
+			inline void									SetPixelFormat(std::string&& pix_fmt) noexcept {
+				m_pix_fmt = std::move(pix_fmt);
+			}
 
 			/**
 			 * @brief Checks if the color is HDR10.

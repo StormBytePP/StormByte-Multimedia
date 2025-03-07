@@ -12,10 +12,10 @@ const StormByte::Multimedia::Property::Resolution& Image::GetResolution() const 
 	return m_res;
 }
 
-std::shared_ptr<Base> Image::Clone() const {
-	return std::make_shared<Image>(*this);
+Image::PointerType Image::Clone() const {
+	return MakePointer<Image>(*this);
 }
 
-std::shared_ptr<Base> Image::Move() noexcept {
-	return std::make_shared<Image>(std::move(*this));
+Image::PointerType Image::Move() noexcept {
+	return MakePointer<Image>(std::move(*this));
 }

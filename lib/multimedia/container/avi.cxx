@@ -6,11 +6,3 @@ const CompatibleStreams AVI::CompatStreams {Property::Type::Audio, Property::Typ
 const CompatibleCodecs 	AVI::CompatCodecs {};
 
 AVI::AVI():Base(Type::AVI, "avi") {}
-
-const CompatibleStreams& AVI::GetCompatibleStreams() const noexcept {
-	return CompatStreams;
-}
-
-const CompatibleCodecs& AVI::GetCompatibleCodecs() const noexcept {
-	return CompatCodecs;
-}

@@ -15,67 +15,73 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Base
 	 * @brief The base class for all codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base, std::unique_ptr<Base>> {
 		public:
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the Codec.
 			 * @param type The type of the Codec.
 			 */
-			Base(const Codec::Name& name, const Property::Type& type);
+			constexpr Base(const Codec::Name& name, const Property::Type& type) noexcept:
+				m_name(name), m_type(type) {}
 
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the Codec.
 			 * @param type The type of the Codec.
 			 */
-			Base(Codec::Name&& name, const Property::Type& type) noexcept;
+			constexpr Base(Codec::Name&& name, const Property::Type& type) noexcept:
+				m_name(std::move(name)), m_type(type) {}
 
 			/**
 			 * @brief Copy constructor.
 			 * @param codec The Base to copy.
 			 */
-			Base(const Base& codec) 					= default;
+			constexpr Base(const Base& codec) 					= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param codec The Base to move.
 			 */
-			Base(Base&& codec) noexcept					= default;
+			constexpr Base(Base&& codec) noexcept				= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param codec The Base to copy.
 			 * @return The copied Base.
 			 */
-			Base& operator=(const Base& codec) 			= default;
+			constexpr Base& operator=(const Base& codec) 		= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param codec The Base to move.
 			 * @return The moved Base.
 			 */
-			Base& operator=(Base&& codec) noexcept		= default;
+			constexpr Base& operator=(Base&& codec) noexcept	= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			virtual ~Base() noexcept					= 0;
+			constexpr virtual ~Base() noexcept					= default;
 
 			/**
 			 * @brief Get the codec name
 			 * @return The codec name
 			 */
-			const Codec::Name&							GetName() const noexcept;
+			constexpr const Codec::Name&						GetName() const noexcept {
+				return m_name;
+			}
 
 			/**
 			 * @brief Get the type of the Base.
 			 * @return The type of the Base.
 			 */
-			const Property::Type&						GetType() const noexcept;
+			constexpr const Property::Type&						GetType() const noexcept {
+				return m_type;
+			}
 
 		protected:
-			Codec::Name m_name;							///< The name of the Base.
-			Property::Type m_type;						///< The type of the Base.
+			Codec::Name m_name;									///< The name of the Base.
+			Property::Type m_type;								///< The type of the Base.
 	};
 }

@@ -6,11 +6,3 @@ const CompatibleStreams	Matroska::CompatStreams {Property::Type::Audio, Property
 const CompatibleCodecs	Matroska::CompatCodecs {};
 
 Matroska::Matroska():Base(Type::Matroska, "mkv") {}
-
-const CompatibleStreams& Matroska::GetCompatibleStreams() const noexcept {
-	return CompatStreams;
-}
-
-const CompatibleCodecs& Matroska::GetCompatibleCodecs() const noexcept {
-	return CompatCodecs;
-}

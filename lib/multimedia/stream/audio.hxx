@@ -74,13 +74,13 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Clones the stream
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Base> 						Clone() const override;
+			PointerType 						Clone() const override;
 
 			/**
 			 * @brief Moves the stream
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Base> 						Move() noexcept override;
+			PointerType 						Move() noexcept override;
 
 		private:
 			Property::Duration m_dur;					///< The duration of the audio.

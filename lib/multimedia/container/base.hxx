@@ -2,7 +2,6 @@
 
 #include <multimedia/container/alias.hxx>
 #include <multimedia/container/type.hxx>
-#include <multimedia/property/size.hxx>
 
 #include <filesystem>
 
@@ -59,13 +58,9 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Gets the type of the container.
 			 * @return The type of the container.
 			 */
-			const Type& 												GetType() const noexcept;
-
-			/**
-			 * @brief Gets the size of the container.
-			 * @return The size of the container.
-			 */
-			const Property::Size& 										GetSize() const noexcept;
+			inline const Type& 											GetType() const noexcept {
+				return m_type;
+			}
 
 			/**
 			 * @brief Adds a stream to the container.
@@ -89,13 +84,17 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Gets the count of streams in the container.
 			 * @return The count of streams in the container.
 			 */
-			size_t 														GetStreamCount() const noexcept;
+			inline size_t 												GetStreamCount() const noexcept {
+				return m_streams.size();
+			}
 
 			/**
 			 * @brief Gets the extension of the container.
 			 * @return The extension of the container.
 			 */
-			const std::string&											GetExtension() const noexcept;
+			inline const std::string&									GetExtension() const noexcept {
+				return m_extension;
+			}
 
 			/**
 			 * @brief Gets the begin iterator.

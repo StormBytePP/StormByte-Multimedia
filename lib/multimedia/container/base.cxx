@@ -41,14 +41,6 @@ void Base::AddStream(Stream::Base&& stream) {
 	m_streams.push_back(stream.Move());
 }
 
-size_t Base::GetStreamCount() const noexcept {
-	return m_streams.size();
-}
-
-const std::string& Base::GetExtension() const noexcept {
-	return m_extension;
-}
-
 Iterator Base::Begin() noexcept {
 	return Iterator::Begin(m_streams);
 }
@@ -110,8 +102,8 @@ void Base::CheckStreamAddition(const Stream::Base& stream) const {
 	else if (IsStreamCompatible(stream)) {
 		throw StreamNotCompatible(m_type);
 	}
-	else if (IsCodecCompatible(*stream.GetCodec())) {
-		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
+	else if (IsCodecCompatible(stream.GetCodec())) {
+		throw CodecNotCompatible(stream.GetCodec().GetName(), TypeToString(m_type));
 	}
 }
 

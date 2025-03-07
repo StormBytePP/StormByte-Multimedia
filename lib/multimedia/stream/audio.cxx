@@ -12,10 +12,10 @@ const StormByte::Multimedia::Property::Duration& Audio::GetDuration() const noex
 	return m_dur;
 }
 
-std::shared_ptr<Base> Audio::Clone() const {
-	return std::make_shared<Audio>(*this);
+Audio::PointerType Audio::Clone() const {
+	return MakePointer<Audio>(*this);
 }
 
-std::shared_ptr<Base> Audio::Move() noexcept {
-	return std::make_shared<Audio>(std::move(*this));
+Audio::PointerType Audio::Move() noexcept {
+	return MakePointer<Audio>(std::move(*this));
 }

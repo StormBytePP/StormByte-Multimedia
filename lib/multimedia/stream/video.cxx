@@ -44,10 +44,10 @@ void Video::SetFrames(unsigned int frames) {
 	m_frames = frames;
 }
 
-std::shared_ptr<Base> Video::Clone() const {
-	return std::make_shared<Video>(*this);
+Video::PointerType Video::Clone() const {
+	return MakePointer<Video>(*this);
 }
 
-std::shared_ptr<Base> Video::Move() noexcept {
-	return std::make_shared<Video>(std::move(*this));
+Video::PointerType Video::Move() noexcept {
+	return MakePointer<Video>(std::move(*this));
 }

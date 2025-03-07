@@ -123,13 +123,13 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Clone the stream.
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Base> 						Clone() const override;
+			PointerType 								Clone() const override;
 
 			/**
 			 * @brief Move the stream.
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Base> 						Move() noexcept override;
+			PointerType 								Move() noexcept override;
 
 		private:
 			Property::Resolution m_res; 				///< The resolution of the video.
