@@ -1,5 +1,7 @@
 #include <multimedia/type.hxx>
+#include <multimedia/property/language.hxx>
 
+#include <optional>
 #include <string>
 
 /**
@@ -16,8 +18,16 @@ namespace StormByte::Multimedia::Stream {
 			/**
 			 * @brief Default constructor.
 			 * @param type The type of the Stream.
+			 * @param lang The language of the Stream.
 			 */
-			Stream(const Type& type);
+			Stream(const Type& type, const std::optional<Property::Language>& lang = std::nullopt);
+
+			/**
+			 * @brief Default constructor.
+			 * @param type The type of the Stream.
+			 * @param lang The language of the Stream.
+			 */
+			Stream(const Type& type, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -56,7 +66,26 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			const Type& GetType() const noexcept;
 
+			/**
+			 * @brief Get the language of the Stream.
+			 * @return The language of the Stream.
+			 */
+			const std::optional<Property::Language>& 		GetLanguage() const noexcept;
+
+			/**
+			 * @brief Set the language of the Stream.
+			 * @param lang The language of the Stream.
+			 */
+			void 											SetLanguage(const Property::Language& lang) noexcept;
+
+			/**
+			 * @brief Set the language of the Stream.
+			 * @param lang The language of the Stream.
+			 */
+			void 											SetLanguage(Property::Language&& lang) noexcept;
+
 		protected:
 			Type m_type; 									///< The type of the Codec.
+			std::optional<Property::Language> m_lang;		///< The language of the Stream.
 	};
 }

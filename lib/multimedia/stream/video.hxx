@@ -17,14 +17,16 @@ namespace StormByte::Multimedia::Stream {
 			/**
 			 * @brief Default constructor.
 			 * @param res The resolution of the video.
+			 * @param lang The language of the video.
 			 */
-			Video(const Property::Resolution& res);
+			Video(const Property::Resolution& res, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
 			 * @param res The resolution of the video.
+			 * @param lang The language of the video.
 			 */
-			Video(Property::Resolution&& res) noexcept;
+			Video(Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.

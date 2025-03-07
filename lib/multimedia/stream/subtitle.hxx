@@ -15,8 +15,15 @@ namespace StormByte::Multimedia::Stream {
 		public:
 			/**
 			 * @brief Default constructor.
+			 * @param lang The language of the subtitle.
 			 */
-			Subtitle();
+			Subtitle(const std::optional<Property::Language>& lang = std::nullopt);
+
+			/**
+			 * @brief Default constructor.
+			 * @param lang The language of the subtitle.
+			 */
+			Subtitle(Property::Language&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
