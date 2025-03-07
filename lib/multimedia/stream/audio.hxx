@@ -2,7 +2,7 @@
 
 #include <multimedia/codec/audio.hxx>
 #include <multimedia/property/duration.hxx>
-#include <multimedia/stream/stream.hxx>
+#include <multimedia/stream/base.hxx>
 
 #include <string>
 
@@ -15,7 +15,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Audio
 	 * @brief The class for audio streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Stream {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -74,13 +74,13 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Clones the stream
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Stream> 					Clone() const override;
+			std::shared_ptr<Base> 						Clone() const override;
 
 			/**
 			 * @brief Moves the stream
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Stream> 					Move() noexcept override;
+			std::shared_ptr<Base> 						Move() noexcept override;
 
 		private:
 			Property::Duration m_dur;					///< The duration of the audio.

@@ -2,10 +2,11 @@
 
 #include <util/templates/iterator.hxx>
 #include <multimedia/container/type.hxx>
-#include <multimedia/stream/stream.hxx>
+#include <multimedia/stream/base.hxx>
 #include <multimedia/property/size.hxx>
 
 #include <filesystem>
+#include <list>
 #include <vector>
 
 /**
@@ -19,7 +20,7 @@ namespace StormByte::Multimedia::Container {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Base {
 		public:
-			using Streams 		= std::vector<std::shared_ptr<Stream::Stream>>;		///< Representation for a vector of streams.
+			using Streams 		= std::vector<std::shared_ptr<Stream::Base>>;		///< Representation for a vector of streams.
 			using Iterator 		= Util::Templates::Iterator<Streams>;				///< Representation for an iterator of streams.
 			using ConstIterator	= Util::Templates::ConstIterator<Streams>;			///< Representation for a const iterator of streams.
 
@@ -78,7 +79,7 @@ namespace StormByte::Multimedia::Container {
 			 * @throw StreamNotCompatible If the stream is not compatible with the container.
 			 * @throw CantAddStreams If the container cannot add streams.
 			 */
-			void 																	AddStream(const Stream::Stream& stream);
+			void 																	AddStream(const Stream::Base& stream);
 
 			/**
 			 * @brief Adds a stream to the container.
@@ -86,7 +87,7 @@ namespace StormByte::Multimedia::Container {
 			 * @throw StreamNotCompatible If the stream is not compatible with the container.
 			 * @throw CantAddStreams If the container cannot add streams.
 			 */
-			void 																	AddStream(Stream::Stream&& stream);
+			void 																	AddStream(Stream::Base&& stream);
 
 			/**
 			 * @brief Gets the count of streams in the container.
@@ -141,26 +142,32 @@ namespace StormByte::Multimedia::Container {
 			 * @param type The type of the container.
 			 * @return The created container.
 			 */
-			static std::shared_ptr<Base> 										Create(const Type& type);
+			static std::shared_ptr<Base> 											Create(const Type& type);
 
 			/**
 			 * @brief Creates a container.
 			 * @param extension The extension of the container.
 			 * @return The created container.
 			 */
-			static std::shared_ptr<Base> 										Create(const std::string& extension);
+			static std::shared_ptr<Base> 											Create(const std::string& extension);
+
+			/**
+			 * @brief Gets the compatible streams with the container.
+			 * @return The compatible streams with the container.
+			 */
+			virtual std::list<StormByte::Multimedia::Property::Type> 				CompatibleStreams() const noexcept = 0;
+
+			/**
+			 * @brief Checks if the codec is compatible with the container.
+			 * @param codec The codec to check.
+			 * @return True if the codec is compatible with the container, false otherwise.
+			 */
+			virtual bool 															IsCodecCompatible(const Codec::Base& codec) const noexcept = 0;
 
 		protected:
 			Type m_type;															///< The type of the container.
 			std::string m_extension;												///< The extension of the container.
 			Streams m_streams;														///< The streams in the container (they are ordered!).
-
-			/**
-			 * @brief Checks if the stream is compatible with the container.
-			 * @param stream The stream to check.
-			 * @return True if the stream is compatible with the container, false otherwise.
-			 */
-			virtual bool 															IsStreamCompatible(const Stream::Stream& stream) = 0;
 
 			/**
 			 * @brief Checks if the container can add streams, for example a MP3 which has already a stream cannot add more.

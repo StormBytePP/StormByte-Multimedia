@@ -4,6 +4,10 @@ using namespace StormByte::Multimedia::Container;
 
 WAV::WAV():Base(Type::WAV, "wav") {}
 
-bool WAV::IsStreamCompatible(const Stream::Stream&) {
+std::list<StormByte::Multimedia::Property::Type> WAV::CompatibleStreams() const noexcept {
+	return {Property::Type::Audio};
+}
+
+bool WAV::IsCodecCompatible(const Codec::Base&) const noexcept {
 	return true;
 }

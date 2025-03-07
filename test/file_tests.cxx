@@ -7,7 +7,7 @@ using namespace StormByte::Multimedia;
 
 int test_mkv_file() {
 	int result = 0;
-	auto file = File(CurrentFileDirectory / "files" / "test.mkv");
+	auto file = File(CurrentFileDirectory / "files" / "test.MKV");
 
 	if (!std::dynamic_pointer_cast<Container::Matroska>(file.GetContainer())) {
 		result = 1;

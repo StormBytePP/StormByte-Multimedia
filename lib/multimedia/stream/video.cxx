@@ -3,10 +3,10 @@
 using namespace StormByte::Multimedia::Stream;
 
 Video::Video(const Codec::Video& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang):
-Stream(Property::Type::Video, codec, lang), m_res(res) {}
+Base(Property::Type::Video, codec, lang), m_res(res) {}
 
 Video::Video(Codec::Video&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept:
-Stream(Property::Type::Video, std::move(codec), std::move(lang)), m_res(std::move(res)) {}
+Base(Property::Type::Video, std::move(codec), std::move(lang)), m_res(std::move(res)) {}
 
 const StormByte::Multimedia::Property::Resolution& Video::GetResolution() const noexcept {
 	return m_res;
@@ -44,10 +44,10 @@ void Video::SetFrames(unsigned int frames) {
 	m_frames = frames;
 }
 
-std::shared_ptr<Stream> Video::Clone() const {
+std::shared_ptr<Base> Video::Clone() const {
 	return std::make_shared<Video>(*this);
 }
 
-std::shared_ptr<Stream> Video::Move() noexcept {
+std::shared_ptr<Base> Video::Move() noexcept {
 	return std::make_shared<Video>(std::move(*this));
 }

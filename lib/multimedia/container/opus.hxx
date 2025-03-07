@@ -49,7 +49,17 @@ namespace StormByte::Multimedia::Container {
 			 */
 			~Opus() noexcept override									= default;
 
-		private:
-			bool IsStreamCompatible(const Stream::Stream& stream) override;
+			/**
+			 * @brief Gets the compatible streams with the container.
+			 * @return The compatible streams with the container.
+			 */
+			std::list<StormByte::Multimedia::Property::Type> 			CompatibleStreams() const noexcept override;
+
+			/**
+			 * @brief Checks if the codec is compatible with the container.
+			 * @param codec The codec to check.
+			 * @return True if the codec is compatible with the container, false otherwise.
+			 */
+			bool 														IsCodecCompatible(const Codec::Base& codec) const noexcept override;
 	};
 }

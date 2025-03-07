@@ -2,7 +2,7 @@
 
 #include <multimedia/codec/image.hxx>
 #include <multimedia/property/resolution.hxx>
-#include <multimedia/stream/stream.hxx>
+#include <multimedia/stream/base.hxx>
 
 #include <string>
 
@@ -15,7 +15,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Image
 	 * @brief The class for image streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Image final: public Stream {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Image final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -72,13 +72,13 @@ namespace StormByte::Multimedia::Stream {
 			 * Clone the stream.
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Stream> Clone() const override;
+			std::shared_ptr<Base> Clone() const override;
 
 			/**
 			 * Move the stream.
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Stream> Move() noexcept override;
+			std::shared_ptr<Base> Move() noexcept override;
 
 		private:
 			Property::Resolution m_res; 				///< The resolution of the image.

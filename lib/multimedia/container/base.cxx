@@ -1,3 +1,4 @@
+#include <util/string.hxx>
 #include <multimedia/container/matroska.hxx>
 #include <multimedia/container/mp4.hxx>
 #include <multimedia/container/avi.hxx>
@@ -5,7 +6,6 @@
 #include <multimedia/container/mp3.hxx>
 #include <multimedia/container/wav.hxx>
 #include <multimedia/container/ogg.hxx>
-#include <multimedia/container/ogv.hxx>
 #include <multimedia/container/oga.hxx>
 #include <multimedia/container/opus.hxx>
 #include <multimedia/container/flac.hxx>
@@ -15,25 +15,33 @@
 using namespace StormByte::Multimedia::Container;
 
 Base::Base(const Type& type, const std::string& extension):
-m_type(type), m_extension(extension) {}
+m_type(type), m_extension(Util::String::ToLower(extension)) {}
 
-void Base::AddStream(const Stream::Stream& stream) {
+void Base::AddStream(const Stream::Base& stream) {
+	const auto compat = this->CompatibleStreams();
 	if (!this->CanAddStreams()) {
 		throw CantAddStreams(m_type);
 	}
-	else if (!this->IsStreamCompatible(stream)) {
+	else if (std::find(compat.begin(), compat.end(), stream.GetType()) == compat.end()) {
 		throw StreamNotCompatible(m_type);
+	}
+	else if (!this->IsCodecCompatible(*stream.GetCodec())) {
+		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
 	}
 	else
 		m_streams.push_back(stream.Clone());
 }
 
-void Base::AddStream(Stream::Stream&& stream) {
+void Base::AddStream(Stream::Base&& stream) {
+	const auto compat = this->CompatibleStreams();
 	if (!this->CanAddStreams()) {
 		throw CantAddStreams(m_type);
 	}
-	else if (!this->IsStreamCompatible(stream)) {
+	else if (std::find(compat.begin(), compat.end(), stream.GetType()) == compat.end()) {
 		throw StreamNotCompatible(m_type);
+	}
+	else if (!this->IsCodecCompatible(*stream.GetCodec())) {
+		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
 	}
 	else
 		m_streams.push_back(stream.Move());
@@ -80,7 +88,6 @@ std::shared_ptr<Base> Base::Create(const Type& type) {
 		case Type::MP3:			return std::make_shared<MP3>();
 		case Type::WAV:			return std::make_shared<WAV>();
 		case Type::OGG:			return std::make_shared<OGG>();
-		case Type::OGV:			return std::make_shared<OGV>();
 		case Type::OGA:			return std::make_shared<OGA>();
 		case Type::Opus:		return std::make_shared<Opus>();
 		case Type::FLAC:		return std::make_shared<FLAC>();
@@ -90,27 +97,28 @@ std::shared_ptr<Base> Base::Create(const Type& type) {
 }
 
 std::shared_ptr<Base> Base::Create(const std::string& extension) {
-	if (extension == ".mkv")
+	const std::string ext = Util::String::ToLower(extension);
+	if (ext == ".mkv")
 		return Create(Type::Matroska);
-	else if (extension == ".mp4")
+	else if (ext == ".mp4")
 		return Create(Type::MP4);
-	else if (extension == ".avi")
+	else if (ext == ".avi")
 		return Create(Type::AVI);
-	else if (extension == ".webm")
+	else if (ext == ".webm")
 		return Create(Type::WebM);
-	else if (extension == ".mp3")
+	else if (ext == ".mp3")
 		return Create(Type::MP3);
-	else if (extension == ".wav")
+	else if (ext == ".wav")
 		return Create(Type::WAV);
-	else if (extension == ".ogg")
+	else if (ext == ".ogg" || ext == ".ogv")
 		return Create(Type::OGG);
-	else if (extension == ".ogv")
+	else if (ext == ".ogv")
 		return Create(Type::OGV);
-	else if (extension == ".oga")
+	else if (ext == ".oga")
 		return Create(Type::OGA);
-	else if (extension == ".opus")
+	else if (ext == ".opus")
 		return Create(Type::Opus);
-	else if (extension == ".flac")
+	else if (ext == ".flac")
 		return Create(Type::FLAC);
 	else
 		return Create(Type::Unknown);

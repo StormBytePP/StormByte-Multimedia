@@ -4,6 +4,10 @@ using namespace StormByte::Multimedia::Container;
 
 FLAC::FLAC():Base(Type::FLAC, "flac") {}
 
-bool FLAC::IsStreamCompatible(const Stream::Stream&) {
+std::list<StormByte::Multimedia::Property::Type> FLAC::CompatibleStreams() const noexcept {
+	return {Property::Type::Audio};
+}
+
+bool FLAC::IsCodecCompatible(const Codec::Base&) const noexcept {
 	return true;
 }

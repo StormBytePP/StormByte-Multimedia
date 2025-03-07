@@ -3,7 +3,7 @@
 #include <multimedia/codec/video.hxx>
 #include <multimedia/property/hdr10.hxx>
 #include <multimedia/property/resolution.hxx>
-#include <multimedia/stream/stream.hxx>
+#include <multimedia/stream/base.hxx>
 
 #include <string>
 
@@ -16,7 +16,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Video
 	 * @brief The class for video streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Video final: public Stream {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Video final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -123,18 +123,18 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Clone the stream.
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Stream> 					Clone() const override;
+			std::shared_ptr<Base> 						Clone() const override;
 
 			/**
 			 * @brief Move the stream.
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Stream> 					Move() noexcept override;
+			std::shared_ptr<Base> 						Move() noexcept override;
 
 		private:
-			Property::Resolution m_res; 						///< The resolution of the video.
-			std::optional<Property::Color> m_color;				///< The color primaries of the video.
-			std::optional<Property::HDR10> m_hdr10;				///< The HDR10 properties of the video.
-			std::optional<unsigned int> m_frames;				///< The number of frames in the video.
+			Property::Resolution m_res; 				///< The resolution of the video.
+			std::optional<Property::Color> m_color;		///< The color primaries of the video.
+			std::optional<Property::HDR10> m_hdr10;		///< The HDR10 properties of the video.
+			std::optional<unsigned int> m_frames;		///< The number of frames in the video.
 	};
 }

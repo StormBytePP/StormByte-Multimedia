@@ -22,34 +22,44 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Copy constructor.
 			 * @param matroska The Matroska to copy.
 			 */
-			Matroska(const Matroska& matroska) 										= default;
+			Matroska(const Matroska& matroska) 							= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param matroska The Matroska to move.
 			 */
-			Matroska(Matroska&& matroska) noexcept 									= default;
+			Matroska(Matroska&& matroska) noexcept 						= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param matroska The Matroska to copy.
 			 * @return The copied Matroska.
 			 */
-			Matroska& operator=(const Matroska& matroska) 							= default;
+			Matroska& operator=(const Matroska& matroska) 				= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param matroska The Matroska to move.
 			 * @return The moved Matroska.
 			 */
-			Matroska& operator=(Matroska&& matroska) noexcept 						= default;
+			Matroska& operator=(Matroska&& matroska) noexcept 			= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			~Matroska() noexcept override											= default;
+			~Matroska() noexcept override								= default;
 
-		private:
-			bool IsStreamCompatible(const Stream::Stream& stream) override;
+			/**
+			 * @brief Gets the compatible streams with the container.
+			 * @return The compatible streams with the container.
+			 */
+			std::list<StormByte::Multimedia::Property::Type> 			CompatibleStreams() const noexcept override;
+
+			/**
+			 * @brief Checks if the codec is compatible with the container.
+			 * @param codec The codec to check.
+			 * @return True if the codec is compatible with the container, false otherwise.
+			 */
+			bool 														IsCodecCompatible(const Codec::Base& codec) const noexcept override;
 	};
 }

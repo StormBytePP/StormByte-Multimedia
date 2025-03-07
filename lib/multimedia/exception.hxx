@@ -1,6 +1,7 @@
 #pragma once
 
 #include <exception.hxx>
+#include <multimedia/property/type.hxx>
 #include <multimedia/container/type.hxx>
 
 /**
@@ -96,6 +97,51 @@ namespace StormByte::Multimedia {
 			 * @brief Default destructor.
 			 */
 			~StreamNotCompatible() noexcept 												= default;
+	};
+
+	/**
+	 * @class CodecNotCompatible
+	 * @brief The exception for when a codec is not compatible.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotCompatible: public Exception {
+		public:
+			/**
+			 * @brief Default constructor.
+			 * @param codec The codec name.
+			 * @param container The container name.
+			 */
+			CodecNotCompatible(const std::string& codec, const std::string& container);
+
+			/**
+			 * @brief Copy constructor.
+			 * @param exception The exception to copy.
+			 */
+			CodecNotCompatible(const CodecNotCompatible& exception) 					= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param exception The exception to move.
+			 */
+			CodecNotCompatible(CodecNotCompatible&& exception) noexcept 				= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param exception The exception to copy.
+			 * @return The copied exception.
+			 */
+			CodecNotCompatible& operator=(const CodecNotCompatible& exception) 			= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param exception The exception to move.
+			 * @return The moved exception.
+			 */
+			CodecNotCompatible& operator=(CodecNotCompatible&& exception) noexcept 		= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~CodecNotCompatible() noexcept override										= default;
 	};
 
 	/**

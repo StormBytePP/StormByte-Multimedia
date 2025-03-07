@@ -13,10 +13,10 @@
  */
 namespace StormByte::Multimedia::Stream {
 	/**
-	 * @class Stream
+	 * @class Base
 	 * @brief The base class for streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Stream: public Util::Templates::Clonable<Stream> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base> {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -24,7 +24,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Property::Type& type, const Codec::Base& codec, const std::optional<Property::Language>& lang = std::nullopt);
+			Base(const Property::Type& type, const Codec::Base& codec, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
@@ -32,38 +32,38 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Property::Type& type, Codec::Base&& codec, std::optional<Property::Language>&& lang) noexcept;
+			Base(const Property::Type& type, Codec::Base&& codec, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param stream The stream to copy.
 			 */
-			Stream(const Stream& stream) 					= default;
+			Base(const Base& stream) 						= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param stream The stream to move.
 			 */
-			Stream(Stream&& stream) noexcept				= default;
+			Base(Base&& stream) noexcept					= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param stream The stream to copy.
 			 * @return The copied stream.
 			 */
-			Stream& operator=(const Stream& stream) 		= default;
+			Base& operator=(const Base& stream) 			= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param stream The stream to move.
 			 * @return The moved stream.
 			 */
-			Stream& operator=(Stream&& stream) noexcept		= default;
+			Base& operator=(Base&& stream) noexcept			= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			virtual ~Stream() noexcept						= 0;
+			virtual ~Base() noexcept						= 0;
 
 			/**
 			 * @brief Get the type of the Codec.

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <multimedia/codec/subtitle.hxx>
-#include <multimedia/stream/stream.hxx>
+#include <multimedia/stream/base.hxx>
 
 #include <string>
 
@@ -14,7 +14,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Subtitle
 	 * @brief The class for subtitle streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Subtitle final: public Stream {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Subtitle final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -65,12 +65,12 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Clones the stream.
 			 * @return The cloned stream.
 			 */
-			std::shared_ptr<Stream> Clone() const override;
+			std::shared_ptr<Base> 								Clone() const override;
 
 			/**
 			 * @brief Moves the stream.
 			 * @return The moved stream.
 			 */
-			std::shared_ptr<Stream> Move() noexcept override;
+			std::shared_ptr<Base> 								Move() noexcept override;
 	};
 }
