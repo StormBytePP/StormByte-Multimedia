@@ -90,27 +90,27 @@ std::shared_ptr<Container> Container::Create(const Type& type) {
 }
 
 std::shared_ptr<Container> Container::Create(const std::string& extension) {
-	if (extension == "mkv")
+	if (extension == ".mkv")
 		return Create(Type::Matroska);
-	else if (extension == "mp4")
+	else if (extension == ".mp4")
 		return Create(Type::MP4);
-	else if (extension == "avi")
+	else if (extension == ".avi")
 		return Create(Type::AVI);
-	else if (extension == "webm")
+	else if (extension == ".webm")
 		return Create(Type::WebM);
-	else if (extension == "mp3")
+	else if (extension == ".mp3")
 		return Create(Type::MP3);
-	else if (extension == "wav")
+	else if (extension == ".wav")
 		return Create(Type::WAV);
-	else if (extension == "ogg")
+	else if (extension == ".ogg")
 		return Create(Type::OGG);
-	else if (extension == "ogv")
+	else if (extension == ".ogv")
 		return Create(Type::OGV);
-	else if (extension == "oga")
+	else if (extension == ".oga")
 		return Create(Type::OGA);
-	else if (extension == "opus")
+	else if (extension == ".opus")
 		return Create(Type::Opus);
-	else if (extension == "flac")
+	else if (extension == ".flac")
 		return Create(Type::FLAC);
 	else
 		return Create(Type::Unknown);
