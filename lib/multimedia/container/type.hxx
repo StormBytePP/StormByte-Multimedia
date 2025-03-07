@@ -15,11 +15,14 @@ namespace StormByte::Multimedia::Container {
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Type: unsigned short {
 		Matroska,		///< Matroska container.
+		MP4,			///< MP4 container.
 		AVI,			///< AVI container.
 		WebM,			///< WebM container.
 		MP3,			///< MP3 container.
 		WAV,			///< WAV container.
 		OGG,			///< OGG container.
+		OGV,			///< OGV container.
+		OGA,			///< OGA container.
 		OPUS,			///< OPUS container.
 		FLAC,			///< FLAC container.
 		Unknown			///< Unknown container.
