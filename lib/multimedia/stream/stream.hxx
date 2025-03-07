@@ -1,7 +1,7 @@
 #pragma once
 
 #include <util/templates/clonable.hxx>
-#include <multimedia/codec/codec.hxx>
+#include <multimedia/codec/base.hxx>
 #include <multimedia/property/language.hxx>
 
 #include <optional>
@@ -24,7 +24,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Property::Type& type, const Codec::Codec& codec, const std::optional<Property::Language>& lang = std::nullopt);
+			Stream(const Property::Type& type, const Codec::Base& codec, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
@@ -32,7 +32,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the Stream.
 			 * @param lang The language of the Stream.
 			 */
-			Stream(const Property::Type& type, Codec::Codec&& codec, std::optional<Property::Language>&& lang) noexcept;
+			Stream(const Property::Type& type, Codec::Base&& codec, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -93,11 +93,11 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Get the codec of the Stream.
 			 * @return The codec of the Stream.
 			 */
-			std::shared_ptr<Codec::Codec> 					GetCodec() const noexcept;
+			std::shared_ptr<Codec::Base> 					GetCodec() const noexcept;
 
 		protected:
 			Property::Type m_type; 							///< The type of the Codec.
-			std::shared_ptr<Codec::Codec> m_codec;			///< The codec of the Stream.
+			std::shared_ptr<Codec::Base> m_codec;			///< The codec of the Stream.
 			std::optional<Property::Language> m_lang;		///< The language of the Stream.
 	};
 }

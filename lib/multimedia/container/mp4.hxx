@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/container/container.hxx>
+#include <multimedia/container/base.hxx>
 
 /**
  * @namespace Container
@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Container {
 	 * @class MP4
 	 * @brief The MP4 container.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC MP4 final: public Container {
+	class STORMBYTE_MULTIMEDIA_PUBLIC MP4 final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.

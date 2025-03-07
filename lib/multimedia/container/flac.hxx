@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/container/container.hxx>
+#include <multimedia/container/base.hxx>
 
 /**
  * @namespace Container
@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Container {
 	 * @class FLAC
 	 * @brief The FLAC container.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC FLAC final: public Container {
+	class STORMBYTE_MULTIMEDIA_PUBLIC FLAC final: public Base {
 		public:
 			/**
 			 * @brief Default constructor.

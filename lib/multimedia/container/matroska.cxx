@@ -2,7 +2,7 @@
 
 using namespace StormByte::Multimedia::Container;
 
-Matroska::Matroska():Container(Type::Matroska, "mkv") {}
+Matroska::Matroska():Base(Type::Matroska, "mkv") {}
 
 bool Matroska::IsStreamCompatible(const Stream::Stream&) {
 	return true;

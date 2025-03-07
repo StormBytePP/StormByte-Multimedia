@@ -13,7 +13,11 @@
  * @brief The namespace for all containers
  */
 namespace StormByte::Multimedia::Container {
-	class STORMBYTE_MULTIMEDIA_PUBLIC Container {
+	/**
+	 * @class Base
+	 * @brief The base class for all containers.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base {
 		public:
 			using Streams 		= std::vector<std::shared_ptr<Stream::Stream>>;		///< Representation for a vector of streams.
 			using Iterator 		= Util::Templates::Iterator<Streams>;				///< Representation for an iterator of streams.
@@ -23,38 +27,38 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Default constructor.
 			 * @param type The type of the container.
 			 */
-			Container(const Type& type, const std::string& extension);
+			Base(const Type& type, const std::string& extension);
 
 			/**
 			 * @brief Copy constructor.
-			 * @param container The Container to copy.
+			 * @param container The Base to copy.
 			 */
-			Container(const Container& container) 									= default;
+			Base(const Base& container) 									= default;
 
 			/**
 			 * @brief Move constructor.
-			 * @param container The Container to move.
+			 * @param container The Base to move.
 			 */
-			Container(Container&& container) noexcept 								= default;
+			Base(Base&& container) noexcept 								= default;
 
 			/**
 			 * @brief Copy assignment operator.
-			 * @param container The Container to copy.
-			 * @return The copied Container.
+			 * @param container The Base to copy.
+			 * @return The copied Base.
 			 */
-			Container& operator=(const Container& container) 						= default;
+			Base& operator=(const Base& container) 						= default;
 
 			/**
 			 * @brief Move assignment operator.
-			 * @param container The Container to move.
-			 * @return The moved Container.
+			 * @param container The Base to move.
+			 * @return The moved Base.
 			 */
-			Container& operator=(Container&& container) noexcept 					= default;
+			Base& operator=(Base&& container) noexcept 					= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			virtual ~Container() noexcept											= default;
+			virtual ~Base() noexcept											= default;
 
 			/**
 			 * @brief Gets the type of the container.
@@ -137,14 +141,14 @@ namespace StormByte::Multimedia::Container {
 			 * @param type The type of the container.
 			 * @return The created container.
 			 */
-			static std::shared_ptr<Container> 										Create(const Type& type);
+			static std::shared_ptr<Base> 										Create(const Type& type);
 
 			/**
 			 * @brief Creates a container.
 			 * @param extension The extension of the container.
 			 * @return The created container.
 			 */
-			static std::shared_ptr<Container> 										Create(const std::string& extension);
+			static std::shared_ptr<Base> 										Create(const std::string& extension);
 
 		protected:
 			Type m_type;															///< The type of the container.

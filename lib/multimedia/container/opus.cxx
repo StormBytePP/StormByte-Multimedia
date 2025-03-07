@@ -2,7 +2,7 @@
 
 using namespace StormByte::Multimedia::Container;
 
-Opus::Opus():Container(Type::Opus, "opus") {}
+Opus::Opus():Base(Type::Opus, "opus") {}
 
 bool Opus::IsStreamCompatible(const Stream::Stream&) {
 	return true;

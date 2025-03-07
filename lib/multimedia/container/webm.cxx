@@ -2,7 +2,7 @@
 
 using namespace StormByte::Multimedia::Container;
 
-WebM::WebM():Container(Type::WebM, "webm") {}
+WebM::WebM():Base(Type::WebM, "webm") {}
 
 bool WebM::IsStreamCompatible(const Stream::Stream&) {
 	return true;

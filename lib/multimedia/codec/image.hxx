@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/codec.hxx>
+#include <multimedia/codec/base.hxx>
 
 /**
  * @namespace Codec
@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Image
 	 * @brief The class for all image codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Image: public Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Image: public Base {
 		public:
 			/**
 			 * @brief Default constructor.

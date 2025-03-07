@@ -11,7 +11,7 @@ File::File(const std::filesystem::path& path):m_path(path) {
 	else {
 		m_size.s_bytes = size;
 	}
-	m_container = Container::Container::Create(path.extension().string());
+	m_container = Container::Base::Create(path.extension().string());
 }
 
 const std::filesystem::path& File::GetPath() const noexcept {
@@ -22,6 +22,6 @@ const Property::Size& File::GetSize() const noexcept {
 	return m_size;
 }
 
-std::shared_ptr<Container::Container> File::GetContainer() const noexcept {
+std::shared_ptr<Container::Base> File::GetContainer() const noexcept {
 	return m_container;
 }

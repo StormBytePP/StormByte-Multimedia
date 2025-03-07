@@ -2,10 +2,10 @@
 
 using namespace StormByte::Multimedia::Stream;
 
-Stream::Stream(const Property::Type& type, const Codec::Codec& codec, const std::optional<Property::Language>& lang):
+Stream::Stream(const Property::Type& type, const Codec::Base& codec, const std::optional<Property::Language>& lang):
 m_type(type), m_codec(codec.Clone()), m_lang(lang) {}
 
-Stream::Stream(const Property::Type& type, Codec::Codec&& codec, std::optional<Property::Language>&& lang) noexcept:
+Stream::Stream(const Property::Type& type, Codec::Base&& codec, std::optional<Property::Language>&& lang) noexcept:
 m_type(type), m_codec(codec.Move()), m_lang(std::move(lang)) {}
 
 Stream::~Stream() noexcept {}
@@ -26,6 +26,6 @@ void Stream::SetLanguage(Property::Language&& lang) noexcept {
 	m_lang = std::move(lang);
 }
 
-std::shared_ptr<StormByte::Multimedia::Codec::Codec> Stream::GetCodec() const noexcept {
+std::shared_ptr<StormByte::Multimedia::Codec::Base> Stream::GetCodec() const noexcept {
 	return m_codec;
 }

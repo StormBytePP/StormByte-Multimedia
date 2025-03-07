@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/container/container.hxx>
+#include <multimedia/container/base.hxx>
 #include <multimedia/property/size.hxx>
 
 #include <filesystem>
@@ -69,11 +69,11 @@ namespace StormByte::Multimedia {
 			 * @brief Gets the container of the file.
 			 * @return The container of the file.
 			 */
-			std::shared_ptr<Container::Container>				GetContainer() const noexcept;
+			std::shared_ptr<Container::Base>					GetContainer() const noexcept;
 
 		protected:
 			std::filesystem::path m_path;						///< The path to the file.
 			Property::Size m_size;								///< The size of the file.
-			std::shared_ptr<Container::Container> m_container;	///< The container of the file.
+			std::shared_ptr<Container::Base> m_container;		///< The container of the file.
 	};
 }

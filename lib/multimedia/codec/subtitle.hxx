@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/codec.hxx>
+#include <multimedia/codec/base.hxx>
 
 /**
  * @namespace Codec
@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Subtitle
 	 * @brief The class for all subtitle codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Subtitle: public Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Subtitle: public Base {
 		public:
 			/**
 			 * @brief Default constructor.

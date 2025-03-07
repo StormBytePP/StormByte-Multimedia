@@ -2,7 +2,7 @@
 
 using namespace StormByte::Multimedia::Container;
 
-AVI::AVI():Container(Type::AVI, "avi") {}
+AVI::AVI():Base(Type::AVI, "avi") {}
 
 bool AVI::IsStreamCompatible(const Stream::Stream&) {
 	return true;

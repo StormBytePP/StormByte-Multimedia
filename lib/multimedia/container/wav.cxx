@@ -2,7 +2,7 @@
 
 using namespace StormByte::Multimedia::Container;
 
-WAV::WAV():Container(Type::WAV, "wav") {}
+WAV::WAV():Base(Type::WAV, "wav") {}
 
 bool WAV::IsStreamCompatible(const Stream::Stream&) {
 	return true;

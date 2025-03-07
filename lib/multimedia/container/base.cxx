@@ -14,10 +14,10 @@
 
 using namespace StormByte::Multimedia::Container;
 
-Container::Container(const Type& type, const std::string& extension):
+Base::Base(const Type& type, const std::string& extension):
 m_type(type), m_extension(extension) {}
 
-void Container::AddStream(const Stream::Stream& stream) {
+void Base::AddStream(const Stream::Stream& stream) {
 	if (!this->CanAddStreams()) {
 		throw CantAddStreams(m_type);
 	}
@@ -28,7 +28,7 @@ void Container::AddStream(const Stream::Stream& stream) {
 		m_streams.push_back(stream.Clone());
 }
 
-void Container::AddStream(Stream::Stream&& stream) {
+void Base::AddStream(Stream::Stream&& stream) {
 	if (!this->CanAddStreams()) {
 		throw CantAddStreams(m_type);
 	}
@@ -39,39 +39,39 @@ void Container::AddStream(Stream::Stream&& stream) {
 		m_streams.push_back(stream.Move());
 }
 
-size_t Container::GetStreamCount() const noexcept {
+size_t Base::GetStreamCount() const noexcept {
 	return m_streams.size();
 }
 
-const std::string& Container::GetExtension() const noexcept {
+const std::string& Base::GetExtension() const noexcept {
 	return m_extension;
 }
 
-Container::Iterator Container::Begin() noexcept {
+Base::Iterator Base::Begin() noexcept {
 	return Iterator::Begin(m_streams);
 }
 
-Container::ConstIterator Container::CBegin() const noexcept {
+Base::ConstIterator Base::CBegin() const noexcept {
 	return ConstIterator::Begin(m_streams);
 }
 
-Container::Iterator Container::End() noexcept {
+Base::Iterator Base::End() noexcept {
 	return Iterator::End(m_streams);
 }
 
-Container::ConstIterator Container::CEnd() const noexcept {
+Base::ConstIterator Base::CEnd() const noexcept {
 	return ConstIterator::End(m_streams);
 }
 
-Container::ConstIterator Container::Begin() const noexcept {
+Base::ConstIterator Base::Begin() const noexcept {
 	return CBegin();
 }
 
-Container::ConstIterator Container::End() const noexcept {
+Base::ConstIterator Base::End() const noexcept {
 	return CEnd();
 }
 
-std::shared_ptr<Container> Container::Create(const Type& type) {
+std::shared_ptr<Base> Base::Create(const Type& type) {
 	switch (type) {
 		case Type::Matroska:	return std::make_shared<Matroska>();
 		case Type::MP4:			return std::make_shared<MP4>();
@@ -89,7 +89,7 @@ std::shared_ptr<Container> Container::Create(const Type& type) {
 	return nullptr;
 }
 
-std::shared_ptr<Container> Container::Create(const std::string& extension) {
+std::shared_ptr<Base> Base::Create(const std::string& extension) {
 	if (extension == ".mkv")
 		return Create(Type::Matroska);
 	else if (extension == ".mp4")
@@ -116,6 +116,6 @@ std::shared_ptr<Container> Container::Create(const std::string& extension) {
 		return Create(Type::Unknown);
 }
 
-bool Container::CanAddStreams() const noexcept {
+bool Base::CanAddStreams() const noexcept {
 	return true;
 }

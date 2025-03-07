@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/codec.hxx>
+#include <multimedia/codec/base.hxx>
 
 /**
  * @namespace Codec
@@ -11,7 +11,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Audio
 	 * @brief The class for all audio codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Audio: public Codec {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Audio: public Base {
 		public:
 			/**
 			 * @brief Default constructor.
