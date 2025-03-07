@@ -14,6 +14,20 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const Extensions Base::c_extensions = {
+	{ ".mkv", Type::Matroska },
+	{ ".mp4", Type::MP4 },
+	{ ".avi", Type::AVI },
+	{ ".webm", Type::WebM },
+	{ ".mp3", Type::MP3 },
+	{ ".wav", Type::WAV },
+	{ ".ogg", Type::OGG },
+	{ ".ogv", Type::OGG },
+	{ ".oga", Type::OGA },
+	{ ".opus", Type::Opus },
+	{ ".flac", Type::FLAC }
+};
+
 Base::Base(const Type& type, const std::string& extension):
 m_type(type), m_extension(Util::String::ToLower(extension)) {}
 
@@ -77,31 +91,12 @@ std::shared_ptr<Base> Base::Create(const Type& type) {
 }
 
 std::shared_ptr<Base> Base::Create(const std::string& extension) {
-	const std::string ext = Util::String::ToLower(extension);
-	if (ext == ".mkv")
-		return Create(Type::Matroska);
-	else if (ext == ".mp4")
-		return Create(Type::MP4);
-	else if (ext == ".avi")
-		return Create(Type::AVI);
-	else if (ext == ".webm")
-		return Create(Type::WebM);
-	else if (ext == ".mp3")
-		return Create(Type::MP3);
-	else if (ext == ".wav")
-		return Create(Type::WAV);
-	else if (ext == ".ogg" || ext == ".ogv")
-		return Create(Type::OGG);
-	else if (ext == ".ogv")
-		return Create(Type::OGV);
-	else if (ext == ".oga")
-		return Create(Type::OGA);
-	else if (ext == ".opus")
-		return Create(Type::Opus);
-	else if (ext == ".flac")
-		return Create(Type::FLAC);
+	const auto it = c_extensions.find(Util::String::ToLower(extension));
+	if (it != c_extensions.end()) {
+		return Create(it->second);
+	}
 	else
-		return Create(Type::Unknown);
+		return Create(Container::Type::Unknown);
 }
 
 bool Base::CanAddStreams() const noexcept {

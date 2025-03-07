@@ -192,5 +192,8 @@ namespace StormByte::Multimedia::Container {
 			 * @throw CantAddStreams If the container cannot add streams.
 			 */
 			void 														CheckStreamAddition(const Stream::Base&) const;
+
+		private:
+			static const Extensions c_extensions;						///< The extensions of the containers.
 	};
 }
