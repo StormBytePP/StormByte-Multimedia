@@ -9,8 +9,8 @@
 #include <vector>
 
 /**
- * @namespace Multimedia
- * @brief The namespace for all multimedia classes and functions.
+ * @namespace Container
+ * @brief The namespace for all containers
  */
 namespace StormByte::Multimedia::Container {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Container {
@@ -23,7 +23,7 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Default constructor.
 			 * @param type The type of the container.
 			 */
-			Container(const Type& type);
+			Container(const Type& type, const std::string& extension);
 
 			/**
 			 * @brief Copy constructor.
@@ -54,7 +54,7 @@ namespace StormByte::Multimedia::Container {
 			/**
 			 * @brief Default destructor.
 			 */
-			virtual ~Container() noexcept											= 0;
+			virtual ~Container() noexcept											= default;
 
 			/**
 			 * @brief Gets the type of the container.
@@ -89,6 +89,12 @@ namespace StormByte::Multimedia::Container {
 			 * @return The count of streams in the container.
 			 */
 			size_t 																	GetStreamCount() const noexcept;
+
+			/**
+			 * @brief Gets the extension of the container.
+			 * @return The extension of the container.
+			 */
+			const std::string&														GetExtension() const noexcept;
 
 			/**
 			 * @brief Gets the begin iterator.
@@ -126,8 +132,23 @@ namespace StormByte::Multimedia::Container {
 			 */
 			ConstIterator 															End() const noexcept;
 
+			/**
+			 * @brief Creates a container.
+			 * @param type The type of the container.
+			 * @return The created container.
+			 */
+			static std::shared_ptr<Container> 										Create(const Type& type);
+
+			/**
+			 * @brief Creates a container.
+			 * @param extension The extension of the container.
+			 * @return The created container.
+			 */
+			static std::shared_ptr<Container> 										Create(const std::string& extension);
+
 		protected:
 			Type m_type;															///< The type of the container.
+			std::string m_extension;												///< The extension of the container.
 			Streams m_streams;														///< The streams in the container (they are ordered!).
 
 			/**

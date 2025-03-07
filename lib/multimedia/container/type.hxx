@@ -23,7 +23,7 @@ namespace StormByte::Multimedia::Container {
 		OGG,			///< OGG container.
 		OGV,			///< OGV container.
 		OGA,			///< OGA container.
-		OPUS,			///< OPUS container.
+		Opus,			///< OPUS container.
 		FLAC,			///< FLAC container.
 		Unknown			///< Unknown container.
 	};
@@ -41,7 +41,7 @@ namespace StormByte::Multimedia::Container {
 			case Type::MP3:			return "MP3";
 			case Type::WAV:			return "WAV";
 			case Type::OGG:			return "OGG";
-			case Type::OPUS:		return "OPUS";
+			case Type::Opus:		return "Opus";
 			case Type::FLAC:		return "FLAC";
 			default:				return "Unknown";
 		}
