@@ -1,0 +1,69 @@
+#include <multimedia/property/resolution.hxx>
+#include <multimedia/stream/stream.hxx>
+
+#include <string>
+
+/**
+ * @namespace Stream
+ * @brief The namespace for all streams.
+ */
+namespace StormByte::Multimedia::Stream {
+	/**
+	 * @class Image
+	 * @brief The class for image streams.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Image final: public Stream {
+		public:
+			/**
+			 * @brief Default constructor.
+			 * @param res The resolution of the image.
+			 */
+			Image(const Property::Resolution& res);
+
+			/**
+			 * @brief Default constructor.
+			 * @param res The resolution of the image.
+			 */
+			Image(Property::Resolution&& res) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param stream The stream to copy.
+			 */
+			Image(const Image& stream) 					= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param stream The stream to move.
+			 */
+			Image(Image&& stream) noexcept				= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param stream The stream to copy.
+			 * @return The copied stream.
+			 */
+			Image& operator=(const Image& stream) 		= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param stream The stream to move.
+			 * @return The moved stream.
+			 */
+			Image& operator=(Image&& stream) noexcept	= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~Image() noexcept override 					= default;
+
+			/**
+			 * @brief Get the size of the image.
+			 * @return The size of the image.
+			 */
+			const Property::Resolution& 				GetResolution() const noexcept;
+
+		private:
+			Property::Resolution m_res; 				///< The resolution of the image.
+	};
+}

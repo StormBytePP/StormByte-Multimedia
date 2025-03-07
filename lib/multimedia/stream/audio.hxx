@@ -1,0 +1,52 @@
+#include <multimedia/stream/stream.hxx>
+
+#include <string>
+
+/**
+ * @namespace Stream
+ * @brief The namespace for all streams.
+ */
+namespace StormByte::Multimedia::Stream {
+	/**
+	 * @class Audio
+	 * @brief The class for audio streams.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Stream {
+		public:
+			/**
+			 * @brief Default constructor.
+			 */
+			Audio();
+
+			/**
+			 * @brief Copy constructor.
+			 * @param stream The stream to copy.
+			 */
+			Audio(const Audio& stream) 					= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param stream The stream to move.
+			 */
+			Audio(Audio&& stream) noexcept				= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param stream The stream to copy.
+			 * @return The copied stream.
+			 */
+			Audio& operator=(const Audio& stream) 		= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param stream The stream to move.
+			 * @return The moved stream.
+			 */
+			Audio& operator=(Audio&& stream) noexcept	= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~Audio() noexcept override 					= default;
+	};
+}
