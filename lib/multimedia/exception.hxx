@@ -2,6 +2,7 @@
 
 #include <exception.hxx>
 #include <multimedia/property/type.hxx>
+#include <multimedia/codec/name.hxx>
 #include <multimedia/container/type.hxx>
 
 /**
@@ -110,7 +111,7 @@ namespace StormByte::Multimedia {
 			 * @param codec The codec name.
 			 * @param container The container name.
 			 */
-			CodecNotCompatible(const std::string& codec, const std::string& container);
+			CodecNotCompatible(const Codec::Name& codec, const std::string& container);
 
 			/**
 			 * @brief Copy constructor.

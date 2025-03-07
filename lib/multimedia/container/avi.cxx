@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams AVI::CompatStreams {Property::Type::Audio, Property::Type::Video};
+const CompatibleCodecs 	AVI::CompatCodecs {};
+
 AVI::AVI():Base(Type::AVI, "avi") {}
 
-std::list<StormByte::Multimedia::Property::Type> AVI::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio, Property::Type::Video};
+const CompatibleStreams& AVI::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool AVI::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& AVI::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

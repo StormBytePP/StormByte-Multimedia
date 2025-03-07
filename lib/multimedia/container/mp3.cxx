@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	MP3::CompatStreams {Property::Type::Audio};
+const CompatibleCodecs	MP3::CompatCodecs {};
+
 MP3::MP3():Base(Type::MP3, "mp3") {}
 
-std::list<StormByte::Multimedia::Property::Type> MP3::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio};
+const CompatibleStreams& MP3::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool MP3::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& MP3::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

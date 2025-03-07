@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	OGG::CompatStreams {Property::Type::Audio};
+const CompatibleCodecs	OGG::CompatCodecs {};
+
 OGG::OGG():Base(Type::OGG, "ogg") {}
 
-std::list<StormByte::Multimedia::Property::Type> OGG::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio, Property::Type::Video, Property::Type::Subtitle};
+const CompatibleStreams& OGG::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool OGG::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& OGG::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

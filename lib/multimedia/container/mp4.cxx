@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	MP4::CompatStreams {Property::Type::Audio, Property::Type::Video};
+const CompatibleCodecs	MP4::CompatCodecs {};
+
 MP4::MP4():Base(Type::MP4, "mp4") {}
 
-std::list<StormByte::Multimedia::Property::Type> MP4::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio, Property::Type::Video};
+const CompatibleStreams& MP4::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool MP4::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& MP4::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

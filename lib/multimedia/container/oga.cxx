@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	OGA::CompatStreams {Property::Type::Audio};
+const CompatibleCodecs	OGA::CompatCodecs {};
+
 OGA::OGA():Base(Type::OGA, "oga") {}
 
-std::list<StormByte::Multimedia::Property::Type> OGA::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio};
+const CompatibleStreams& OGA::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool OGA::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& OGA::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

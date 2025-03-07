@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	Matroska::CompatStreams {Property::Type::Audio, Property::Type::Video, Property::Type::Subtitle};
+const CompatibleCodecs	Matroska::CompatCodecs {};
+
 Matroska::Matroska():Base(Type::Matroska, "mkv") {}
 
-std::list<StormByte::Multimedia::Property::Type> Matroska::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio, Property::Type::Video, Property::Type::Subtitle};
+const CompatibleStreams& Matroska::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool Matroska::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& Matroska::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	FLAC::CompatStreams {Property::Type::Audio};
+const CompatibleCodecs	FLAC::CompatCodecs {};
+
 FLAC::FLAC():Base(Type::FLAC, "flac") {}
 
-std::list<StormByte::Multimedia::Property::Type> FLAC::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio};
+const CompatibleStreams& FLAC::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool FLAC::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& FLAC::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

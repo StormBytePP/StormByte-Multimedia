@@ -1,6 +1,7 @@
 #pragma once
 
 #include <util/templates/clonable.hxx>
+#include <multimedia/codec/name.hxx>
 #include <multimedia/property/type.hxx>
 
 #include <string>
@@ -18,17 +19,17 @@ namespace StormByte::Multimedia::Codec {
 		public:
 			/**
 			 * @brief Default constructor.
-			 * @param name The name of the Base.
-			 * @param type The type of the Base.
+			 * @param name The name of the Codec.
+			 * @param type The type of the Codec.
 			 */
-			Base(const std::string& name, const Property::Type& type);
+			Base(const Codec::Name& name, const Property::Type& type);
 
 			/**
 			 * @brief Default constructor.
-			 * @param name The name of the Base.
-			 * @param type The type of the Base.
+			 * @param name The name of the Codec.
+			 * @param type The type of the Codec.
 			 */
-			Base(std::string&& name, const Property::Type& type) noexcept;
+			Base(Codec::Name&& name, const Property::Type& type) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -62,10 +63,10 @@ namespace StormByte::Multimedia::Codec {
 			virtual ~Base() noexcept					= 0;
 
 			/**
-			 * @brief Get the name of the Base.
-			 * @return The name of the Base.
+			 * @brief Get the codec name
+			 * @return The codec name
 			 */
-			const std::string&							GetName() const noexcept;
+			const Codec::Name&							GetName() const noexcept;
 
 			/**
 			 * @brief Get the type of the Base.
@@ -74,7 +75,7 @@ namespace StormByte::Multimedia::Codec {
 			const Property::Type&						GetType() const noexcept;
 
 		protected:
-			std::string m_name;							///< The name of the Base.
+			Codec::Name m_name;							///< The name of the Base.
 			Property::Type m_type;						///< The type of the Base.
 	};
 }

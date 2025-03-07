@@ -53,13 +53,16 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Gets the compatible streams with the container.
 			 * @return The compatible streams with the container.
 			 */
-			std::list<StormByte::Multimedia::Property::Type> 						CompatibleStreams() const noexcept override;
+			const CompatibleStreams& 									GetCompatibleStreams() const noexcept override;
 
 			/**
-			 * @brief Checks if the codec is compatible with the container.
-			 * @param codec The codec to check.
-			 * @return True if the codec is compatible with the container, false otherwise.
+			 * @brief Gets the compatible codecs with the container.
+			 * @return The compatible codecs with the container.
 			 */
-			bool 														IsCodecCompatible(const Codec::Base& codec) const noexcept override;
+			const CompatibleCodecs& 									GetCompatibleCodecs() const noexcept override;
+
+		private:
+			static const CompatibleStreams 	CompatStreams;				///< The compatible streams with the container.
+			static const CompatibleCodecs 	CompatCodecs;				///< The compatible codecs with the container.
 	};
 }

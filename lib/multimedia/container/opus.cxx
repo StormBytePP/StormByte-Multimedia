@@ -2,12 +2,15 @@
 
 using namespace StormByte::Multimedia::Container;
 
+const CompatibleStreams	Opus::CompatStreams {Property::Type::Audio};
+const CompatibleCodecs	Opus::CompatCodecs {};
+
 Opus::Opus():Base(Type::Opus, "opus") {}
 
-std::list<StormByte::Multimedia::Property::Type> Opus::CompatibleStreams() const noexcept {
-	return {Property::Type::Audio};
+const CompatibleStreams& Opus::GetCompatibleStreams() const noexcept {
+	return CompatStreams;
 }
 
-bool Opus::IsCodecCompatible(const Codec::Base&) const noexcept {
-	return true;
+const CompatibleCodecs& Opus::GetCompatibleCodecs() const noexcept {
+	return CompatCodecs;
 }

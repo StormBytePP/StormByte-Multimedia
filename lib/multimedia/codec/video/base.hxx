@@ -17,13 +17,13 @@ namespace StormByte::Multimedia::Codec::Video {
 			 * @brief Default constructor.
 			 * @param name The name of the codec.
 			 */
-			Base(const std::string& name);
+			Base(const Name& name);
 
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the codec.
 			 */
-			Base(std::string&& name) noexcept;
+			Base(Name&& name) noexcept;
 
 			/**
 			 * @brief Copy constructor.

@@ -18,33 +18,13 @@ Base::Base(const Type& type, const std::string& extension):
 m_type(type), m_extension(Util::String::ToLower(extension)) {}
 
 void Base::AddStream(const Stream::Base& stream) {
-	const auto compat = this->CompatibleStreams();
-	if (!this->CanAddStreams()) {
-		throw CantAddStreams(m_type);
-	}
-	else if (std::find(compat.begin(), compat.end(), stream.GetType()) == compat.end()) {
-		throw StreamNotCompatible(m_type);
-	}
-	else if (!this->IsCodecCompatible(*stream.GetCodec())) {
-		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
-	}
-	else
-		m_streams.push_back(stream.Clone());
+	CheckStreamAddition(stream);
+	m_streams.push_back(stream.Clone());
 }
 
 void Base::AddStream(Stream::Base&& stream) {
-	const auto compat = this->CompatibleStreams();
-	if (!this->CanAddStreams()) {
-		throw CantAddStreams(m_type);
-	}
-	else if (std::find(compat.begin(), compat.end(), stream.GetType()) == compat.end()) {
-		throw StreamNotCompatible(m_type);
-	}
-	else if (!this->IsCodecCompatible(*stream.GetCodec())) {
-		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
-	}
-	else
-		m_streams.push_back(stream.Move());
+	CheckStreamAddition(stream);
+	m_streams.push_back(stream.Move());
 }
 
 size_t Base::GetStreamCount() const noexcept {
@@ -126,4 +106,24 @@ std::shared_ptr<Base> Base::Create(const std::string& extension) {
 
 bool Base::CanAddStreams() const noexcept {
 	return true;
+}
+
+void Base::CheckStreamAddition(const Stream::Base& stream) const {
+	if (!this->CanAddStreams()) {
+		throw CantAddStreams(m_type);
+	}
+	else if (IsStreamCompatible(stream)) {
+		throw StreamNotCompatible(m_type);
+	}
+	else if (IsCodecCompatible(*stream.GetCodec())) {
+		throw CodecNotCompatible(stream.GetCodec()->GetName(), TypeToString(m_type));
+	}
+}
+
+bool Base::IsStreamCompatible(const Stream::Base& stream) const noexcept {
+	return this->GetCompatibleStreams().contains(stream.GetType());
+}
+
+bool Base::IsCodecCompatible(const Codec::Base& codec) const noexcept {
+	return this->GetCompatibleCodecs().contains(codec.GetName());
 }
