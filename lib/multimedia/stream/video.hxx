@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/video.hxx>
+#include <multimedia/codec/video/base.hxx>
 #include <multimedia/property/hdr10.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/base.hxx>
@@ -24,7 +24,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param res The resolution of the video.
 			 * @param lang The language of the video.
 			 */
-			Video(const Codec::Video& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang = std::nullopt);
+			Video(const Codec::Video::Base& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
@@ -32,7 +32,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param res The resolution of the video.
 			 * @param lang The language of the video.
 			 */
-			Video(Codec::Video&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept;
+			Video(Codec::Video::Base&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.

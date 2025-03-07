@@ -2,10 +2,10 @@
 
 using namespace StormByte::Multimedia::Stream;
 
-Video::Video(const Codec::Video& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang):
+Video::Video(const Codec::Video::Base& codec, const Property::Resolution& res, const std::optional<Property::Language>& lang):
 Base(Property::Type::Video, codec, lang), m_res(res) {}
 
-Video::Video(Codec::Video&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept:
+Video::Video(Codec::Video::Base&& codec, Property::Resolution&& res, std::optional<Property::Language>&& lang) noexcept:
 Base(Property::Type::Video, std::move(codec), std::move(lang)), m_res(std::move(res)) {}
 
 const StormByte::Multimedia::Property::Resolution& Video::GetResolution() const noexcept {

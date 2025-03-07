@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/image.hxx>
+#include <multimedia/codec/image/base.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/base.hxx>
 
@@ -22,14 +22,14 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the image.
 			 * @param res The resolution of the image.
 			 */
-			Image(const Codec::Image& codec, const Property::Resolution& res);
+			Image(const Codec::Image::Base& codec, const Property::Resolution& res);
 
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the image.
 			 * @param res The resolution of the image.
 			 */
-			Image(Codec::Image&& codec, Property::Resolution&& res) noexcept;
+			Image(Codec::Image::Base&& codec, Property::Resolution&& res) noexcept;
 
 			/**
 			 * @brief Copy constructor.

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <multimedia/codec/subtitle.hxx>
+#include <multimedia/codec/subtitle/base.hxx>
 #include <multimedia/stream/base.hxx>
 
 #include <string>
@@ -21,14 +21,14 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec The codec of the subtitle.
 			 * @param lang The language of the subtitle.
 			 */
-			Subtitle(const Codec::Subtitle& codec, const std::optional<Property::Language>& lang = std::nullopt);
+			Subtitle(const Codec::Subtitle::Base& codec, const std::optional<Property::Language>& lang = std::nullopt);
 
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the subtitle.
 			 * @param lang The language of the subtitle.
 			 */
-			Subtitle(Codec::Subtitle&& codec, Property::Language&& lang) noexcept;
+			Subtitle(Codec::Subtitle::Base&& codec, Property::Language&& lang) noexcept;
 
 			/**
 			 * @brief Copy constructor.

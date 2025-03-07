@@ -2,10 +2,10 @@
 
 using namespace StormByte::Multimedia::Stream;
 
-Subtitle::Subtitle(const Codec::Subtitle& codec, const std::optional<Property::Language>& lang):
+Subtitle::Subtitle(const Codec::Subtitle::Base& codec, const std::optional<Property::Language>& lang):
 Base(Property::Type::Subtitle, codec, lang) {}
 
-Subtitle::Subtitle(Codec::Subtitle&& codec, Property::Language&& lang) noexcept:
+Subtitle::Subtitle(Codec::Subtitle::Base&& codec, Property::Language&& lang) noexcept:
 Base(Property::Type::Subtitle, std::move(codec), std::move(lang)) {}
 
 std::shared_ptr<Base> Subtitle::Clone() const {

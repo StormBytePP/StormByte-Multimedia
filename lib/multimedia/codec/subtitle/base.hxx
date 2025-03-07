@@ -3,57 +3,57 @@
 #include <multimedia/codec/base.hxx>
 
 /**
- * @namespace Codec
- * @brief The namespace for all codecs.
+ * @namespace Subtitle
+ * @brief The namespace for all subtitle codecs.
  */
-namespace StormByte::Multimedia::Codec {
+namespace StormByte::Multimedia::Codec::Subtitle {
 	/**
-	 * @class Audio
-	 * @brief The class for all audio codecs.
+	 * @class Base
+	 * @brief The class for all subtitle codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Audio: public Base {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Codec::Base {
 		public:
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the codec.
 			 */
-			Audio(const std::string& name);
+			Base(const std::string& name);
 
 			/**
 			 * @brief Default constructor.
 			 * @param name The name of the codec.
 			 */
-			Audio(std::string&& name) noexcept;
+			Base(std::string&& name) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param codec The Codec to copy.
 			 */
-			Audio(const Audio& codec) 						= default;
+			Base(const Base& codec) 						= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param codec The Codec to move.
 			 */
-			Audio(Audio&& codec) noexcept					= default;
+			Base(Base&& codec) noexcept						= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param codec The codec to copy.
 			 * @return The copied codec.
 			 */
-			Audio& operator=(const Audio& codec) 			= default;
+			Base& operator=(const Base& codec) 				= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param codec The codec to move.
-			 * @return The moved Audio.
+			 * @return The moved Base.
 			 */
-			Audio& operator=(Audio&& codec) noexcept		= default;
+			Base& operator=(Base&& codec) noexcept			= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			virtual ~Audio() noexcept override 				= default;
+			virtual ~Base() noexcept override 				= default;
 	};
 }
