@@ -1,3 +1,5 @@
+#pragma once
+
 #include <multimedia/codec/audio.hxx>
 #include <multimedia/property/duration.hxx>
 #include <multimedia/stream/stream.hxx>
@@ -67,6 +69,18 @@ namespace StormByte::Multimedia::Stream {
 			 * @return The duration of the audio.
 			 */
 			const Property::Duration& 					GetDuration() const noexcept;
+
+			/**
+			 * @brief Clones the stream
+			 * @return The cloned stream.
+			 */
+			std::shared_ptr<Stream> 					Clone() const override;
+
+			/**
+			 * @brief Moves the stream
+			 * @return The moved stream.
+			 */
+			std::shared_ptr<Stream> 					Move() noexcept override;
 
 		private:
 			Property::Duration m_dur;					///< The duration of the audio.

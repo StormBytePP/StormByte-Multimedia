@@ -11,3 +11,11 @@ Stream(Property::Type::Audio, std::move(codec), lang), m_dur(std::move(dur)) {}
 const StormByte::Multimedia::Property::Duration& Audio::GetDuration() const noexcept {
 	return m_dur;
 }
+
+std::shared_ptr<Stream> Audio::Clone() const {
+	return std::make_shared<Audio>(*this);
+}
+
+std::shared_ptr<Stream> Audio::Move() noexcept {
+	return std::make_shared<Audio>(std::move(*this));
+}

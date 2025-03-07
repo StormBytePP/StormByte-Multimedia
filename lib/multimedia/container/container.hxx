@@ -1,0 +1,144 @@
+#pragma once
+
+#include <util/templates/iterator.hxx>
+#include <multimedia/container/type.hxx>
+#include <multimedia/stream/stream.hxx>
+#include <multimedia/property/size.hxx>
+
+#include <filesystem>
+#include <vector>
+
+/**
+ * @namespace Multimedia
+ * @brief The namespace for all multimedia classes and functions.
+ */
+namespace StormByte::Multimedia::Container {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Container {
+		public:
+			using Streams 		= std::vector<std::shared_ptr<Stream::Stream>>;		///< Representation for a vector of streams.
+			using Iterator 		= Util::Templates::Iterator<Streams>;				///< Representation for an iterator of streams.
+			using ConstIterator	= Util::Templates::ConstIterator<Streams>;			///< Representation for a const iterator of streams.
+
+			/**
+			 * @brief Default constructor.
+			 * @param type The type of the container.
+			 */
+			Container(const Type& type);
+
+			/**
+			 * @brief Copy constructor.
+			 * @param container The Container to copy.
+			 */
+			Container(const Container& container) 									= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param container The Container to move.
+			 */
+			Container(Container&& container) noexcept 								= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param container The Container to copy.
+			 * @return The copied Container.
+			 */
+			Container& operator=(const Container& container) 						= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param container The Container to move.
+			 * @return The moved Container.
+			 */
+			Container& operator=(Container&& container) noexcept 					= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			virtual ~Container() noexcept											= 0;
+
+			/**
+			 * @brief Gets the type of the container.
+			 * @return The type of the container.
+			 */
+			const Type& 															GetType() const noexcept;
+
+			/**
+			 * @brief Gets the size of the container.
+			 * @return The size of the container.
+			 */
+			const Property::Size& 													GetSize() const noexcept;
+
+			/**
+			 * @brief Adds a stream to the container.
+			 * @param stream The stream to add.
+			 * @throw StreamNotCompatible If the stream is not compatible with the container.
+			 */
+			void 																	AddStream(const Stream::Stream& stream);
+
+			/**
+			 * @brief Adds a stream to the container.
+			 * @param stream The stream to add.
+			 * @throw StreamNotCompatible If the stream is not compatible with the container.
+			 */
+			void 																	AddStream(Stream::Stream&& stream) noexcept;
+
+			/**
+			 * @brief Gets the count of streams in the container.
+			 * @return The count of streams in the container.
+			 */
+			size_t 																	GetStreamCount() const noexcept;
+
+			/**
+			 * @brief Gets the begin iterator.
+			 * @return The begin iterator.
+			 */
+			Iterator 																Begin() noexcept;
+
+			/**
+			 * @brief Gets the begin iterator.
+			 * @return The begin iterator.
+			 */
+			ConstIterator 															CBegin() const noexcept;
+
+			/**
+			 * @brief Gets the end iterator.
+			 * @return The end iterator.
+			 */
+			Iterator 																End() noexcept;
+
+			/**
+			 * @brief Gets the end iterator.
+			 * @return The end iterator.
+			 */
+			ConstIterator 															CEnd() const noexcept;
+
+			/**
+			 * @brief Gets the begin iterator.
+			 * @return The begin iterator.
+			 */
+			ConstIterator 															Begin() const noexcept;
+
+			/**
+			 * @brief Gets the end iterator.
+			 * @return The end iterator.
+			 */
+			ConstIterator 															End() const noexcept;
+
+		protected:
+			Type m_type;															///< The type of the container.
+			Streams m_streams;														///< The streams in the container (they are ordered!).
+
+			/**
+			 * @brief Checks if the stream is compatible with the container.
+			 * @param stream The stream to check.
+			 * @return True if the stream is compatible with the container, false otherwise.
+			 */
+			virtual bool 															IsStreamCompatible(const Stream::Stream& stream) = 0;
+
+			/**
+			 * @brief Checks if the container can add streams, for example a MP3 which has already a stream cannot add more.
+			 * @return True if the container can add streams, false otherwise. (default is true)
+			 */
+			virtual bool 															CanAddStreams() const noexcept;
+	};
+}

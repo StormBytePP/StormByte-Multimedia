@@ -11,3 +11,11 @@ Stream(Property::Type::Image, std::move(codec)), m_res(std::move(res)) {}
 const StormByte::Multimedia::Property::Resolution& Image::GetResolution() const noexcept {
 	return m_res;
 }
+
+std::shared_ptr<Stream> Image::Clone() const {
+	return std::make_shared<Image>(*this);
+}
+
+std::shared_ptr<Stream> Image::Move() noexcept {
+	return std::make_shared<Image>(std::move(*this));
+}

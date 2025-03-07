@@ -35,3 +35,19 @@ void Video::SetHDR10(const StormByte::Multimedia::Property::HDR10& hdr10) {
 void Video::SetHDR10(StormByte::Multimedia::Property::HDR10&& hdr10) noexcept {
 	m_hdr10 = std::move(hdr10);
 }
+
+const std::optional<unsigned int>& Video::GetFrames() const noexcept {
+	return m_frames;
+}
+
+void Video::SetFrames(unsigned int frames) {
+	m_frames = frames;
+}
+
+std::shared_ptr<Stream> Video::Clone() const {
+	return std::make_shared<Video>(*this);
+}
+
+std::shared_ptr<Stream> Video::Move() noexcept {
+	return std::make_shared<Video>(std::move(*this));
+}

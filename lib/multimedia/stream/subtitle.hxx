@@ -1,3 +1,5 @@
+#pragma once
+
 #include <multimedia/codec/subtitle.hxx>
 #include <multimedia/stream/stream.hxx>
 
@@ -58,5 +60,17 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default destructor.
 			 */
 			~Subtitle() noexcept override 						= default;
+
+			/**
+			 * @brief Clones the stream.
+			 * @return The cloned stream.
+			 */
+			std::shared_ptr<Stream> Clone() const override;
+
+			/**
+			 * @brief Moves the stream.
+			 * @return The moved stream.
+			 */
+			std::shared_ptr<Stream> Move() noexcept override;
 	};
 }

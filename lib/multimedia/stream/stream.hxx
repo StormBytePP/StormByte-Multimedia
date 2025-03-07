@@ -1,7 +1,9 @@
+#pragma once
+
+#include <util/templates/clonable.hxx>
 #include <multimedia/codec/codec.hxx>
 #include <multimedia/property/language.hxx>
 
-#include <memory>
 #include <optional>
 #include <string>
 
@@ -14,7 +16,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Stream
 	 * @brief The base class for streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Stream: public Util::Templates::Clonable<Stream> {
 		public:
 			/**
 			 * @brief Default constructor.

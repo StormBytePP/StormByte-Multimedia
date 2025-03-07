@@ -1,3 +1,5 @@
+#pragma once
+
 #include <multimedia/codec/video.hxx>
 #include <multimedia/property/hdr10.hxx>
 #include <multimedia/property/resolution.hxx>
@@ -105,9 +107,34 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			void 										SetHDR10(Property::HDR10&& hdr10) noexcept;
 
+			/**
+			 * @brief Get the number of frames in the video.
+			 * @return The number of frames in the video.
+			 */
+			const std::optional<unsigned int>&			GetFrames() const noexcept;
+
+			/**
+			 * @brief Set the number of frames in the video.
+			 * @param frames The number of frames in the video.
+			 */
+			void 										SetFrames(unsigned int frames);
+
+			/**
+			 * @brief Clone the stream.
+			 * @return The cloned stream.
+			 */
+			std::shared_ptr<Stream> 					Clone() const override;
+
+			/**
+			 * @brief Move the stream.
+			 * @return The moved stream.
+			 */
+			std::shared_ptr<Stream> 					Move() noexcept override;
+
 		private:
 			Property::Resolution m_res; 						///< The resolution of the video.
 			std::optional<Property::Color> m_color;				///< The color primaries of the video.
 			std::optional<Property::HDR10> m_hdr10;				///< The HDR10 properties of the video.
+			std::optional<unsigned int> m_frames;				///< The number of frames in the video.
 	};
 }

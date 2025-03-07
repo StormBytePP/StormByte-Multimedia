@@ -1,3 +1,5 @@
+#pragma once
+
 #include <multimedia/visibility.h>
 
 #include <string>

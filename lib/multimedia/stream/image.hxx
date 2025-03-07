@@ -1,3 +1,5 @@
+#pragma once
+
 #include <multimedia/codec/image.hxx>
 #include <multimedia/property/resolution.hxx>
 #include <multimedia/stream/stream.hxx>
@@ -65,6 +67,18 @@ namespace StormByte::Multimedia::Stream {
 			 * @return The size of the image.
 			 */
 			const Property::Resolution& 				GetResolution() const noexcept;
+
+			/**
+			 * Clone the stream.
+			 * @return The cloned stream.
+			 */
+			std::shared_ptr<Stream> Clone() const override;
+
+			/**
+			 * Move the stream.
+			 * @return The moved stream.
+			 */
+			std::shared_ptr<Stream> Move() noexcept override;
 
 		private:
 			Property::Resolution m_res; 				///< The resolution of the image.
