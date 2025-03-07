@@ -97,4 +97,48 @@ namespace StormByte::Multimedia {
 			 */
 			~StreamNotCompatible() noexcept 												= default;
 	};
+
+	/**
+	 * @class CantAddStreams
+	 * @brief The exception for when a container cannot add streams.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC CantAddStreams: public Exception {
+		public:
+			/**
+			 * @brief Default constructor.
+			 * @param container The container name.
+			 */
+			CantAddStreams(const Container::Type& container);
+
+			/**
+			 * @brief Copy constructor.
+			 * @param exception The exception to copy.
+			 */
+			CantAddStreams(const CantAddStreams& exception) 								= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param exception The exception to move.
+			 */
+			CantAddStreams(CantAddStreams&& exception) noexcept 							= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param exception The exception to copy.
+			 * @return The copied exception.
+			 */
+			CantAddStreams& operator=(const CantAddStreams& exception) 						= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param exception The exception to move.
+			 * @return The moved exception.
+			 */
+			CantAddStreams& operator=(CantAddStreams&& exception) noexcept 					= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~CantAddStreams() noexcept 														= default;
+	};
 }

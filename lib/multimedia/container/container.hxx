@@ -72,6 +72,7 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Adds a stream to the container.
 			 * @param stream The stream to add.
 			 * @throw StreamNotCompatible If the stream is not compatible with the container.
+			 * @throw CantAddStreams If the container cannot add streams.
 			 */
 			void 																	AddStream(const Stream::Stream& stream);
 
@@ -79,8 +80,9 @@ namespace StormByte::Multimedia::Container {
 			 * @brief Adds a stream to the container.
 			 * @param stream The stream to add.
 			 * @throw StreamNotCompatible If the stream is not compatible with the container.
+			 * @throw CantAddStreams If the container cannot add streams.
 			 */
-			void 																	AddStream(Stream::Stream&& stream) noexcept;
+			void 																	AddStream(Stream::Stream&& stream);
 
 			/**
 			 * @brief Gets the count of streams in the container.

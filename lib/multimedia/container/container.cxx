@@ -8,14 +8,25 @@ Container::Container(const Type& type):m_type(type) {}
 Container::~Container() noexcept {}
 
 void Container::AddStream(const Stream::Stream& stream) {
-	if (!IsStreamCompatible(stream)) {
+	if (!this->CanAddStreams()) {
+		throw CantAddStreams(m_type);
+	}
+	else if (!this->IsStreamCompatible(stream)) {
 		throw StreamNotCompatible(m_type);
 	}
-	m_streams.push_back(stream.Clone());
+	else
+		m_streams.push_back(stream.Clone());
 }
 
-void Container::AddStream(Stream::Stream&& stream) noexcept {
-	m_streams.push_back(stream.Move());
+void Container::AddStream(Stream::Stream&& stream) {
+	if (!this->CanAddStreams()) {
+		throw CantAddStreams(m_type);
+	}
+	else if (!this->IsStreamCompatible(stream)) {
+		throw StreamNotCompatible(m_type);
+	}
+	else
+		m_streams.push_back(stream.Move());
 }
 
 size_t Container::GetStreamCount() const noexcept {
@@ -44,4 +55,8 @@ Container::ConstIterator Container::Begin() const noexcept {
 
 Container::ConstIterator Container::End() const noexcept {
 	return CEnd();
+}
+
+bool Container::CanAddStreams() const noexcept {
+	return true;
 }
