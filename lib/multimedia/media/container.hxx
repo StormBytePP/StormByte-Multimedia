@@ -44,6 +44,44 @@ namespace StormByte::Multimedia::Media {
 	};
 
 	/**
+	 * @brief Gets the name of the container.
+	 * @param container The container.
+	 * @return The name of the container.
+	 */
+	constexpr std::string STORMBYTE_MULTIMEDIA_PUBLIC ContainerName(const Container& container) noexcept {
+		switch (container) {
+			// Audio
+			case Container::AC3:		return "AC3";
+			case Container::FLAC:		return "FLAC";
+			case Container::MP3:		return "MP3";
+			case Container::OGA:		return "OGA";
+			case Container::WAV:		return "WAV";
+	
+			// Video
+			case Container::AVI:		return "AVI";
+			case Container::M2TS:		return "M2TS";
+			case Container::MKV:		return "MKV";
+			case Container::MP4:		return "MP4";
+			case Container::MPEG:		return "MPEG";
+			case Container::MPG:		return "MPG";
+			case Container::OGV:		return "OGV";
+			case Container::TS:			return "TS";
+			case Container::WEBM:		return "WEBM";
+	
+			// Image
+			case Container::BMP:		return "BMP";
+			case Container::GIF:		return "GIF";
+			case Container::HEIC:		return "HEIC";
+			case Container::JPG:		return "JPG";
+			case Container::PNG:		return "PNG";
+	
+			// Unknown
+			default:
+			case Container::Unknown: 	return "Unknown";
+		}
+	}
+
+	/**
 	 * @brief Gets the type of the container.
 	 * @param extension The file extension.
 	 * @return The type of the container.

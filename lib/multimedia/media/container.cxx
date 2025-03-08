@@ -6,7 +6,7 @@
 
 using namespace StormByte::Multimedia::Media;
 
-Container STORMBYTE_MULTIMEDIA_PUBLIC ContainerFromExtension(const std::string& extension) noexcept {
+Container ContainerFromExtension(const std::string& extension) noexcept {
 	// Define the mapping as a constexpr unordered_map, grouped and sorted by category
 	const std::unordered_map<std::string_view, Container> containerMap = {
 		// Audio

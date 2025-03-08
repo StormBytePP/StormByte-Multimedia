@@ -5,7 +5,7 @@
 
 using namespace StormByte::Multimedia::Media;
 
-Codec CodecByName(const std::string& name){
+Codec CodecByName(const std::string& name) {
 	static const std::unordered_map<std::string, Codec> codecMap = {
 		// Audio codecs
 		{"aac", Codec::AAC},

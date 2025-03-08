@@ -103,8 +103,54 @@ namespace StormByte::Multimedia::Media {
 	}
 
 	/**
+	 * @brief Gets the name of the codec.
+	 * @param codec The codec.
+	 * @return The name of the codec.
+	 */
+	constexpr std::string STORMBYTE_MULTIMEDIA_PUBLIC CodecName(const Codec& codec) noexcept {
+		switch (codec) {
+			// Audio codecs
+			case Codec::AAC:		return "AAC";
+			case Codec::AC3:		return "AC3";
+			case Codec::DTS:		return "DTS";
+			case Codec::EAC3:		return "EAC3";
+			case Codec::FLAC:		return "FLAC";
+			case Codec::MP3:		return "MP3";
+			case Codec::OPUS:		return "OPUS";
+			case Codec::PCM:		return "PCM";
+			case Codec::VORBIS:		return "VORBIS";
+			case Codec::WMA:		return "WMA";
+	
+			// Video codecs
+			case Codec::AV1:		return "AV1";
+			case Codec::AVC:		return "AVC";
+			case Codec::H264:		return "H264";
+			case Codec::H265:		return "H265";
+			case Codec::MJPEG:		return "MJPEG";
+			case Codec::THEORA:		return "THEORA";
+			case Codec::VP8:		return "VP8";
+			case Codec::VP9:		return "VP9";
+			case Codec::XVID:		return "XVID";
+	
+			// Subtitle codecs
+			case Codec::ASUB:		return "ASUB";
+			case Codec::SUBRIP:		return "SUBRIP";
+			case Codec::WEBVTT:		return "WEBVTT";
+	
+			// Image codecs
+			case Codec::BMP:		return "BMP";
+			case Codec::GIF:		return "GIF";
+			case Codec::JPEG:		return "JPEG";
+			case Codec::PNG:		return "PNG";
+			case Codec::TIFF:		return "TIFF";
+			default:				return "Unknown";
+		}
+	}
+
+	/**
 	 * @brief Gets the codec by its name.
 	 * @param name The name of the codec.
+	 * @throws CodecNotFound If the codec is not found.
 	 * @return The codec.
 	 */
 	Codec STORMBYTE_MULTIMEDIA_PUBLIC CodecByName(const std::string& name);
