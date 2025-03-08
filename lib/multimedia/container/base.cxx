@@ -41,30 +41,6 @@ void Base::AddStream(Stream::Base&& stream) {
 	m_streams.push_back(stream.Move());
 }
 
-Iterator Base::Begin() noexcept {
-	return Iterator::Begin(m_streams);
-}
-
-ConstIterator Base::CBegin() const noexcept {
-	return ConstIterator::Begin(m_streams);
-}
-
-Iterator Base::End() noexcept {
-	return Iterator::End(m_streams);
-}
-
-ConstIterator Base::CEnd() const noexcept {
-	return ConstIterator::End(m_streams);
-}
-
-ConstIterator Base::Begin() const noexcept {
-	return CBegin();
-}
-
-ConstIterator Base::End() const noexcept {
-	return CEnd();
-}
-
 std::shared_ptr<Base> Base::Create(const Type& type) {
 	switch (type) {
 		case Type::Matroska:	return std::make_shared<Matroska>();

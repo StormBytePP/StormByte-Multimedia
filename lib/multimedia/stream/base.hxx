@@ -107,7 +107,7 @@ namespace StormByte::Multimedia::Stream {
 
 		protected:
 			Property::Type m_type; 								///< The type of the Codec.
-			std::unique_ptr<Codec::Base> m_codec;				///< The codec of the Stream.
+			Codec::Base::PointerType m_codec;					///< The codec of the Stream.
 			std::optional<Property::Language> m_lang;			///< The language of the Stream.
 	};
 }

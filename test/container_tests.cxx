@@ -95,9 +95,9 @@ int test_add_stream_with_codec() {
     container->AddStream(std::move(stream));
 
     // Check if the stream was successfully added and its codec is compatible
-   	auto it = container->Begin();
+   	auto streams = container->GetStreams();
     ASSERT_EQUAL("test_add_stream_with_codec", 1, container->GetStreamCount());
-    ASSERT_EQUAL("test_add_stream_with_codec", Codec::NameToString(Codec::Name::EAC3), Codec::NameToString((*it)->GetCodec().GetName()));
+    ASSERT_EQUAL("test_add_stream_with_codec", Codec::NameToString(Codec::Name::EAC3), Codec::NameToString(streams[0]->GetCodec().GetName()));
     
     RETURN_TEST("test_add_stream_with_codec", 0);
 }

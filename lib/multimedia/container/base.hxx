@@ -4,6 +4,7 @@
 #include <multimedia/container/type.hxx>
 
 #include <filesystem>
+#include <span>
 
 /**
  * @namespace Container
@@ -63,6 +64,22 @@ namespace StormByte::Multimedia::Container {
 			}
 
 			/**
+			 * @brief Gets the streams in the container.
+			 * @return The streams in the container.
+			 */
+			inline std::span<Stream::Base::PointerType> 				GetStreams() noexcept {
+				return std::span(m_streams);
+			}
+		
+			/**
+			 * @brief Gets the streams in the container.
+			 * @return The streams in the container.
+			 */
+			inline std::span<const Stream::Base::PointerType> 			GetStreams() const noexcept {
+				return std::span(m_streams);
+			}
+
+			/**
 			 * @brief Adds a stream to the container.
 			 * @param stream The stream to add.
 			 * @throw CodecNotCompatible If the codec is not compatible with the container.
@@ -95,42 +112,6 @@ namespace StormByte::Multimedia::Container {
 			inline const std::string&									GetExtension() const noexcept {
 				return m_extension;
 			}
-
-			/**
-			 * @brief Gets the begin iterator.
-			 * @return The begin iterator.
-			 */
-			Iterator 													Begin() noexcept;
-
-			/**
-			 * @brief Gets the begin iterator.
-			 * @return The begin iterator.
-			 */
-			ConstIterator 												CBegin() const noexcept;
-
-			/**
-			 * @brief Gets the end iterator.
-			 * @return The end iterator.
-			 */
-			Iterator 													End() noexcept;
-
-			/**
-			 * @brief Gets the end iterator.
-			 * @return The end iterator.
-			 */
-			ConstIterator 												CEnd() const noexcept;
-
-			/**
-			 * @brief Gets the begin iterator.
-			 * @return The begin iterator.
-			 */
-			ConstIterator 												Begin() const noexcept;
-
-			/**
-			 * @brief Gets the end iterator.
-			 * @return The end iterator.
-			 */
-			ConstIterator 												End() const noexcept;
 
 			/**
 			 * @brief Creates a container.

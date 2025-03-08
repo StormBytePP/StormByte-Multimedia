@@ -15,7 +15,7 @@ namespace StormByte::Multimedia::Codec {
 	 * @class Base
 	 * @brief The base class for all codecs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base, std::unique_ptr<Base>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base, std::shared_ptr<Base>> {
 		public:
 			/**
 			 * @brief Default constructor.

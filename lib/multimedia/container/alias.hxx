@@ -16,9 +16,7 @@
  * @brief The namespace for all containers
  */
 namespace StormByte::Multimedia::Container {
-	using Streams 			= std::vector<std::shared_ptr<Stream::Base>>;			///< Representation for a vector of streams.
-	using Iterator 			= Util::Templates::Iterator<Streams>;					///< Representation for an iterator of streams.
-	using ConstIterator		= Util::Templates::ConstIterator<Streams>;				///< Representation for a const iterator of streams.
+	using Streams 			= std::vector<Stream::Base::PointerType>;				///< Representation for a vector of streams.
 	using CompatibleStreams = std::unordered_set<Property::Type>;					///< Representation for a set of compatible streams.
 	using CompatibleCodecs 	= std::unordered_set<Codec::Name>;						///< Representation for a set of compatible codecs.
 	using Extensions		= std::unordered_map<std::string, Container::Type>;		///< Representation for a map of extensions and types.
