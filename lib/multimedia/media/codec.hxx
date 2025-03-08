@@ -2,6 +2,8 @@
 
 #include <multimedia/media/type.hxx>
 
+#include <string>
+
 /**
  * @namespace Media
  * @brief The namespace for all multimedia media codecs.
@@ -99,4 +101,11 @@ namespace StormByte::Multimedia::Media {
 				return Type::Unknown;
 		}
 	}
+
+	/**
+	 * @brief Gets the codec by its name.
+	 * @param name The name of the codec.
+	 * @return The codec.
+	 */
+	Codec STORMBYTE_MULTIMEDIA_PUBLIC CodecByName(const std::string& name);
 }

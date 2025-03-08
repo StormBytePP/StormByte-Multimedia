@@ -1,5 +1,6 @@
 #pragma once
 
+#include <multimedia/exception.hxx>
 #include <multimedia/media/codec.hxx>
 #include <multimedia/media/language.hxx>
 #include <util/templates/clonable.hxx>

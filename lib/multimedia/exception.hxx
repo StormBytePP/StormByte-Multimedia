@@ -57,4 +57,44 @@ namespace StormByte::Multimedia {
 			 */
 			virtual ~Exception() noexcept 								= default;
 	};
+
+	class STORMBYTE_PUBLIC CodecNotFound: public Exception {
+		public:
+			/**
+			 * @brief Default constructor.
+			 * @param codec The message of the exception.
+			 */
+			CodecNotFound(const std::string& codec);
+
+			/**
+			 * @brief Copy constructor.
+			 * @param exception The exception to copy.
+			 */
+			CodecNotFound(const CodecNotFound& exception) 						= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param exception The exception to move.
+			 */
+			CodecNotFound(CodecNotFound&& exception) noexcept 					= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param exception The exception to copy.
+			 * @return The copied exception.
+			 */
+			CodecNotFound& operator=(const CodecNotFound& exception) 			= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param exception The exception to move.
+			 * @return The moved exception.
+			 */
+			CodecNotFound& operator=(CodecNotFound&& exception) noexcept 		= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~CodecNotFound() noexcept override									= default;
+	};
 }
