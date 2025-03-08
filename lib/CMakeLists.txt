@@ -15,7 +15,7 @@ set_target_properties(StormByte-Multimedia PROPERTIES
 
 # Compile options
 if(MSVC)
-	add_compile_options(/wd4251 /EHsc)
+	add_compile_options(/wd4251 /EHsc /O2 /Gs /LTCG /GL)
 	add_compile_definitions(UNICODE) # Create problems if disabled
 else()
 	set(CMAKE_CXX_FLAGS_DEBUG "-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0")
