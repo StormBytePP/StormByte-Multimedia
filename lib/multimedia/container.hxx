@@ -1,5 +1,6 @@
 #pragma once
 
+#include <multimedia/media/container.hxx>
 #include <multimedia/stream.hxx>
 
 #include <vector>
