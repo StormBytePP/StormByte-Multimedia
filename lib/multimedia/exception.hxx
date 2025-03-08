@@ -58,7 +58,7 @@ namespace StormByte::Multimedia {
 			virtual ~Exception() noexcept 								= default;
 	};
 
-	class STORMBYTE_PUBLIC CodecNotFound: public Exception {
+	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFound: public Exception {
 		public:
 			/**
 			 * @brief Default constructor.
