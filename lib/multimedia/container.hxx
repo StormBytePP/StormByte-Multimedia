@@ -48,6 +48,6 @@ namespace StormByte::Multimedia {
 			~Container() noexcept = default;
 
 		private:
-			std::vector<Stream> streams;
+			std::vector<Stream::PointerType> streams;
 	};
 }
