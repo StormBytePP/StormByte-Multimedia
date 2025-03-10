@@ -8,8 +8,11 @@ Exception::Exception(std::string&& message) noexcept:StormByte::Exception(std::m
 
 CodecNotFound::CodecNotFound(const std::string& codecName):Exception("Codec not found: " + codecName) {}
 
-CodecNotSupported::CodecNotSupported(const Media::Container& container, const Media::Codec& codec):
-Exception("Codec " + Media::CodecName(codec) + " is not supported for container " + Media::ContainerName(container)) {}
+CodecNotSupported::CodecNotSupported(const Media::Container::Name& container, const Media::Codec::Name& codec):
+Exception("Codec " + Media::Codec::Registry::Info(codec).s_name + " is not supported for container " + Media::Container::Registry::Info(container).s_name) {}
 
-ContainerIsFull::ContainerIsFull(const Media::Container& container):
-Exception("Container " + Media::ContainerName(container) + " is full") {}
+ContainerIsFull::ContainerIsFull(const Media::Container::Name& container):
+Exception("Container " + Media::Container::Registry::Info(container).s_name + " is full") {}
+
+ContainerNotFound::ContainerNotFound(const std::string& containerName):
+Exception("Container " + containerName + " is not supported") {}

@@ -1,52 +1,67 @@
 #include <multimedia/exception.hxx>
 #include <multimedia/media/codec.hxx>
+#include <util/string.hxx>
 
 #include <unordered_map>
 
 using namespace StormByte::Multimedia::Media;
 
-Codec CodecByName(const std::string& name) {
-	static const std::unordered_map<std::string, Codec> codecMap = {
-		// Audio codecs
-		{"aac", Codec::AAC},
-		{"ac3", Codec::AC3},
-		{"dts", Codec::DTS},
-		{"eac3", Codec::EAC3},
-		{"flac", Codec::FLAC},
-		{"mp3", Codec::MP3},
-		{"opus", Codec::OPUS},
-		{"pcm", Codec::PCM},
-		{"vorbis", Codec::VORBIS},
-		{"wma", Codec::WMA},
+const std::unordered_map<Codec::Name, Codec::Info> Codec::Registry::c_codec_registry = {
+	// Audio codecs
+	{ Codec::Name::AAC,		{ "AAC",		Type::Audio		} },
+	{ Codec::Name::AC3,		{ "AC3",		Type::Audio		} },
+	{ Codec::Name::DTS,		{ "DTS",		Type::Audio		} },
+	{ Codec::Name::EAC3,	{ "EAC3",		Type::Audio		} },
+	{ Codec::Name::FLAC,	{ "FLAC",		Type::Audio		} },
+	{ Codec::Name::MP3,		{ "MP3",		Type::Audio		} },
+	{ Codec::Name::OPUS,	{ "OPUS",		Type::Audio		} },
+	{ Codec::Name::PCM,		{ "PCM",		Type::Audio		} },
+	{ Codec::Name::VORBIS,	{ "VORBIS",		Type::Audio		} },
+	{ Codec::Name::WMA,		{ "WMA",		Type::Audio		} },
+	{ Codec::Name::ALAC,	{ "ALAC",		Type::Audio		} },
+	{ Codec::Name::MPEG1L2,	{ "MPEG1L2",	Type::Audio		} },
 
-		// Video codecs
-		{"av1", Codec::AV1},
-		{"avc", Codec::AVC},
-		{"h264", Codec::H264},
-		{"h265", Codec::H265},
-		{"mjpeg", Codec::MJPEG},
-		{"theora", Codec::THEORA},
-		{"vp8", Codec::VP8},
-		{"vp9", Codec::VP9},
-		{"xvid", Codec::XVID},
+	// Video codecs
+	{ Codec::Name::AV1,		{ "AV1",		Type::Video		} },
+	{ Codec::Name::AVC,		{ "AVC",		Type::Video		} },
+	{ Codec::Name::H264,	{ "H264",		Type::Video		} },
+	{ Codec::Name::H265,	{ "H265",		Type::Video		} },
+	{ Codec::Name::MJPEG,	{ "MJPEG",		Type::Video		} },
+	{ Codec::Name::THEORA,	{ "THEORA",		Type::Video		} },
+	{ Codec::Name::VP8,		{ "VP8",		Type::Video		} },
+	{ Codec::Name::VP9,		{ "VP9",		Type::Video		} },
+	{ Codec::Name::XVID,	{ "XVID",		Type::Video		} },
 
-		// Subtitle codecs
-		{"asub", Codec::ASUB},
-		{"subrip", Codec::SUBRIP},
-		{"webvtt", Codec::WEBVTT},
+	// Subtitle codecs
+	{ Codec::Name::ASUB,	{ "ASUB",		Type::Subtitle	} },
+	{ Codec::Name::SUBRIP,	{ "SUBRIP",		Type::Subtitle	} },
+	{ Codec::Name::WEBVTT,	{ "WEBVTT",		Type::Subtitle	} },
 
-		// Image codecs
-		{"bmp", Codec::BMP},
-		{"gif", Codec::GIF},
-		{"jpeg", Codec::JPEG},
-		{"png", Codec::PNG},
-		{"tiff", Codec::TIFF}
-	};
+	// Image codecs
+	{ Codec::Name::BMP,		{ "BMP",		Type::Image		} },
+	{ Codec::Name::GIF,		{ "GIF",		Type::Image		} },
+	{ Codec::Name::JPEG,	{ "JPEG",		Type::Image		} },
+	{ Codec::Name::PNG,		{ "PNG",		Type::Image		} },
+	{ Codec::Name::TIFF,	{ "TIFF",		Type::Image		} },
+	{ Codec::Name::JPEG_XL,	{ "JPEG_XL",	Type::Image		} }
+};
 
-	auto it = codecMap.find(name);
-	if (it != codecMap.end()) {
+const std::unordered_map<std::string, Codec::Name> Codec::Registry::c_codec_name_map = [] {
+    std::unordered_map<std::string, Codec::Name> map;
+    for (const auto& [codec, info] : c_codec_registry) {
+        map[StormByte::Util::String::ToLower(info.s_name)] = codec;
+    }
+    return map;
+}();
+
+const Codec::Info& Codec::Registry::Info(const Codec::Name& codec) {
+	return c_codec_registry.at(codec);
+}
+
+const Codec::Name& Codec::Registry::Info(const std::string& name) {
+	auto it = c_codec_name_map.find(StormByte::Util::String::ToLower(name));
+	if (it != c_codec_name_map.end()) {
 		return it->second;
 	}
-
-	throw StormByte::Multimedia::CodecNotFound(name); // Handle unknown codec
-}	
+	throw StormByte::Multimedia::CodecNotFound(name);
+}
