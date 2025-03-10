@@ -1,133 +1,212 @@
-// #include <iostream>
-// #include <filesystem>
-// #include <multimedia/file.hxx>
-// #include <multimedia/codec/audio/eac3.hxx>
-// #include <multimedia/container/matroska.hxx>
-// #include <multimedia/container/avi.hxx>
-// #include <multimedia/container/mp4.hxx>
-// #include <multimedia/container/webm.hxx>
-// #include <multimedia/container/wav.hxx>
-// #include <multimedia/container/ogg.hxx>
-// #include <multimedia/container/flac.hxx>
-// #include <multimedia/container/opus.hxx>
-// #include <multimedia/exception.hxx>
-// #include <multimedia/stream/audio.hxx>
-// #include "test_handlers.h"
+#include <multimedia/container.hxx>
+#include <multimedia/stream.hxx>
+#include <iostream>
+#include "test_handlers.h"
 
-// using namespace StormByte::Multimedia;
+using namespace StormByte::Multimedia;
 
-// // Test cases
-// int test_file_initialization() {
-//     File file(CurrentFileDirectory / "files" / "test.mp4");
-//     ASSERT_FALSE("test_file_initialization", file.GetContainer()->GetType() == Container::Type::Unknown);
-//     RETURN_TEST("test_file_initialization", 0);
-// }
+// Test cases for all containers
 
-// int test_invalid_file_path() {
-//     try {
-// 		// Invalid file does not throw an exception
-//         File file(CurrentFileDirectory / "files" / "invalid_file.mkv");
-//     } catch (const Exception&) {
-//         RETURN_TEST("test_invalid_file_path", 1);
-//     }
-//     RETURN_TEST("test_invalid_file_path", 0);
-// }
+// AC3 Container
+int test_ac3_container_codecs() {
+    auto ac3 = Container(Media::Container::AC3);
+    ASSERT_EQUAL("test_ac3_container_codecs", true, ac3.Supports(Media::Codec::AC3));
+    ASSERT_EQUAL("test_ac3_container_codecs", false, ac3.Supports(Media::Codec::H264));
+    RETURN_TEST("test_ac3_container_codecs", 0);
+}
 
-// int test_matroska_compatible_codecs() {
-//     auto matroska = std::make_shared<Container::Matroska>();
-//     auto codecs = matroska->GetCompatibleCodecs();
-//     ASSERT_EQUAL("test_matroska_compatible_codecs", true,
-//         codecs.contains(Codec::Name::H264) && codecs.contains(Codec::Name::AAC));
-//     RETURN_TEST("test_matroska_compatible_codecs", 0);
-// }
+// FLAC Container
+int test_flac_container_codecs() {
+    auto flac = Container(Media::Container::FLAC);
+    ASSERT_EQUAL("test_flac_container_codecs", true, flac.Supports(Media::Codec::FLAC));
+    ASSERT_EQUAL("test_flac_container_codecs", false, flac.Supports(Media::Codec::MP3));
+    RETURN_TEST("test_flac_container_codecs", 0);
+}
 
-// int test_unsupported_codec() {
-//     auto avi = std::make_shared<Container::AVI>();
-//     auto codecs = avi->GetCompatibleCodecs();
-//     ASSERT_EQUAL("test_unsupported_codec", false, codecs.contains(Codec::Name::THEORA));
-//     RETURN_TEST("test_unsupported_codec", 0);
-// }
+// MP3 Container
+int test_mp3_container_codecs() {
+    auto mp3 = Container(Media::Container::MP3);
+    ASSERT_EQUAL("test_mp3_container_codecs", true, mp3.Supports(Media::Codec::MP3));
+    ASSERT_EQUAL("test_mp3_container_codecs", false, mp3.Supports(Media::Codec::AAC));
+    RETURN_TEST("test_mp3_container_codecs", 0);
+}
 
-// int test_codec_count_matroska() {
-//     auto matroska = std::make_shared<Container::Matroska>();
-//     ASSERT_EQUAL("test_codec_count_matroska", 15, matroska->GetCompatibleCodecs().size());
-//     RETURN_TEST("test_codec_count_matroska", 0);
-// }
+// OGA Container
+int test_oga_container_codecs() {
+    auto oga = Container(Media::Container::OGA);
+    ASSERT_EQUAL("test_oga_container_codecs", true, oga.Supports(Media::Codec::VORBIS) && oga.Supports(Media::Codec::OPUS));
+    ASSERT_EQUAL("test_oga_container_codecs", false, oga.Supports(Media::Codec::H264));
+    RETURN_TEST("test_oga_container_codecs", 0);
+}
 
-// int test_container_identification() {
-//     File file(CurrentFileDirectory / "files" / "test.mkv");
-//     ASSERT_FALSE("test_container_identification",
-//         std::dynamic_pointer_cast<Container::Matroska>(file.GetContainer()) == nullptr);
-//     RETURN_TEST("test_container_identification", 0);
-// }
+// WAV Container
+int test_wav_container_codecs() {
+    auto wav = Container(Media::Container::WAV);
+    ASSERT_EQUAL("test_wav_container_codecs", true, wav.Supports(Media::Codec::PCM) && wav.Supports(Media::Codec::WMA));
+    ASSERT_EQUAL("test_wav_container_codecs", false, wav.Supports(Media::Codec::MP3));
+    RETURN_TEST("test_wav_container_codecs", 0);
+}
 
-// int test_pcm_wav_compatibility() {
-//     auto wav = std::make_shared<Container::WAV>();
-//     ASSERT_EQUAL("test_pcm_wav_compatibility", true, wav->GetCompatibleCodecs().contains(Codec::Name::PCM));
-//     RETURN_TEST("test_pcm_wav_compatibility", 0);
-// }
+// AVI Container
+int test_avi_container_codecs() {
+    auto avi = Container(Media::Container::AVI);
+    ASSERT_EQUAL("test_avi_container_codecs", true, avi.Supports(Media::Codec::H264) && avi.Supports(Media::Codec::MJPEG));
+    ASSERT_EQUAL("test_avi_container_codecs", false, avi.Supports(Media::Codec::AAC));
+    RETURN_TEST("test_avi_container_codecs", 0);
+}
 
-// int test_empty_file_exception() {
-//     try {
-// 		// Invalid file does not throw, neither empty
-//         File empty_file("");
-//     } catch (const Exception&) {
-//         RETURN_TEST("test_empty_file_exception", 1);
-//     }
-//     RETURN_TEST("test_empty_file_exception", 0);
-// }
+// MKV Container
+int test_mkv_container_codecs() {
+    auto mkv = Container(Media::Container::MKV);
+    ASSERT_EQUAL("test_mkv_container_codecs", true,
+        mkv.Supports(Media::Codec::H264) &&
+        mkv.Supports(Media::Codec::H265) &&
+        mkv.Supports(Media::Codec::VP8) &&
+        mkv.Supports(Media::Codec::AAC));
+    ASSERT_EQUAL("test_mkv_container_codecs", false, mkv.Supports(Media::Codec::MP3));
+    RETURN_TEST("test_mkv_container_codecs", 0);
+}
 
-// int test_avi_h264_codec() {
-//     auto avi = std::make_shared<Container::AVI>();
-//     ASSERT_EQUAL("test_avi_h264_codec", true, avi->GetCompatibleCodecs().contains(Codec::Name::H264));
-//     RETURN_TEST("test_avi_h264_codec", 0);
-// }
+// MP4 Container
+int test_mp4_container_codecs() {
+    auto mp4 = Container(Media::Container::MP4);
+    ASSERT_EQUAL("test_mp4_container_codecs", true,
+        mp4.Supports(Media::Codec::H264) &&
+        mp4.Supports(Media::Codec::H265) &&
+        mp4.Supports(Media::Codec::AAC));
+    ASSERT_EQUAL("test_mp4_container_codecs", false, mp4.Supports(Media::Codec::VORBIS));
+    RETURN_TEST("test_mp4_container_codecs", 0);
+}
 
-// int test_add_stream_with_codec() {
-//     auto container = std::make_unique<Container::MP4>();
-    
-// 	// Create EAC3 codec
-// 	Codec::Audio::EAC3 eac3;
-//     // Create a stream with a valid codec
-//     Stream::Audio stream(std::move(eac3), Property::Duration(100));
+// M2TS Container
+int test_m2ts_container_codecs() {
+    auto m2ts = Container(Media::Container::M2TS);
+    ASSERT_EQUAL("test_m2ts_container_codecs", true,
+        m2ts.Supports(Media::Codec::H264) &&
+        m2ts.Supports(Media::Codec::H265) &&
+        m2ts.Supports(Media::Codec::AC3));
+    ASSERT_EQUAL("test_m2ts_container_codecs", false, m2ts.Supports(Media::Codec::VP8));
+    RETURN_TEST("test_m2ts_container_codecs", 0);
+}
 
-//     // Add the stream to the container
-//     container->AddStream(std::move(stream));
+// MPEG Container
+int test_mpeg_container_codecs() {
+    auto mpeg = Container(Media::Container::MPEG);
+    ASSERT_EQUAL("test_mpeg_container_codecs", true,
+        mpeg.Supports(Media::Codec::H264) &&
+        mpeg.Supports(Media::Codec::MP3));
+    ASSERT_EQUAL("test_mpeg_container_codecs", false, mpeg.Supports(Media::Codec::VORBIS));
+    RETURN_TEST("test_mpeg_container_codecs", 0);
+}
 
-//     // Check if the stream was successfully added and its codec is compatible
-//    	auto streams = container->GetStreams();
-//     ASSERT_EQUAL("test_add_stream_with_codec", 1, container->GetStreamCount());
-//     ASSERT_EQUAL("test_add_stream_with_codec", Codec::NameToString(Codec::Name::EAC3), Codec::NameToString(streams[0]->GetCodec().GetName()));
-    
-//     RETURN_TEST("test_add_stream_with_codec", 0);
-// }
+// MPG Container
+int test_mpg_container_codecs() {
+    auto mpg = Container(Media::Container::MPG);
+    ASSERT_EQUAL("test_mpg_container_codecs", true,
+        mpg.Supports(Media::Codec::H264) &&
+        mpg.Supports(Media::Codec::MP3));
+    ASSERT_EQUAL("test_mpg_container_codecs", false, mpg.Supports(Media::Codec::AAC));
+    RETURN_TEST("test_mpg_container_codecs", 0);
+}
 
+// OGV Container
+int test_ogv_container_codecs() {
+    auto ogv = Container(Media::Container::OGV);
+    ASSERT_EQUAL("test_ogv_container_codecs", true,
+        ogv.Supports(Media::Codec::THEORA) &&
+        ogv.Supports(Media::Codec::VORBIS));
+    ASSERT_EQUAL("test_ogv_container_codecs", false, ogv.Supports(Media::Codec::H264));
+    RETURN_TEST("test_ogv_container_codecs", 0);
+}
 
-// // Main function
-// int main() {
-//     int result = 0;
-//     try {
-//         result += test_file_initialization();
-//         result += test_invalid_file_path();
-//         result += test_matroska_compatible_codecs();
-//         result += test_unsupported_codec();
-//         result += test_codec_count_matroska();
-//         result += test_container_identification();
-//         result += test_pcm_wav_compatibility();
-//         result += test_empty_file_exception();
-//         result += test_avi_h264_codec();
-//         result += test_add_stream_with_codec();
-//     } catch (const StormByte::Multimedia::Exception& ex) {
-//         std::cerr << ex.what() << std::endl;
-//         result++;
-//     }
-//     if (result == 0) {
-//         std::cout << "All tests passed!" << std::endl;
-//     } else {
-//         std::cout << result << " tests failed." << std::endl;
-//     }
-//     return result;
-// }
+// TS Container
+int test_ts_container_codecs() {
+    auto ts = Container(Media::Container::TS);
+    ASSERT_EQUAL("test_ts_container_codecs", true,
+        ts.Supports(Media::Codec::H264) &&
+        ts.Supports(Media::Codec::AAC));
+    ASSERT_EQUAL("test_ts_container_codecs", false, ts.Supports(Media::Codec::VP9));
+    RETURN_TEST("test_ts_container_codecs", 0);
+}
+
+// WEBM Container
+int test_webm_container_codecs() {
+    auto webm = Container(Media::Container::WEBM);
+    ASSERT_EQUAL("test_webm_container_codecs", true,
+        webm.Supports(Media::Codec::VP8) &&
+        webm.Supports(Media::Codec::VP9) &&
+        webm.Supports(Media::Codec::OPUS));
+    ASSERT_EQUAL("test_webm_container_codecs", false, webm.Supports(Media::Codec::AAC));
+    RETURN_TEST("test_webm_container_codecs", 0);
+}
+
+// BMP Container
+int test_bmp_container_codecs() {
+    auto bmp = Container(Media::Container::BMP);
+    ASSERT_EQUAL("test_bmp_container_codecs", true, bmp.Supports(Media::Codec::BMP));
+    ASSERT_EQUAL("test_bmp_container_codecs", false, bmp.Supports(Media::Codec::JPEG));
+    RETURN_TEST("test_bmp_container_codecs", 0);
+}
+
+// GIF Container
+int test_gif_container_codecs() {
+    auto gif = Container(Media::Container::GIF);
+    ASSERT_EQUAL("test_gif_container_codecs", true, gif.Supports(Media::Codec::GIF));
+    ASSERT_EQUAL("test_gif_container_codecs", false, gif.Supports(Media::Codec::PNG));
+    RETURN_TEST("test_gif_container_codecs", 0);
+}
+
+// HEIC Container
+int test_heic_container_codecs() {
+    auto heic = Container(Media::Container::HEIC);
+    ASSERT_EQUAL("test_heic_container_codecs", true, heic.Supports(Media::Codec::TIFF));
+    ASSERT_EQUAL("test_heic_container_codecs", false, heic.Supports(Media::Codec::JPEG));
+    RETURN_TEST("test_heic_container_codecs", 0);
+}
+
+// JPG Container
+int test_jpg_container_codecs() {
+    auto jpg = Container(Media::Container::JPG);
+    ASSERT_EQUAL("test_jpg_container_codecs", true, jpg.Supports(Media::Codec::JPEG));
+    ASSERT_EQUAL("test_jpg_container_codecs", false, jpg.Supports(Media::Codec::PNG));
+    RETURN_TEST("test_jpg_container_codecs", 0);
+}
+
+// PNG Container
+int test_png_container_codecs() {
+    auto png = Container(Media::Container::PNG);
+    ASSERT_EQUAL("test_png_container_codecs", true, png.Supports(Media::Codec::PNG));
+    ASSERT_EQUAL("test_png_container_codecs", false, png.Supports(Media::Codec::GIF));
+    RETURN_TEST("test_png_container_codecs", 0);
+}
+
+// Main function
 int main() {
-	return 0;
+    int result = 0;
+    try {
+        result += test_ac3_container_codecs();
+        result += test_flac_container_codecs();
+        result += test_mp3_container_codecs();
+        result += test_oga_container_codecs();
+        result += test_wav_container_codecs();
+        result += test_avi_container_codecs();
+        result += test_mkv_container_codecs();
+        result += test_mp4_container_codecs();
+        result += test_m2ts_container_codecs();
+        result += test_mpeg_container_codecs();
+		result += test_mpg_container_codecs();
+		result += test_ogv_container_codecs();
+		result += test_ts_container_codecs();
+		result += test_webm_container_codecs();
+		result += test_bmp_container_codecs();
+		result += test_gif_container_codecs();
+		result += test_heic_container_codecs();
+		result += test_jpg_container_codecs();
+		result += test_png_container_codecs();
+		std::cout << "All tests passed successfully.\n";
+    } catch (...) {
+        result++;
+	}
+
+    return result;
 }

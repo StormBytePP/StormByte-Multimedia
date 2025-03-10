@@ -1,154 +1,53 @@
 #include <multimedia/container.hxx>
 
+#include <ranges>
+
 using namespace StormByte::Multimedia;
 
-// Audio Containers
-template<>
-constexpr bool Container<Media::Container::AC3>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::AC3;
-}
-template<>
-constexpr bool Container<Media::Container::AC3>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-
-template<>
-constexpr bool Container<Media::Container::FLAC>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::FLAC;
-}
-template<>
-constexpr bool Container<Media::Container::FLAC>::CanAddStreams() const noexcept {
-	return streams.empty();
+bool Container::IsFull() const noexcept {
+	const auto stream_limit = Media::Container::Registry::Info(m_name).s_max_streams;
+	if (stream_limit.has_value() && m_streams.size() >= stream_limit.value()) {
+		return true;
+	}
+	else {
+		return false;
+	}
 }
 
-template<>
-constexpr bool Container<Media::Container::MP3>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::MP3;
-}
-template<>
-constexpr bool Container<Media::Container::MP3>::CanAddStreams() const noexcept {
-	return streams.empty();
+bool Container::Supports(const Media::Codec::Name& codec) const noexcept {
+	const auto& supported_codecs = Media::Container::Registry::Info(m_name).s_allowed_codecs;
+	std::span<const Media::Codec::Name> supported_codecs_span(supported_codecs);
+	return std::ranges::find(supported_codecs_span, codec) != supported_codecs_span.end();
 }
 
-template<>
-constexpr bool Container<Media::Container::OGA>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::VORBIS || codec == Media::Codec::OPUS;
+bool Container::CanAddStream(const Stream::Base& stream) const noexcept {
+	try {
+		StreamAdditionCheck(stream);
+		return true;
+	}
+	catch (...) {
+		return false;
+	}
 }
 
-template<>
-constexpr bool Container<Media::Container::WAV>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::PCM || codec == Media::Codec::WMA;
-}
-template<>
-constexpr bool Container<Media::Container::WAV>::CanAddStreams() const noexcept {
-	return streams.empty();
+void Container::AddStream(const Stream::Base& stream) {
+	Stream::PointerType stream_pointer = stream.Clone();
+	AddStream(std::move(stream_pointer));
 }
 
-// Video Containers
-template<>
-constexpr bool Container<Media::Container::AVI>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::MJPEG || codec == Media::Codec::XVID;
+void Container::AddStream(Stream::Base&& stream) {
+	AddStream(std::move(stream.Move()));
 }
 
-template<>
-constexpr bool Container<Media::Container::MKV>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::H265 || codec == Media::Codec::VP8 || 
-			codec == Media::Codec::VP9 || codec == Media::Codec::AV1 || codec == Media::Codec::AAC ||
-			codec == Media::Codec::FLAC || codec == Media::Codec::VORBIS || codec == Media::Codec::SUBRIP ||
-			codec == Media::Codec::WEBVTT || codec == Media::Codec::OPUS;
+void Container::AddStream(std::shared_ptr<Stream::Base> stream) {
+	StreamAdditionCheck(*stream);
+	m_streams.push_back(stream);
 }
 
-template<>
-constexpr bool Container<Media::Container::MP4>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::H265 || codec == Media::Codec::AV1 ||
-			codec == Media::Codec::AAC || codec == Media::Codec::FLAC || codec == Media::Codec::MP3;
+void Container::StreamAdditionCheck(const Stream::Base& stream) const {
+	if (IsFull())
+		throw ContainerIsFull(m_name);
+	else if (!Supports(stream.Codec())) {
+		throw CodecNotSupported(m_name, stream.Codec());
+	}
 }
-
-template<>
-constexpr bool Container<Media::Container::M2TS>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::H265 || codec == Media::Codec::AC3 ||
-			codec == Media::Codec::AAC || codec == Media::Codec::PCM;
-}
-
-template<>
-constexpr bool Container<Media::Container::MPEG>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::MP3 || codec == Media::Codec::AAC;
-}
-
-template<>
-constexpr bool Container<Media::Container::MPG>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::MP3 || codec == Media::Codec::AAC;
-}
-
-template<>
-constexpr bool Container<Media::Container::OGV>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::THEORA || codec == Media::Codec::VORBIS;
-}
-
-template<>
-constexpr bool Container<Media::Container::TS>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::H264 || codec == Media::Codec::H265 || codec == Media::Codec::AAC;
-}
-
-template<>
-constexpr bool Container<Media::Container::WEBM>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	auto codec = stream->GetCodec();
-	return codec == Media::Codec::VP8 || codec == Media::Codec::VP9 || codec == Media::Codec::OPUS;
-}
-
-// Image Containers
-template<>
-constexpr bool Container<Media::Container::BMP>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::BMP;
-}
-template<>
-constexpr bool Container<Media::Container::BMP>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-
-template<>
-constexpr bool Container<Media::Container::GIF>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::GIF;
-}
-template<>
-constexpr bool Container<Media::Container::GIF>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-
-template<>
-constexpr bool Container<Media::Container::HEIC>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::TIFF;
-}
-template<>
-constexpr bool Container<Media::Container::HEIC>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-
-template<>
-constexpr bool Container<Media::Container::JPG>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::JPEG;
-}
-template<>
-constexpr bool Container<Media::Container::JPG>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-
-template<>
-constexpr bool Container<Media::Container::PNG>::CanAddStream(const Stream::PointerType& stream) const noexcept {
-	return stream->GetCodec() == Media::Codec::PNG;
-}
-template<>
-constexpr bool Container<Media::Container::PNG>::CanAddStreams() const noexcept {
-	return streams.empty();
-}
-	

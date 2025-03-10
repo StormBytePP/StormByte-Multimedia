@@ -99,6 +99,46 @@ namespace StormByte::Multimedia {
 			~CodecNotFound() noexcept override									= default;
 	};
 
+	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFound: public Exception {
+		public:
+			/**
+			 * @brief Default constructor.
+			 * @param container The message of the exception.
+			 */
+			ContainerNotFound(const std::string& container);
+
+			/**
+			 * @brief Copy constructor.
+			 * @param exception The exception to copy.
+			 */
+			ContainerNotFound(const ContainerNotFound& exception) 					= default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param exception The exception to move.
+			 */
+			ContainerNotFound(ContainerNotFound&& exception) noexcept 				= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param exception The exception to copy.
+			 * @return The copied exception.
+			 */
+			ContainerNotFound& operator=(const ContainerNotFound& exception) 		= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param exception The exception to move.
+			 * @return The moved exception.
+			 */
+			ContainerNotFound& operator=(ContainerNotFound&& exception) noexcept 	= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~ContainerNotFound() noexcept override									= default;
+	};
+
 	/**
 	 * @class CodecNotSupported
 	 * @brief The exception for when a codec is not supported for a container
@@ -110,7 +150,7 @@ namespace StormByte::Multimedia {
 			 * @param container The container.
 			 * @param codec The Codec.
 			 */
-			CodecNotSupported(const Media::Container& container, const Media::Codec& codec);
+			CodecNotSupported(const Media::Container::Name& container, const Media::Codec::Name& codec);
 
 			/**
 			 * @brief Copy constructor.
@@ -150,7 +190,7 @@ namespace StormByte::Multimedia {
 			 * @brief Default constructor.
 			 * @param container The container.
 			 */
-			ContainerIsFull(const Media::Container& container);
+			ContainerIsFull(const Media::Container::Name& container);
 
 			/**
 			 * @brief Copy constructor.

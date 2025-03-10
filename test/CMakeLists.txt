@@ -1,9 +1,5 @@
 option(ENABLE_TEST "Enable Unit Tests" OFF)
 if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
-	add_executable(FileTests file_tests.cxx)
-	target_link_libraries(FileTests StormByte::Multimedia)
-	add_test(NAME FileTests COMMAND FileTests)
-
 	add_executable(ContainerTests container_tests.cxx)
 	target_link_libraries(ContainerTests StormByte::Multimedia)
 	add_test(NAME ContainerTests COMMAND ContainerTests)
