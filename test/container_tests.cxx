@@ -1,7 +1,6 @@
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/stream.hxx>
-
-#include "test_handlers.h"
+#include <StormByte/test_handlers.h>
 
 using namespace StormByte::Multimedia;
 
