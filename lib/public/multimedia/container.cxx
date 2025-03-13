@@ -36,7 +36,7 @@ void Container::AddStream(const Stream::Base& stream) {
 }
 
 void Container::AddStream(Stream::Base&& stream) {
-	AddStream(std::move(stream.Move()));
+	AddStream(stream.Move());
 }
 
 void Container::AddStream(std::shared_ptr<Stream::Base> stream) {
