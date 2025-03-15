@@ -1,4 +1,3 @@
-#include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/codec.hxx>
 #include <StormByte/util/string.hxx>
 
@@ -25,7 +24,7 @@ const std::unordered_map<Codec::Name, Codec::Info> Codec::Registry::c_codec_regi
 	{ Codec::Name::AV1,		{ "AV1",		Type::Video		} },
 	{ Codec::Name::AVC,		{ "AVC",		Type::Video		} },
 	{ Codec::Name::H264,	{ "H264",		Type::Video		} },
-	{ Codec::Name::H265,	{ "H265",		Type::Video		} },
+	{ Codec::Name::H265,	{ "HEVC",		Type::Video		} },
 	{ Codec::Name::MJPEG,	{ "MJPEG",		Type::Video		} },
 	{ Codec::Name::THEORA,	{ "THEORA",		Type::Video		} },
 	{ Codec::Name::VP8,		{ "VP8",		Type::Video		} },
