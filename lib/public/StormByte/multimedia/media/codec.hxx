@@ -1,5 +1,7 @@
 #pragma once
 
+#include <StormByte/alias.hxx>
+#include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/type.hxx>
 
 #include <string>
@@ -81,7 +83,7 @@ namespace StormByte::Multimedia::Media::Codec {
 		 * @param codecName The name of the codec.
 		 * @return A reference to the CodecInfo struct for the requested codec.
 		 */
-		static const Name& Info(const std::string& codecName);
+		static StormByte::Expected<Name, CodecNotFound> Info(const std::string& codecName);
 
 		private:
 			static const STORMBYTE_MULTIMEDIA_PRIVATE std::unordered_map<Codec::Name, Codec::Info> c_codec_registry; 	///< The codec registry.

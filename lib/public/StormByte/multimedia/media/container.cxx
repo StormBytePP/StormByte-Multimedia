@@ -1,4 +1,3 @@
-#include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/container.hxx>
 #include <StormByte/util/string.hxx>
 
@@ -46,10 +45,10 @@ const Container::Info& Container::Registry::Info(const Container::Name& containe
     return c_container_registry.at(container);
 }
 
-const Container::Name& Container::Registry::Info(const std::string& name) {
+StormByte::Expected<Container::Name, StormByte::Multimedia::ContainerNotFound> Container::Registry::Info(const std::string& name) {
     auto it = c_container_name_map.find(StormByte::Util::String::ToLower(name));
-    if (it == c_container_name_map.end()) {
-        throw StormByte::Multimedia::ContainerNotFound(name);
-    }
-    return it->second;
+    if (it != c_container_name_map.end())
+	return it->second;
+
+    return Unexpected<StormByte::Multimedia::ContainerNotFound>(name);
 }

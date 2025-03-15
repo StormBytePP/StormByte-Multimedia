@@ -1,8 +1,7 @@
 #pragma once
 
 #include <StormByte/exception.hxx>
-#include <StormByte/multimedia/media/codec.hxx>
-#include <StormByte/multimedia/media/container.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 /**
  * @namespace Multimedia
@@ -158,7 +157,7 @@ namespace StormByte::Multimedia {
 			 * @param container The container.
 			 * @param codec The Codec.
 			 */
-			CodecNotSupported(const Media::Container::Name& container, const Media::Codec::Name& codec);
+			CodecNotSupported(const std::string& container, const std::string& codec);
 
 			/**
 			 * @brief Copy constructor.
@@ -202,7 +201,7 @@ namespace StormByte::Multimedia {
 			 * @brief Default constructor.
 			 * @param container The container.
 			 */
-			ContainerIsFull(const Media::Container::Name& container);
+			ContainerIsFull(const std::string& container);
 
 			/**
 			 * @brief Copy constructor.

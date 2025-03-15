@@ -1,18 +1,20 @@
 #include <StormByte/multimedia/exception.hxx>
 
+#include <format>
+
 using namespace StormByte::Multimedia;
 
 Exception::Exception(const std::string& message):StormByte::Exception(message) {}
 
 Exception::Exception(std::string&& message) noexcept:StormByte::Exception(std::move(message)) {}
 
-CodecNotFound::CodecNotFound(const std::string& codecName):Exception("Codec not found: " + codecName) {}
+CodecNotFound::CodecNotFound(const std::string& codecName):Exception(std::format("Codec not found: {}", codecName)) {}
 
-CodecNotSupported::CodecNotSupported(const Media::Container::Name& container, const Media::Codec::Name& codec):
-Exception("Codec " + Media::Codec::Registry::Info(codec).s_name + " is not supported for container " + Media::Container::Registry::Info(container).s_name) {}
+CodecNotSupported::CodecNotSupported(const std::string& container, const std::string& codec):
+Exception(std::format("Codec {} is not supported for container {}", codec, container)) {}
 
-ContainerIsFull::ContainerIsFull(const Media::Container::Name& container):
-Exception("Container " + Media::Container::Registry::Info(container).s_name + " is full") {}
+ContainerIsFull::ContainerIsFull(const std::string& container):
+Exception(std::format("Container {} is full", container)) {}
 
 ContainerNotFound::ContainerNotFound(const std::string& containerName):
-Exception("Container " + containerName + " is not supported") {}
+Exception(std::format("Container {} is not supported", containerName)) {}

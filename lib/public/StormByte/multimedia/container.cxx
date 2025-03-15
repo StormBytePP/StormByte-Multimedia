@@ -46,8 +46,8 @@ void Container::AddStream(std::shared_ptr<Stream::Base> stream) {
 
 void Container::StreamAdditionCheck(const Stream::Base& stream) const {
 	if (IsFull())
-		throw ContainerIsFull(m_name);
+		throw ContainerIsFull(Media::Container::Registry::Info(m_name).s_name);
 	else if (!Supports(stream.Codec())) {
-		throw CodecNotSupported(m_name, stream.Codec());
+		throw CodecNotSupported(Media::Container::Registry::Info(m_name).s_name, Media::Codec::Registry::Info(stream.Codec()).s_name);
 	}
 }

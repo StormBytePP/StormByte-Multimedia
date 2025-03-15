@@ -58,10 +58,10 @@ const Codec::Info& Codec::Registry::Info(const Codec::Name& codec) {
 	return c_codec_registry.at(codec);
 }
 
-const Codec::Name& Codec::Registry::Info(const std::string& name) {
+StormByte::Expected<Codec::Name, StormByte::Multimedia::CodecNotFound> Codec::Registry::Info(const std::string& name) {
 	auto it = c_codec_name_map.find(StormByte::Util::String::ToLower(name));
-	if (it != c_codec_name_map.end()) {
+	if (it != c_codec_name_map.end())
 		return it->second;
-	}
-	throw StormByte::Multimedia::CodecNotFound(name);
+
+	return Unexpected<CodecNotFound>(name);
 }

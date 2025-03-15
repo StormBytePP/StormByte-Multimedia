@@ -1,5 +1,7 @@
 #pragma once
 
+#include <StormByte/alias.hxx>
+#include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/codec.hxx>
 #include <StormByte/multimedia/media/type.hxx>
 
@@ -72,7 +74,7 @@ namespace StormByte::Multimedia::Media::Container {
 		 * @return The corresponding container enum value.
 		 * @throws std::out_of_range If the container name is not found.
 		 */
-		static const Name& Info(const std::string& name);
+		static StormByte::Expected<Name, ContainerNotFound> Info(const std::string& name);
 
 	private:
 		static const std::unordered_map<Name, Container::Info> c_container_registry;	///< Registry of container metadata.
