@@ -59,6 +59,10 @@ namespace StormByte::Multimedia {
 			virtual ~Exception() noexcept 								= default;
 	};
 
+	/**
+	 * @class CodecNotFound
+	 * @brief The exception for when a codec is not found.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFound: public Exception {
 		public:
 			/**
@@ -99,6 +103,10 @@ namespace StormByte::Multimedia {
 			~CodecNotFound() noexcept override									= default;
 	};
 
+	/**
+	 * @class ContainerNotFound
+	 * @brief The exception for when a container is not found.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFound: public Exception {
 		public:
 			/**
@@ -184,6 +192,10 @@ namespace StormByte::Multimedia {
 			~CodecNotSupported() noexcept override										= default;
 	};
 
+	/**
+	 * @class ContainerIsFull
+	 * @brief The exception for when a container is full.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerIsFull: public Exception {
 		public:
 			/**
