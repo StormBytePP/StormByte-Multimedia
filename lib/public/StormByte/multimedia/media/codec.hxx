@@ -58,35 +58,70 @@ namespace StormByte::Multimedia::Media::Codec {
 	};
 
 	/**
-	 * @struct CodecInfo
+	 * @class Info
 	 * @brief Holds detailed information about a codec.
 	 */
-	struct STORMBYTE_MULTIMEDIA_PUBLIC Info {
-		std::string s_name;						///< Name of the codec (e.g., "AAC", "H264").
-		Type s_type;							///< Type of the codec (Audio, Video, Subtitle, or Image).
-	};
+	class STORMBYTE_MULTIMEDIA_PUBLIC Info {
+		public:
+			/**
+			 * @brief Constructor.
+			 * @param name The name of the codec.
+			 * @param type The type of the codec.
+			 */
+			Info(const std::string& name, const Type& type);
+			
+			/**
+			 * @brief Constructor.
+			 * @param name The name of the codec.
+			 * @param type The type of the codec.
+			 */
+			Info(const std::string&& name, Type&& type);
 
-	/**
-	 * @class CodecRegistry
-	 * @brief Centralized registry to manage codec-related metadata.
-	 */
-	struct STORMBYTE_MULTIMEDIA_PUBLIC Registry {
-		/**
-		 * @brief Retrieves detailed information about a codec.
-		 * @param codec The codec enum value.
-		 * @return A reference to the CodecInfo struct for the requested codec.
-		 */
-		static const Info& Info(const Name& codec);
+			/**
+			 * @brief Copy constructor.
+			 * @param info The Info to copy.
+			 */
+			Info(const Info& info) 						= default;
 
-		/**
-		 * @brief Retrieves detailed information about a codec by name.
-		 * @param codecName The name of the codec.
-		 * @return A reference to the CodecInfo struct for the requested codec.
-		 */
-		static StormByte::Expected<Name, CodecNotFound> Info(const std::string& codecName);
+			/**
+			 * @brief Move constructor.
+			 * @param info The Info to move.
+			 */
+			Info(Info&& info) noexcept 					= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param info The Info to copy.
+			 * @return The copied Info.
+			 */
+			Info& operator=(const Info& info)			= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param info The Info to move.
+			 * @return The moved Info.
+			 */
+			Info& operator=(Info&& info) noexcept 		= default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Info() noexcept 							= default;
+
+			/**
+			 * @brief Gets the name of the codec.
+			 * @return The name of the codec.
+			 */
+			const std::string& 							Name() const noexcept;
+
+			/**
+			 * @brief Gets the type of the codec.
+			 * @return The type of the codec.
+			 */
+			const Media::Type&							Type() const noexcept;
 
 		private:
-			static const std::unordered_map<Codec::Name, Codec::Info> c_codec_registry; 	///< The codec registry.
-			static const std::unordered_map<std::string, Codec::Name> c_codec_name_map;	///< The codec name map.
+			std::string 								m_name;		///< Name of the codec (e.g., "AAC", "H264").
+			Media::Type 								m_type;		///< Type of the codec (Audio, Video, Subtitle, or Image).
 	};
 }

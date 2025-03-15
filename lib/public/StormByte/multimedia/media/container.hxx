@@ -47,37 +47,79 @@ namespace StormByte::Multimedia::Media::Container {
 	};
 
 	/**
-	 * @struct Info
+	 * @class Info
 	 * @brief Holds information about a container.
 	 */
-	struct STORMBYTE_MULTIMEDIA_PUBLIC Info {
-		std::string s_name;								///< The name of the container (e.g., "MP4").
-		std::optional<unsigned short> s_max_streams;	///< The maximum number of streams allowed in the container.
-		std::vector<Codec::Name> s_allowed_codecs;		///< The list of codecs allowed in the container.
-	};
+	class STORMBYTE_MULTIMEDIA_PUBLIC Info {
+		public:
+			/**
+			 * @brief Constructor.
+			 * @param name The name of the container.
+			 * @param allowedCodecs The list of allowed codecs.
+			 * @param maxStreams The maximum number of streams allowed in the container.
+			 */
+			Info(const std::string& name, const std::vector<Codec::Name>& allowedCodecs, const std::optional<unsigned short>& maxStreams = std::nullopt);
 
-	/**
-	 * @class Registry
-	 * @brief Centralized registry for managing container metadata.
-	 */
-	struct STORMBYTE_MULTIMEDIA_PUBLIC Registry {
-		/**
-		 * @brief Retrieves information about a container.
-		 * @param container The container enum value.
-		 * @return Reference to the Info struct of the container.
-		 */
-		static const Info& Info(const Name& container);
+			/**
+			 * @brief Constructor.
+			 * @param name The name of the container.
+			 * @param allowedCodecs The list of allowed codecs.
+			 * @param maxStreams The maximum number of streams allowed in the container.
+			 */
+			Info(const std::string&& name, std::vector<Codec::Name>&& allowedCodecs, std::optional<unsigned short>&& maxStreams = std::nullopt);
 
-		/**
-		 * @brief Retrieves the container enum by its name.
-		 * @param name The container name (case-insensitive).
-		 * @return The corresponding container enum value.
-		 * @throws std::out_of_range If the container name is not found.
-		 */
-		static StormByte::Expected<Name, ContainerNotFound> Info(const std::string& name);
+			/**
+			 * @brief Copy constructor.
+			 * @param info The Info to copy.
+			 */
+			Info(const Info& info) 						= default;
 
-	private:
-		static const std::unordered_map<Name, Container::Info> c_container_registry;	///< Registry of container metadata.
-		static const std::unordered_map<std::string, Name> c_container_name_map;		///< Reverse lookup map.
+			/**
+			 * @brief Move constructor.
+			 * @param info The Info to move.
+			 */
+			Info(Info&& info) noexcept 					= default;
+
+			/**
+			 * @brief Copy assignment operator.
+			 * @param info The Info to copy.
+			 * @return The copied Info.
+			 */
+			Info& operator=(const Info& info)			= default;
+
+			/**
+			 * @brief Move assignment operator.
+			 * @param info The Info to move.
+			 * @return The moved Info.
+			 */
+			Info& operator=(Info&& info) noexcept 		= default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Info() noexcept 							= default;
+
+			/**
+			 * @brief Gets container name
+			 * @return The container name.
+			 */
+			const std::string& 							Name() const noexcept;
+
+			/**
+			 * @brief Gets all the allowed codecs for the container.
+			 * @return The vector of allowed codecs.
+			 */
+			const std::vector<Codec::Name>&				AllowedCodecs() const noexcept;
+
+			/**
+			 * @brief Gets the maximum number of streams allowed in the container (if this restriction is present)
+			 * @return The maximum number of streams.
+			 */
+			const std::optional<unsigned short>&		MaxStreams() const noexcept;
+
+		private:
+			std::string 								m_name;				///< The name of the container (e.g., "MP4").
+			std::vector<Codec::Name> 					m_allowed_codecs;	///< The list of codecs allowed in the container.
+			std::optional<unsigned short> 				m_max_streams;		///< The maximum number of streams allowed in the container.
 	};
 }
