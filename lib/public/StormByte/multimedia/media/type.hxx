@@ -2,6 +2,8 @@
 
 #include <StormByte/multimedia/visibility.h>
 
+#include <string>
+
 /**
  * @namespace Media
  * @brief The namespace for all multimedia media types.
@@ -19,4 +21,6 @@ namespace StormByte::Multimedia::Media {
 		Attachment,		///< Attachment stream.
 		Unknown			///< Unknown stream.
 	};
+
+	std::string STORMBYTE_MULTIMEDIA_PUBLIC TypeToString(Type type);
 }
