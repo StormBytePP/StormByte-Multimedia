@@ -86,7 +86,7 @@ namespace StormByte::Multimedia::Media::Codec {
 		static StormByte::Expected<Name, CodecNotFound> Info(const std::string& codecName);
 
 		private:
-			static const STORMBYTE_MULTIMEDIA_PRIVATE std::unordered_map<Codec::Name, Codec::Info> c_codec_registry; 	///< The codec registry.
-			static const STORMBYTE_MULTIMEDIA_PRIVATE std::unordered_map<std::string, Codec::Name> c_codec_name_map;	///< The codec name map.
+			static const std::unordered_map<Codec::Name, Codec::Info> c_codec_registry; 	///< The codec registry.
+			static const std::unordered_map<std::string, Codec::Name> c_codec_name_map;	///< The codec name map.
 	};
 }
