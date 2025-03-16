@@ -42,20 +42,4 @@ const unsigned int& Audio::Bitrate() const noexcept {
 	return m_bitrate;
 }
 
-StormByte::Multimedia::Media::Tags& Audio::Disposition() noexcept {
-	return m_disposition;
-}
-
-const StormByte::Multimedia::Media::Tags& Audio::Disposition() const noexcept {
-	return m_disposition;
-}
-
-StormByte::Multimedia::Media::Tags& Audio::Tags() noexcept {
-	return m_tags;
-}
-
-const StormByte::Multimedia::Media::Tags& Audio::Tags() const noexcept {
-	return m_tags;
-}
-
 Audio::Audio(const Media::Codec::Name& codec) noexcept: Base(codec) {}

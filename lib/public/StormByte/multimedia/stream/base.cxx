@@ -21,6 +21,14 @@ PointerType Base::Create(const Media::Codec::Name& codec) {
 	}
 }
 
+StormByte::Multimedia::Media::Tags& Base::Disposition() noexcept {
+	return m_disposition;
+}
+
+const StormByte::Multimedia::Media::Tags& Base::Disposition() const noexcept {
+	return m_disposition;
+}
+
 StormByte::Multimedia::Media::Tags& Base::Tags() noexcept {
 	return m_tags;
 }

@@ -114,30 +114,6 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			const unsigned int& 										Bitrate() const noexcept;
 
-			/**
-			 * @brief Gets the disposition.
-			 * @return The disposition.
-			 */
-			Media::Tags& 												Disposition() noexcept;
-
-			/**
-			 * @brief Gets the disposition.
-			 * @return The disposition.
-			 */
-			const Media::Tags& 											Disposition() const noexcept;
-
-			/**
-			 * @brief Gets the tags.
-			 * @return The tags.
-			 */
-			Media::Tags& 												Tags() noexcept;
-
-			/**
-			 * @brief Gets the tags.
-			 * @return The tags.
-			 */
-			const Media::Tags& 											Tags() const noexcept;
-
 		private:
 			/**
 			 * @brief Default constructor.
@@ -149,7 +125,5 @@ namespace StormByte::Multimedia::Stream {
 			unsigned int m_sample_rate;									///< The sample rate.
 			std::string m_channel_layout;								///< The channel layout.
 			unsigned int m_bitrate;										///< The number of bits per sample.
-			Media::Tags m_disposition;									///< The disposition of the stream.
-			Media::Tags m_tags;											///< The tags of the stream.
 	};
 }
