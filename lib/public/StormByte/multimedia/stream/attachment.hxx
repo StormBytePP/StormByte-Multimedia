@@ -18,32 +18,32 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Copy constructor.
 			 * @param stream The stream to copy.
 			 */
-			constexpr Attachment(const Attachment& stream) noexcept 			= default;
+			Attachment(const Attachment& stream) noexcept 						= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param stream The stream to move.
 			 */
-			constexpr Attachment(Attachment&& stream) noexcept					= default;
+			Attachment(Attachment&& stream) noexcept							= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param stream The stream to copy.
 			 * @return Reference to the assigned stream.
 			 */
-			constexpr Attachment& operator=(const Attachment& stream) noexcept 	= default;
+			Attachment& operator=(const Attachment& stream) noexcept 			= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param stream The stream to move.
 			 * @return Reference to the assigned stream.
 			 */
-			constexpr Attachment& operator=(Attachment&& stream) noexcept 		= default;
+			Attachment& operator=(Attachment&& stream) noexcept 				= default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			constexpr ~Attachment() noexcept 									= default;
+			~Attachment() noexcept override 									= default;
 
 			/**
 			 * @brief Clones the stream.
@@ -70,6 +70,6 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			constexpr Attachment(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+			Attachment(const Media::Codec::Name& codec) noexcept: Base(codec) {}
 	};
 }

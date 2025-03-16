@@ -30,32 +30,32 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Copy constructor.
 			 * @param stream The stream to copy.
 			 */
-			constexpr Base(const Base& stream) noexcept 			= default;
+			Base(const Base& stream) noexcept 						= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param stream The stream to move.
 			 */
-			constexpr Base(Base&& stream) noexcept					= default;
+			Base(Base&& stream) noexcept							= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param stream The stream to copy.
 			 * @return Reference to the assigned stream.
 			 */
-			constexpr Base& operator=(const Base& stream) noexcept 	= default;
+			Base& operator=(const Base& stream) noexcept 			= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param stream The stream to move.
 			 * @return Reference to the assigned stream.
 			 */
-			constexpr Base& operator=(Base&& stream) noexcept 		= default;
+			Base& operator=(Base&& stream) noexcept 				= default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			constexpr virtual ~Base() noexcept 						= default;
+			virtual ~Base() noexcept override 						= default;
 
 			/**
 			 * @brief Gets the codec of the stream.
@@ -98,9 +98,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			constexpr Base(const Media::Codec::Name& codec) noexcept {
-				m_codec = codec;
-			}
+			Base(const Media::Codec::Name& codec) noexcept;
     };
 	using PointerType	= Base::PointerType;						///< PointerType alias
 	using Span			= std::span<PointerType>;					///< Span type

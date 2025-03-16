@@ -28,3 +28,5 @@ StormByte::Multimedia::Media::Tags& Base::Tags() noexcept {
 const StormByte::Multimedia::Media::Tags& Base::Tags() const noexcept {
 	return m_tags;
 }
+
+Base::Base(const Media::Codec::Name& codec) noexcept: m_codec(codec), m_tags() {}
