@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/multimedia/media/type.hxx>
-#include <StormByte/util/templates/clonable.hxx>
+#include <StormByte/util/clonable.hxx>
 
 namespace StormByte::Multimedia {
     /**
@@ -9,7 +9,7 @@ namespace StormByte::Multimedia {
      * @brief The template class for all multimedia codecs.
      */
     template <Media::Codec C>
-	class STORMBYTE_MULTIMEDIA_PUBLIC Codec: public Util::Templates::Clonable<Codec<C>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Codec: public Util::Clonable<Codec<C>> {
 		public:
 			/**
 			 * @brief Default constructor.

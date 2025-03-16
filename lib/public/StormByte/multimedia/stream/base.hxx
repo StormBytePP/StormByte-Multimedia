@@ -2,10 +2,10 @@
 
 #include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/codec.hxx>
-#include <StormByte/multimedia/media/language.hxx>
-#include <StormByte/util/templates/clonable.hxx>
+#include <StormByte/multimedia/media/tags.hxx>
+#include <StormByte/util/clonable.hxx>
 
-#include <optional>
+
 #include <span>
 
 /**
@@ -24,7 +24,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Base
 	 * @brief Base class for all multimedia streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Templates::Clonable<Base, std::shared_ptr<Base>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Clonable<Base, std::shared_ptr<Base>> {
 		public:
 			/**
 			 * @brief Copy constructor.
@@ -66,26 +66,22 @@ namespace StormByte::Multimedia::Stream {
 			}
 
 			/**
+			 * @brief Gets the tags of the stream.
+			 * @return The tags of the stream.
+			 */
+			Media::Tags& 											Tags() noexcept;
+
+			/**
+			 * @brief Gets the tags of the stream.
+			 * @return The tags of the stream.
+			 */
+			const Media::Tags& 										Tags() const noexcept;
+
+			/**
 			 * @brief Gets the type of the stream.
 			 * @return The type of the stream.
 			 */
 			virtual Media::Type 									Type() const noexcept = 0;
-
-			/**
-			 * @brief Gets the language of the stream.
-			 * @return The language of the stream.
-			 */
-			constexpr std::optional<Media::Language> 				Language() const noexcept {
-				return m_language;
-			}
-
-			/**
-			 * @brief Sets the language of the stream.
-			 * @param language The language of the stream.
-			 */
-			constexpr void 											Language(const Media::Language& language) noexcept {
-				m_language = language;
-			}
 
 			/**
 			 * @brief Creates a new stream of the corresponding type based on the provided codec
@@ -96,7 +92,7 @@ namespace StormByte::Multimedia::Stream {
 
 		protected:
 			Media::Codec::Name m_codec;								///< The codec of the stream.
-			std::optional<Media::Language> m_language;				///< The language of the stream.
+			Media::Tags m_tags;										///< Tags of the stream.
 
 			/**
 			 * @brief Default constructor.
