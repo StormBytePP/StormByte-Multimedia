@@ -13,7 +13,6 @@ namespace StormByte::Multimedia::Media {
 				return "Image";
 			case Type::Attachment:
 				return "Attachment";
-			case Type::Unknown:
 			default:
 				return "Unknown";
 			}

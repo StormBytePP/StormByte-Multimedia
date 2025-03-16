@@ -17,7 +17,7 @@ PointerType Base::Create(const Media::Codec::Name& codec) {
 		case Media::Type::Attachment:
 			return PointerType(new Attachment(codec));
 		default:
-			return nullptr;
+			return nullptr; // This will not happen but compiler needs to be happy
 	}
 }
 

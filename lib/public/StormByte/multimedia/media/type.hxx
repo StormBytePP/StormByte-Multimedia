@@ -19,7 +19,6 @@ namespace StormByte::Multimedia::Media {
 		Subtitle,		///< Subtitle stream.
 		Image,			///< Image stream.
 		Attachment,		///< Attachment stream.
-		Unknown			///< Unknown stream.
 	};
 
 	std::string STORMBYTE_MULTIMEDIA_PUBLIC TypeToString(Type type);
