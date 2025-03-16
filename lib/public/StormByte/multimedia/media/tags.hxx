@@ -67,37 +67,38 @@ namespace StormByte::Multimedia::Media {
 			StormByte::Expected<const std::string&, Exception> 		operator[](const std::string& key) const noexcept;
 
 			/**
-			 * @brief Gets the value of a tag.
+			 * @brief Removes the value of a tag.
 			 * @param key The key of the tag.
-			 * @return The value of the tag.
 			 */
 			void 													Remove(const std::string& key) noexcept;
 
 			/**
-			 * @brief Gets the value of a tag.
-			 * @param key The key of the tag.
-			 * @return The value of the tag.
+			 * @brief Gets tags size
+			 * @return The size of the tags.
+			 */
+			std::size_t 											Size() const noexcept;
+
+			/**
+			 * @brief Gets iterator to the first tag.
+			 * @return The iterator to the first tag.
 			 */
 			iterator 												begin() noexcept;
 
 			/**
-			 * @brief Gets the value of a tag.
-			 * @param key The key of the tag.
-			 * @return The value of the tag.
+			 * @brief Gets const iterator to the first tag.
+			 * @return The iterator to the first tag.
 			 */
 			const_iterator 											begin() const noexcept;
 
 			/**
-			 * @brief Gets the value of a tag.
-			 * @param key The key of the tag.
-			 * @return The value of the tag.
+			 * @brief Gets iterator past the last tag.
+			 * @return The iterator past the last tag.
 			 */
 			iterator 												end() noexcept;
 
 			/**
-			 * @brief Gets the value of a tag.
-			 * @param key The key of the tag.
-			 * @return The value of the tag.
+			 * @brief Gets const iterator past the last tag.
+			 * @return The iterator past the last tag.
 			 */
 			const_iterator 											end() const noexcept;
 
