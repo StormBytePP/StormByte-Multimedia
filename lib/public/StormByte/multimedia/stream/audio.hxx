@@ -3,6 +3,9 @@
 #include <StormByte/multimedia/media/tags.hxx>
 #include <StormByte/multimedia/stream/base.hxx>
 
+#include <optional>
+#include <string>
+
 /**
  * @namespace Stream
  * @brief The namespace for all multimedia streams types.
@@ -114,6 +117,18 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			const unsigned int& 										Bitrate() const noexcept;
 
+			/**
+			 * @brief Gets the profile.
+			 * @return The profile.
+			 */
+			std::optional<std::string>& 								Profile() noexcept;
+
+			/**
+			 * @brief Gets the profile.
+			 * @return The profile.
+			 */
+			const std::optional<std::string>& 							Profile() const noexcept;
+
 		private:
 			/**
 			 * @brief Default constructor.
@@ -125,5 +140,6 @@ namespace StormByte::Multimedia::Stream {
 			unsigned int m_sample_rate;									///< The sample rate.
 			std::string m_channel_layout;								///< The channel layout.
 			unsigned int m_bitrate;										///< The number of bits per sample.
+			std::optional<std::string> m_profile;						///< The profile.
 	};
 }

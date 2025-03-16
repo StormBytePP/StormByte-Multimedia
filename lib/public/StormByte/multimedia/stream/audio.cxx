@@ -42,4 +42,12 @@ const unsigned int& Audio::Bitrate() const noexcept {
 	return m_bitrate;
 }
 
+std::optional<std::string>& Audio::Profile() noexcept {
+	return m_profile;
+}
+
+const std::optional<std::string>& Audio::Profile() const noexcept {
+	return m_profile;
+}
+
 Audio::Audio(const Media::Codec::Name& codec) noexcept: Base(codec) {}
