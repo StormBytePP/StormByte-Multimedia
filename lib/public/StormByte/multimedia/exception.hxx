@@ -190,48 +190,4 @@ namespace StormByte::Multimedia {
 			 */
 			~CodecNotSupported() noexcept override										= default;
 	};
-
-	/**
-	 * @class ContainerIsFull
-	 * @brief The exception for when a container is full.
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerIsFull: public Exception {
-		public:
-			/**
-			 * @brief Default constructor.
-			 * @param container The container.
-			 */
-			ContainerIsFull(const std::string& container);
-
-			/**
-			 * @brief Copy constructor.
-			 * @param exception The exception to copy.
-			 */
-			ContainerIsFull(const ContainerIsFull& exception) 							= default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param exception The exception to move.
-			 */
-			ContainerIsFull(ContainerIsFull&& exception) noexcept 						= default;
-
-			/**
-			 * @brief Copy assignment operator.
-			 * @param exception The exception to copy.
-			 * @return The copied exception.
-			 */
-			ContainerIsFull& operator=(const ContainerIsFull& exception) 				= default;
-
-			/**
-			 * @brief Move assignment operator.
-			 * @param exception The exception to move.
-			 * @return The moved exception.
-			 */
-			ContainerIsFull& operator=(ContainerIsFull&& exception) noexcept 			= default;
-
-			/**
-			 * @brief Default destructor.
-			 */
-			~ContainerIsFull() noexcept override										= default;
-	};
 }

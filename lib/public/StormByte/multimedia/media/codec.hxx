@@ -63,19 +63,23 @@ namespace StormByte::Multimedia::Media::Codec {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Info {
 		public:
+			using PointerType = std::shared_ptr<const Info>;	///< Shared pointer to Info.
+
 			/**
 			 * @brief Constructor.
 			 * @param name The name of the codec.
+			 * @param name_string The name of the codec as a string.
 			 * @param type The type of the codec.
 			 */
-			Info(const std::string& name, const Type& type);
+			Info(const Codec::Name& name, const Type& type, const std::string& name_string) noexcept;
 			
 			/**
 			 * @brief Constructor.
 			 * @param name The name of the codec.
+			 * @param name_string The name of the codec as a string.
 			 * @param type The type of the codec.
 			 */
-			Info(const std::string&& name, Type&& type);
+			Info(Codec::Name&& name, Type&& type, std::string&& name_string) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -112,7 +116,13 @@ namespace StormByte::Multimedia::Media::Codec {
 			 * @brief Gets the name of the codec.
 			 * @return The name of the codec.
 			 */
-			const std::string& 							Name() const noexcept;
+			const Codec::Name& 							Name() const noexcept;
+
+			/**
+			 * @brief Gets the name of the codec.
+			 * @return The name of the codec.
+			 */
+			const std::string& 							NameToString() const noexcept;
 
 			/**
 			 * @brief Gets the type of the codec.
@@ -121,7 +131,8 @@ namespace StormByte::Multimedia::Media::Codec {
 			const Media::Type&							Type() const noexcept;
 
 		private:
-			std::string 								m_name;		///< Name of the codec (e.g., "AAC", "H264").
-			Media::Type 								m_type;		///< Type of the codec (Audio, Video, Subtitle, or Image).
+			Codec::Name 								m_name;			///< Name of the codec.
+			Media::Type 								m_type;			///< Type of the codec (Audio, Video, Subtitle, or Image).
+			std::string 								m_name_string;	///< Name of the codec (e.g., "AAC", "H264").
 	};
 }

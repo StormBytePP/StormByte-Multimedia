@@ -5,10 +5,8 @@
 #include <StormByte/multimedia/media/codec.hxx>
 #include <StormByte/multimedia/media/type.hxx>
 
-#include <optional>
 #include <string>
 #include <vector>
-#include <unordered_map>
 
 /**
  * @namespace Container
@@ -52,13 +50,8 @@ namespace StormByte::Multimedia::Media::Container {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Info {
 		public:
-			/**
-			 * @brief Constructor.
-			 * @param name The name of the container.
-			 * @param allowedCodecs The list of allowed codecs.
-			 * @param maxStreams The maximum number of streams allowed in the container.
-			 */
-			Info(const std::string& name, const std::vector<Codec::Name>& allowedCodecs, const std::optional<unsigned short>& maxStreams = std::nullopt);
+			using PointerType = std::shared_ptr<Info>;				///< Shared pointer to Info.
+			using ConstPointerType = std::shared_ptr<const Info>;	///< Shared pointer to Info.
 
 			/**
 			 * @brief Constructor.
@@ -66,7 +59,15 @@ namespace StormByte::Multimedia::Media::Container {
 			 * @param allowedCodecs The list of allowed codecs.
 			 * @param maxStreams The maximum number of streams allowed in the container.
 			 */
-			Info(const std::string&& name, std::vector<Codec::Name>&& allowedCodecs, std::optional<unsigned short>&& maxStreams = std::nullopt);
+			Info(const Container::Name& name, const std::string& name_string, const std::vector<Codec::Name>& allowedCodecs);
+
+			/**
+			 * @brief Constructor.
+			 * @param name The name of the container.
+			 * @param allowedCodecs The list of allowed codecs.
+			 * @param maxStreams The maximum number of streams allowed in the container.
+			 */
+			Info(Container::Name&& name, std::string&& name_string, std::vector<Codec::Name>&& allowedCodecs);
 
 			/**
 			 * @brief Copy constructor.
@@ -103,7 +104,13 @@ namespace StormByte::Multimedia::Media::Container {
 			 * @brief Gets container name
 			 * @return The container name.
 			 */
-			const std::string& 							Name() const noexcept;
+			const Container::Name& 						Name() const noexcept;
+
+			/**
+			 * @brief Gets container name as string
+			 * @return The container name.
+			 */
+			const std::string& 							NameToString() const noexcept;
 
 			/**
 			 * @brief Gets all the allowed codecs for the container.
@@ -111,15 +118,9 @@ namespace StormByte::Multimedia::Media::Container {
 			 */
 			const std::vector<Codec::Name>&				AllowedCodecs() const noexcept;
 
-			/**
-			 * @brief Gets the maximum number of streams allowed in the container (if this restriction is present)
-			 * @return The maximum number of streams.
-			 */
-			const std::optional<unsigned short>&		MaxStreams() const noexcept;
-
 		private:
-			std::string 								m_name;				///< The name of the container (e.g., "MP4").
+			Container::Name 							m_name;				///< The name of the container (e.g., "MP4").
+			std::string 								m_name_string;		///< The name of the container as a string.
 			std::vector<Codec::Name> 					m_allowed_codecs;	///< The list of codecs allowed in the container.
-			std::optional<unsigned short> 				m_max_streams;		///< The maximum number of streams allowed in the container.
 	};
 }

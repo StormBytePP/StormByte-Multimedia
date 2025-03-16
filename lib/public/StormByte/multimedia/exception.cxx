@@ -13,8 +13,5 @@ CodecNotFound::CodecNotFound(const std::string& codecName):Exception(std::format
 CodecNotSupported::CodecNotSupported(const std::string& container, const std::string& codec):
 Exception(std::format("Codec {} is not supported for container {}", codec, container)) {}
 
-ContainerIsFull::ContainerIsFull(const std::string& container):
-Exception(std::format("Container {} is full", container)) {}
-
 ContainerNotFound::ContainerNotFound(const std::string& containerName):
 Exception(std::format("Container {} is not supported", containerName)) {}

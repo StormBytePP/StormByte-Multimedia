@@ -87,12 +87,6 @@ namespace StormByte::Multimedia {
 			}
 
 			/**
-			 * @brief Check if the container is full.
-			 * @return True if the container is full, false otherwise.
-			 */
-			bool 														IsFull() const noexcept;
-
-			/**
 			 * @brief Checks if the codec is supported
 			 * @param codec Codec to check
 			 * @return True if the codec is supported, false otherwise

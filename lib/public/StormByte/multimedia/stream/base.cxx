@@ -5,7 +5,7 @@ using namespace StormByte::Multimedia::Stream;
 
 PointerType Base::Create(const Media::Codec::Name& codec) {
 	// We need to use explicitelly new here because MakePointer gives problems with friendship
-	switch (Media::Registry::CodecInfo(codec).Type()) {
+	switch (Media::Registry::CodecInfo(codec)->Type()) {
 		case Media::Type::Audio:
 			return PointerType(new Audio(codec));
 		case Media::Type::Video:

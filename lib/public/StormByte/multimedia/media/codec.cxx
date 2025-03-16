@@ -2,12 +2,18 @@
 
 using namespace StormByte::Multimedia;
 
-Media::Codec::Info::Info(const std::string& name, const Media::Type& type):m_name(name), m_type(type) {}
+Media::Codec::Info::Info(const Codec::Name& name, const Media::Type& type, const std::string& name_string) noexcept:
+m_name(name), m_type(type), m_name_string(name_string) {}
 
-Media::Codec::Info::Info(const std::string&& name, Media::Type&& type):m_name(name), m_type(type) {}
+Media::Codec::Info::Info(Codec::Name&& name, Media::Type&& type, std::string&& name_string) noexcept:
+m_name(name), m_type(type), m_name_string(name_string) {}
 
-const std::string& Media::Codec::Info::Name() const noexcept {
+const Media::Codec::Name& Media::Codec::Info::Name() const noexcept {
 	return m_name;
+}
+
+const std::string& Media::Codec::Info::NameToString() const noexcept {
+	return m_name_string;
 }
 
 const Media::Type& Media::Codec::Info::Type() const noexcept {
