@@ -9,3 +9,5 @@ PointerType Subtitle::Clone() const {
 PointerType Subtitle::Move() {
 	return MakePointer<Subtitle>(std::move(*this));
 }
+
+Subtitle::Subtitle(const Media::Codec::Name& codec) noexcept: Base(codec) {}

@@ -9,3 +9,5 @@ PointerType Attachment::Clone() const {
 PointerType Attachment::Move() {
 	return MakePointer<Attachment>(std::move(*this));
 }
+
+Attachment::Attachment(const Media::Codec::Name& codec) noexcept: Base(codec) {}

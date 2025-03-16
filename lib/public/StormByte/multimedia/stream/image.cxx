@@ -9,3 +9,5 @@ PointerType Image::Clone() const {
 PointerType Image::Move() {
 	return MakePointer<Image>(std::move(*this));
 }
+
+Image::Image(const Media::Codec::Name& codec) noexcept: Base(codec) {}

@@ -70,6 +70,6 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Image(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+			Image(const Media::Codec::Name& codec) noexcept;
 	};
 }
