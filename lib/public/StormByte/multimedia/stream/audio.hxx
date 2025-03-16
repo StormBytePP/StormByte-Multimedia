@@ -1,5 +1,6 @@
 #pragma once
 
+#include <StormByte/multimedia/media/tags.hxx>
 #include <StormByte/multimedia/stream/base.hxx>
 
 /**
@@ -65,11 +66,90 @@ namespace StormByte::Multimedia::Stream {
 				return Media::Type::Audio;
 			}
 
+			/**
+			 * @brief Gets the number of channels.
+			 * @return The number of channels.
+			 */
+			unsigned short& 											Channels() noexcept;
+
+			/**
+			 * @brief Gets the number of channels.
+			 * @return The number of channels.
+			 */
+			const unsigned short& 										Channels() const noexcept;
+
+			/**
+			 * @brief Gets the sample rate.
+			 * @return The sample rate.
+			 */
+			unsigned int& 												SampleRate() noexcept;
+
+			/**
+			 * @brief Gets the sample rate.
+			 * @return The sample rate.
+			 */
+			const unsigned int& 										SampleRate() const noexcept;
+
+			/**
+			 * @brief Gets the channel layout.
+			 * @return The channel layout.
+			 */
+			std::string& 												ChannelLayout() noexcept;
+
+			/**
+			 * @brief Gets the channel layout.
+			 * @return The channel layout.
+			 */
+			const std::string& 											ChannelLayout() const noexcept;
+
+			/**
+			 * @brief Gets the bitrate.
+			 * @return The bitrate.
+			 */
+			unsigned int& 												Bitrate() noexcept;
+
+			/**
+			 * @brief Gets the bitrate.
+			 * @return The bitrate.
+			 */
+			const unsigned int& 										Bitrate() const noexcept;
+
+			/**
+			 * @brief Gets the disposition.
+			 * @return The disposition.
+			 */
+			Media::Tags& 												Disposition() noexcept;
+
+			/**
+			 * @brief Gets the disposition.
+			 * @return The disposition.
+			 */
+			const Media::Tags& 											Disposition() const noexcept;
+
+			/**
+			 * @brief Gets the tags.
+			 * @return The tags.
+			 */
+			Media::Tags& 												Tags() noexcept;
+
+			/**
+			 * @brief Gets the tags.
+			 * @return The tags.
+			 */
+			const Media::Tags& 											Tags() const noexcept;
+
 		private:
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Audio(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+			Audio(const Media::Codec::Name& codec) noexcept;
+
+			unsigned short m_channels;									///< The number of channels.
+			unsigned int m_sample_rate;									///< The sample rate.
+			std::string m_channel_layout;								///< The channel layout.
+			unsigned int m_bitrate;										///< The number of bits per sample.
+			Media::Tags m_disposition;									///< The disposition of the stream.
+			Media::Tags m_tags;											///< The tags of the stream.
 	};
 }

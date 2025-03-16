@@ -9,3 +9,53 @@ PointerType Audio::Clone() const {
 PointerType Audio::Move() {
 	return MakePointer<Audio>(std::move(*this));
 }
+
+unsigned short& Audio::Channels() noexcept {
+	return m_channels;
+}
+
+const unsigned short& Audio::Channels() const noexcept {
+	return m_channels;
+}
+
+unsigned int& Audio::SampleRate() noexcept {
+	return m_sample_rate;
+}
+
+const unsigned int& Audio::SampleRate() const noexcept {
+	return m_sample_rate;
+}
+
+std::string& Audio::ChannelLayout() noexcept {
+	return m_channel_layout;
+}
+
+const std::string& Audio::ChannelLayout() const noexcept {
+	return m_channel_layout;
+}
+
+unsigned int& Audio::Bitrate() noexcept {
+	return m_bitrate;
+}
+
+const unsigned int& Audio::Bitrate() const noexcept {
+	return m_bitrate;
+}
+
+StormByte::Multimedia::Media::Tags& Audio::Disposition() noexcept {
+	return m_disposition;
+}
+
+const StormByte::Multimedia::Media::Tags& Audio::Disposition() const noexcept {
+	return m_disposition;
+}
+
+StormByte::Multimedia::Media::Tags& Audio::Tags() noexcept {
+	return m_tags;
+}
+
+const StormByte::Multimedia::Media::Tags& Audio::Tags() const noexcept {
+	return m_tags;
+}
+
+Audio::Audio(const Media::Codec::Name& codec) noexcept: Base(codec) {}
