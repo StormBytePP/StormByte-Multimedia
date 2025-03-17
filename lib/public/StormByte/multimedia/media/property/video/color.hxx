@@ -2,13 +2,12 @@
 
 #include <StormByte/multimedia/visibility.h>
 
-#include <optional>
 #include <string>
 #include <utility>
 
 /**
  * @namespace Video
- * @brief The namespace for multimedia video media types.
+ * @brief The namespace for multimedia video media properties.
  */
 namespace StormByte::Multimedia::Media::Property::Video {
 	/**
@@ -17,27 +16,23 @@ namespace StormByte::Multimedia::Media::Property::Video {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Color {
 		public:
-			static const Color 							DefaultForHDR10;	///< The default color for HDR10.
-
 			using Point = std::pair<int, int>;			///< Representation for a point
 
 			/**
 			 * @brief Constructor.
-			 * @param primaries The primaries.
-			 * @param matrix The matrix.
-			 * @param transfer The transfer.
 			 * @param pix_fmt The pixel format.
+			 * @param range The range.
+			 * @param space The space.
 			 */
-			Color(const std::string& primaries, const std::string& matrix, const std::string& transfer, const std::string& pix_fmt);
+			Color(const std::string& pix_fmt, const std::string& range, const std::string& space) noexcept;
 
 			/**
 			 * @brief Constructor.
-			 * @param primaries The primaries.
-			 * @param matrix The matrix.
-			 * @param transfer The transfer.
 			 * @param pix_fmt The pixel format.
+			 * @param range The range.
+			 * @param space The space.
 			 */
-			Color(std::string&& primaries, std::string&& matrix, std::string&& transfer, std::string&& pix_fmt) noexcept;
+			Color(std::string&& pix_fmt, std::string&& range, std::string&& space) noexcept;
 
 			/**
 			 * @brief Copy constructor
@@ -74,105 +69,30 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @brief Gets the primaries.
 			 * @return The primaries.
 			 */
-			inline const std::optional<std::string>&	GetPrimaries() const noexcept {
-				return m_prim;
-			}
+			const std::string&							PixelFormat() const noexcept;
 
 			/**
-			 * @brief Sets the primaries.
-			 * @param primaries The primaries.
+			 * @brief Sets the color range.
 			 */
-			inline void									SetPrimaries(const std::string& primaries) {
-				m_prim = primaries;
-			} 
-
-			/**
-			 * @brief Sets the primaries.
-			 * @param primaries The primaries.
-			 */
-			inline void									SetPrimaries(std::string&& primaries) noexcept {
-				m_prim = std::move(primaries);
-			}
+			const std::string&							Range() const noexcept;
 
 			/**
 			 * @brief Gets the matrix.
 			 * @return The matrix.
 			 */
-			inline const std::optional<std::string>& 	GetMatrix() const noexcept {
-				return m_matrix;
-			}
+			const std::string&							Space() const noexcept;
 
 			/**
-			 * @brief Sets the matrix.
-			 * @param matrix The matrix.
+			 * @brief Checks if HDR10 is possible.
+			 * @return True if HDR10 is possible, false otherwise.
 			 */
-			inline void									SetMatrix(const std::string& matrix) {
-				m_matrix = matrix;
+			constexpr virtual bool 						IsHDR10() const noexcept {
+				return false;
 			}
 
-			/**
-			 * @brief Sets the matrix.
-			 * @param matrix The matrix.
-			 */
-			inline void									SetMatrix(std::string&& matrix) noexcept {
-				m_matrix = std::move(matrix);
-			}
-
-			/**
-			 * @brief Gets the transfer.
-			 * @return The transfer.
-			 */
-			inline const std::optional<std::string>& 	GetTransfer() const noexcept {
-				return m_transfer;
-			}
-
-			/**
-			 * @brief Sets the transfer.
-			 * @param transfer The transfer.
-			 */
-			inline void									SetTransfer(const std::string& transfer) {
-				m_transfer = transfer;
-			}
-
-			/**
-			 * @brief Sets the transfer.
-			 * @param transfer The transfer.
-			 */
-			inline void									SetTransfer(std::string&& transfer) noexcept {
-				m_transfer = std::move(transfer);
-			}
-
-			/**
-			 * @brief Gets the pixel format.
-			 * @return The pixel format.
-			 */
-			inline const std::optional<std::string>&	GetPixelFormat() const noexcept {
-				return m_pix_fmt;
-			}
-
-			/**
-			 * @brief Sets the pixel format.
-			 * @param pix_fmt The pixel format.
-			 */
-			inline void									SetPixelFormat(const std::string& pix_fmt) {
-				m_pix_fmt = pix_fmt;
-			}
-
-			/**
-			 * @brief Sets the pixel format.
-			 * @param pix_fmt The pixel format.
-			 */
-			inline void									SetPixelFormat(std::string&& pix_fmt) noexcept {
-				m_pix_fmt = std::move(pix_fmt);
-			}
-
-			/**
-			 * @brief Checks if the color is HDR10.
-			 * @return True if the color is HDR10, false otherwise.
-			 */
-			bool										IsHDR10Possible() const noexcept;
-
-		private:
-			std::optional<std::string> m_prim, m_matrix, m_transfer, m_pix_fmt;
+		protected:
+			std::string m_pix_fmt;						///< The pixel format.
+			std::string m_range;						///< The range.
+			std::string m_space;						///< The space.
 	};
 }

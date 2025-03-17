@@ -1,6 +1,13 @@
 #pragma once
 
+#include <StormByte/multimedia/media/property/video/color.hxx>
+#include <StormByte/multimedia/media/property/video/hdr10.hxx>
+#include <StormByte/multimedia/media/property/resolution.hxx>
 #include <StormByte/multimedia/stream/base.hxx>
+
+#include <memory>
+#include <optional>
+#include <variant>
 
 /**
  * @namespace Stream
@@ -65,7 +72,47 @@ namespace StormByte::Multimedia::Stream {
 				return Media::Type::Video;
 			}
 
+			/**
+			 * @brief Gets the color properties of the stream.
+			 * @return The color properties of the stream.
+			 */
+			std::shared_ptr<Media::Property::Video::Color>&				Color() noexcept;
+
+			/**
+			 * @brief Gets the color properties of the stream.
+			 * @return The color properties of the stream.
+			 */
+			const std::shared_ptr<const Media::Property::Video::Color> 	Color() const noexcept;
+
+			/**
+			 * @brief Gets the resolution of the stream.
+			 * @return The resolution of the stream.
+			 */
+			std::shared_ptr<Media::Property::Resolution>&				Resolution() noexcept;
+
+			/**
+			 * @brief Gets the resolution of the stream.
+			 * @return The resolution of the stream.
+			 */
+			const std::shared_ptr<const Media::Property::Resolution>	Resolution() const noexcept;
+
+			/**
+			 * @brief Gets the profile of the stream.
+			 * @return The profile of the stream.
+			 */
+			std::optional<std::string>&									Profile() noexcept;
+
+			/**
+			 * @brief Gets the profile of the stream.
+			 * @return The profile of the stream.
+			 */
+			const std::optional<const std::string>						Profile() const noexcept;
+
 		private:
+			std::shared_ptr<Media::Property::Video::Color>				m_color;		///< The color properties of the stream.
+			std::shared_ptr<Media::Property::Resolution>				m_resolution;	///< The resolution of the stream.
+			std::optional<std::string>									m_profile;		///< The profile of the stream.
+			
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.

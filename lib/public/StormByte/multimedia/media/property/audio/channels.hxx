@@ -6,7 +6,7 @@
 
 /**
  * @namespace Audio
- * @brief The namespace for multimedia audio media types.
+ * @brief The namespace for multimedia audio media properties.
  */
 namespace StormByte::Multimedia::Media::Property::Audio {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Channels {

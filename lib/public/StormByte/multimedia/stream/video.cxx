@@ -10,4 +10,29 @@ PointerType Video::Move() {
 	return MakePointer<Video>(std::move(*this));
 }
 
-Video::Video(const Media::Codec::ID& codec) noexcept: Base(codec) {}
+Video::Video(const Media::Codec::ID& codec) noexcept: Base(codec),
+m_color(), m_resolution(), m_profile() {}
+
+std::shared_ptr<StormByte::Multimedia::Media::Property::Video::Color>& Video::Color() noexcept {
+	return m_color;
+}
+
+const std::shared_ptr<const StormByte::Multimedia::Media::Property::Video::Color> Video::Color() const noexcept {
+	return m_color;
+}
+
+std::shared_ptr<StormByte::Multimedia::Media::Property::Resolution>& Video::Resolution() noexcept {
+	return m_resolution;
+}
+
+const std::shared_ptr<const StormByte::Multimedia::Media::Property::Resolution> Video::Resolution() const noexcept {
+	return m_resolution;
+}
+
+std::optional<std::string>& Video::Profile() noexcept {
+	return m_profile;
+}
+
+const std::optional<const std::string> Video::Profile() const noexcept {
+	return m_profile;
+}

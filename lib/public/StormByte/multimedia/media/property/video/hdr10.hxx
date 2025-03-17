@@ -3,23 +3,27 @@
 #include <StormByte/multimedia/media/property/video/color.hxx>
 
 #include <optional>
-#include <string>
 
 /**
  * @namespace Video
- * @brief The namespace for multimedia video media types.
+ * @brief The namespace for multimedia video media properties.
  */
 namespace StormByte::Multimedia::Media::Property::Video {
 	/**
 	 * @class HDR10
 	 * @brief The class for HDR10 properties.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC HDR10 {
+	class STORMBYTE_MULTIMEDIA_PUBLIC HDR10 final: public Color {
 		public:
 			static const HDR10 									Default;	///< The default HDR10 properties.
 
 			/**
 			 * @brief Default constructor.
+			 * @param pix_fmt The pixel format.
+			 * @param range The range.
+			 * @param space The space.
+			 * @param primaries The primaries.
+			 * @param transfer The transfer.
 			 * @param red The red point.
 			 * @param green The green point.
 			 * @param blue The blue point.
@@ -27,7 +31,8 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @param luminance The luminance.
 			 * @param light_level The light level.
 			 */
-			HDR10(const Color::Point& red,
+			HDR10(const std::string& pix_fmt, const std::string& range, const std::string& space, const std::string& primaries, const std::string& transfer,
+				const Color::Point& red,
 				const Color::Point& green,
 				const Color::Point& blue,
 				const Color::Point& white,
@@ -37,6 +42,11 @@ namespace StormByte::Multimedia::Media::Property::Video {
 
 			/**
 			 * @brief Default constructor.
+			 * @param pix_fmt The pixel format.
+			 * @param range The range.
+			 * @param space The space.
+			 * @param primaries The primaries.
+			 * @param transfer The transfer.
 			 * @param red The red point.
 			 * @param green The green point.
 			 * @param blue The blue point.
@@ -44,7 +54,8 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @param luminance The luminance.
 			 * @param light_level The light level.
 			 */
-			HDR10(Color::Point&& red,
+			HDR10(std::string&& pix_fmt, std::string&& range, std::string&& space, std::string&& primaries, std::string&& transfer,
+				Color::Point&& red,
 				Color::Point&& green,
 				Color::Point&& blue,
 				Color::Point&& white,
@@ -56,199 +67,100 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @brief Copy constructor.
 			 * @param hdr10 The HDR10 to copy.
 			 */
-			constexpr HDR10(const HDR10& hdr10)					= default;
+			HDR10(const HDR10& hdr10)							= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param hdr10 The HDR10 to move.
 			 */
-			constexpr HDR10(HDR10&& hdr10) noexcept				= default;
+			HDR10(HDR10&& hdr10) noexcept						= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param hdr10 The HDR10 to copy.
 			 * @return The copied HDR10.
 			 */
-			constexpr HDR10& operator=(const HDR10& hdr10)		= default;
+			HDR10& operator=(const HDR10& hdr10)				= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param hdr10 The HDR10 to move.
 			 * @return The moved HDR10.
 			 */
-			constexpr HDR10& operator=(HDR10&& hdr10) noexcept	= default;
+			HDR10& operator=(HDR10&& hdr10) noexcept			= default;
 
 			/**
 			 * @brief Default destructor.
 			 */
-			constexpr ~HDR10() noexcept							= default;
+			~HDR10() noexcept override							= default;
 
 			/**
 			 * @brief Gets the red point.
 			 * @return The red point.
 			 */
-			inline const Color::Point& 							GetRedPoint() const noexcept {
-				return m_red;
-			}
-
-			/**
-			 * @brief Sets the red point.
-			 * @param red_point The red point.
-			 */
-			inline void 										SetRedPoint(const Color::Point& red_point) {
-				m_red = red_point;
-			}
-
-			/**
-			 * @brief Sets the red point.
-			 * @param red_point The red point.
-			 */
-			inline void 										SetRedPoint(Color::Point&& red_point) noexcept {
-				m_red = std::move(red_point);
-			}
+			const Color::Point& 								RedPoint() const noexcept;
 
 			/**
 			 * @brief Gets the green point.
 			 * @return The green point.
 			 */
-			inline const Color::Point& 							GetGreenPoint() const noexcept {
-				return m_green;
-			}
-
-			/**
-			 * @brief Sets the green point.
-			 * @param green_point The green point.
-			 */
-			inline void 										SetGreenPoint(const Color::Point& green_point) {
-				m_green = green_point;
-			}
-
-			/**
-			 * @brief Sets the green point.
-			 * @param green_point The green point.
-			 */
-			inline void 										SetGreenPoint(Color::Point&& green_point) noexcept {
-				m_green = std::move(green_point);
-			}
+			const Color::Point& 								GreenPoint() const noexcept;
 
 			/**
 			 * @brief Gets the blue point.
 			 * @return The blue point.
 			 */
-			inline const Color::Point& 							GetBluePoint() const noexcept {
-				return m_blue;
-			}
-
-			/**
-			 * @brief Sets the blue point.
-			 * @param blue_point The blue point.
-			 */
-			inline void 										SetBluePoint(const Color::Point& blue_point) {
-				m_blue = blue_point;
-			}
-
-			/**
-			 * @brief Sets the blue point.
-			 * @param blue_point The blue point.
-			 */
-			inline void 										SetBluePoint(Color::Point&& blue_point) noexcept {
-				m_blue = std::move(blue_point);
-			}
+			const Color::Point& 								BluePoint() const noexcept;
 
 			/**
 			 * @brief Gets the white point.
 			 * @return The white point.
 			 */
-			inline const Color::Point& 							GetWhitePoint() const noexcept {
-				return m_white;
-			}
-
-			/**
-			 * @brief Sets the white point.
-			 * @param white_point The white point.
-			 */
-			inline void 										SetWhitePoint(const Color::Point& white_point) {
-				m_white = white_point;
-			}
-
-			/**
-			 * @brief Sets the white point.
-			 * @param white_point The white point.
-			 */
-			inline void 										SetWhitePoint(Color::Point&& white_point) noexcept {
-				m_white = std::move(white_point);
-			}
+			const Color::Point& 								WhitePoint() const noexcept;
 
 			/**
 			 * @brief Gets the luminance.
 			 * @return The luminance.
 			 */
-			inline const Color::Point& 							GetLuminance() const noexcept {
-				return m_luminance;
-			}
-
-			/**
-			 * @brief Sets the luminance.
-			 * @param luminance The luminance.
-			 */
-			inline void 										SetLuminance(const Color::Point& luminance) {
-				m_luminance = luminance;
-			}
-
-			/**
-			 * @brief Sets the luminance.
-			 * @param luminance The luminance.
-			 */
-			inline void 										SetLuminance(Color::Point&& luminance) noexcept {
-				m_luminance = std::move(luminance);
-			}
+			const Color::Point& 								Luminance() const noexcept;
 
 			/**
 			 * @brief Gets the light level.
 			 * @return The light level.
 			 */
-			inline const std::optional<Color::Point>& 			GetLightLevel() const noexcept {
-				return m_light_level;
-			}
+			const std::optional<Color::Point>& 					LightLevel() const noexcept;
 
 			/**
-			 * @brief Sets the light level.
-			 * @param light_level The light level.
+			 * @brief Checks if HDR10 is possible.
+			 * @return True if HDR10 is possible, false otherwise.
 			 */
-			inline void 										SetLightLevel(const Color::Point& light_level) {
-				m_light_level = light_level;
-			}
-
-			/**
-			 * @brief Sets the light level.
-			 * @param light_level The light level.
-			 */
-			inline void 										SetLightLevel(Color::Point&& light_level) noexcept {
-				m_light_level = std::move(light_level);
+			constexpr bool 										IsHDR10() const noexcept override {
+				return m_primaries == Default.m_primaries && m_space == Default.m_space
+						&& m_transfer == Default.m_transfer && m_pix_fmt == Default.m_pix_fmt;
 			}
 
 			/**
 			 * @brief Checks if it is HDR10+ compatible.
 			 * @return True if it is HDR10+ compatible, false otherwise.
 			 */
-			inline bool 										IsHDR10Plus() const noexcept {
-				return m_hdr10plus;
-			}
+			bool 												IsHDR10Plus() const noexcept;
 
 			/**
-			 * @brief Sets the HDR10+ status.
+			 * @brief Gets HDR10+ compatible status.
+			 * @return True if it is HDR10+ compatible, false otherwise.
 			 */
-			inline void 										SetHDR10Plus() noexcept	{
-				m_hdr10plus = true;
-			}
+			bool 												HDR10Plus() noexcept;
 
 		private:
-			Color::Point m_red;							///< The red point.
-			Color::Point m_green;						///< The green point.
-			Color::Point m_blue;						///< The blue point.
-			Color::Point m_white;						///< The white point.
-			Color::Point m_luminance;					///< The luminance.
-			std::optional<Color::Point> m_light_level;	///< The light level.
-			bool m_hdr10plus;							///< The HDR10+ status.
+			std::string m_pix_fmt;								///< The pixel format.
+			std::string m_primaries;							///< The primaries.
+			std::string m_transfer;								///< The transfer.
+			Color::Point m_red;									///< The red point.
+			Color::Point m_green;								///< The green point.
+			Color::Point m_blue;								///< The blue point.
+			Color::Point m_white;								///< The white point.
+			Color::Point m_luminance;							///< The luminance.
+			std::optional<Color::Point> m_light_level;			///< The light level.
+			bool m_hdr10plus;									///< The HDR10+ status.
 	};
 }
