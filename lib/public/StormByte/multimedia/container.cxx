@@ -37,6 +37,6 @@ void Container::AddStream(std::shared_ptr<Stream::Base> stream) {
 
 void Container::StreamAdditionCheck(const Stream::Base& stream) const {
 	if (!Supports(stream.Codec())) {
-		throw CodecNotSupported(Media::Registry::ContainerInfo(m_name)->NameToString(), Media::Registry::CodecInfo(stream.Codec())->NameToString());
+		throw CodecNotSupported(Media::Registry::ContainerInfo(m_name)->Name(), Media::Registry::CodecInfo(stream.Codec())->Name());
 	}
 }

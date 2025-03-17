@@ -21,7 +21,7 @@ namespace StormByte::Multimedia {
 			 * @brief Default constructor.
 			 * @param name The container name.
 			 */
-			constexpr Container(const Media::Container::Name& name):m_name(name) {}
+			constexpr Container(const Media::Container::ID& name):m_name(name) {}
 
 			/**
 			 * @brief Copy constructor.
@@ -58,7 +58,7 @@ namespace StormByte::Multimedia {
 			 * @brief Gets the container name.
 			 * @return The container name.
 			 */
-			constexpr const Media::Container::Name&						Name() const noexcept {
+			constexpr const Media::Container::ID&						Name() const noexcept {
 				return m_name;
 			}
 
@@ -125,7 +125,7 @@ namespace StormByte::Multimedia {
 			void														AddStream(std::shared_ptr<Stream::Base> stream);
 
 		private:
-			Media::Container::Name m_name;								///< The container name.
+			Media::Container::ID m_name;								///< The container name.
 			std::vector<Stream::PointerType> m_streams;					///< The streams in the container.
 
 			/**

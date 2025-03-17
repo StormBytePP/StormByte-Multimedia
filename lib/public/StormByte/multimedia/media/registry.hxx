@@ -30,7 +30,7 @@ namespace StormByte::Multimedia::Media {
 		 * @param container The container enum value.
 		 * @return A reference to the Container::Info struct for the requested container.
 		 */
-		static Container::Info::PointerType												ContainerInfo(const Container::Name& container);
+		static Container::Info::PointerType												ContainerInfo(const Container::ID& container);
 
 		/**
 		 * @brief Retrieves detailed information about a codec by name.
@@ -48,8 +48,10 @@ namespace StormByte::Multimedia::Media {
 
 		private:
 			static const std::vector<Codec::Info::PointerType> c_codec_registry; 								///< The codec registry.
-			static const std::unordered_map<std::string, Codec::Info::PointerType> c_codec_name_map;			///< The codec name map.
+			static const std::unordered_map<Codec::ID, Codec::Info::PointerType> c_codec_id_map;				///< The codec name map.
+			static const std::unordered_map<std::string, Codec::Info::PointerType> c_codec_name_map;			///< Reverse lookup map.
 			static const std::vector<Container::Info::PointerType> c_container_registry;						///< Registry of container metadata.
+			static const std::unordered_map<Container::ID, Container::Info::PointerType> c_container_id_map;		///< Reverse lookup map.
 			static const std::unordered_map<std::string, Container::Info::PointerType> c_container_name_map;	///< Reverse lookup map.
 	};
 }

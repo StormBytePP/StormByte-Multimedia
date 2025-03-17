@@ -8,11 +8,11 @@ m_name(name), m_type(type), m_name_string(name_string) {}
 Media::Codec::Info::Info(Codec::ID&& name, Media::Type&& type, std::string&& name_string) noexcept:
 m_name(name), m_type(type), m_name_string(name_string) {}
 
-const Media::Codec::ID& Media::Codec::Info::Name() const noexcept {
+const Media::Codec::ID& Media::Codec::Info::ID() const noexcept {
 	return m_name;
 }
 
-const std::string& Media::Codec::Info::NameToString() const noexcept {
+const std::string& Media::Codec::Info::Name() const noexcept {
 	return m_name_string;
 }
 

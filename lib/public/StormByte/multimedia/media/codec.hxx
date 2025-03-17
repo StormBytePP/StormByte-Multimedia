@@ -116,13 +116,13 @@ namespace StormByte::Multimedia::Media::Codec {
 			 * @brief Gets the name of the codec.
 			 * @return The name of the codec.
 			 */
-			const Codec::ID& 							Name() const noexcept;
+			const Codec::ID& 							ID() const noexcept;
 
 			/**
 			 * @brief Gets the name of the codec.
 			 * @return The name of the codec.
 			 */
-			const std::string& 							NameToString() const noexcept;
+			const std::string& 							Name() const noexcept;
 
 			/**
 			 * @brief Gets the type of the codec.

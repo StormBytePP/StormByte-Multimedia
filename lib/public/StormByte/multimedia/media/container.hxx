@@ -17,7 +17,7 @@ namespace StormByte::Multimedia::Media::Container {
 	 * @enum Container
 	 * @brief Enumerates all supported multimedia containers.
 	 */
-	enum STORMBYTE_MULTIMEDIA_PUBLIC Name: unsigned short {
+	enum STORMBYTE_MULTIMEDIA_PUBLIC ID: unsigned short {
 		// Audio Containers
 		AC3,		///< **AC3**: Audio Codec 3 container, commonly used for surround sound audio files.
 		FLAC,		///< **FLAC**: Free Lossless Audio Codec, often used for high-quality audio storage.
@@ -50,24 +50,23 @@ namespace StormByte::Multimedia::Media::Container {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Info {
 		public:
-			using PointerType = std::shared_ptr<Info>;				///< Shared pointer to Info.
-			using ConstPointerType = std::shared_ptr<const Info>;	///< Shared pointer to Info.
+			using PointerType = std::shared_ptr<const Info>;				///< Shared pointer to Info.
 
 			/**
 			 * @brief Constructor.
+			 * @param id The ID of the container.
 			 * @param name The name of the container.
 			 * @param allowedCodecs The list of allowed codecs.
-			 * @param maxStreams The maximum number of streams allowed in the container.
 			 */
-			Info(const Container::Name& name, const std::string& name_string, const std::vector<Codec::ID>& allowedCodecs);
+			Info(const Container::ID& id, const std::string& name, const std::vector<Codec::ID>& allowedCodecs);
 
 			/**
 			 * @brief Constructor.
+			 * @param id The ID of the container.
 			 * @param name The name of the container.
 			 * @param allowedCodecs The list of allowed codecs.
-			 * @param maxStreams The maximum number of streams allowed in the container.
 			 */
-			Info(Container::Name&& name, std::string&& name_string, std::vector<Codec::ID>&& allowedCodecs);
+			Info(Container::ID&& id, std::string&& name, std::vector<Codec::ID>&& allowedCodecs);
 
 			/**
 			 * @brief Copy constructor.
@@ -104,13 +103,13 @@ namespace StormByte::Multimedia::Media::Container {
 			 * @brief Gets container name
 			 * @return The container name.
 			 */
-			const Container::Name& 						Name() const noexcept;
+			const Container::ID& 						ID() const noexcept;
 
 			/**
 			 * @brief Gets container name as string
 			 * @return The container name.
 			 */
-			const std::string& 							NameToString() const noexcept;
+			const std::string& 							Name() const noexcept;
 
 			/**
 			 * @brief Gets all the allowed codecs for the container.
@@ -119,8 +118,8 @@ namespace StormByte::Multimedia::Media::Container {
 			const std::vector<Codec::ID>&				AllowedCodecs() const noexcept;
 
 		private:
-			Container::Name 							m_name;				///< The name of the container (e.g., "MP4").
-			std::string 								m_name_string;		///< The name of the container as a string.
-			std::vector<Codec::ID> 					m_allowed_codecs;	///< The list of codecs allowed in the container.
+			Container::ID 								m_id;				///< The name of the container (e.g., "MP4").
+			std::string 								m_name;				///< The name of the container as a string.
+			std::vector<Codec::ID> 						m_allowed_codecs;	///< The list of codecs allowed in the container.
 	};
 }

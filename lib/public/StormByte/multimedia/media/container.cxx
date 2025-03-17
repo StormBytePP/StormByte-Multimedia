@@ -2,18 +2,18 @@
 
 using namespace StormByte::Multimedia;
 
-Media::Container::Info::Info(const Media::Container::Name& name, const std::string& name_string, const std::vector<Codec::ID>& allowedCodecs):
-m_name(name), m_name_string(name_string), m_allowed_codecs(allowedCodecs) {}
+Media::Container::Info::Info(const Media::Container::ID& id, const std::string& name, const std::vector<Codec::ID>& allowedCodecs):
+m_id(id), m_name(name), m_allowed_codecs(allowedCodecs) {}
 
-Media::Container::Info::Info(Media::Container::Name&& name, std::string&& name_string, std::vector<Codec::ID>&& allowedCodecs):
-m_name(name), m_name_string(name_string), m_allowed_codecs(allowedCodecs) {}
+Media::Container::Info::Info(Media::Container::ID&& id, std::string&& name, std::vector<Codec::ID>&& allowedCodecs):
+m_id(id), m_name(name), m_allowed_codecs(allowedCodecs) {}
 
 
-const Media::Container::Name& Media::Container::Info::Name() const noexcept {
-	return m_name;
+const Media::Container::ID& Media::Container::Info::ID() const noexcept {
+	return m_id;
 }
-const std::string& Media::Container::Info::NameToString() const noexcept {
-	return m_name_string;
+const std::string& Media::Container::Info::Name() const noexcept {
+	return m_name;
 }
 
 const std::vector<Media::Codec::ID>& Media::Container::Info::AllowedCodecs() const noexcept {
