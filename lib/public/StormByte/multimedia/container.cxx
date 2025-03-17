@@ -5,9 +5,9 @@
 
 using namespace StormByte::Multimedia;
 
-bool Container::Supports(const Media::Codec::Name& codec) const noexcept {
+bool Container::Supports(const Media::Codec::ID& codec) const noexcept {
 	const auto& supported_codecs = Media::Registry::ContainerInfo(m_name)->AllowedCodecs();
-	std::span<const Media::Codec::Name> supported_codecs_span(supported_codecs);
+	std::span<const Media::Codec::ID> supported_codecs_span(supported_codecs);
 	return std::ranges::find(supported_codecs_span, codec) != supported_codecs_span.end();
 }
 

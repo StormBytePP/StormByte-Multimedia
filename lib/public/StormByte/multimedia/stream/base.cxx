@@ -3,7 +3,7 @@
 
 using namespace StormByte::Multimedia::Stream;
 
-PointerType Base::Create(const Media::Codec::Name& codec) {
+PointerType Base::Create(const Media::Codec::ID& codec) {
 	// We need to use explicitelly new here because MakePointer gives problems with friendship
 	switch (Media::Registry::CodecInfo(codec)->Type()) {
 		case Media::Type::Audio:
@@ -37,4 +37,4 @@ const StormByte::Multimedia::Media::Tags& Base::Tags() const noexcept {
 	return m_tags;
 }
 
-Base::Base(const Media::Codec::Name& codec) noexcept: m_codec(codec), m_disposition(), m_tags() {}
+Base::Base(const Media::Codec::ID& codec) noexcept: m_codec(codec), m_disposition(), m_tags() {}

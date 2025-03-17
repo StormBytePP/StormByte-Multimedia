@@ -23,7 +23,7 @@ namespace StormByte::Multimedia::Media {
 		 * @param codec The codec enum value.
 		 * @return A reference to the Codec::Info struct for the requested codec.
 		 */
-		static Codec::Info::PointerType 												CodecInfo(const Codec::Name& codec);
+		static Codec::Info::PointerType 												CodecInfo(const Codec::ID& codec);
 
 		/**
 		 * @brief Retrieves detailed information about a container.

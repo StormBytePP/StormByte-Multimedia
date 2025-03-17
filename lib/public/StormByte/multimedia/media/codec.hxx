@@ -14,10 +14,10 @@
  */
 namespace StormByte::Multimedia::Media::Codec {
 	/**
-	 * @enum Name
+	 * @enum ID
 	 * @brief Enumerates all supported codec names.
 	 */
-	enum STORMBYTE_MULTIMEDIA_PUBLIC Name: unsigned short {
+	enum STORMBYTE_MULTIMEDIA_PUBLIC ID: unsigned short {
 		// Audio codecs
 		AAC,									///< AAC audio codec.
 		AC3,									///< AC3 audio codec.
@@ -71,7 +71,7 @@ namespace StormByte::Multimedia::Media::Codec {
 			 * @param name_string The name of the codec as a string.
 			 * @param type The type of the codec.
 			 */
-			Info(const Codec::Name& name, const Type& type, const std::string& name_string) noexcept;
+			Info(const Codec::ID& name, const Type& type, const std::string& name_string) noexcept;
 			
 			/**
 			 * @brief Constructor.
@@ -79,7 +79,7 @@ namespace StormByte::Multimedia::Media::Codec {
 			 * @param name_string The name of the codec as a string.
 			 * @param type The type of the codec.
 			 */
-			Info(Codec::Name&& name, Type&& type, std::string&& name_string) noexcept;
+			Info(Codec::ID&& name, Type&& type, std::string&& name_string) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -116,7 +116,7 @@ namespace StormByte::Multimedia::Media::Codec {
 			 * @brief Gets the name of the codec.
 			 * @return The name of the codec.
 			 */
-			const Codec::Name& 							Name() const noexcept;
+			const Codec::ID& 							Name() const noexcept;
 
 			/**
 			 * @brief Gets the name of the codec.
@@ -131,7 +131,7 @@ namespace StormByte::Multimedia::Media::Codec {
 			const Media::Type&							Type() const noexcept;
 
 		private:
-			Codec::Name 								m_name;			///< Name of the codec.
+			Codec::ID 									m_name;			///< Name of the codec.
 			Media::Type 								m_type;			///< Type of the codec (Audio, Video, Subtitle, or Image).
 			std::string 								m_name_string;	///< Name of the codec (e.g., "AAC", "H264").
 	};

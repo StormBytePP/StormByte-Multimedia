@@ -10,4 +10,4 @@ PointerType Attachment::Move() {
 	return MakePointer<Attachment>(std::move(*this));
 }
 
-Attachment::Attachment(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+Attachment::Attachment(const Media::Codec::ID& codec) noexcept: Base(codec) {}

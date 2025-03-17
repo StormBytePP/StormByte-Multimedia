@@ -10,4 +10,4 @@ PointerType Image::Move() {
 	return MakePointer<Image>(std::move(*this));
 }
 
-Image::Image(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+Image::Image(const Media::Codec::ID& codec) noexcept: Base(codec) {}

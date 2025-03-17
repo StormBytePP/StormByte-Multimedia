@@ -10,4 +10,4 @@ PointerType Video::Move() {
 	return MakePointer<Video>(std::move(*this));
 }
 
-Video::Video(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+Video::Video(const Media::Codec::ID& codec) noexcept: Base(codec) {}

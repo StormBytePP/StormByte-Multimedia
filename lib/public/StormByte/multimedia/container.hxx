@@ -91,7 +91,7 @@ namespace StormByte::Multimedia {
 			 * @param codec Codec to check
 			 * @return True if the codec is supported, false otherwise
 			 */
-			bool 														Supports(const Media::Codec::Name& codec) const noexcept;
+			bool 														Supports(const Media::Codec::ID& codec) const noexcept;
 
 			/**
 			 * @brief Check if the container can add a stream (for example, audio containers can not have video streams).

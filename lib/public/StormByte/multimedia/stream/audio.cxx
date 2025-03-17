@@ -50,4 +50,4 @@ const std::optional<std::string>& Audio::Profile() const noexcept {
 	return m_profile;
 }
 
-Audio::Audio(const Media::Codec::Name& codec) noexcept: Base(codec) {}
+Audio::Audio(const Media::Codec::ID& codec) noexcept: Base(codec) {}
