@@ -76,25 +76,25 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Gets the disposition of the stream.
 			 * @return The disposition of the stream.
 			 */
-			Media::Property::Tags& 									Disposition() noexcept;
+			Media::Property::Tags<bool>& 							Disposition() noexcept;
 
 			/**
 			 * @brief Gets the disposition of the stream.
 			 * @return The disposition of the stream.
 			 */
-			const Media::Property::Tags& 							Disposition() const noexcept;
+			const Media::Property::Tags<bool>& 						Disposition() const noexcept;
 
 			/**
 			 * @brief Gets the tags of the stream.
 			 * @return The tags of the stream.
 			 */
-			Media::Property::Tags& 									Tags() noexcept;
+			Media::Property::Tags<std::string>& 					Tags() noexcept;
 
 			/**
 			 * @brief Gets the tags of the stream.
 			 * @return The tags of the stream.
 			 */
-			const Media::Property::Tags& 							Tags() const noexcept;
+			const Media::Property::Tags<std::string>& 				Tags() const noexcept;
 
 			/**
 			 * @brief Gets the type of the stream.
@@ -104,8 +104,8 @@ namespace StormByte::Multimedia::Stream {
 
 		protected:
 			Media::Codec::ID m_codec;								///< The codec of the stream.
-			Media::Property::Tags m_disposition;					///< The disposition of the stream.
-			Media::Property::Tags m_tags;							///< The tags of the stream.
+			Media::Property::Tags<bool> m_disposition;				///< The disposition of the stream.
+			Media::Property::Tags<std::string> m_tags;				///< The tags of the stream.
 
 			/**
 			 * @brief Default constructor.
