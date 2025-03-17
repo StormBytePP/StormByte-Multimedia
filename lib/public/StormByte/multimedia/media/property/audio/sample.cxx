@@ -1,6 +1,6 @@
-#include <StormByte/multimedia/media/sample.hxx>
+#include <StormByte/multimedia/media/property/audio/sample.hxx>
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia::Media::Property::Audio;
 
 Sample::Sample(const std::string& format, const unsigned int& rate): m_format(format), m_rate(rate) {}
 

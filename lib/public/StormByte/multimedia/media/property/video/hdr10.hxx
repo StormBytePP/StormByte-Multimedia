@@ -1,15 +1,15 @@
 #pragma once
 
-#include <StormByte/multimedia/media/color.hxx>
+#include <StormByte/multimedia/media/property/video/color.hxx>
 
 #include <optional>
 #include <string>
 
 /**
- * @namespace Media
- * @brief The namespace for all multimedia media types.
+ * @namespace Video
+ * @brief The namespace for multimedia video media types.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia::Media::Property::Video {
 	/**
 	 * @class HDR10
 	 * @brief The class for HDR10 properties.

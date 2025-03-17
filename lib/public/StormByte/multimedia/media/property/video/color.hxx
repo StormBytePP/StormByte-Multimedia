@@ -7,10 +7,10 @@
 #include <utility>
 
 /**
- * @namespace Media
- * @brief The namespace for all multimedia media types.
+ * @namespace Video
+ * @brief The namespace for multimedia video media types.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia::Media::Property::Video {
 	/**
 	 * @class Color
 	 * @brief The class for color properties.

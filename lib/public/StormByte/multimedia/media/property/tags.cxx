@@ -1,8 +1,8 @@
-#include <StormByte/multimedia/media/tags.hxx>
+#include <StormByte/multimedia/media/property/tags.hxx>
 
 #include <format>
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia::Media::Property;
 
 std::string& Tags::operator[](const std::string& key) noexcept {
 	return m_tags[key];

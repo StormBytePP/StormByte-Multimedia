@@ -5,10 +5,10 @@
 #include <string>
 
 /**
- * @namespace Media
- * @brief The namespace for all multimedia media types.
+ * @namespace Property
+ * @brief The namespace for all multimedia properties.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia::Media::Property {
 	/**
 	 * @struct Duration
 	 * @brief The struct for duration properties.

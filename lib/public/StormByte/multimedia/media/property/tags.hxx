@@ -7,10 +7,10 @@
 #include <unordered_map>
 
 /**
- * @namespace Stream
- * @brief The namespace for all multimedia streams types.
+ * @namespace Property
+ * @brief The namespace for all multimedia properties.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia::Media::Property {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Tags final {
 		public:
 			using iterator 			= typename std::unordered_map<std::string, std::string>::iterator;			///< Iterator type.

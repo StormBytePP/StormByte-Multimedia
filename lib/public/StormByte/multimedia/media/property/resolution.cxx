@@ -1,6 +1,6 @@
-#include <StormByte/multimedia/media/resolution.hxx>
+#include <StormByte/multimedia/media/property/resolution.hxx>
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia::Media::Property;
 
 std::string Resolution::GetName() const noexcept {
 	return std::to_string(m_width) + "x" + std::to_string(m_height);

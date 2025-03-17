@@ -1,6 +1,7 @@
 #pragma once
 
-#include <StormByte/multimedia/media/tags.hxx>
+#include <StormByte/multimedia/media/property/audio/channels.hxx>
+#include <StormByte/multimedia/media/property/audio/sample.hxx>
 #include <StormByte/multimedia/stream/base.hxx>
 
 #include <optional>
@@ -22,50 +23,50 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Copy constructor.
 			 * @param stream The stream to copy.
 			 */
-			Audio(const Audio& stream) noexcept 						= default;
+			Audio(const Audio& stream) noexcept 							= default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param stream The stream to move.
 			 */
-			Audio(Audio&& stream) noexcept								= default;
+			Audio(Audio&& stream) noexcept									= default;
 
 			/**
 			 * @brief Copy assignment operator.
 			 * @param stream The stream to copy.
 			 * @return Reference to the assigned stream.
 			 */
-			Audio& operator=(const Audio& stream) noexcept 				= default;
+			Audio& operator=(const Audio& stream) noexcept 					= default;
 
 			/**
 			 * @brief Move assignment operator.
 			 * @param stream The stream to move.
 			 * @return Reference to the assigned stream.
 			 */
-			Audio& operator=(Audio&& stream) noexcept 					= default;
+			Audio& operator=(Audio&& stream) noexcept 						= default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Audio() noexcept override									= default;
+			~Audio() noexcept override										= default;
 
 			/**
 			 * @brief Clones the stream.
 			 * @return The cloned stream.
 			 */
-			PointerType 												Clone() const override;
+			PointerType 													Clone() const override;
 
 			/**
 			 * @brief Moves the stream.
 			 * @return The moved stream.
 			 */
-			PointerType 												Move() override;
+			PointerType 													Move() override;
 
 			/**
 			 * @brief Gets the type of the stream.
 			 * @return The type of the stream.
 			 */
-			constexpr Media::Type 										Type() const noexcept {
+			constexpr Media::Type 											Type() const noexcept {
 				return Media::Type::Audio;
 			}
 
@@ -73,61 +74,49 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Gets the number of channels.
 			 * @return The number of channels.
 			 */
-			unsigned short& 											Channels() noexcept;
+			std::optional<Media::Property::Audio::Channels>&				Channels() noexcept;
 
 			/**
 			 * @brief Gets the number of channels.
 			 * @return The number of channels.
 			 */
-			const unsigned short& 										Channels() const noexcept;
+			const std::optional<Media::Property::Audio::Channels>&			Channels() const noexcept;
 
 			/**
 			 * @brief Gets the sample rate.
 			 * @return The sample rate.
 			 */
-			unsigned int& 												SampleRate() noexcept;
+			std::optional<Media::Property::Audio::Sample>& 					Sample() noexcept;
 
 			/**
 			 * @brief Gets the sample rate.
 			 * @return The sample rate.
 			 */
-			const unsigned int& 										SampleRate() const noexcept;
-
-			/**
-			 * @brief Gets the channel layout.
-			 * @return The channel layout.
-			 */
-			std::string& 												ChannelLayout() noexcept;
-
-			/**
-			 * @brief Gets the channel layout.
-			 * @return The channel layout.
-			 */
-			const std::string& 											ChannelLayout() const noexcept;
+			const std::optional<Media::Property::Audio::Sample>& 			Sample() const noexcept;
 
 			/**
 			 * @brief Gets the bitrate.
 			 * @return The bitrate.
 			 */
-			unsigned int& 												Bitrate() noexcept;
+			std::optional<unsigned int>& 									Bitrate() noexcept;
 
 			/**
 			 * @brief Gets the bitrate.
 			 * @return The bitrate.
 			 */
-			const unsigned int& 										Bitrate() const noexcept;
+			const std::optional<unsigned int>& 								Bitrate() const noexcept;
 
 			/**
 			 * @brief Gets the profile.
 			 * @return The profile.
 			 */
-			std::optional<std::string>& 								Profile() noexcept;
+			std::optional<std::string>& 									Profile() noexcept;
 
 			/**
 			 * @brief Gets the profile.
 			 * @return The profile.
 			 */
-			const std::optional<std::string>& 							Profile() const noexcept;
+			const std::optional<std::string>& 								Profile() const noexcept;
 
 		private:
 			/**
@@ -136,10 +125,9 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			Audio(const Media::Codec::ID& codec) noexcept;
 
-			unsigned short m_channels;									///< The number of channels.
-			unsigned int m_sample_rate;									///< The sample rate.
-			std::string m_channel_layout;								///< The channel layout.
-			unsigned int m_bitrate;										///< The number of bits per sample.
-			std::optional<std::string> m_profile;						///< The profile.
+			std::optional<Media::Property::Audio::Channels> m_channels;		///< The number of channels.
+			std::optional<Media::Property::Audio::Sample> m_sample;			///< The sample rate.
+			std::optional<unsigned int> m_bitrate;							///< The number of bits per sample.
+			std::optional<std::string> m_profile;							///< The profile.
 	};
 }

@@ -5,10 +5,14 @@
 #include <string>
 
 /**
- * @namespace Media
- * @brief The namespace for all multimedia media types.
+ * @namespace Audio
+ * @brief The namespace for multimedia audio media types.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia::Media::Property::Audio {
+	/**
+	 * @class Sample
+	 * @brief The class for sample properties.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Sample {
 		public:
 			/**

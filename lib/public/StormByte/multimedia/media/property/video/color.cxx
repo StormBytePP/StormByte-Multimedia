@@ -1,6 +1,6 @@
-#include <StormByte/multimedia/media/color.hxx>
+#include <StormByte/multimedia/media/property/video/color.hxx>
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia::Media::Property::Video;
 
 const Color Color::DefaultForHDR10 = { "bt2020", "bt2020nc", "smpte2084", "yuv420p10le" };
 

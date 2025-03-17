@@ -1,6 +1,6 @@
-#include <StormByte/multimedia/media/hdr10.hxx>
+#include <StormByte/multimedia/media/property/video/hdr10.hxx>
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia::Media::Property::Video;
 
 /** Default values for HDR and color to check and use when metadata is missing in source video **/
 const HDR10 HDR10::Default = { {34000, 16000}, {13250, 34500}, {7500, 3000}, {15635, 16450}, {1, 10000000} };

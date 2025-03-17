@@ -10,35 +10,27 @@ PointerType Audio::Move() {
 	return MakePointer<Audio>(std::move(*this));
 }
 
-unsigned short& Audio::Channels() noexcept {
+std::optional<StormByte::Multimedia::Media::Property::Audio::Channels>& Audio::Channels() noexcept {
 	return m_channels;
 }
 
-const unsigned short& Audio::Channels() const noexcept {
+const std::optional<StormByte::Multimedia::Media::Property::Audio::Channels>& Audio::Channels() const noexcept {
 	return m_channels;
 }
 
-unsigned int& Audio::SampleRate() noexcept {
-	return m_sample_rate;
+std::optional<StormByte::Multimedia::Media::Property::Audio::Sample>& Audio::Sample() noexcept {
+	return m_sample;
 }
 
-const unsigned int& Audio::SampleRate() const noexcept {
-	return m_sample_rate;
+const std::optional<StormByte::Multimedia::Media::Property::Audio::Sample>& Audio::Sample() const noexcept {
+	return m_sample;
 }
 
-std::string& Audio::ChannelLayout() noexcept {
-	return m_channel_layout;
-}
-
-const std::string& Audio::ChannelLayout() const noexcept {
-	return m_channel_layout;
-}
-
-unsigned int& Audio::Bitrate() noexcept {
+std::optional<unsigned int>& Audio::Bitrate() noexcept {
 	return m_bitrate;
 }
 
-const unsigned int& Audio::Bitrate() const noexcept {
+const std::optional<unsigned int>& Audio::Bitrate() const noexcept {
 	return m_bitrate;
 }
 
@@ -50,4 +42,5 @@ const std::optional<std::string>& Audio::Profile() const noexcept {
 	return m_profile;
 }
 
-Audio::Audio(const Media::Codec::ID& codec) noexcept: Base(codec) {}
+Audio::Audio(const Media::Codec::ID& codec) noexcept: Base(codec),
+m_channels(), m_sample(), m_bitrate(), m_profile() {}
