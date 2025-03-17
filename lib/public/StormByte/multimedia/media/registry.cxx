@@ -1,6 +1,8 @@
 #include <StormByte/multimedia/media/registry.hxx>
 #include <StormByte/util/string.hxx>
 
+#include <ranges>
+
 using namespace StormByte::Multimedia::Media;
 
 const std::vector<Codec::Info::PointerType> Registry::c_codec_registry = {
