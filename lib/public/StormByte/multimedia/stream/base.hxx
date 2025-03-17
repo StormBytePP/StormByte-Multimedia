@@ -58,10 +58,17 @@ namespace StormByte::Multimedia::Stream {
 			virtual ~Base() noexcept override 						= default;
 
 			/**
+			 * @brief Creates a new stream of the corresponding type based on the provided codec
+			 * @param codec Codec for the stream
+			 * @return The created stream.
+			 */
+			static PointerType 										Create(const Media::Codec::ID& codec);
+
+			/**
 			 * @brief Gets the codec of the stream.
 			 * @return The codec of the stream.
 			 */
-			constexpr Media::Codec::ID							Codec() const noexcept {
+			constexpr Media::Codec::ID								Codec() const noexcept {
 				return m_codec;
 			}
 
@@ -95,13 +102,6 @@ namespace StormByte::Multimedia::Stream {
 			 */
 			virtual Media::Type 									Type() const noexcept = 0;
 
-			/**
-			 * @brief Creates a new stream of the corresponding type based on the provided codec
-			 * @param codec Codec for the stream
-			 * @return The created stream.
-			 */
-			static PointerType 										Create(const Media::Codec::ID& codec);
-
 		protected:
 			Media::Codec::ID m_codec;								///< The codec of the stream.
 			Media::Tags m_disposition;								///< The disposition of the stream.
@@ -115,5 +115,7 @@ namespace StormByte::Multimedia::Stream {
     };
 	using PointerType	= Base::PointerType;						///< PointerType alias
 	using Span			= std::span<PointerType>;					///< Span type
-	using ConstSpan		= std::span<const PointerType>;				///< Const span type 
+	using ConstSpan		= std::span<const PointerType>;				///< Const span type
+
+	STORMBYTE_MULTIMEDIA_PUBLIC PointerType Create(const Media::Codec::ID& codec);
 }

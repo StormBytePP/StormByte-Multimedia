@@ -38,3 +38,9 @@ const StormByte::Multimedia::Media::Tags& Base::Tags() const noexcept {
 }
 
 Base::Base(const Media::Codec::ID& codec) noexcept: m_codec(codec), m_disposition(), m_tags() {}
+
+namespace StormByte::Multimedia::Stream {
+	PointerType Create(const StormByte::Multimedia::Media::Codec::ID& codec) {
+		return Base::Create(codec);
+	}
+}
