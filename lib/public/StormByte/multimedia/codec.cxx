@@ -16,6 +16,6 @@ const std::string& Codec::Description() const noexcept {
 	return m_description;
 }
 
-const std::shared_ptr<const Media::Property::Flags>& Codec::Flags() const noexcept {
-	return m_flags;
+const Media::Property::Flags* Codec::Flags() const noexcept {
+	return m_flags.get();
 }
