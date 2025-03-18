@@ -9,10 +9,9 @@ namespace StormByte::Multimedia::Media {
 				return "Video";
 			case Type::Subtitle:
 				return "Subtitle";
-			case Type::Image:
-				return "Image";
 			case Type::Attachment:
 				return "Attachment";
+			case Type::Unknown:
 			default:
 				return "Unknown";
 			}

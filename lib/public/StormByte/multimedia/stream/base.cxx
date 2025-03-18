@@ -13,8 +13,6 @@ PointerType Base::Create(std::shared_ptr<Multimedia::Codec> codec) {
 			return PointerType(new Video(codec));
 		case Media::Type::Subtitle:
 			return PointerType(new Subtitle(codec));
-		case Media::Type::Image:
-			return PointerType(new Image(codec));
 		case Media::Type::Attachment:
 			return PointerType(new Attachment(codec));
 		default:
