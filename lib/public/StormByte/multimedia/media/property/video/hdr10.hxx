@@ -18,6 +18,16 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			static const HDR10 									Default;	///< The default HDR10 properties.
 
 			/**
+			 * @brief Constructor with default HDR color points
+			 * @param pix_fmt The pixel format.
+			 * @param range The range.
+			 * @param space The space.
+			 * @param primaries The primaries.
+			 * @param transfer The transfer.
+			 */
+			HDR10(const std::string& pix_fmt, const std::string& range, const std::string& space, const std::string& primaries, const std::string& transfer) noexcept;
+
+			/**
 			 * @brief Default constructor.
 			 * @param pix_fmt The pixel format.
 			 * @param range The range.
@@ -38,7 +48,7 @@ namespace StormByte::Multimedia::Media::Property::Video {
 				const Color::Point& white,
 				const Color::Point& luminance,
 				const std::optional<Color::Point>& light_level = std::nullopt
-			);
+			) noexcept;
 
 			/**
 			 * @brief Default constructor.
@@ -61,7 +71,7 @@ namespace StormByte::Multimedia::Media::Property::Video {
 				Color::Point&& white,
 				Color::Point&& luminance,
 				std::optional<Color::Point>&& light_level = std::nullopt
-			);
+			) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -93,6 +103,18 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @brief Default destructor.
 			 */
 			~HDR10() noexcept override							= default;
+
+			/**
+			 * @brief Gets color primaries
+			 * @return The color primaries
+			 */
+			const std::string& 									Primaries() const noexcept;
+
+			/**
+			 * @brief Gets transfer function
+			 * @return The transfer function
+			 */
+			const std::string& 									Transfer() const noexcept;
 
 			/**
 			 * @brief Gets the red point.
@@ -152,7 +174,6 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			bool 												HDR10Plus() noexcept;
 
 		private:
-			std::string m_pix_fmt;								///< The pixel format.
 			std::string m_primaries;							///< The primaries.
 			std::string m_transfer;								///< The transfer.
 			Color::Point m_red;									///< The red point.
