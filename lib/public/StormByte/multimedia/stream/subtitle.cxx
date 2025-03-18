@@ -10,4 +10,4 @@ PointerType Subtitle::Move() {
 	return MakePointer<Subtitle>(std::move(*this));
 }
 
-Subtitle::Subtitle(std::shared_ptr<Multimedia::Codec> codec) noexcept: Base(codec) {}
+Subtitle::Subtitle(std::shared_ptr<const Multimedia::Codec> codec) noexcept: Base(codec) {}

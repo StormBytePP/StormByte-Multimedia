@@ -4,7 +4,7 @@
 #include <StormByte/multimedia/media/property/audio/sample.hxx>
 #include <StormByte/multimedia/stream/base.hxx>
 
-#include <optional>
+#include <memory>
 #include <string>
 
 /**
@@ -74,60 +74,60 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Gets the number of channels.
 			 * @return The number of channels.
 			 */
-			std::optional<Media::Property::Audio::Channels>&				Channels() noexcept;
+			std::shared_ptr<const Media::Property::Audio::Channels>&		Channels() noexcept;
 
 			/**
 			 * @brief Gets the number of channels.
 			 * @return The number of channels.
 			 */
-			const std::optional<Media::Property::Audio::Channels>&			Channels() const noexcept;
+			const std::shared_ptr<const Media::Property::Audio::Channels>&	Channels() const noexcept;
 
 			/**
 			 * @brief Gets the sample rate.
 			 * @return The sample rate.
 			 */
-			std::optional<Media::Property::Audio::Sample>& 					Sample() noexcept;
+			std::shared_ptr<const Media::Property::Audio::Sample>& 			Sample() noexcept;
 
 			/**
 			 * @brief Gets the sample rate.
 			 * @return The sample rate.
 			 */
-			const std::optional<Media::Property::Audio::Sample>& 			Sample() const noexcept;
+			const std::shared_ptr<const Media::Property::Audio::Sample>& 	Sample() const noexcept;
 
 			/**
 			 * @brief Gets the bitrate.
 			 * @return The bitrate.
 			 */
-			std::optional<unsigned int>& 									Bitrate() noexcept;
+			std::shared_ptr<const unsigned int>& 							Bitrate() noexcept;
 
 			/**
 			 * @brief Gets the bitrate.
 			 * @return The bitrate.
 			 */
-			const std::optional<unsigned int>& 								Bitrate() const noexcept;
+			const std::shared_ptr<const unsigned int>& 						Bitrate() const noexcept;
 
 			/**
 			 * @brief Gets the profile.
 			 * @return The profile.
 			 */
-			std::optional<std::string>& 									Profile() noexcept;
+			std::shared_ptr<const std::string>& 							Profile() noexcept;
 
 			/**
 			 * @brief Gets the profile.
 			 * @return The profile.
 			 */
-			const std::optional<std::string>& 								Profile() const noexcept;
+			const std::shared_ptr<const std::string>& 						Profile() const noexcept;
 
 		private:
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Audio(std::shared_ptr<Multimedia::Codec> codec) noexcept;
+			Audio(std::shared_ptr<const Multimedia::Codec> codec) noexcept;
 
-			std::optional<Media::Property::Audio::Channels> m_channels;		///< The number of channels.
-			std::optional<Media::Property::Audio::Sample> m_sample;			///< The sample rate.
-			std::optional<unsigned int> m_bitrate;							///< The number of bits per sample.
-			std::optional<std::string> m_profile;							///< The profile.
+			std::shared_ptr<const Media::Property::Audio::Channels> m_channels;	///< The number of channels.
+			std::shared_ptr<const Media::Property::Audio::Sample> m_sample;		///< The sample rate.
+			std::shared_ptr<const unsigned int> m_bitrate;						///< The number of bits per sample.
+			std::shared_ptr<const std::string> m_profile;						///< The profile.
 	};
 }

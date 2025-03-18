@@ -62,7 +62,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec Codec for the stream
 			 * @return The created stream.
 			 */
-			static PointerType 										Create(std::shared_ptr<Codec> codec);
+			static PointerType 										Create(std::shared_ptr<const Codec> codec);
 
 			/**
 			 * @brief Gets the codec of the stream.
@@ -109,11 +109,11 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Base(std::shared_ptr<Multimedia::Codec> codec) noexcept;
+			Base(std::shared_ptr<const Multimedia::Codec> codec) noexcept;
     };
 	using PointerType	= Base::PointerType;						///< PointerType alias
 	using Span			= std::span<PointerType>;					///< Span type
 	using ConstSpan		= std::span<const PointerType>;				///< Const span type
 
-	STORMBYTE_MULTIMEDIA_PUBLIC PointerType Create(std::shared_ptr<Multimedia::Codec> codec);
+	STORMBYTE_MULTIMEDIA_PUBLIC PointerType Create(std::shared_ptr<const Multimedia::Codec> codec);
 }
