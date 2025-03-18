@@ -170,10 +170,10 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			bool 												IsHDR10Plus() const noexcept;
 
 			/**
-			 * @brief Gets HDR10+ compatible status.
-			 * @return True if it is HDR10+ compatible, false otherwise.
+			 * @brief Sets HDR10+ compatible status.
+			 * @param hdrplus The HDR10+ compatible status.
 			 */
-			bool 												HDR10Plus() noexcept;
+			void 												HDR10Plus(bool hdrplus) noexcept;
 
 			/**
 			 * @brief Gets color point from string like "6550/50000"

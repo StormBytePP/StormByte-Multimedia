@@ -68,8 +68,8 @@ bool HDR10::IsHDR10Plus() const noexcept {
 	return m_hdr10plus;
 }
 
-bool HDR10::HDR10Plus() noexcept {
-	return m_hdr10plus;
+void HDR10::HDR10Plus(bool hdr10plus) noexcept {
+	m_hdr10plus = hdr10plus;
 }
 
 StormByte::Expected<Color::Point, StormByte::Multimedia::Exception> HDR10::ColorPoint(const std::string& fraction_x, const std::string& fraction_y) noexcept {
