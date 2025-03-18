@@ -20,6 +20,10 @@ PointerType Base::Create(std::shared_ptr<const Multimedia::Codec> codec) {
 	}
 }
 
+const std::shared_ptr<const StormByte::Multimedia::Codec>& Base::Codec() const noexcept {
+	return m_codec;
+}
+
 StormByte::Multimedia::Media::Property::Tags<bool>& Base::Disposition() noexcept {
 	return m_disposition;
 }
