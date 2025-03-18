@@ -16,7 +16,7 @@ namespace StormByte::Multimedia::Media::Property::Video {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Color {
 		public:
-			using Point = std::pair<int, int>;			///< Representation for a point
+			using Point = std::pair<unsigned int, unsigned int>;			///< Representation for a point
 
 			/**
 			 * @brief Constructor.

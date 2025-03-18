@@ -1,5 +1,7 @@
 #pragma once
 
+#include <StormByte/alias.hxx>
+#include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/media/property/video/color.hxx>
 
 #include <optional>
@@ -172,6 +174,20 @@ namespace StormByte::Multimedia::Media::Property::Video {
 			 * @return True if it is HDR10+ compatible, false otherwise.
 			 */
 			bool 												HDR10Plus() noexcept;
+
+			/**
+			 * @brief Gets color point from string like "6550/50000"
+			 * @param str The string to parse
+			 * @return The color point
+			 */
+			static StormByte::Expected<Color::Point, Multimedia::Exception>	ColorPoint(const std::string& fraction_x, const std::string& fraction_y) noexcept;
+
+			/**
+			 * @brief Gets color point from string like "6550/50000"
+			 * @param str The string to parse
+			 * @return The color point
+			 */
+			static StormByte::Expected<Color::Point, Multimedia::Exception>	LuminanceColorPoint(const std::string& fraction_x, const std::string& fraction_y) noexcept;
 
 		private:
 			std::string m_primaries;							///< The primaries.
