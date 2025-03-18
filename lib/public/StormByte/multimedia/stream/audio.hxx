@@ -123,7 +123,7 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Audio(const Media::Codec::ID& codec) noexcept;
+			Audio(std::shared_ptr<Multimedia::Codec> codec) noexcept;
 
 			std::optional<Media::Property::Audio::Channels> m_channels;		///< The number of channels.
 			std::optional<Media::Property::Audio::Sample> m_sample;			///< The sample rate.

@@ -1,11 +1,12 @@
-#include <StormByte/multimedia/media/registry.hxx>
 #include <StormByte/multimedia/stream.hxx>
 
 using namespace StormByte::Multimedia::Stream;
 
-PointerType Base::Create(const Media::Codec::ID& codec) {
+Base::Base(std::shared_ptr<Multimedia::Codec> codec) noexcept: m_codec(codec), m_disposition(), m_tags() {}
+
+PointerType Base::Create(std::shared_ptr<Multimedia::Codec> codec) {
 	// We need to use explicitelly new here because MakePointer gives problems with friendship
-	switch (Media::Registry::CodecInfo(codec)->Type()) {
+	switch (codec->Type()) {
 		case Media::Type::Audio:
 			return PointerType(new Audio(codec));
 		case Media::Type::Video:
@@ -37,10 +38,8 @@ const StormByte::Multimedia::Media::Property::Tags<std::string>& Base::Tags() co
 	return m_tags;
 }
 
-Base::Base(const Media::Codec::ID& codec) noexcept: m_codec(codec), m_disposition(), m_tags() {}
-
 namespace StormByte::Multimedia::Stream {
-	PointerType Create(const StormByte::Multimedia::Media::Codec::ID& codec) {
+	PointerType Create(std::shared_ptr<Multimedia::Codec> codec) {
 		return Base::Create(codec);
 	}
 }

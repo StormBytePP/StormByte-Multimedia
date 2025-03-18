@@ -42,5 +42,5 @@ const std::optional<std::string>& Audio::Profile() const noexcept {
 	return m_profile;
 }
 
-Audio::Audio(const Media::Codec::ID& codec) noexcept: Base(codec),
+Audio::Audio(std::shared_ptr<Multimedia::Codec> codec) noexcept: Base(codec),
 m_channels(), m_sample(), m_bitrate(), m_profile() {}

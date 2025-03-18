@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/multimedia/exception.hxx>
-#include <StormByte/multimedia/media/codec.hxx>
+#include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/media/property/tags.hxx>
 #include <StormByte/util/clonable.hxx>
 
@@ -62,15 +62,13 @@ namespace StormByte::Multimedia::Stream {
 			 * @param codec Codec for the stream
 			 * @return The created stream.
 			 */
-			static PointerType 										Create(const Media::Codec::ID& codec);
+			static PointerType 										Create(std::shared_ptr<Codec> codec);
 
 			/**
 			 * @brief Gets the codec of the stream.
 			 * @return The codec of the stream.
 			 */
-			constexpr Media::Codec::ID								Codec() const noexcept {
-				return m_codec;
-			}
+			const std::shared_ptr<const Codec>&						Codec() const noexcept;
 
 			/**
 			 * @brief Gets the disposition of the stream.
@@ -103,19 +101,19 @@ namespace StormByte::Multimedia::Stream {
 			virtual Media::Type 									Type() const noexcept = 0;
 
 		protected:
-			Media::Codec::ID m_codec;								///< The codec of the stream.
-			Media::Property::Tags<bool> m_disposition;				///< The disposition of the stream.
-			Media::Property::Tags<std::string> m_tags;				///< The tags of the stream.
+			std::shared_ptr<const Multimedia::Codec> 				m_codec;		///< The codec of the stream.
+			Media::Property::Tags<bool> 							m_disposition;	///< The disposition of the stream.
+			Media::Property::Tags<std::string>						m_tags;			///< The tags of the stream.
 
 			/**
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Base(const Media::Codec::ID& codec) noexcept;
+			Base(std::shared_ptr<Multimedia::Codec> codec) noexcept;
     };
 	using PointerType	= Base::PointerType;						///< PointerType alias
 	using Span			= std::span<PointerType>;					///< Span type
 	using ConstSpan		= std::span<const PointerType>;				///< Const span type
 
-	STORMBYTE_MULTIMEDIA_PUBLIC PointerType Create(const Media::Codec::ID& codec);
+	STORMBYTE_MULTIMEDIA_PUBLIC PointerType Create(std::shared_ptr<Multimedia::Codec> codec);
 }

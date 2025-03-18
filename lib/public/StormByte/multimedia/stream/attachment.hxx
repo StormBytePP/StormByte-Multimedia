@@ -70,6 +70,6 @@ namespace StormByte::Multimedia::Stream {
 			 * @brief Default constructor.
 			 * @param codec The codec of the stream.
 			 */
-			Attachment(const Media::Codec::ID& codec) noexcept;
+			Attachment(std::shared_ptr<Multimedia::Codec> codec) noexcept;
 	};
 }
