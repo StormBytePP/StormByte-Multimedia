@@ -76,7 +76,7 @@ namespace StormByte::Multimedia::Media::Property {
 				try {
 					return m_tags.at(key);
 				} catch (const std::out_of_range&) {
-					return StormByte::Unexpected<Exception>(std::format("Tag {} not found", key));
+					return StormByte::Unexpected<Exception>("Tag {} not found", key);
 				}
 			}
 

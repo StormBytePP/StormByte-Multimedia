@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/multimedia/visibility.h>
-#include <StormByte/util/clonable.hxx>
+#include <StormByte/clonable.hxx>
 
 #include <string>
 
@@ -13,7 +13,7 @@ namespace StormByte::Multimedia::Media::Property {
 	/**
 	 * @brief Flags class.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Flags: public StormByte::Util::Clonable<Flags, std::shared_ptr<Flags>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Flags: public StormByte::Clonable<Flags, std::shared_ptr<Flags>> {
 		public:
 			/**
 			 * @brief Constructor.

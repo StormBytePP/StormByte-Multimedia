@@ -1,4 +1,4 @@
-#include <StormByte/util/string.hxx>
+#include <StormByte/string.hxx>
 #include <StormByte/multimedia/media/property/video/hdr10.hxx>
 
 using namespace StormByte::Multimedia::Media::Property::Video;
@@ -73,8 +73,8 @@ void HDR10::HDR10Plus(bool hdr10plus) noexcept {
 }
 
 StormByte::Expected<Color::Point, StormByte::Multimedia::Exception> HDR10::ColorPoint(const std::string& fraction_x, const std::string& fraction_y) noexcept {
-	auto expected_fraction_x = StormByte::Util::String::SplitFraction(fraction_x, 50000);
-	auto expected_fraction_y = StormByte::Util::String::SplitFraction(fraction_y, 50000);
+	auto expected_fraction_x = StormByte::String::SplitFraction(fraction_x, 50000);
+	auto expected_fraction_y = StormByte::String::SplitFraction(fraction_y, 50000);
 	if (!expected_fraction_x)
 		return StormByte::Unexpected<Multimedia::Exception>(expected_fraction_x.error()->what());
 	else if (!expected_fraction_y)
@@ -84,8 +84,8 @@ StormByte::Expected<Color::Point, StormByte::Multimedia::Exception> HDR10::Color
 }
 
 StormByte::Expected<Color::Point, StormByte::Multimedia::Exception> HDR10::LuminanceColorPoint(const std::string& fraction_x, const std::string& fraction_y) noexcept {
-	auto expected_fraction_x = StormByte::Util::String::SplitFraction(fraction_x, 10000);
-	auto expected_fraction_y = StormByte::Util::String::SplitFraction(fraction_y, 10000);
+	auto expected_fraction_x = StormByte::String::SplitFraction(fraction_x, 10000);
+	auto expected_fraction_y = StormByte::String::SplitFraction(fraction_y, 10000);
 	if (!expected_fraction_x)
 		return StormByte::Unexpected<Multimedia::Exception>(expected_fraction_x.error()->what());
 	else if (!expected_fraction_y)

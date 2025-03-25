@@ -3,7 +3,7 @@
 #include <StormByte/multimedia/exception.hxx>
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/media/property/tags.hxx>
-#include <StormByte/util/clonable.hxx>
+#include <StormByte/clonable.hxx>
 
 
 #include <span>
@@ -24,7 +24,7 @@ namespace StormByte::Multimedia::Stream {
 	 * @class Base
 	 * @brief Base class for all multimedia streams.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Util::Clonable<Base, std::shared_ptr<Base>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Base: public Clonable<Base, std::shared_ptr<Base>> {
 		public:
 			/**
 			 * @brief Copy constructor.
