@@ -4,5 +4,5 @@
 using namespace StormByte::Multimedia::Media::Property;
 
 std::string Size::ToString() const noexcept {
-	return StormByte::Util::String::HumanReadableByteSize(s_bytes);
+	return Util::String::HumanReadable(s_bytes, Util::String::Format::HumanReadableBytes);
 }
