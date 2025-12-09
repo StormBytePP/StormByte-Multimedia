@@ -12,6 +12,11 @@ set_target_properties(StormByte-Multimedia PROPERTIES
 	SOVERSION		${CMAKE_PROJECT_VERSION}
 	VERSION 		${CMAKE_PROJECT_VERSION}
 )
+set_target_properties(StormByte-Multimedia PROPERTIES
+	POSITION_INDEPENDENT_CODE        ON
+	CXX_VISIBILITY_PRESET            hidden
+	VISIBILITY_INLINES_HIDDEN        ON
+)
 
 # Compile options
 if(MSVC)
