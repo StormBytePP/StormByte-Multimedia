@@ -6,7 +6,6 @@ file(GLOB_RECURSE STORMBYTE_MULTIMEDIA_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURREN
 # Library
 add_library(StormByte-Multimedia SHARED ${STORMBYTE_MULTIMEDIA_SOURCES})
 add_library(StormByte::Multimedia ALIAS StormByte-Multimedia)
-target_link_libraries(StormByte-Multimedia PUBLIC StormByte)
 set_target_properties(StormByte-Multimedia PROPERTIES
 	LINKER_LANGUAGE CXX
 	SOVERSION		${CMAKE_PROJECT_VERSION}
