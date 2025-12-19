@@ -1,0 +1,157 @@
+if(WITH_FFMPEG STREQUAL "BUNDLED")
+	message(STATUS "Enabling x265 bundled in FFmpeg build")
+
+	set(X265_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/source")
+	find_program(GIT_COMMAND git)
+	if(NOT GIT_COMMAND)
+		message(FATAL_ERROR "Git not found: required to build bundled x265. Install 'git'.")
+	endif()
+	# Need to patch CMakeLists to delete invalid POLICY settings for CMake < 3.5
+	set(X265_CMAKELISTS_PATCHED "${CMAKE_CURRENT_BINARY_DIR}/x265-patched")
+	add_custom_command(
+		OUTPUT "${X265_CMAKELISTS_PATCHED}"
+		COMMAND ${GIT_COMMAND} checkout -- .
+		COMMAND ${GIT_COMMAND} apply "${CMAKE_CURRENT_SOURCE_DIR}/0001-Delete-invalid-cmake-policies.patch"
+		WORKING_DIRECTORY "${X265_SRC_DIR}"
+		COMMENT "Patching x265 CMakeLists.txt"
+		VERBATIM
+	)
+
+	# Build 3 phases: 12bit, 10bit+hdr10+ and 8bit (this last one exposing C API)
+	# 12-bit build
+	set(X265_BUILD_DIR_12 "${CMAKE_CURRENT_BINARY_DIR}/x265-build-12bit")
+	set(X265_LIBRARY_12 "${X265_BUILD_DIR_12}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	file(MAKE_DIRECTORY "${X265_BUILD_DIR_12}")
+	add_custom_command(
+		OUTPUT "${X265_LIBRARY_12}"
+		COMMAND ${CMAKE_COMMAND}
+			-S "${X265_SRC_DIR}"
+			-B "${X265_BUILD_DIR_12}"
+			-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+			-DENABLE_SHARED=OFF
+			-DENABLE_PIC=ON
+			-DENABLE_ALPHA="yes"
+			-DENABLE_MULTIVIEW="yes"
+			-DENABLE_SVT_HEVC="no"
+			-DENABLE_SCC_EXT="yes"
+			-DENABLE_LIBVMAF=OFF
+			-DENABLE_LIBNUMA=OFF
+			-DGIT_ARCHETYPE=1
+			-DENABLE_CLI=OFF
+			-DEXPORT_C_API=OFF
+			-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}
+			-DHIGH_BIT_DEPTH=ON
+			-DMAIN12=ON
+		COMMAND ${CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
+		WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
+		COMMENT "Configure and build x265 (10-bit)"
+		VERBATIM
+		DEPENDS "${X265_CMAKELISTS_PATCHED}"
+	)
+
+	# 10-bit build
+	set(X265_BUILD_DIR_10 "${CMAKE_CURRENT_BINARY_DIR}/x265-build-10bit")
+	set(X265_LIBRARY_10 "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	set(X265_LIBRARY_10_HDRPLUS "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}hdr10plus${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	file(MAKE_DIRECTORY "${X265_BUILD_DIR_10}")
+	add_custom_command(
+		OUTPUT "${X265_LIBRARY_10}" "${X265_LIBRARY_10_HDRPLUS}"
+		COMMAND ${CMAKE_COMMAND}
+			-S "${X265_SRC_DIR}"
+			-B "${X265_BUILD_DIR_10}"
+			-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+			-DENABLE_SHARED=OFF
+			-DENABLE_PIC=ON
+			-DENABLE_ALPHA="yes"
+			-DENABLE_MULTIVIEW="yes"
+			-DENABLE_SVT_HEVC="no"
+			-DENABLE_SCC_EXT="yes"
+			-DENABLE_LIBVMAF=OFF
+			-DENABLE_LIBNUMA=OFF
+			-DGIT_ARCHETYPE=1
+			-DENABLE_CLI=OFF
+			-DEXPORT_C_API=OFF
+			-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}
+			-DENABLE_HDR10_PLUS=ON
+			-DHIGH_BIT_DEPTH=ON
+			-DMAIN12=OFF
+		COMMAND ${CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
+		WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
+		COMMENT "Configure and build x265 (10-bit)"
+		VERBATIM
+		DEPENDS "${X265_CMAKELISTS_PATCHED}"
+	)
+
+		# 8-bit build
+		set(X265_BUILD_DIR_8 "${CMAKE_CURRENT_BINARY_DIR}/x265-build-8bit")
+		# Prefer the 8-bit build output in the build directory as the combiner input
+		# (using the installed path causes self-inclusion when the combined output
+		# is the same install location).
+		set(X265_LIBRARY_8 "${X265_BUILD_DIR_8}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	file(MAKE_DIRECTORY "${X265_BUILD_DIR_8}")
+	add_custom_command(
+		OUTPUT "${X265_LIBRARY_8}"
+		COMMAND ${CMAKE_COMMAND}
+			-S "${X265_SRC_DIR}"
+			-B "${X265_BUILD_DIR_8}"
+			-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+			-DENABLE_SHARED=OFF
+			-DENABLE_PIC=ON
+			-DENABLE_ALPHA="yes"
+			-DENABLE_MULTIVIEW="yes"
+			-DENABLE_SVT_HEVC="no"
+			-DENABLE_SCC_EXT="yes"
+			-DENABLE_LIBVMAF=OFF
+			-DENABLE_LIBNUMA=OFF
+			-DGIT_ARCHETYPE=1
+			-DENABLE_CLI=OFF
+			-DEXPORT_C_API=ON
+			-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}
+			-DHIGH_BIT_DEPTH=OFF
+			-DCMAKE_INSTALL_PREFIX=${FFMPEG_EXTERNAL_PATH}
+		COMMAND ${CMAKE_COMMAND} --build "${X265_BUILD_DIR_8}" --target install
+		WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
+		COMMENT "Configure and build x265 (10-bit)"
+		VERBATIM
+		DEPENDS "${X265_BUILD_DIR_12}" "${X265_BUILD_DIR_10}"
+	)
+
+	# Combine the 10-bit x265 static lib and hdr10plus into a single libx265.a
+	# Find a Python interpreter to run the combiner script
+	find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+	set(X265_COMBINED_LIB "${FFMPEG_EXTERNAL_PATH}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	set(X265_COMBINED_MARKER "${CMAKE_CURRENT_BINARY_DIR}/.x265_combined_done")
+	add_custom_command(
+		OUTPUT "${X265_COMBINED_MARKER}"
+		COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/combine-x265-static.py" -o "${X265_COMBINED_LIB}" "${X265_LIBRARY_12}" "${X265_LIBRARY_10}" "${X265_LIBRARY_10_HDRPLUS}" "${X265_LIBRARY_8}"
+		COMMAND ${CMAKE_COMMAND} -E touch "${X265_COMBINED_MARKER}"
+		WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+		COMMENT "Combining x265 (12/10/8-bit) and hdr10plus into ${X265_COMBINED_LIB}"
+		VERBATIM
+		DEPENDS "${X265_LIBRARY_12}" "${X265_LIBRARY_10}" "${X265_LIBRARY_10_HDRPLUS}" "${X265_LIBRARY_8}"
+	)
+
+	add_custom_target(x265_merge DEPENDS "${X265_COMBINED_MARKER}")
+
+	# Restore CMakeLists.txt to original state
+	set(X265_CMAKELISTS_RESTORED "${CMAKE_CURRENT_BINARY_DIR}/x265-restored")
+	add_custom_command(
+		OUTPUT "${X265_CMAKELISTS_RESTORED}"
+		COMMAND ${GIT_COMMAND} checkout -- CMakeLists.txt
+		WORKING_DIRECTORY "${X265_SRC_DIR}"
+		COMMENT "Restoring x265 CMakeLists.txt"
+		VERBATIM
+		DEPENDS x265_merge
+	)
+
+	add_custom_target(x265_bundled DEPENDS "${X265_CMAKELISTS_RESTORED}")
+
+	# Update FFmpeg options
+	set(FFMPEG_MESON_OPTIONS
+		${FFMPEG_MESON_OPTIONS}
+		"-Dlibx265=enabled"
+		"-Dlibx265_encoder=enabled"
+		PARENT_SCOPE
+	)
+endif()

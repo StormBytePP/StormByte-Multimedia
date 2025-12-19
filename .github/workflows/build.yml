@@ -17,10 +17,13 @@ jobs:
       matrix:
         compiler: [gcc, clang]
         stdlib: [libstdc++, libc++]
+        ffmpeg: [SYSTEM, BUNDLED]
         exclude:
         - compiler: gcc
           stdlib: libc++
-    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}
+        - stdlib: libc++
+          ffmpeg: SYSTEM
+    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-ffmpeg-${{ matrix.ffmpeg }}
 
     steps:
     - name: Checkout repository and submodules
@@ -34,6 +37,28 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
 
+    - name: Cache APT packages
+      if: runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM'
+      uses: awalsh128/cache-apt-pkgs-action@v1
+      with:
+        packages: "pkg-config ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev"
+        version: ffmpeg-system-v1
+
+    - name: Cache APT packages
+      if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
+      uses: awalsh128/cache-apt-pkgs-action@v1
+      with:
+        packages: "nasm yasm"
+        version: ffmpeg-bundled-v1
+
+    - name: Install APT packages
+      if: runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM'
+      run: sudo apt-get install -y pkg-config ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev
+
+    - name: Install APT packages
+      if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
+      run: sudo apt-get install -y nasm yasm
+
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master
       with:
@@ -44,6 +69,7 @@ jobs:
           -G Ninja
           -DENABLE_ASAN=ON
           -DENABLE_TEST=ON
+          -DWITH_FFMPEG=${{ matrix.ffmpeg }}
           -DWITH_STORMBYTE=BUNDLED
         build-type: ${{ env.BUILD_TYPE }}
         run-test: true
@@ -76,6 +102,7 @@ jobs:
           configure-options: >-
             -G Ninja
             -DENABLE_TEST=ON
+            -DWITH_FFMPEG=BUNDLED
             -DWITH_STORMBYTE=BUNDLED
           build-type: ${{ env.BUILD_TYPE }}
 
@@ -86,3 +113,4 @@ jobs:
           
       - name: Run unit tests
         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test
+

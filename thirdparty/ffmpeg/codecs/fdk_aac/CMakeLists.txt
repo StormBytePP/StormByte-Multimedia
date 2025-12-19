@@ -1,1 +1,35 @@
 option(WITH_NONFREE "Enable nonfree codecs in FFmpeg build" OFF)
+if(WITH_FFMPEG STREQUAL "BUNDLED" AND WITH_NONFREE)
+	message(STATUS "Enabling nonfree codecs in bundled FFmpeg build")
+
+	include(GNUInstallDirs)
+
+	set(FDK_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+	set(FDK_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/fdk-build")
+	set(FDK_LIBRARY "${FFMPEG_EXTERNAL_PATH}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}fdk-aac${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	file(MAKE_DIRECTORY "${FDK_BUILD_DIR}")
+
+	add_custom_command(
+		OUTPUT "${FDK_LIBRARY}"
+		COMMAND ${CMAKE_COMMAND} -S ${FDK_SRC_DIR} -B ${FDK_BUILD_DIR}
+			-DBUILD_SHARED_LIBS=OFF
+			-DBUILD_PROGRAMS=OFF
+			-DFDK_AAC_INSTALL_CMAKE_CONFIG_MODULE=OFF
+			-DFDK_AAC_INSTALL_PKGCONFIG_MODULE=ON
+			-DCMAKE_INSTALL_PREFIX=${FFMPEG_EXTERNAL_PATH}
+		COMMAND ${CMAKE_COMMAND} --build ${FDK_BUILD_DIR} --target install
+		WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+		COMMENT "Configuring and installing fdk-aac to ${FFMPEG_EXTERNAL_PATH}"
+		VERBATIM
+	)
+
+	add_custom_target(fdk-aac_bundled DEPENDS "${FDK_LIBRARY}")
+
+	# Update FFmpeg options
+	set(FFMPEG_MESON_OPTIONS
+		${FFMPEG_MESON_OPTIONS}
+		"-Dnonfree=enabled"
+		"-Dlibfdk_aac=enabled"
+		PARENT_SCOPE
+	)
+endif()

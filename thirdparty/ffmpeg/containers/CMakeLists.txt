@@ -1,9 +1,4 @@
-add_subdirectory(fdk_aac)
-add_subdirectory(opus)
-add_subdirectory(vorbis)
-add_subdirectory(x264)
-add_subdirectory(x265)
-# add_subdirectory(vpx) # Broken
+add_subdirectory(ogg)
 
 # Propagate any meson option additions from codec subdirs to the parent
 # (child CMakeLists use PARENT_SCOPE to set variables in this scope;

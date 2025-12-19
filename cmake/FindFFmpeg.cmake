@@ -134,6 +134,8 @@ if (NOT FFMPEG_LIBRARIES)
                    FFMPEG_LIBRARIES
                    FFMPEG_DEFINITIONS)
 
+  # (deferred) imported target creation moved after detection
+
 endif ()
 
 # Now set the noncached _FOUND vars for the components.
@@ -149,3 +151,25 @@ endforeach ()
 
 # Give a nice error message if some of the required vars are missing.
 find_package_handle_standard_args(FFmpeg DEFAULT_MSG ${_FFmpeg_REQUIRED_VARS})
+
+# Create imported targets for discovered components so callers can use
+# `target_link_libraries(... ffmpeg::avutil)` or `FFmpeg::avutil`.
+set(_FFMPEG_ALL_COMPONENTS AVCODEC AVFORMAT AVDEVICE AVFILTER AVUTIL SWSCALE POSTPROC SWRESAMPLE)
+foreach(_cmp IN LISTS _FFMPEG_ALL_COMPONENTS)
+  # If library variable exists and is non-empty, create imported targets.
+  if(DEFINED ${_cmp}_LIBRARIES AND ${_cmp}_LIBRARIES)
+    # prefer the first library entry if multiple
+    list(GET ${_cmp}_LIBRARIES 0 _lib_path)
+    string(TOLOWER "${_cmp}" _cmp_lc)
+    if(NOT TARGET FFmpeg::${_cmp_lc})
+      add_library(FFmpeg::${_cmp_lc} UNKNOWN IMPORTED)
+      set_target_properties(FFmpeg::${_cmp_lc} PROPERTIES
+        IMPORTED_LOCATION "${_lib_path}"
+        INTERFACE_INCLUDE_DIRECTORIES "${${_cmp}_INCLUDE_DIRS}"
+      )
+      if(DEFINED ${_cmp}_DEFINITIONS AND ${_cmp}_DEFINITIONS)
+        set_property(TARGET FFmpeg::${_cmp_lc} PROPERTY INTERFACE_COMPILE_DEFINITIONS "${${_cmp}_DEFINITIONS}")
+      endif()
+    endif()
+  endif()
+endforeach()

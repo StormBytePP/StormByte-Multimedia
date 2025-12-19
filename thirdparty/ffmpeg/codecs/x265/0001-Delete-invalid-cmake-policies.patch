@@ -1,0 +1,32 @@
+From 669af1446daee349a5e8cc0e4f29cea24ebc3d62 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Sat, 20 Dec 2025 17:26:02 +0100
+Subject: [PATCH] Delete invalid cmake policies
+
+---
+ source/CMakeLists.txt | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/source/CMakeLists.txt b/source/CMakeLists.txt
+index 95218f5dc..1b4aed516 100755
+--- a/source/CMakeLists.txt
++++ b/source/CMakeLists.txt
+@@ -6,15 +6,9 @@ if(NOT CMAKE_BUILD_TYPE)
+         FORCE)
+ endif()
+ message(STATUS "cmake version ${CMAKE_VERSION}")
+-if(POLICY CMP0025)
+-    cmake_policy(SET CMP0025 OLD) # report Apple's Clang as just Clang
+-endif()
+ if(POLICY CMP0042)
+     cmake_policy(SET CMP0042 NEW) # MACOSX_RPATH
+ endif()
+-if(POLICY CMP0054)
+-    cmake_policy(SET CMP0054 OLD) # Only interpret if() arguments as variables or keywords when unquoted
+-endif()
+ 
+ project (x265)
+ cmake_minimum_required (VERSION 2.8.8) # OBJECT libraries require 2.8.8
+-- 
+2.52.0
+
