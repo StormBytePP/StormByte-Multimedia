@@ -1,0 +1,5 @@
+add_subdirectory(fdk_aac)
+add_subdirectory(opus)
+add_subdirectory(vorbis)
+add_subdirectory(x264)
+add_subdirectory(x265)

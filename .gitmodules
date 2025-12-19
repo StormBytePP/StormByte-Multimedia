@@ -1,3 +1,24 @@
 [submodule "thirdparty/StormByte/base"]
 	path = thirdparty/StormByte/base
 	url = https://github.com/StormBytePP/StormByte.git
+[submodule "thirdparty/ffmpeg/codecs/x264/src"]
+	path = thirdparty/ffmpeg/codecs/x264/src
+	url = https://code.videolan.org/videolan/x264.git
+[submodule "thirdparty/ffmpeg/codecs/x265/src"]
+	path = thirdparty/ffmpeg/codecs/x265/src
+	url = https://bitbucket.org/multicoreware/x265_git.git
+[submodule "thirdparty/ffmpeg/codecs/opus/src"]
+	path = thirdparty/ffmpeg/codecs/opus/src
+	url = https://gitlab.xiph.org/xiph/opus.git
+[submodule "thirdparty/ffmpeg/codecs/fdk_aac/src"]
+	path = thirdparty/ffmpeg/codecs/fdk_aac/src
+	url = https://github.com/mstorsjo/fdk-aac.git
+[submodule "thirdparty/ffmpeg/containers/ogg/src"]
+	path = thirdparty/ffmpeg/containers/ogg/src
+	url = https://gitlab.xiph.org/xiph/ogg.git
+[submodule "thirdparty/ffmpeg/src"]
+	path = thirdparty/ffmpeg/src
+	url = https://github.com/FFmpeg/FFmpeg.git
+[submodule "thirdparty/ffmpeg/codecs/vorbis/src"]
+	path = thirdparty/ffmpeg/codecs/vorbis/src
+	url = https://gitlab.xiph.org/xiph/vorbis.git
