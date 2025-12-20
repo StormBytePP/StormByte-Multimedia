@@ -81,7 +81,7 @@ else()
 
 	# Ensure Meson configure re-runs when codec staging targets are updated.
 	# Collect codec bundled targets we want to be ready before Meson runs.
-	set(_ffmpeg_codec_bundles "opus_bundled;vorbis_bundled;ogg_bundled;x264_bundled")
+	set(_ffmpeg_codec_bundles "opus_bundled;vorbis_bundled;ogg_bundled;x264_bundled;x265_bundled")
 	if(WITH_NONFREE)
 		list(APPEND _ffmpeg_codec_bundles fdk-aac_bundled)
 	endif()
