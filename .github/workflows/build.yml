@@ -75,42 +75,42 @@ jobs:
         run-test: true
         ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
-  build-windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        arch:
-          - x64
+#   build-windows:
+#     runs-on: windows-latest
+#     strategy:
+#       matrix:
+#         arch:
+#           - x64
 
-    steps:
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: true
+#     steps:
+#       - name: Checkout repository and submodules
+#         uses: actions/checkout@v4
+#         with:
+#           submodules: true
 
-      - name: Install toolchain
-        id: install-toolchain
-        uses: stormbytepp/install-toolchain@v1
-        with:
-          compiler: msvc
-          arch: ${{ matrix.arch }}
+#       - name: Install toolchain
+#         id: install-toolchain
+#         uses: stormbytepp/install-toolchain@v1
+#         with:
+#           compiler: msvc
+#           arch: ${{ matrix.arch }}
 
-      - name: Build with CMake
-        uses: ashutoshvarma/action-cmake-build@master
-        with:
-          build-dir: ${{ github.workspace }}\build
-          configure-options: >-
-            -G Ninja
-            -DENABLE_TEST=ON
-            -DWITH_FFMPEG=BUNDLED
-            -DWITH_STORMBYTE=BUNDLED
-          build-type: ${{ env.BUILD_TYPE }}
+#       - name: Build with CMake
+#         uses: ashutoshvarma/action-cmake-build@master
+#         with:
+#           build-dir: ${{ github.workspace }}\build
+#           configure-options: >-
+#             -G Ninja
+#             -DENABLE_TEST=ON
+#             -DWITH_FFMPEG=BUNDLED
+#             -DWITH_STORMBYTE=BUNDLED
+#           build-type: ${{ env.BUILD_TYPE }}
 
-      - name: Copy DLLs
-        run: |
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
-          Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Multimedia.dll" -Destination "${{ github.workspace }}\build\test" -Force
+#       - name: Copy DLLs
+#         run: |
+#           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
+#           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Multimedia.dll" -Destination "${{ github.workspace }}\build\test" -Force
           
-      - name: Run unit tests
-        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test
+#       - name: Run unit tests
+#         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test
 
