@@ -29,6 +29,7 @@ jobs:
     - name: Checkout repository and submodules
       uses: actions/checkout@v4
       with:
+        fetch-depth: 0        # fetch all history and tags
         submodules: true
 
     - name: Install toolchain
@@ -48,8 +49,8 @@ jobs:
       if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
       uses: awalsh128/cache-apt-pkgs-action@v1
       with:
-        packages: "nasm yasm"
-        version: ffmpeg-bundled-v1
+        packages: "nasm yasm git"
+        version: ffmpeg-bundled-v2
 
     - name: Install APT packages
       if: runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM'
@@ -57,7 +58,7 @@ jobs:
 
     - name: Install APT packages
       if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
-      run: sudo apt-get install -y nasm yasm
+      run: sudo apt-get install -y nasm yasm git
 
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master

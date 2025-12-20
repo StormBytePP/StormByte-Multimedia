@@ -1,8 +1,8 @@
 if(NOT DEFINED WITH_FFMPEG)
 	if(WIN32)
-		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)")
+		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)" FORCE)
 	else()
-		set(WITH_FFMPEG "SYSTEM" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)")
+		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)")
 	endif()
 endif()
 
@@ -110,7 +110,7 @@ else()
 
 	# Ninja build target for FFmpeg
 	set(FFMPEG_LIB_DIR "${FFMPEG_BUILD_DIR}")
-	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter avdevice)
+	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
 	set(_ffmpeg_outputs "")
 	foreach(_lib IN LISTS _ffmpeg_libs)
 		list(APPEND _ffmpeg_outputs "${FFMPEG_LIB_DIR}/lib${_lib}.a")
@@ -144,4 +144,4 @@ else()
 endif()
 
 cmake_policy(SET CMP0079 NEW)
-target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter FFmpeg::avdevice)
+target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
