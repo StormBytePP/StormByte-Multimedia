@@ -1,10 +1,12 @@
-name: CMake
+name: Compile & Test
 
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  
+  workflow_dispatch:
 
 env:
   BUILD_TYPE: Debug
@@ -15,50 +17,40 @@ jobs:
 
     strategy:
       matrix:
-        compiler: [gcc, clang]
-        stdlib: [libstdc++, libc++]
+        compiler: [gcc, clang, clang-libc++]
         ffmpeg: [SYSTEM, BUNDLED]
         exclude:
-        - compiler: gcc
-          stdlib: libc++
-        - stdlib: libc++
-          ffmpeg: SYSTEM
-    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-ffmpeg-${{ matrix.ffmpeg }}
+          - compiler: clang-libc++
+            ffmpeg: SYSTEM
+    
+    name: ${{ matrix.compiler }}-ffmpeg-${{ matrix.ffmpeg }}
 
     steps:
     - name: Checkout repository and submodules
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0        # fetch all history and tags
+        fetch-depth: 0
         submodules: true
 
     - name: Install toolchain
       id: install-toolchain
-      uses: stormbytepp/install-toolchain@v1
+      uses: stormbytepp/githubactions/.github/actions/install-toolchain@master
       with:
-        compiler: ${{ matrix.compiler }}
+        toolchain: ${{ matrix.compiler }}
 
     - name: Cache APT packages
-      if: runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM'
-      uses: awalsh128/cache-apt-pkgs-action@v1
+      if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM' }}
+      uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
-        packages: "pkg-config ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev"
-        version: ffmpeg-system-v1
+        cache-key: ffmpeg-system-deps
+        packages: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
 
     - name: Cache APT packages
-      if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
-      uses: awalsh128/cache-apt-pkgs-action@v1
+      if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED' }}
+      uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
+        cache-key: ffmpeg-build-deps
         packages: "nasm yasm git"
-        version: ffmpeg-bundled-v2
-
-    - name: Install APT packages
-      if: runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM'
-      run: sudo apt-get install -y pkg-config ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev
-
-    - name: Install APT packages
-      if: runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED'
-      run: sudo apt-get install -y nasm yasm git
 
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master
@@ -72,6 +64,7 @@ jobs:
           -DENABLE_TEST=ON
           -DWITH_FFMPEG=${{ matrix.ffmpeg }}
           -DWITH_STORMBYTE=BUNDLED
+          ${{ matrix.compiler == 'clang-libc++' && format('-DCMAKE_CXX_FLAGS=-stdlib={0}', 'libc++') || '' }}
         build-type: ${{ env.BUILD_TYPE }}
         run-test: true
         ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
@@ -91,10 +84,9 @@ jobs:
 
 #       - name: Install toolchain
 #         id: install-toolchain
-#         uses: stormbytepp/install-toolchain@v1
+#         uses: stormbytepp/githubactions/install-toolchain@master
 #         with:
-#           compiler: msvc
-#           arch: ${{ matrix.arch }}
+#           toolchain: msvc
 
 #       - name: Build with CMake
 #         uses: ashutoshvarma/action-cmake-build@master

@@ -1,0 +1,19 @@
+name: Documentation Deployment
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  docs:
+    uses: stormbytepp/githubactions/.github/workflows/generate-and-deploy-docs.yml@master
+    with:
+      doc_target: StormByteMultimediaDoc
+      extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM
+      extra-install: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
