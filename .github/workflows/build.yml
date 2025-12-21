@@ -38,19 +38,12 @@ jobs:
       with:
         toolchain: ${{ matrix.compiler }}
 
-    - name: Cache APT packages
+    - name: Install APT packages
       if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM' }}
       uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
         cache-key: ffmpeg-system-deps
         packages: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
-
-    - name: Cache APT packages
-      if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED' }}
-      uses: stormbytepp/githubactions/.github/actions/install-cached@master
-      with:
-        cache-key: ffmpeg-build-deps
-        packages: "nasm yasm git"
 
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master

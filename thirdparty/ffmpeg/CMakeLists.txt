@@ -123,6 +123,7 @@ else()
 		COMMENT "Building bundled FFmpeg (meson + ninja)"
 		USES_TERMINAL
 		DEPENDS ${_meson_setup_out}
+		USES_TERMINAL
 	)
 
 	add_custom_target(ffmpeg_bundled DEPENDS ${_ffmpeg_outputs})

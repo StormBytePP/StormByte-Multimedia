@@ -82,6 +82,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 		COMMENT "Configure and build x265 (10-bit)"
 		VERBATIM
 		DEPENDS "${X265_CMAKELISTS_PATCHED}"
+		USES_TERMINAL
 	)
 
 		# 8-bit build
@@ -116,6 +117,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 		COMMENT "Configure and build x265 (10-bit)"
 		VERBATIM
 		DEPENDS "${X265_CMAKELISTS_PATCHED}"
+		USES_TERMINAL
 	)
 
 	# Combine the 10-bit x265 static lib and hdr10plus into a single libx265.a
@@ -132,6 +134,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 		COMMENT "Combining x265 (12/10/8-bit) and hdr10plus into ${X265_COMBINED_LIB}"
 		VERBATIM
 		DEPENDS "${X265_LIBRARY_12}" "${X265_LIBRARY_10}" "${X265_LIBRARY_10_HDRPLUS}" "${X265_LIBRARY_8}"
+		USES_TERMINAL
 	)
 
 	add_custom_target(x265_merge DEPENDS "${X265_COMBINED_MARKER}")
