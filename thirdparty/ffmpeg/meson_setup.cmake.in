@@ -1,0 +1,44 @@
+# meson_setup.cmake (template)
+# This template is intended to be populated by `configure_file(@ONLY)` from
+# CMake. It supports two substitution styles:
+#  - `@FFMPEG_MESON_OPTIONS_QUOTED@` / `@FFMPEG_MESON_ENV_QUOTED@` : already
+#    quoted tokens suitable for passing directly to `execute_process`.
+#  - `@FFMPEG_MESON_OPTIONS@` / `@FFMPEG_MESON_ENV@` : semicolon-separated
+#    lists produced by CMake; we convert semicolons to spaces to form separate
+#    arguments.
+
+# Placeholders populated by configure_file():
+#  - `@FFMPEG_MESON_ENV@` : semicolon-separated environment entries
+#  - `@FFMPEG_MESON_OPTIONS@` : semicolon-separated meson args
+# We delegate tokenization to CMake by putting those placeholders directly
+# into the `COMMAND` invocation. Use `cmake -E env` to apply the environment
+# entries portably, then call Meson.
+## Convert the semicolon-separated placeholders (produced by configure_file)
+## into space-separated strings so CMake parses them as individual command
+## arguments rather than producing semicolons in the generated source.
+set(_meson_opts @FFMPEG_MESON_OPTIONS_QUOTED@)
+
+set(_meson_env @FFMPEG_MESON_ENV_QUOTED@)
+
+execute_process(
+  	COMMAND ${CMAKE_COMMAND} -E env ${_meson_env} @MESON_EXECUTABLE@ setup "@FFMPEG_BUILD_DIR@" "@FFMPEG_SRC_DIR@" ${_meson_opts}
+  	RESULT_VARIABLE MESON_SETUP_RESULT
+  	OUTPUT_VARIABLE MESON_SETUP_OUT
+  	ERROR_VARIABLE MESON_SETUP_ERR
+)
+
+if(MESON_SETUP_OUT)
+	message(STATUS "${MESON_SETUP_OUT}")
+endif()
+if(MESON_SETUP_ERR)
+	message(STATUS "${MESON_SETUP_ERR}")
+endif()
+if(NOT MESON_SETUP_RESULT EQUAL 0)
+	set(MESON_LOG_FILE "@FFMPEG_BUILD_DIR@/meson-logs/meson-log.txt")
+	if(EXISTS "${MESON_LOG_FILE}")
+    	file(READ "${MESON_LOG_FILE}" MESON_LOG_CONTENT)
+    	message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). Meson log: ${MESON_LOG_FILE}\n${MESON_LOG_CONTENT}")
+	else()
+    	message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). See meson output above for details.")
+  	endif()
+endif()

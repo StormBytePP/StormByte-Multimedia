@@ -86,13 +86,42 @@ else()
 		list(APPEND _ffmpeg_codec_bundles fdk-aac_bundled)
 	endif()
 
+	# Prepare quoted argument strings for configure_file substitution so the
+	# generated script contains properly quoted separate tokens for COMMAND
+	# and ENVIRONMENT (avoid semicolon-joined lists).
+	set(_meson_opts_quoted "")
+	foreach(_o IN LISTS FFMPEG_MESON_OPTIONS)
+		if(_meson_opts_quoted STREQUAL "")
+			set(_meson_opts_quoted "\"${_o}\"")
+		else()
+			set(_meson_opts_quoted "${_meson_opts_quoted} \"${_o}\"")
+		endif()
+	endforeach()
+	set(FFMPEG_MESON_OPTIONS_QUOTED "${_meson_opts_quoted}")
+
+	set(_meson_env_quoted "")
+	foreach(_e IN LISTS _meson_env)
+		if(_meson_env_quoted STREQUAL "")
+			set(_meson_env_quoted "\"${_e}\"")
+		else()
+			set(_meson_env_quoted "${_meson_env_quoted} \"${_e}\"")
+		endif()
+	endforeach()
+	set(FFMPEG_MESON_ENV_QUOTED "${_meson_env_quoted}")
+
+	configure_file(
+		${CMAKE_CURRENT_SOURCE_DIR}/meson_setup.cmake.in
+		${CMAKE_CURRENT_BINARY_DIR}/meson_setup.cmake
+		@ONLY
+	)
+
 	add_custom_command(
 		OUTPUT ${_meson_setup_out}
-		COMMAND ${CMAKE_COMMAND} -E env ${_meson_env} ${MESON_EXECUTABLE} setup ${FFMPEG_BUILD_DIR} ${FFMPEG_SRC_DIR} ${FFMPEG_MESON_OPTIONS}
+		COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/meson_setup.cmake
 		WORKING_DIRECTORY ${FFMPEG_SRC_DIR}
 		COMMENT "Configuring bundled FFmpeg with Meson"
-		USES_TERMINAL
 		DEPENDS ${_ffmpeg_codec_bundles}
+		USES_TERMINAL
 	)
 
 	add_custom_target(meson_configure_ffmpeg DEPENDS ${_meson_setup_out})
