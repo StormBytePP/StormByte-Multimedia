@@ -1,6 +1,13 @@
 if(WITH_FFMPEG STREQUAL "BUNDLED")
 	find_program(MESON_EXECUTABLE meson)
 	find_program(NINJA_EXECUTABLE ninja)
+
+	find_program(PYTHON3_EXECUTABLE python3)
+	if(PYTHON3_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ninja-propagate.py")
+		set(NINJA_RUNNER ${PYTHON3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../ninja-propagate.py" ${NINJA_EXECUTABLE})
+	else()
+		set(NINJA_RUNNER ${NINJA_EXECUTABLE})
+	endif()
 	if(NOT MESON_EXECUTABLE)
 		message(FATAL_ERROR "Meson not found: required to build bundled Opus. Install 'meson'.")
 	endif()
@@ -65,6 +72,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 
 	set(OPUS_MESON_OPTIONS
 		"--prefix=${FFMPEG_EXTERNAL_PATH}"
+		"--libdir=${CMAKE_INSTALL_LIBDIR}"
 		"-Ddefault_library=static"
 		"-Dbuildtype=release"
 		"-Dtests=disabled"
@@ -102,7 +110,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 
 	add_custom_command(
 		OUTPUT "${OPUS_LIBRARY}"
-		COMMAND ${NINJA_EXECUTABLE} -C ${OPUS_BUILD_DIR} install
+		COMMAND ${NINJA_RUNNER} -C ${OPUS_BUILD_DIR} install
 		WORKING_DIRECTORY ${OPUS_BUILD_DIR}
 		COMMENT "Building bundled Opus (meson + ninja)"
 		USES_TERMINAL

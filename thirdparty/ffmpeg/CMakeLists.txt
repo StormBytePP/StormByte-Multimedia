@@ -54,6 +54,16 @@ else()
 	# expose static IMPORTED targets in the `FFmpeg::` namespace.
 	find_program(MESON_EXECUTABLE meson)
 	find_program(NINJA_EXECUTABLE ninja)
+
+	# Optional wrapper to propagate jobserver or -j from top-level builds into
+	# nested ninja invocations. If Python and the wrapper script are available,
+	# use it; otherwise fall back to calling ninja directly.
+	find_program(PYTHON3_EXECUTABLE python3)
+	if(PYTHON3_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ninja-propagate.py")
+		set(NINJA_RUNNER ${PYTHON3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ninja-propagate.py" ${NINJA_EXECUTABLE})
+	else()
+		set(NINJA_RUNNER ${NINJA_EXECUTABLE})
+	endif()
 	if (NOT MESON_EXECUTABLE)
 		message(FATAL_ERROR "Meson not found: required to build bundled FFmpeg. Install 'meson'.")
 	endif()
@@ -85,29 +95,6 @@ else()
 	if(WITH_NONFREE)
 		list(APPEND _ffmpeg_codec_bundles fdk-aac_bundled)
 	endif()
-
-	# Prepare quoted argument strings for configure_file substitution so the
-	# generated script contains properly quoted separate tokens for COMMAND
-	# and ENVIRONMENT (avoid semicolon-joined lists).
-	set(_meson_opts_quoted "")
-	foreach(_o IN LISTS FFMPEG_MESON_OPTIONS)
-		if(_meson_opts_quoted STREQUAL "")
-			set(_meson_opts_quoted "\"${_o}\"")
-		else()
-			set(_meson_opts_quoted "${_meson_opts_quoted} \"${_o}\"")
-		endif()
-	endforeach()
-	set(FFMPEG_MESON_OPTIONS_QUOTED "${_meson_opts_quoted}")
-
-	set(_meson_env_quoted "")
-	foreach(_e IN LISTS _meson_env)
-		if(_meson_env_quoted STREQUAL "")
-			set(_meson_env_quoted "\"${_e}\"")
-		else()
-			set(_meson_env_quoted "${_meson_env_quoted} \"${_e}\"")
-		endif()
-	endforeach()
-	set(FFMPEG_MESON_ENV_QUOTED "${_meson_env_quoted}")
 
 	configure_file(
 		${CMAKE_CURRENT_SOURCE_DIR}/meson_setup.cmake.in
@@ -147,7 +134,7 @@ else()
 
 	add_custom_command(
 		OUTPUT ${_ffmpeg_outputs}
-		COMMAND ${NINJA_EXECUTABLE} -C ${FFMPEG_BUILD_DIR}
+		COMMAND ${NINJA_RUNNER} -C ${FFMPEG_BUILD_DIR}
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Building bundled FFmpeg (meson + ninja)"
 		USES_TERMINAL
