@@ -32,24 +32,22 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 	)
 
 	if (NOT EXISTS "${X264_BUILD_DIR}/build.ninja")
+		include(${CMAKE_SOURCE_DIR}/cmake/meson.cmake)
 		message(STATUS "Configuring bundled X264 with Meson")
-		execute_process(
-			COMMAND ${MESON_EXECUTABLE} setup ${X264_BUILD_DIR} ${X264_SRC_DIR} ${X264_MESON_OPTIONS}
-			RESULT_VARIABLE MESON_SETUP_RESULT
-			OUTPUT_VARIABLE MESON_SETUP_OUT
-			ERROR_VARIABLE MESON_SETUP_ERR
-		)
-		if(MESON_SETUP_OUT)
-			message(STATUS "${MESON_SETUP_OUT}")
+		# Use helper run_meson to ensure correct env on Windows
+		run_meson("${X264_BUILD_DIR}" "${X264_SRC_DIR}" "${X264_MESON_OPTIONS}")
+		# run_meson exports MESON_LAST_RESULT/MESON_LAST_OUT/MESON_LAST_ERR
+		if(MESON_LAST_OUT)
+			message(STATUS "${MESON_LAST_OUT}")
 		endif()
-		if(MESON_SETUP_ERR)
-			message(STATUS "${MESON_SETUP_ERR}")
+		if(MESON_LAST_ERR)
+			message(STATUS "${MESON_LAST_ERR}")
 		endif()
-		if(NOT MESON_SETUP_RESULT EQUAL 0)
-			message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). See meson output above for details.")
+		if(NOT MESON_LAST_RESULT EQUAL 0)
+			message(FATAL_ERROR "Meson setup failed (exit ${MESON_LAST_RESULT}). See meson output above for details.")
 		endif()
 	else()
-		message(STATUS "Skipping meson setup; build files already present for VPX")
+		message(STATUS "Skipping meson setup; build files already present for x264")
 	endif()
 
 	add_custom_command(

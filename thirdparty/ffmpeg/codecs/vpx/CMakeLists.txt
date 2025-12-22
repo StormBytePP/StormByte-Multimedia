@@ -43,21 +43,17 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 	)
 
 	if (NOT EXISTS "${VPX_BUILD_DIR}/build.ninja")
+		include(${CMAKE_SOURCE_DIR}/cmake/meson.cmake OPTIONAL)
 		message(STATUS "Configuring bundled VPX with Meson")
-		execute_process(
-			COMMAND ${MESON_EXECUTABLE} setup ${VPX_BUILD_DIR} ${VPX_SRC_DIR} ${VPX_MESON_OPTIONS}
-			RESULT_VARIABLE MESON_SETUP_RESULT
-			OUTPUT_VARIABLE MESON_SETUP_OUT
-			ERROR_VARIABLE MESON_SETUP_ERR
-		)
-		if(MESON_SETUP_OUT)
-			message(STATUS "${MESON_SETUP_OUT}")
+		run_meson("${VPX_BUILD_DIR}" "${VPX_SRC_DIR}" "${VPX_MESON_OPTIONS}")
+		if(MESON_LAST_OUT)
+			message(STATUS "${MESON_LAST_OUT}")
 		endif()
-		if(MESON_SETUP_ERR)
-			message(STATUS "${MESON_SETUP_ERR}")
+		if(MESON_LAST_ERR)
+			message(STATUS "${MESON_LAST_ERR}")
 		endif()
-		if(NOT MESON_SETUP_RESULT EQUAL 0)
-			message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). See meson output above for details.")
+		if(NOT MESON_LAST_RESULT EQUAL 0)
+			message(FATAL_ERROR "Meson setup failed (exit ${MESON_LAST_RESULT}). See meson output above for details.")
 		endif()
 	else()
 		message(STATUS "Skipping meson setup; build files already present for VPX")
