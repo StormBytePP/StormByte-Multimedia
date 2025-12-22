@@ -10,6 +10,10 @@ project("StormByte C++ Library: Multimedia module"
 	HOMEPAGE_URL "https://dev.stormbyte.org/StormByte-Multimedia"
 )
 
+if (NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
+string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_LOWERCASE)
 include(cmake/asan.cmake)
 
 add_subdirectory(doc)

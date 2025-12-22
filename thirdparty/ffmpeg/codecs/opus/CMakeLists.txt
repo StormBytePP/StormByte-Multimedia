@@ -74,7 +74,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 		"--prefix=${FFMPEG_EXTERNAL_PATH}"
 		"--libdir=${CMAKE_INSTALL_LIBDIR}"
 		"-Ddefault_library=static"
-		"-Dbuildtype=release"
+		"-Dbuildtype=${CMAKE_BUILD_TYPE_LOWERCASE}"
 		"-Dtests=disabled"
 		"-Ddocs=disabled"
 		"-Dextra-programs=disabled"

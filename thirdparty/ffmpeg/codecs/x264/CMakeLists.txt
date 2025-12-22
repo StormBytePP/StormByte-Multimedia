@@ -22,7 +22,7 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 
 	set(X264_MESON_OPTIONS
 		"-Ddefault_library=static"
-		"-Dbuildtype=release"
+		"-Dbuildtype=${CMAKE_BUILD_TYPE_LOWERCASE}"
 		"--prefix=${FFMPEG_EXTERNAL_PATH}"
 		"--libdir=${CMAKE_INSTALL_LIBDIR}"
 		"-Dbashcompletion=false"

@@ -13,7 +13,7 @@ else()
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
 		"-Ddefault_library=static"
-		"-Dbuildtype=release"
+		"-Dbuildtype=${CMAKE_BUILD_TYPE_LOWERCASE}"
 		"-Dprograms=enabled"
 		"-Dtests=disabled"
 		"-Ddevices=disabled"
