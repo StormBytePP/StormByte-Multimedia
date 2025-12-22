@@ -1,0 +1,54 @@
+#! /bin/sh
+
+update_pkg_config="@PKG_CONFIG@"
+update_pkgconfig_path="@PKG_CONFIG_PATH@"
+update_cflags="@CFLAGS@"
+update_cxxflags="@CXXFLAGS@"
+update_ldflags="@LDFLAGS@"
+update_path="@PATH@"
+
+if [ -n "$update_pkg_config" ]; then
+	export PKG_CONFIG="$update_pkg_config"
+fi
+
+if [ -n "$update_pkgconfig_path" ]; then
+	if [ -n "$PKG_CONFIG_PATH" ]; then
+		export PKG_CONFIG_PATH="$update_pkgconfig_path:$PKG_CONFIG_PATH"
+	else
+		export PKG_CONFIG_PATH="$update_pkgconfig_path"
+	fi
+fi
+
+if [ -n "$update_cflags" ]; then
+	if [ -n "$CFLAGS" ]; then
+		export CFLAGS="$update_cflags $CFLAGS"
+	else
+		export CFLAGS="$update_cflags"
+	fi
+fi
+
+if [ -n "$update_cxxflags" ]; then
+	if [ -n "$CXXFLAGS" ]; then
+		export CXXFLAGS="$update_cxxflags $CXXFLAGS"
+	else
+		export CXXFLAGS="$update_cxxflags"
+	fi
+fi
+
+if [ -n "$update_ldflags" ]; then
+	if [ -n "$LDFLAGS" ]; then
+		export LDFLAGS="$update_ldflags $LDFLAGS"
+	else
+		export LDFLAGS="$update_ldflags"
+	fi
+fi
+
+if [ -n "$update_path" ]; then
+	export PATH="$update_path:$PATH"
+fi
+
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 <command> [args...]"
+fi
+
+exec "$@"

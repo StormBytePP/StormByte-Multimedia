@@ -1,0 +1,8 @@
+find_program(NINJA_EXECUTABLE ninja)
+if(NOT NINJA_EXECUTABLE)
+	message(FATAL_ERROR "Ninja executable not found: please install Ninja or ensure it's on PATH.")
+endif()
+get_filename_component(NINJA_EXECUTABLE "${NINJA_EXECUTABLE}" NAME)
+set(_env_ninja_list ${ENV_RUNNER} ${NINJA_EXECUTABLE})
+prepare_command(ENV_NINJA_COMMAND "${_env_ninja_list}")
+set(ENV_NINJA_COMMAND ${ENV_NINJA_COMMAND} PARENT_SCOPE)

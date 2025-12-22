@@ -1,0 +1,56 @@
+@echo off
+rem Runner for Windows: sets PKG_CONFIG/PKG_CONFIG_PATH/LIB/INCLUDE then runs command
+setlocal
+
+set "update_pkg_config=@PKG_CONFIG@"
+set "update_pkgconfig_path=@PKG_CONFIG_PATH@"
+set "update_lib=@LIB@"
+set "update_include=@INCLUDE@"
+set "update_path=@PATH@"
+
+if not "%update_pkg_config%"=="" (
+  set "PKG_CONFIG=%update_pkg_config%"
+)
+
+if not "%update_pkgconfig_path%"=="" (
+  if defined PKG_CONFIG_PATH (
+    set "PKG_CONFIG_PATH=%update_pkgconfig_path%;%PKG_CONFIG_PATH%"
+  ) else (
+    set "PKG_CONFIG_PATH=%update_pkgconfig_path%"
+  )
+)
+
+if not "%update_lib%"=="" (
+  if defined LIB (
+    set "LIB=%update_lib%;%LIB%"
+  ) else (
+    set "LIB=%update_lib%"
+  )
+)
+
+if not "%update_include%"=="" (
+  if defined INCLUDE (
+    set "INCLUDE=%update_include%;%INCLUDE%"
+  ) else (
+    set "INCLUDE=%update_include%"
+  )
+)
+
+if not "%update_path%"=="" (
+  if defined PATH (
+    set "PATH=%update_path%;%PATH%"
+  ) else (
+    set "PATH=%update_path%"
+  )
+)
+
+if "%~1"=="" (
+  echo Usage: %~nx0 ^<command^> [args...]
+  endlocal
+  exit /b 1
+)
+
+rem Execute the passed command with its arguments
+cmd /c %*
+set "rc=%ERRORLEVEL%"
+endlocal & exit /b %rc%

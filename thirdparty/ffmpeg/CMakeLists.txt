@@ -1,3 +1,6 @@
+# Configure options
+option(WITH_NONFREE "Enable nonfree codecs in FFmpeg build" OFF)
+option(WITH_GPL "Enable GPL components in FFmpeg build" OFF)
 if(NOT DEFINED WITH_FFMPEG)
 	if(WIN32)
 		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)" FORCE)
@@ -10,12 +13,46 @@ if (WITH_FFMPEG STREQUAL "SYSTEM")
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 	find_package(FFmpeg REQUIRED)
 else()
+	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
+	include(GNUInstallDirs)
+
+	# Initialize bootstrap
+	add_subdirectory(bootstrap)
+
+	# Include helpers so they are available
+	include(bootstrap/helpers.cmake)
+
+	set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/install")
+	set(FFMPEG_INSTALL_LIB_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+	set(FFMPEG_INSTALL_BIN_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_BINDIR}")
+	set(FFMPEG_INSTALL_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_INCLUDEDIR}")
+	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}")
+	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_LIB_DIR}")
+	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_BIN_DIR}")
+	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_INCLUDE_DIR}")
+
+	# Set env variables
+	if(WIN32)
+		set(LIB "${FFMPEG_INSTALL_LIB_DIR}")
+		set(INCLUDE "${FFMPEG_INSTALL_INCLUDE_DIR}")
+	else()
+		set(CFLAGS "-I${FFMPEG_INSTALL_INCLUDE_DIR}")
+		set(CXXFLAGS "-I${FFMPEG_INSTALL_INCLUDE_DIR}")
+		set(LDFLAGS "-L${FFMPEG_INSTALL_LIB_DIR}")
+	endif()
+
+	# Set PKG_CONFIG_PATH to include our internal pkgconfig files
+	set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
+
+	# Update runner with new env vars
+	update_bootstrap_env_runner()
+
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
-		"-Ddefault_library=static"
-		"-Dbuildtype=${CMAKE_BUILD_TYPE_LOWERCASE}"
+		"-Ddefault_library=shared"
 		"-Dprograms=enabled"
 		"-Dtests=disabled"
+		# Disabled features we don't need / want
 		"-Ddevices=disabled"
 		"-Dvaapi=disabled"
 		"-Dvaapi_drm=disabled"
@@ -33,128 +70,146 @@ else()
 		"-Dpad_vaapi_filter=disabled"
 		"-Ddrawbox_vaapi_filter=disabled"
 		"-Dvaapi_x11=disabled"
-		"-Dgpl=enabled"
-		"-Dversion3=enabled"
+		"-Dalsa=disabled"
+		"-Dlibpulse=disabled"
+		"-Dlibjack=disabled"
+		"-Dffnvcodec=disabled"
+		"-Dnvenc=disabled"
+		"-Dnvdec=disabled"
+		"-Dcuda=disabled"
+		"-Dcuvid=disabled"
+		"-Dff_cuda_nvcc=disabled"
+		"-Dlibmfx=disabled"
+		"-Drkmpp=disabled"
+		"-Drockchip_mpp=disabled"
+		"-Dmmal=disabled"
+		"-Domx=disabled"
+		"-Domx_rpi=disabled"
+		"-Dvaapi=disabled"
+		"-Dvaapi_drm=disabled"
+		"-Dvaapi_x11=disabled"
+		"-Dvdpau=disabled"
+		"-Dvdpau_x11=disabled"
+		"-Dvulkan=disabled"
+		"-Dopencl=disabled"
+		"-Dopengl=disabled"
+		"-Dsdl2=disabled"
+		"-Dappkit=disabled"
+		"-Davfoundation=disabled"
+		"-Dvideotoolbox=disabled"
+		"-Dmetal=disabled"
+		"-Dxlib=disabled"
+		"-Dlibxcb=disabled"
+		"-Dlibdrm=disabled"
+		"-Dlibv4l2=disabled"
+		"-Dmediandk=disabled"
+		"-Dmediafoundation=disabled"
+		"-Dlibsrt=disabled"
+		"-Dlibrtmp=disabled"
+		"-Dlibssh=disabled"
+		"-Dlibtensorflow=disabled"
+		"-Dnanosleep=disabled"
 	)
 
-	# Create a path to gather all external dependencies
-	set(FFMPEG_EXTERNAL_PATH "${CMAKE_CURRENT_BINARY_DIR}/external")
-	file(MAKE_DIRECTORY "${FFMPEG_EXTERNAL_PATH}")
-	# file(MAKE_DIRECTORY "${FFMPEG_EXTERNAL_PATH}/include")
-	# file(MAKE_DIRECTORY "${FFMPEG_EXTERNAL_PATH}/lib")
-
-	# Create pkgconfig path
-	set(PKGCONFIG_PATH "${FFMPEG_EXTERNAL_PATH}/${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-
-	# Include dependencies
-	add_subdirectory(containers) # Containers are needed before codecs
-	add_subdirectory(codecs)
-
-	# Build FFmpeg from the readonly `src/` tree using Meson + Ninja and
-	# expose static IMPORTED targets in the `FFmpeg::` namespace.
-	find_program(MESON_EXECUTABLE meson)
-	find_program(NINJA_EXECUTABLE ninja)
-
-	# Optional wrapper to propagate jobserver or -j from top-level builds into
-	# nested ninja invocations. If Python and the wrapper script are available,
-	# use it; otherwise fall back to calling ninja directly.
-	find_program(PYTHON3_EXECUTABLE python3)
-	if(PYTHON3_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ninja-propagate.py")
-		set(NINJA_RUNNER ${PYTHON3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ninja-propagate.py" ${NINJA_EXECUTABLE})
+	# Enable GPL components if requested
+	if(WITH_GPL)
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dgpl=enabled")
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dversion3=enabled")
 	else()
-		set(NINJA_RUNNER ${NINJA_EXECUTABLE})
-	endif()
-	if (NOT MESON_EXECUTABLE)
-		message(FATAL_ERROR "Meson not found: required to build bundled FFmpeg. Install 'meson'.")
-	endif()
-	if (NOT NINJA_EXECUTABLE)
-		message(FATAL_ERROR "Ninja not found: required to build bundled FFmpeg. Install 'ninja'.")
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dgpl=disabled")
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dversion3=disabled")
 	endif()
 
-	set(FFMPEG_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-	set(FFMPEG_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/meson-build")
-	file(MAKE_DIRECTORY "${FFMPEG_BUILD_DIR}")
-
-	# Meson configure at build time; set PKG_CONFIG_PATH to staged pkgconfig dir
-	set(_meson_setup_out "${FFMPEG_BUILD_DIR}/build.ninja")
-	# Export pkg-config path and staged include/lib dirs so Meson's compile/link
-	# probes can find bundled codec headers and libraries (e.g. x264).
-	# Use a CMake list so each assignment is passed as a separate arg to
-	# `cmake -E env` (avoids concatenating into PKG_CONFIG_PATH).
-	set(_meson_env
-		"PKG_CONFIG_PATH=${PKGCONFIG_PATH}"
-		"CPPFLAGS=-I${FFMPEG_EXTERNAL_PATH}/include"
-		"CFLAGS=-I${FFMPEG_EXTERNAL_PATH}/include"
-		"CXXFLAGS=-I${FFMPEG_EXTERNAL_PATH}/include"
-		"LDFLAGS=-L${FFMPEG_EXTERNAL_PATH}/${CMAKE_INSTALL_LIBDIR}"
-	)
-
-	# Ensure Meson configure re-runs when codec staging targets are updated.
-	# Collect codec bundled targets we want to be ready before Meson runs.
-	set(_ffmpeg_codec_bundles "opus_bundled;vorbis_bundled;ogg_bundled;x264_bundled;x265_bundled")
+	# Enable nonfree codecs if requested
 	if(WITH_NONFREE)
-		list(APPEND _ffmpeg_codec_bundles fdk-aac_bundled)
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=enabled")
+	else()
+		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=disabled")
 	endif()
 
-	configure_file(
-		${CMAKE_CURRENT_SOURCE_DIR}/meson_setup.cmake.in
-		${CMAKE_CURRENT_BINARY_DIR}/meson_setup.cmake
-		@ONLY
+	# Add plugins
+	add_subdirectory(plugins)
+
+	# Show final meson options for FFmpeg (print list with spaces instead of ';')
+	string(REPLACE ";" " " _ffmpeg_plugin_options_str "${FFMPEG_PLUGIN_OPTIONS}")
+	message(STATUS "FFmpeg enabled codecs: ${_ffmpeg_plugin_options_str}")
+
+	# Append values added by codecs
+	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})
+
+	# Configure FFmpeg build
+	set(FFMPEG_COMPONENT "ffmpeg")
+	set(FFMPEG_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
+	ensure_build_dir(FFMPEG_BUILD_DIR "ffmpeg")
+	set(FFMPEG_OPTIONS "${FFMPEG_MESON_OPTIONS}")
+
+	create_meson_setup_file(
+		FFMPEG_MESON_SETUP_FILE
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+		"${FFMPEG_BUILD_DIR}"
+		"${FFMPEG_INSTALL_DIR}"
+		"${FFMPEG_OPTIONS}"
 	)
 
-	add_custom_command(
-		OUTPUT ${_meson_setup_out}
-		COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/meson_setup.cmake
-		WORKING_DIRECTORY ${FFMPEG_SRC_DIR}
-		COMMENT "Configuring bundled FFmpeg with Meson"
-		DEPENDS ${_ffmpeg_codec_bundles}
+	add_custom_target(_ffmpeg_configure
+		COMMAND ${ENV_CMAKE_COMMAND} -P ${FFMPEG_MESON_SETUP_FILE}
+		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
+		COMMENT "Configuring FFmpeg"
+		DEPENDS ffmpeg-plugins
 		USES_TERMINAL
 	)
 
-	add_custom_target(meson_configure_ffmpeg DEPENDS ${_meson_setup_out})
+	add_custom_target(_ffmpeg_build
+		COMMAND_EXPAND_LISTS
+		COMMAND ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}"
+		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
+		COMMENT "Building FFmpeg"
+		USES_TERMINAL
+		DEPENDS _ffmpeg_configure
+	)
 
-	# # Add codec and container dependencies
-	# if(WITH_NONFREE)
-	# 	add_dependencies(meson_configure_ffmpeg fdk-aac_bundled)
-	# endif()
-	# add_dependencies(meson_configure_ffmpeg opus_bundled)
-	# add_dependencies(meson_configure_ffmpeg vorbis_bundled)
-	# add_dependencies(meson_configure_ffmpeg ogg_bundled)
-	# add_dependencies(meson_configure_ffmpeg x264_bundled)
-	# #add_dependencies(meson_configure_ffmpeg x265_bundled)
-	# add_dependencies(meson_configure_ffmpeg vpx_bundled)
-
-	# Ninja build target for FFmpeg
-	set(FFMPEG_LIB_DIR "${FFMPEG_BUILD_DIR}")
+	# Set a list or artifacts that will be installed
 	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
 	set(_ffmpeg_outputs "")
 	foreach(_lib IN LISTS _ffmpeg_libs)
-		list(APPEND _ffmpeg_outputs "${FFMPEG_LIB_DIR}/lib${_lib}.a")
+		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+		list(APPEND _ffmpeg_outputs "${_libpath}")
 	endforeach()
 
+	# Install FFmpeg internally
 	add_custom_command(
 		OUTPUT ${_ffmpeg_outputs}
-		COMMAND ${NINJA_RUNNER} -C ${FFMPEG_BUILD_DIR}
+		COMMAND_EXPAND_LISTS
+		COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}" install
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
-		COMMENT "Building bundled FFmpeg (meson + ninja)"
-		USES_TERMINAL
-		DEPENDS ${_meson_setup_out}
-		USES_TERMINAL
+		COMMENT "Installing FFmpeg internally"
+		DEPENDS _ffmpeg_build
 	)
 
-	add_custom_target(ffmpeg_bundled DEPENDS ${_ffmpeg_outputs})
-	add_dependencies(ffmpeg_bundled meson_configure_ffmpeg)
-
-	message(STATUS "MESONOPTIONS: ${FFMPEG_MESON_OPTIONS}")
+	# Added so FFmpeg libraries know which files to wait for
+	add_custom_target(ffmpeg
+		DEPENDS ${_ffmpeg_outputs}
+	)
 
 	# Expose imported targets for consumers
+	set(FFMPEG_LIB_INSTALL_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
 	foreach(_lib IN LISTS _ffmpeg_libs)
-		set(_libpath "${FFMPEG_LIB_DIR}/lib${_lib}.a")
+		library_import_hint(_libpath "${_lib}" "${FFMPEG_LIB_INSTALL_DIR}")
 		set(_tgt "FFmpeg::${_lib}")
 		if(NOT TARGET ${_tgt})
-			add_library(${_tgt} STATIC IMPORTED GLOBAL)
-			set_target_properties(${_tgt} PROPERTIES IMPORTED_LOCATION "${_libpath}")
-			add_dependencies(${_tgt} ffmpeg_bundled)
+			add_library(${_tgt} SHARED IMPORTED GLOBAL)
+			if(WIN32)
+				set_target_properties(${_tgt} PROPERTIES
+					IMPORTED_IMPLIB "${_libpath}"
+				)
+			else()
+				set_target_properties(${_tgt} PROPERTIES
+					IMPORTED_LOCATION "${_libpath}"
+				)
+			endif()
+			add_dependencies(${_tgt} ffmpeg)
 			set_target_properties(${_tgt} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_SRC_DIR}")
 		endif()
 	endforeach()

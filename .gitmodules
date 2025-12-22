@@ -1,32 +1,37 @@
-[submodule "thirdparty/StormByte/base"]
+[submodule "StormByte base"]
 	path = thirdparty/StormByte/base
 	url = https://github.com/StormBytePP/StormByte.git
-[submodule "thirdparty/ffmpeg/codecs/opus/src"]
-	path = thirdparty/ffmpeg/codecs/opus/src
+[submodule "Opus codec"]
+	path = thirdparty/ffmpeg/plugins/opus/src
 	url = https://gitlab.xiph.org/xiph/opus.git
-[submodule "thirdparty/ffmpeg/codecs/fdk_aac/src"]
-	path = thirdparty/ffmpeg/codecs/fdk_aac/src
+[submodule "FDK-AAC codec"]
+	path = thirdparty/ffmpeg/plugins/fdk-aac/src
 	url = https://github.com/mstorsjo/fdk-aac.git
-[submodule "thirdparty/ffmpeg/containers/ogg/src"]
-	path = thirdparty/ffmpeg/containers/ogg/src
+[submodule "Ogg container"]
+	path = thirdparty/ffmpeg/plugins/ogg/src
 	url = https://gitlab.xiph.org/xiph/ogg.git
-[submodule "thirdparty/ffmpeg/codecs/vorbis/src"]
-	path = thirdparty/ffmpeg/codecs/vorbis/src
+[submodule "Vorbis codec"]
+	path = thirdparty/ffmpeg/plugins/vorbis/src
 	url = https://gitlab.xiph.org/xiph/vorbis.git
-[submodule "thirdparty/ffmpeg/src"]
+[submodule "FFmpeg"]
 	path = thirdparty/ffmpeg/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg.git
 	branch = meson-8.0.1
-[submodule "thirdparty/ffmpeg/codecs/vpx/src"]
-	path = thirdparty/ffmpeg/codecs/vpx/src
+[submodule "VPX codec"]
+	path = thirdparty/ffmpeg/plugins/vpx/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/libvpx.git
-[submodule "thirdparty/ffmpeg/codecs/x264/src"]
-	path = thirdparty/ffmpeg/codecs/x264/src
+[submodule "X264 codec"]
+	path = thirdparty/ffmpeg/plugins/x264/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/x264.git
-[submodule "thirdparty/ffmpeg/codecs/x265/src"]
-	path = thirdparty/ffmpeg/codecs/x265/src
+[submodule "X265 codec"]
+	path = thirdparty/ffmpeg/plugins/x265/src
 	url = https://github.com/videolan/x265.git
-
-[submodule "thirdparty/ffmpeg/codecs/x265/svt-hevc/src"]
-	path = thirdparty/ffmpeg/codecs/x265/svt-hevc/src
-	url = https://github.com/OpenVisualCloud/SVT-HEVC.git
+[submodule "pkgconf"]
+	path = thirdparty/ffmpeg/bootstrap/pkgconf/src
+	url = https://github.com/pkgconf/pkgconf.git
+[submodule "thirdparty/ffmpeg/plugins/ogg/src"]
+	path = thirdparty/ffmpeg/plugins/ogg/src
+	url = https://gitlab.xiph.org/xiph/ogg.git
+[submodule "thirdparty/ffmpeg/bootstrap/pkgconf/src"]
+	path = thirdparty/ffmpeg/bootstrap/pkgconf/src
+	url = https://github.com/pkgconf/pkgconf.git

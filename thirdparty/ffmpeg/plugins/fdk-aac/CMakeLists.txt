@@ -1,0 +1,33 @@
+set(FDK_AAC_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
+ensure_build_dir(FDK_AAC_BUILD_DIR)
+library_import_hint(FDK_AAC_LIBRARY "fdk-aac" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+set(FDK_AAC_COMPONENT "FDK_AAC codec")
+set(FDK_AAC_OPTIONS
+	"-DBUILD_SHARED_LIBS=ON"
+	"-DBUILD_PROGRAMS=OFF"
+	"-DFDK_AAC_INSTALL_CMAKE_CONFIG_MODULE=OFF"
+	"-DFDK_AAC_INSTALL_PKGCONFIG_MODULE=ON"
+)
+create_cmake_configure_file(
+	FDK_AAC_CMAKE_CONFIGURE_FILE
+	"${FDK_AAC_COMPONENT}"
+	"${FDK_AAC_SRC_DIR}"
+	"${FDK_AAC_BUILD_DIR}"
+	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FDK_AAC_OPTIONS}"
+)
+include("${FDK_AAC_CMAKE_CONFIGURE_FILE}")
+
+add_custom_target(_fdk-aac_build
+	COMMAND ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}"
+	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
+	COMMENT "Building FDK_AAC"
+	USES_TERMINAL
+)
+add_custom_target(_fdk-aac_install
+	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}" --target install
+	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
+	COMMENT "Installing internally FDK_AAC"
+	DEPENDS _fdk-aac_build
+)
+add_custom_target(fdk-aac DEPENDS _fdk-aac_install)

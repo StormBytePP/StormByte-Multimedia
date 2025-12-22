@@ -19,11 +19,17 @@ jobs:
       matrix:
         compiler: [gcc, clang, clang-libc++]
         ffmpeg: [SYSTEM, BUNDLED]
+        nonfree: [ON, OFF]
+        gpl: [ON, OFF]
         exclude:
           - compiler: clang-libc++
             ffmpeg: SYSTEM
+          - ffmpeg: SYSTEM
+            nonfree: ON
+          - ffmpeg: SYSTEM
+            gpl: ON
     
-    name: ${{ matrix.compiler }}-ffmpeg-${{ matrix.ffmpeg }}
+    name: ${{ matrix.compiler }}-ffmpeg(${{ matrix.ffmpeg }})-nonfree-(${{ matrix.nonfree }})-gpl(${{ matrix.gpl }})
 
     steps:
     - name: Checkout repository and submodules
@@ -37,12 +43,13 @@ jobs:
       uses: stormbytepp/githubactions/.github/actions/install-toolchain@master
       with:
         toolchain: ${{ matrix.compiler }}
+        ccache-key: '${{ matrix.compiler }}-ffmpeg(${{ matrix.ffmpeg }})-nonfree-(${{ matrix.nonfree }})-gpl(${{ matrix.gpl }})-v1'
 
     - name: Install APT packages
       if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM' }}
       uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
-        cache-key: ffmpeg-system-deps
+        cache-key: apt-ffmpeg-system-deps
         packages: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
 
     - name: Build with CMake
@@ -56,47 +63,51 @@ jobs:
           -DENABLE_ASAN=ON
           -DENABLE_TEST=ON
           -DWITH_FFMPEG=${{ matrix.ffmpeg }}
+          -DWITH_NONFREE=ON
+          -DWITH_GPL=ON
           -DWITH_STORMBYTE=BUNDLED
           ${{ matrix.compiler == 'clang-libc++' && format('-DCMAKE_CXX_FLAGS=-stdlib={0}', 'libc++') || '' }}
         build-type: ${{ env.BUILD_TYPE }}
         run-test: true
         ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
-#   build-windows:
-#     runs-on: windows-latest
-#     strategy:
-#       matrix:
-#         arch:
-#           - x64
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch:
+          - x64
 
-#     steps:
-#       - name: Checkout repository and submodules
-#         uses: actions/checkout@v4
-#         with:
-#           submodules: true
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
 
-#       - name: Install toolchain
-#         id: install-toolchain
-#         uses: stormbytepp/githubactions/install-toolchain@master
-#         with:
-#           toolchain: msvc
+      - name: Install toolchain
+        id: install-toolchain
+        uses: stormbytepp/githubactions/.github/actions/install-toolchain@master
+        with:
+          toolchain: msvc
 
-#       - name: Build with CMake
-#         uses: ashutoshvarma/action-cmake-build@master
-#         with:
-#           build-dir: ${{ github.workspace }}\build
-#           configure-options: >-
-#             -G Ninja
-#             -DENABLE_TEST=ON
-#             -DWITH_FFMPEG=BUNDLED
-#             -DWITH_STORMBYTE=BUNDLED
-#           build-type: ${{ env.BUILD_TYPE }}
+      - name: Build with CMake
+        uses: ashutoshvarma/action-cmake-build@master
+        with:
+          build-dir: ${{ github.workspace }}\build
+          configure-options: >-
+            -G Ninja
+            -DENABLE_TEST=ON
+            -DWITH_FFMPEG=BUNDLED
+            -DWITH_STORMBYTE=BUNDLED
+            -DWITH_NONFREE=ON
+            -DWITH_GPL=ON
+          build-type: ${{ env.BUILD_TYPE }}
 
-#       - name: Copy DLLs
-#         run: |
-#           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
-#           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Multimedia.dll" -Destination "${{ github.workspace }}\build\test" -Force
+      - name: Copy DLLs
+        run: |
+          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
+          Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Multimedia.dll" -Destination "${{ github.workspace }}\build\test" -Force
           
-#       - name: Run unit tests
-#         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test
-
+      - name: Run unit tests
+        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test

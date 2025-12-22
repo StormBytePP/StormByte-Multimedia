@@ -1,0 +1,8 @@
+find_program(GIT_EXECUTABLE git)
+if(NOT GIT_EXECUTABLE)
+	message(FATAL_ERROR "Git executable not found. Install Git.")
+endif()
+get_filename_component(GIT_EXECUTABLE "${GIT_EXECUTABLE}" NAME)
+set(_env_git_list ${ENV_RUNNER} ${GIT_EXECUTABLE})
+prepare_command(ENV_GIT_COMMAND "${_env_git_list}")
+set(ENV_GIT_COMMAND ${ENV_GIT_COMMAND} PARENT_SCOPE)

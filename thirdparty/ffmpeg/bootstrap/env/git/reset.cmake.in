@@ -1,0 +1,17 @@
+execute_process(
+	COMMAND @ENV_GIT_COMMAND@ reset --hard
+	WORKING_DIRECTORY @GIT_REPO@
+	RESULT_VARIABLE GIT_RESULT
+	OUTPUT_VARIABLE GIT_OUT
+	ERROR_VARIABLE GIT_ERROR
+)
+
+if(GIT_OUT AND GIT_VERBOSE)
+	message(STATUS "${GIT_OUT}")
+endif()
+if(GIT_ERR)
+	message(STATUS "${GIT_ERR}")
+endif()
+if(NOT GIT_RESULT EQUAL 0)
+	message(FATAL_ERROR "Git patch failed (exit ${GIT_RESULT}). See error output above for details.")
+endif()
