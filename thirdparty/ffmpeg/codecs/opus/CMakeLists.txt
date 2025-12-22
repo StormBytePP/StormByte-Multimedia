@@ -70,50 +70,25 @@ if(WITH_FFMPEG STREQUAL "BUNDLED")
 		endif()
 	endif()
 
-	set(OPUS_MESON_OPTIONS
-		"--prefix=${FFMPEG_EXTERNAL_PATH}"
-		"--libdir=${CMAKE_INSTALL_LIBDIR}"
-		"-Ddefault_library=static"
-		"-Dbuildtype=${CMAKE_BUILD_TYPE_LOWERCASE}"
-		"-Dtests=disabled"
-		"-Ddocs=disabled"
-		"-Dextra-programs=disabled"
-		"-Db_pch=false"
-		"-Dcustom-modes=true"
-		"-Dassertions=false"
-		"-Ddeep-plc=disabled"
-		"-Ddred=disabled"
-		"-Dosce=disabled"
-		"-Dintrinsics=enabled"
-	)
-
-	if (NOT EXISTS "${OPUS_BUILD_DIR}/build.ninja")
-		message(STATUS "Configuring bundled Opus with Meson")
-		execute_process(
-			COMMAND ${MESON_EXECUTABLE} setup ${OPUS_BUILD_DIR} ${OPUS_SRC_DIR} ${OPUS_MESON_OPTIONS}
-			RESULT_VARIABLE MESON_SETUP_RESULT
-			OUTPUT_VARIABLE MESON_SETUP_OUT
-			ERROR_VARIABLE MESON_SETUP_ERR
-		)
-		if(MESON_SETUP_OUT)
-			message(STATUS "${MESON_SETUP_OUT}")
-		endif()
-		if(MESON_SETUP_ERR)
-			message(STATUS "${MESON_SETUP_ERR}")
-		endif()
-		if(NOT MESON_SETUP_RESULT EQUAL 0)
-			message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). See meson output above for details.")
-		endif()
-	else()
-		message(STATUS "Skipping meson setup; build files already present for Opus")
-	endif()
-
 	add_custom_command(
 		OUTPUT "${OPUS_LIBRARY}"
-		COMMAND ${NINJA_RUNNER} -C ${OPUS_BUILD_DIR} install
-		WORKING_DIRECTORY ${OPUS_BUILD_DIR}
-		COMMENT "Building bundled Opus (meson + ninja)"
-		USES_TERMINAL
+		COMMAND ${CMAKE_COMMAND} -S ${OPUS_SRC_DIR} -B ${OPUS_BUILD_DIR} -G Ninja
+			-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+			-DOPUS_BUILD_SHARED_LIBRARY=OFF
+			-DOPUS_BUILD_TESTING=OFF
+			-DOPUS_CUSTOM_MODES=ON
+			-DOPUS_BUILD_PROGRAMS=OFF
+			-DOPUS_FUZZING=ON
+			-DOPUS_CHECK_ASM=ON
+			-DOPUS_INSTALL_PKG_CONFIG_MODULE=ON
+			-DOPUS_INSTALL_CMAKE_CONFIG_MODULE=OFF
+			-DOPUS_DRED=ON
+			-DOPUS_OSCE=ON
+			-DCMAKE_INSTALL_PREFIX=${FFMPEG_EXTERNAL_PATH}
+		COMMAND ${CMAKE_COMMAND} --build ${OPUS_BUILD_DIR} --target install
+		WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+		COMMENT "Configuring and installing opus to ${FFMPEG_EXTERNAL_PATH}"
+		VERBATIM
 	)
 
 	add_custom_target(opus_bundled DEPENDS "${OPUS_LIBRARY}")
