@@ -16,9 +16,15 @@
 ## Convert the semicolon-separated placeholders (produced by configure_file)
 ## into space-separated strings so CMake parses them as individual command
 ## arguments rather than producing semicolons in the generated source.
-set(_meson_opts @FFMPEG_MESON_OPTIONS_QUOTED@)
 
-set(_meson_env @FFMPEG_MESON_ENV_QUOTED@)
+# Transform semicolon-separated placeholders (from configure_file) into
+# space-separated strings and then into argument lists so CMake passes each
+# Meson option/env entry as a separate command argument.
+string(REPLACE ";" " " _meson_opts_str "@FFMPEG_MESON_OPTIONS@")
+separate_arguments(_meson_opts UNIX_COMMAND "${_meson_opts_str}")
+
+string(REPLACE ";" " " _meson_env_str "@_meson_env@")
+separate_arguments(_meson_env UNIX_COMMAND "${_meson_env_str}")
 
 execute_process(
   	COMMAND ${CMAKE_COMMAND} -E env ${_meson_env} @MESON_EXECUTABLE@ setup "@FFMPEG_BUILD_DIR@" "@FFMPEG_SRC_DIR@" ${_meson_opts}

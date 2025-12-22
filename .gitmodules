@@ -26,3 +26,7 @@
 [submodule "thirdparty/ffmpeg/codecs/x265/src"]
 	path = thirdparty/ffmpeg/codecs/x265/src
 	url = https://github.com/videolan/x265.git
+
+[submodule "thirdparty/ffmpeg/codecs/x265/svt-hevc/src"]
+	path = thirdparty/ffmpeg/codecs/x265/svt-hevc/src
+	url = https://github.com/OpenVisualCloud/SVT-HEVC.git

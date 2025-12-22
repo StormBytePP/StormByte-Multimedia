@@ -1,0 +1,41 @@
+if(WITH_FFMPEG STREQUAL "BUNDLED")
+	message(STATUS "Configuring SVT-HEVC library")
+
+	include(GNUInstallDirs)
+
+	set(SVT_HEVC_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+	set(SVT_HEVC_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/svt_hevc-build")
+	set(SVT_HEVC_LIBRARY "${FFMPEG_EXTERNAL_PATH}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SvtHevcEnc${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	file(MAKE_DIRECTORY "${SVT_HEVC_BUILD_DIR}")
+
+	# Only 1.4.1 version is supported so we checkout that tag
+	find_program(GIT_COMMAND git)
+	set(SVT_HEVC_VERSION_TAG "v1.4.1")
+	set(CHECKOUT_VERSION "${CURRENT_BINARY_DIR}/svt-hevc-version-checked-out")
+	add_custom_command(
+		OUTPUT "${CHECKOUT_VERSION}"
+		COMMAND ${GIT_COMMAND} fetch --tags origin
+		COMMAND ${GIT_COMMAND} checkout ${SVT_HEVC_VERSION_TAG}
+		WORKING_DIRECTORY "${SVT_HEVC_SRC_DIR}"
+		COMMENT "Checking out svt-hevc v1.5.1"
+		VERBATIM
+	)
+
+	add_custom_command(
+		OUTPUT "${SVT_HEVC_LIBRARY}"
+		COMMAND ${CMAKE_COMMAND} -S ${SVT_HEVC_SRC_DIR} -B ${SVT_HEVC_BUILD_DIR}
+			-DBUILD_SHARED_LIBS=OFF
+			-DCOVERAGE=OFF
+			-DBUILD_APP=OFF
+			-DCOMPILE_AS_CPP=OFF
+			-DCMAKE_INSTALL_PREFIX=${FFMPEG_EXTERNAL_PATH}
+			-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+		COMMAND ${CMAKE_COMMAND} --build ${SVT_HEVC_BUILD_DIR} --target install
+		WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+		COMMENT "Configuring and installing svt-hevc to ${FFMPEG_EXTERNAL_PATH}"
+		VERBATIM
+		DEPENDS "${CHECKOUT_VERSION}"
+	)
+
+	add_custom_target(svt-hevc_bundled DEPENDS "${SVT_HEVC_LIBRARY}")
+endif()

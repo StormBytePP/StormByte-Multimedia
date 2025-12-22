@@ -51,8 +51,17 @@ def main(argv):
     makeflags = os.environ.get('MAKEFLAGS', '')
     kind, val = parse_makeflags_jobserver(makeflags)
     if kind == 'auth':
-        extra.append('--jobserver-auth=%s' % val)
-    elif kind == 'count':
+        # Some make jobserver auth forms (e.g. fifo:/tmp/...) are not
+        # supported by older Ninja versions. Only forward numeric auth
+        # tokens (e.g. "3,4") which are understood; otherwise fall
+        # through to try to derive a -j count instead.
+        if re.match(r'^\d+(,\d+)?$', val):
+            extra.append('--jobserver-auth=%s' % val)
+        else:
+            # ignore unsupported auth form and try to derive a -j count
+            kind = None
+            val = None
+    if kind == 'count':
         extra.append('-j%s' % val)
     else:
         # fallback to common env vars used by CI or wrappers
