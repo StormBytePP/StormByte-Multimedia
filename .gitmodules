@@ -32,3 +32,6 @@
 [submodule "VVenc (H266) codec"]
 	path = thirdparty/ffmpeg/plugins/vvenc/src
 	url = https://github.com/fraunhoferhhi/vvenc.git
+[submodule "thirdparty/ffmpeg/plugins/lame/src"]
+	path = thirdparty/ffmpeg/plugins/lame/src
+	url = https://github.com/lameproject/lame.git

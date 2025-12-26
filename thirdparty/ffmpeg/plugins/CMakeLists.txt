@@ -39,6 +39,7 @@ set(FFMPEG_PLUGIN_OPTIONS "")
 # to FFMPEG_PLUGIN_OPTIONS variable.
 register_plugin_optional("fdk-aac" WITH_NONFREE "-Dlibfdk_aac=enabled" "-Dlibfdk_aac=disabled")
 register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")
+register_plugin("lame" "-Dlibmp3lame=enabled")
 register_plugin("opus" "-Dlibopus=enabled")
 register_plugin("vorbis" "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")
 register_plugin("vpx" "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")
