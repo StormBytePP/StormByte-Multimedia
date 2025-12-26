@@ -75,8 +75,8 @@ jobs:
           -DENABLE_ASAN=ON
           -DENABLE_TEST=ON
           -DWITH_FFMPEG=${{ matrix.ffmpeg }}
-          -DWITH_NONFREE=ON
-          -DWITH_GPL=ON
+          -DWITH_NONFREE=${{ matrix.nonfree }}
+          -DWITH_GPL=${{ matrix.gpl }}
           -DWITH_STORMBYTE=BUNDLED
           ${{ matrix.compiler == 'clang-libc++' && format('-DCMAKE_CXX_FLAGS=-stdlib={0}', 'libc++') || '' }}
         build-type: ${{ env.BUILD_TYPE }}
