@@ -68,7 +68,9 @@ macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options
 	if(${_truthy_value})
 		register_plugin(${_plugin_name} ${_enable_plugin_options})
 	else()
-		list(APPEND FFMPEG_PLUGIN_OPTIONS ${_disable_plugin_options})
+		# Register plugin options: append to a temporary list and export to parent
+		separate_arguments(_opts_list ${_disable_plugin_options} UNIX_COMMAND)
+		list(APPEND FFMPEG_PLUGIN_OPTIONS ${_opts_list})
 		set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)
 	endif()
 endmacro()

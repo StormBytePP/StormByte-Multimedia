@@ -1,11 +1,10 @@
 set(VPX_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 ensure_build_dir(VPX_BUILD_DIR)
-library_import_hint(VPX_LIBRARY "vpx" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+library_import_hint(VPX_LIBRARY "vpx" "${FFMPEG_PLUGINS_INSTALL_LIB_DIR}")
 
 set(VPX_MESON_OPTIONS
 	"-Ddefault_library=shared"
 	"-Dcpu=x86_64"
-	"--prefix=${FFMPEG_INSTALL_DIR}"
 	"-Dlibs=enabled"
 	"-Dexamples=disabled"
 	"-Dtools=disabled"
@@ -47,7 +46,7 @@ add_custom_target(_vpx_build
 
 add_custom_target(_vpx_install
 	COMMAND_EXPAND_LISTS
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}" install
+	COMMAND ${ENV_RUNNER} ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}" install
 	WORKING_DIRECTORY ${VPX_BUILD_DIR}
 	COMMENT "Installing VPX codec internally"
 	DEPENDS _vpx_build
