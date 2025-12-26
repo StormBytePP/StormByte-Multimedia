@@ -50,9 +50,9 @@ else()
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
 		"-Ddefault_library=shared"
-		"-Dprograms=enabled"
-		"-Dtests=disabled"
 		# Disabled features we don't need / want
+		"-Dprograms=disabled"
+		"-Dtests=disabled"
 		"-Ddevices=disabled"
 		"-Dvaapi=disabled"
 		"-Dvaapi_drm=disabled"
