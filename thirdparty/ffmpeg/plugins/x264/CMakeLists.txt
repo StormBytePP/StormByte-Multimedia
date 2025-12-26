@@ -27,7 +27,7 @@ endif()
 
 add_custom_target(_x264_build
 	COMMAND_EXPAND_LISTS
-	COMMAND ${NINJA_EXECUTABLE} -C "${X264_BUILD_DIR}"
+	COMMAND ${ENV_NINJA_COMMAND} -C "${X264_BUILD_DIR}"
 	WORKING_DIRECTORY ${X264_BUILD_DIR}
 	COMMENT "Building X264 codec"
 	USES_TERMINAL
@@ -35,9 +35,10 @@ add_custom_target(_x264_build
 
 add_custom_target(_x264_install
 	COMMAND_EXPAND_LISTS
-	COMMAND ${ENV_RUNNER_SILENT} ${NINJA_EXECUTABLE} -C "${X264_BUILD_DIR}" install
+	COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${X264_BUILD_DIR}" install
 	WORKING_DIRECTORY ${X264_BUILD_DIR}
 	COMMENT "Installing X264 codec internally"
+	DEPENDS _x264_build
 )
 
 add_custom_target(x264 DEPENDS _x264_install)
