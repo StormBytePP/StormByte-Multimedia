@@ -1,7 +1,7 @@
-From bbe4ecd1d37c8e52d9a18c731d97c6165676b490 Mon Sep 17 00:00:00 2001
+From 97519d3a3fc13c05267cfae838fc4d1b92cf334c Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
-Date: Fri, 26 Dec 2025 09:43:46 +0100
-Subject: [PATCH] Fix vpx: Add top-level flag if libvpx is present
+Date: Fri, 26 Dec 2025 16:23:04 +0100
+Subject: [PATCH 1/2] Fix vpx: Add top-level flag if libvpx is present
 
 ---
  meson.build | 7 +++++++

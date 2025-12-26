@@ -29,9 +29,6 @@
 [submodule "pkgconf"]
 	path = thirdparty/ffmpeg/bootstrap/pkgconf/src
 	url = https://github.com/pkgconf/pkgconf.git
-[submodule "thirdparty/ffmpeg/plugins/ogg/src"]
-	path = thirdparty/ffmpeg/plugins/ogg/src
-	url = https://gitlab.xiph.org/xiph/ogg.git
-[submodule "thirdparty/ffmpeg/bootstrap/pkgconf/src"]
-	path = thirdparty/ffmpeg/bootstrap/pkgconf/src
-	url = https://github.com/pkgconf/pkgconf.git
+[submodule "VVenc (H266) codec"]
+	path = thirdparty/ffmpeg/plugins/vvenc/src
+	url = https://github.com/fraunhoferhhi/vvenc.git

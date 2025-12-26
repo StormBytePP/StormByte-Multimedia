@@ -42,6 +42,7 @@ register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabl
 register_plugin("opus" "-Dlibopus=enabled")
 register_plugin("vorbis" "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")
 register_plugin("vpx" "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")
+register_plugin("vvenc" "-Dlibvvenc=enabled -Dlibvvenc_encoder=enabled")
 register_plugin_optional(
 	"x264"
 	WITH_GPL

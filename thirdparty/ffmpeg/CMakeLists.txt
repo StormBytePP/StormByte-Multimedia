@@ -170,12 +170,15 @@ else()
 	include("${FFMPEG_GIT_SWITCH_FILE}")
 
 	# Patch source to fix libvpx detection issue
-	set(FFMPEG_VPX_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Fix-vpx-Add-top-level-flag-if-libvpx-is-present.patch")
+	set(FFMPEG_VPX_PATCH_FILES
+		"${CMAKE_CURRENT_LIST_DIR}/0001-Fix-vpx-Add-top-level-flag-if-libvpx-is-present.patch"
+		"${CMAKE_CURRENT_LIST_DIR}/0002-Fix-libvvenc-Don-t-require-vpl-probably-a-typo-bad-p.patch"
+	)
 	create_git_patch_file(
 		FFMPEG_VPX_PATCH_REPO
 		"${FFMPEG_COMPONENT}"
 		"${FFMPEG_SRC_DIR}"
-		"${FFMPEG_VPX_PATCH_FILE}"
+		"${FFMPEG_VPX_PATCH_FILES}"
 	)
 	include("${FFMPEG_VPX_PATCH_REPO}")
 
