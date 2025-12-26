@@ -54,7 +54,7 @@ add_custom_target(_vpx_build
 
 add_custom_target(_vpx_install
 	COMMAND_EXPAND_LISTS
-	COMMAND ${ENV_RUNNER} ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}" install
+	COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}" install
 	WORKING_DIRECTORY ${VPX_BUILD_DIR}
 	COMMENT "Installing VPX codec internally"
 	DEPENDS _vpx_build
