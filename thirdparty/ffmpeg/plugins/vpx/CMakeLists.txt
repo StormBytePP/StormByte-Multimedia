@@ -2,8 +2,16 @@ set(VPX_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 ensure_build_dir(VPX_BUILD_DIR)
 library_import_hint(VPX_LIBRARY "vpx" "${FFMPEG_PLUGINS_INSTALL_LIB_DIR}")
 
+# On Windows it is needed to force static build as of error:
+# ERROR: Problem encountered: Shared library build is only supported
+# on ELF and Darwin for now
+if(WIN32)
+	set(library_type "static")
+else()
+	set(library_type "shared")
+endif()
 set(VPX_MESON_OPTIONS
-	"-Ddefault_library=shared"
+	"-Ddefault_library=${library_type}"
 	"-Dcpu=x86_64"
 	"-Dlibs=enabled"
 	"-Dexamples=disabled"
