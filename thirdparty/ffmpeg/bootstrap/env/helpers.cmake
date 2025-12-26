@@ -30,26 +30,39 @@ endfunction()
 
 ## prepare_command(_out _command_list)
 ##
-## Prepare a serialized command list for use with `execute_process` or
-## similar APIs by expanding CMake's internal list form into a space-
-## separated argument list and splitting it into tokens appropriate for
-## the current platform.
+## Prepare a tokenized command suitable for passing to
+## `execute_process(COMMAND ...)` by converting CMake's internal list
+## representation into a platform-appropriate sequence of arguments.
 ##
 ## Parameters:
-##  - _out: name of the variable to set in the parent scope with the
-##          resulting tokenized command (as a CMake list).
-##  - _command_list: a CMake list (or a variable name containing a list)
-##                   representing the command and its arguments. The
-##                   function will join list elements with spaces and
-##                   then call `separate_arguments` to produce a list of
-##                   tokens suitable for passing to `execute_process`.
+##  - _out: name of the variable to set in the parent scope. The value
+##          will be a CMake list where each element is a single token
+##          (i.e. an argument) suitable for expanding directly in
+##          `execute_process(COMMAND ${_out} ...)`.
+##  - _command_list: a CMake list (or the name of a variable containing
+##                   a list) representing the command and its
+##                   arguments. For example: `/bin/sh;${SCRIPT}` or
+##                   `cmd;/C;${SCRIPT}`.
 ##
-## Behavior:
-##  - Replaces CMake's semicolon separators with spaces to form a single
-##    string, then uses `separate_arguments` with the platform-appropriate
-##    mode (`WINDOWS_COMMAND` or `UNIX_COMMAND`) to produce a tokenized
-##    command suitable for execution.
-##  - Returns the tokenized command list in `_out` (parent scope).
+## Behavior and notes:
+##  - Joins the CMake list elements with spaces and then calls
+##    `separate_arguments` using `WINDOWS_COMMAND` or `UNIX_COMMAND`
+##    depending on the platform. This handles quoting and token
+##    splitting so the caller does not need to perform manual parsing.
+##  - The returned `_out` is a proper CMake list of tokens; callers
+##    should expand it as multiple arguments in `execute_process`, not
+##    as a single quoted string.
+##  - The function requires exactly two arguments; it will `FATAL_ERROR`
+##    if called incorrectly.
+##
+## Example:
+## ```cmake
+## set(_cmd /bin/sh "${BOOTSTRAP_SCRIPTS_ENV_DIR}/runner.sh")
+## prepare_command(ENV_RUNNER "${_cmd}")
+## execute_process(COMMAND ${ENV_RUNNER} --version WORKING_DIRECTORY ${WD})
+## ```
+## This produces a token list like `/bin/sh` and `/path/to/runner.sh`
+## so `execute_process` receives them as two separate arguments.
 function(prepare_command _out _command_list)
 	if(NOT ARGC EQUAL 2)
 		message(FATAL_ERROR "prepare_command requires out variable and command list")

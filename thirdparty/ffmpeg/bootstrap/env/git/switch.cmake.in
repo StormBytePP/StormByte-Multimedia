@@ -1,9 +1,9 @@
 execute_process(
-	COMMAND @ENV_GIT_COMMAND@ apply @GIT_PATCHES@
+	COMMAND @ENV_GIT_COMMAND@ -C @GIT_REPO@ switch -C @GIT_BRANCH@ --track origin/@GIT_BRANCH@
 	WORKING_DIRECTORY @GIT_REPO@
 	RESULT_VARIABLE GIT_RESULT
 	OUTPUT_VARIABLE GIT_OUT
-	ERROR_VARIABLE GIT_ERROROR
+	ERROR_VARIABLE GIT_ERROR
 )
 
 if(GIT_OUT AND GIT_VERBOSE)
@@ -13,5 +13,5 @@ if(GIT_ERROR)
 	message(STATUS "${GIT_ERROR}")
 endif()
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Git patch failed (exit ${GIT_RESULT}). See error output above for details.")
+	message(FATAL_ERROR "Git switch failed (exit ${GIT_RESULT}). See error output above for details.")
 endif()

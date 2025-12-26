@@ -3,14 +3,14 @@ execute_process(
 	WORKING_DIRECTORY @GIT_REPO@
 	RESULT_VARIABLE GIT_RESULT
 	OUTPUT_VARIABLE GIT_OUT
-	ERROR_VARIABLE GIT_ERROR
+	ERROR_VARIABLE GIT_ERROROR
 )
 
 if(GIT_OUT AND GIT_VERBOSE)
 	message(STATUS "${GIT_OUT}")
 endif()
-if(GIT_ERR)
-	message(STATUS "${GIT_ERR}")
+if(GIT_ERROR)
+	message(STATUS "${GIT_ERROR}")
 endif()
 if(NOT GIT_RESULT EQUAL 0)
 	message(FATAL_ERROR "Git patch failed (exit ${GIT_RESULT}). See error output above for details.")

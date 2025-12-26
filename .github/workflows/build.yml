@@ -51,14 +51,14 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
 
     - name: Install APT packages
-      if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'SYSTEM' }}
+      if: ${{ matrix.ffmpeg == 'SYSTEM' }}
       uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
         cache-key: apt-ffmpeg-system-deps
         packages: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
 
     - name: Install APT packages
-      if: ${{ runner.os == 'Linux' && matrix.ffmpeg == 'BUNDLED' }}
+      if: ${{ matrix.ffmpeg == 'BUNDLED' }}
       uses: stormbytepp/githubactions/.github/actions/install-cached@master
       with:
         cache-key: apt-nasm-yasm
@@ -104,10 +104,9 @@ jobs:
           toolchain: msvc
 
       - name: Install Nasm and Yasm
-        uses: stormbytepp/githubactions/.github/actions/install-cached@master
-        with:
-          cache-key: apt-nasm-yasm
-          packages: 'nasm yasm'
+        shell: pwsh
+        run: |
+          choco install nasm yasm -y
 
       - name: Build with CMake
         uses: ashutoshvarma/action-cmake-build@master

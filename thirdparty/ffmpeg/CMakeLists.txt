@@ -143,6 +143,48 @@ else()
 	ensure_build_dir(FFMPEG_BUILD_DIR "ffmpeg")
 	set(FFMPEG_OPTIONS "${FFMPEG_MESON_OPTIONS}")
 
+	# Fetch latest data
+	create_git_fetch(
+		FFMPEG_GIT_FETCH_FILE
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+	)
+	include("${FFMPEG_GIT_FETCH_FILE}")
+
+	# Reset changes
+	create_git_reset_file(
+		FFMPEG_GIT_RESET_FILE
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+	)
+	include("${FFMPEG_GIT_RESET_FILE}")
+
+	# Switch to branch meson-8.0.1 which is more recent than default master
+	create_git_switch_branch(
+		FFMPEG_GIT_SWITCH_FILE
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+		"meson-8.0.1"
+	)
+	include("${FFMPEG_GIT_SWITCH_FILE}")
+
+	# Patch source to fix libvpx detection issue
+	set(FFMPEG_VPX_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Fix-vpx-Add-top-level-flag-if-libvpx-is-present.patch")
+	create_git_patch_file(
+		FFMPEG_VPX_PATCH_REPO
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+		"${FFMPEG_VPX_PATCH_FILE}"
+	)
+	include("${FFMPEG_VPX_PATCH_REPO}")
+
+	# Creates a reset for postbuild stage
+	create_git_reset_file(
+		FFMPEG_GIT_RESET_FILE
+		"${FFMPEG_COMPONENT}"
+		"${FFMPEG_SRC_DIR}"
+	)
+
 	create_meson_setup_file(
 		FFMPEG_MESON_SETUP_FILE
 		"${FFMPEG_COMPONENT}"
@@ -169,17 +211,7 @@ else()
 		DEPENDS _ffmpeg_configure
 	)
 
-	# Set a list or artifacts that will be installed
-	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
-	set(_ffmpeg_outputs "")
-	foreach(_lib IN LISTS _ffmpeg_libs)
-		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-		list(APPEND _ffmpeg_outputs "${_libpath}")
-	endforeach()
-
-	# Install FFmpeg internally
-	add_custom_command(
-		OUTPUT ${_ffmpeg_outputs}
+	add_custom_target(_ffmpeg_install
 		COMMAND_EXPAND_LISTS
 		COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}" install
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
@@ -187,10 +219,23 @@ else()
 		DEPENDS _ffmpeg_build
 	)
 
-	# Added so FFmpeg libraries know which files to wait for
-	add_custom_target(ffmpeg
-		DEPENDS ${_ffmpeg_outputs}
+	add_custom_command(TARGET _ffmpeg_install
+		POST_BUILD
+		COMMAND ${ENV_CMAKE_COMMAND} -P ${FFMPEG_GIT_RESET_FILE}
+		WORKING_DIRECTORY ${FFMPEG_SRC_DIR}
+		COMMENT "Resetting FFmpeg source directory to clean state"
 	)
+
+	# Added so FFmpeg libraries know which files to wait for
+	add_custom_target(ffmpeg DEPENDS _ffmpeg_install)
+
+	# Set a list or artifacts that will be installed
+	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
+	set(_ffmpeg_outputs "")
+	foreach(_lib IN LISTS _ffmpeg_libs)
+		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+		list(APPEND _ffmpeg_outputs "${_libpath}")
+	endforeach()
 
 	# Expose imported targets for consumers
 	set(FFMPEG_LIB_INSTALL_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")

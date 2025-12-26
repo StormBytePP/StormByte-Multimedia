@@ -41,6 +41,7 @@ register_plugin_optional("fdk-aac" WITH_NONFREE "-Dlibfdk_aac=enabled" "-Dlibfdk
 register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")
 register_plugin("opus" "-Dlibopus=enabled")
 register_plugin("vorbis" "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")
+register_plugin("vpx" "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")
 register_plugin_optional(
 	"x264"
 	WITH_GPL
