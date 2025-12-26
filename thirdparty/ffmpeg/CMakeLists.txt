@@ -226,9 +226,6 @@ else()
 		COMMENT "Resetting FFmpeg source directory to clean state"
 	)
 
-	# Added so FFmpeg libraries know which files to wait for
-	add_custom_target(ffmpeg DEPENDS _ffmpeg_install)
-
 	# Set a list or artifacts that will be installed
 	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
 	set(_ffmpeg_outputs "")
@@ -236,6 +233,15 @@ else()
 		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
 		list(APPEND _ffmpeg_outputs "${_libpath}")
 	endforeach()
+
+	# This is a dummy needed so cmake knows the rules for the ffmpeg libraries
+	add_custom_command(
+		OUTPUT ${_ffmpeg_outputs}
+		DEPENDS _ffmpeg_install
+	)
+
+	# Added so FFmpeg libraries know which files to wait for
+	add_custom_target(ffmpeg DEPENDS ${_ffmpeg_outputs})
 
 	# Expose imported targets for consumers
 	set(FFMPEG_LIB_INSTALL_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
