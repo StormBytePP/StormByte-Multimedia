@@ -110,6 +110,7 @@ else()
 		"-Dlibssh=disabled"
 		"-Dlibtensorflow=disabled"
 		"-Dnanosleep=disabled"
+		"-Dlibvpl=disabled"
 	)
 
 	# Enable GPL components if requested
@@ -143,7 +144,7 @@ else()
 	# Configure FFmpeg build
 	set(FFMPEG_COMPONENT "ffmpeg")
 	set(FFMPEG_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
-	ensure_build_dir(FFMPEG_BUILD_DIR "ffmpeg")
+	ensure_build_dir(FFMPEG_BUILD_DIR)
 	set(FFMPEG_OPTIONS "${FFMPEG_MESON_OPTIONS}")
 
 	# Fetch latest data
@@ -201,8 +202,11 @@ else()
 		"${FFMPEG_OPTIONS}"
 	)
 
-	add_custom_target(_ffmpeg_configure
+	set(FFMPEG_CONFIGURED "${FFMPEG_BUILD_DIR}/.configured")
+	add_custom_command(
+		OUTPUT ${FFMPEG_CONFIGURED}
 		COMMAND ${ENV_CMAKE_COMMAND} -P ${FFMPEG_MESON_SETUP_FILE}
+		COMMAND ${ENV_CMAKE_COMMAND} -E touch ${FFMPEG_CONFIGURED}
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Configuring FFmpeg"
 		DEPENDS ffmpeg-plugins
@@ -215,7 +219,7 @@ else()
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Building FFmpeg"
 		USES_TERMINAL
-		DEPENDS _ffmpeg_configure
+		DEPENDS ${FFMPEG_CONFIGURED}
 	)
 
 	add_custom_target(_ffmpeg_install
@@ -226,12 +230,12 @@ else()
 		DEPENDS _ffmpeg_build
 	)
 
-	add_custom_command(TARGET _ffmpeg_install
-		POST_BUILD
-		COMMAND ${ENV_CMAKE_COMMAND} -P ${FFMPEG_GIT_RESET_FILE}
-		WORKING_DIRECTORY ${FFMPEG_SRC_DIR}
-		COMMENT "Resetting FFmpeg source directory to clean state"
-	)
+	# add_custom_command(TARGET _ffmpeg_install
+	# 	POST_BUILD
+	# 	COMMAND ${ENV_CMAKE_COMMAND} -P ${FFMPEG_GIT_RESET_FILE}
+	# 	WORKING_DIRECTORY ${FFMPEG_SRC_DIR}
+	# 	COMMENT "Resetting FFmpeg source directory to clean state"
+	# )
 
 	# Set a list or artifacts that will be installed
 	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
