@@ -138,6 +138,8 @@ else()
 	# Append values added by codecs
 	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})
 
+	message(STATUS "Configuring FFmpeg build with options: ${FFMPEG_MESON_OPTIONS}")
+
 	# Configure FFmpeg build
 	set(FFMPEG_COMPONENT "ffmpeg")
 	set(FFMPEG_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
@@ -173,6 +175,7 @@ else()
 	set(FFMPEG_VPX_PATCH_FILES
 		"${CMAKE_CURRENT_LIST_DIR}/0001-Fix-vpx-Add-top-level-flag-if-libvpx-is-present.patch"
 		"${CMAKE_CURRENT_LIST_DIR}/0002-Fix-libvvenc-Don-t-require-vpl-probably-a-typo-bad-p.patch"
+		"${CMAKE_CURRENT_LIST_DIR}/0003-Only-set-vpx-as-enabled-if-used-enabled-it-or-header.patch"
 	)
 	create_git_patch_file(
 		FFMPEG_VPX_PATCH_REPO
