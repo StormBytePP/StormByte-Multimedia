@@ -15,42 +15,18 @@ namespace StormByte::Multimedia {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Exception: public StormByte::Exception {
 		public:
 			/**
-			 * @brief Default constructor.
-			 * @param message The message of the exception.
+			 * @brief Constructor forwards the message to the `std::format` function
+			 * @tparam Args Format argument types
+			 * @param fmt Format string
+			 * @param args Arguments for formatting
+			 * 
+			 * If no arguments are provided, the format string is used as the exception message directly.
 			 */
-			Exception(const std::string& message);
+			template <typename... Args>
+			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
+			StormByte::Exception("Multimedia::" +component, fmt, std::forward<Args>(args)...) {}
 
-			/**
-			 * @brief Default constructor.
-			 * @param message The message of the exception.
-			 */
-			Exception(std::string&& message) noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 * @param exception The exception to copy.
-			 */
-			Exception(const Exception& exception) 						= default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param exception The exception to move.
-			 */
-			Exception(Exception&& exception) noexcept 					= default;
-
-			/**
-			 * @brief Copy assignment operator.
-			 * @param exception The exception to copy.
-			 * @return The copied exception.
-			 */
-			Exception& operator=(const Exception& exception) 			= default;
-
-			/**
-			 * @brief Move assignment operator.
-			 * @param exception The exception to move.
-			 * @return The moved exception.
-			 */
-			Exception& operator=(Exception&& exception) noexcept 		= default;
+			using StormByte::Exception::Exception;
 
 			/**
 			 * @brief Default destructor.
@@ -68,126 +44,25 @@ namespace StormByte::Multimedia {
 			 * @brief Default constructor.
 			 * @param codec The message of the exception.
 			 */
-			CodecNotFound(const std::string& codec);
+			CodecNotFound(const std::string& codec):
+			Exception("Codec: ", "Codec '{}' not found.", codec) {}
 
-			/**
-			 * @brief Copy constructor.
-			 * @param exception The exception to copy.
-			 */
-			CodecNotFound(const CodecNotFound& exception) 						= default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param exception The exception to move.
-			 */
-			CodecNotFound(CodecNotFound&& exception) noexcept 					= default;
-
-			/**
-			 * @brief Copy assignment operator.
-			 * @param exception The exception to copy.
-			 * @return The copied exception.
-			 */
-			CodecNotFound& operator=(const CodecNotFound& exception) 			= default;
-
-			/**
-			 * @brief Move assignment operator.
-			 * @param exception The exception to move.
-			 * @return The moved exception.
-			 */
-			CodecNotFound& operator=(CodecNotFound&& exception) noexcept 		= default;
-
-			/**
-			 * @brief Default destructor.
-			 */
-			~CodecNotFound() noexcept override									= default;
+			using Exception::Exception;
 	};
 
 	/**
-	 * @class ContainerNotFound
-	 * @brief The exception for when a container is not found.
+	 * @class FileError
+	 * @brief The exception for when a file error occurs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFound: public Exception {
+	class STORMBYTE_MULTIMEDIA_PUBLIC FileError: public Exception {
 		public:
 			/**
 			 * @brief Default constructor.
-			 * @param container The message of the exception.
+			 * @param codec The message of the exception.
 			 */
-			ContainerNotFound(const std::string& container);
+			FileError(const std::string& message):
+			Exception("File: ", "File error occurred: {}", message) {}
 
-			/**
-			 * @brief Copy constructor.
-			 * @param exception The exception to copy.
-			 */
-			ContainerNotFound(const ContainerNotFound& exception) 					= default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param exception The exception to move.
-			 */
-			ContainerNotFound(ContainerNotFound&& exception) noexcept 				= default;
-
-			/**
-			 * @brief Copy assignment operator.
-			 * @param exception The exception to copy.
-			 * @return The copied exception.
-			 */
-			ContainerNotFound& operator=(const ContainerNotFound& exception) 		= default;
-
-			/**
-			 * @brief Move assignment operator.
-			 * @param exception The exception to move.
-			 * @return The moved exception.
-			 */
-			ContainerNotFound& operator=(ContainerNotFound&& exception) noexcept 	= default;
-
-			/**
-			 * @brief Default destructor.
-			 */
-			~ContainerNotFound() noexcept override									= default;
-	};
-
-	/**
-	 * @class CodecNotSupported
-	 * @brief The exception for when a codec is not supported for a container
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotSupported: public Exception {
-		public:
-			/**
-			 * @brief Default constructor.
-			 * @param container The container.
-			 * @param codec The Codec.
-			 */
-			CodecNotSupported(const std::string& container, const std::string& codec);
-
-			/**
-			 * @brief Copy constructor.
-			 * @param exception The exception to copy.
-			 */
-			CodecNotSupported(const CodecNotSupported& exception) 						= default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param exception The exception to move.
-			 */
-			CodecNotSupported(CodecNotSupported&& exception) noexcept 					= default;
-
-			/**
-			 * @brief Copy assignment operator.
-			 * @param exception The exception to copy.
-			 * @return The copied exception.
-			 */
-			CodecNotSupported& operator=(const CodecNotSupported& exception) 			= default;
-
-			/**
-			 * @brief Move assignment operator.
-			 * @param exception The exception to move.
-			 * @return The moved exception.
-			 */
-			CodecNotSupported& operator=(CodecNotSupported&& exception) noexcept 		= default;
-
-			/**
-			 * @brief Default destructor.
-			 */
-			~CodecNotSupported() noexcept override										= default;
+			using Exception::Exception;
 	};
 }

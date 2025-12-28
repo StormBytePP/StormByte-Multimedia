@@ -64,6 +64,12 @@ jobs:
         cache-key: apt-nasm-yasm
         packages: 'nasm yasm'
 
+    - name: Add FFmpeg libs to LD_LIBRARY_PATH
+      if: ${{ matrix.ffmpeg == 'BUNDLED' }}
+      run: |
+        echo "${{ github.workspace }}/build/thirdparty/ffmpeg/plugins/install/lib64" >> $GITHUB_PATH
+        echo "${{ github.workspace }}/build/thirdparty/ffmpeg/install/lib64" >> $GITHUB_PATH
+
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master
       with:
@@ -125,6 +131,8 @@ jobs:
         run: |
           echo "${{ github.workspace }}\build\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "${{ github.workspace }}\build\thirdparty\StormByte\base\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\build\thirdparty\ffmpeg\install\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\build\thirdparty\ffmpeg\plugins\install\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           
       - name: Run unit tests
         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test

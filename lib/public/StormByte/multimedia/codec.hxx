@@ -1,96 +1,98 @@
 #pragma once
 
-#include <StormByte/multimedia/media/property/flags.hxx>
-#include <StormByte/multimedia/media/type.hxx>
-
-#include <memory>
-#include <string>
+#include <StormByte/multimedia/typedefs.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 /**
  * @namespace Multimedia
  * @brief The namespace for all multimedia classes.
  */
 namespace StormByte::Multimedia {
-    /**
-     * @class Codec
-     * @brief The template class for all multimedia codecs.
-     */
-    class STORMBYTE_MULTIMEDIA_PUBLIC Codec {
+	/**
+	 * @class Codec
+	 * @brief The class representing a multimedia codec.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Codec {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param name The name of the codec.
-			 * @param description The description of the codec.
-			 * @param flags The flags of the codec.
-			 */
-			Codec(const std::string& name, const std::string& description, const Media::Property::Flags& flags) noexcept;
-
-			/**
-			 * @brief Constructor.
-			 * @param name The name of the codec.
-			 * @param description The description of the codec.
-			 * @param flags The flags of the codec.
-			 */
-			Codec(std::string&& name, std::string&& description, Media::Property::Flags&& flags) noexcept;
-
-			/**
 			 * @brief Copy constructor.
-			 * @param codec The codec to copy.
+			 * @param other The other codec to copy from.
 			 */
-			Codec(const Codec& codec) noexcept								= default;
+			Codec(const Codec& other)								= default;
 
 			/**
 			 * @brief Move constructor.
-			 * @param codec The codec to move.
+			 * @param other The other codec to move from.
 			 */
-			Codec(Codec&& codec) noexcept									= default;
+			Codec(Codec&& other) noexcept							= default;
+
+			/**
+			 * @brief Default destructor.
+			 */
+			~Codec() noexcept 										= default;
 
 			/**
 			 * @brief Copy assignment operator.
-			 * @param codec The codec to copy.
-			 * @return Reference to the assigned codec.
+			 * @param other The other codec to copy from.
+			 * @return Reference to this codec.
 			 */
-			Codec& operator=(const Codec& codec) noexcept					= default;
+			Codec& operator=(const Codec& other)					= default;
 
 			/**
 			 * @brief Move assignment operator.
-			 * @param codec The codec to move.
-			 * @return Reference to the assigned codec.
+			 * @param other The other codec to move from.
+			 * @return Reference to this codec.
 			 */
-			Codec& operator=(Codec&& codec) noexcept						= default;
-
-			/**
-			 * @brief Destructor.
-			 */
-			virtual ~Codec() noexcept 										= default;
+			Codec& operator=(Codec&& other)							= default;
 
 			/**
 			 * @brief Gets the name of the codec.
 			 * @return The name of the codec.
 			 */
-			const std::string& 												Name() const noexcept;
+			std::string 											Name() const noexcept;
 
 			/**
 			 * @brief Gets the description of the codec.
 			 * @return The description of the codec.
 			 */
-			const std::string& 												Description() const noexcept;
+			std::string 											Description() const noexcept;
 
 			/**
-			 * @brief Gets the name of the codec.
-			 * @return The name of the codec.
+			 * @brief Finds a codec by name.
+			 * @param name The name of the codec.
+			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
 			 */
-			virtual const Media::Property::Flags* 							Flags() const noexcept;
+			static ExpectedCodec 									Find(const std::string& name) noexcept;
 
 			/**
-			 * @brief Gets the type of the codec.
-			 * @return The type of the codec.
+			 * @brief Finds a codec by ID.
+			 * @param id The ID of the codec.
+			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
 			 */
-			virtual Media::Type 											Type() const noexcept = 0;
+			static ExpectedCodec 									Find(int id) noexcept;
 
-		protected:
-			std::string m_name;												///< The name of the codec.
-			std::string m_description;										///< The description of the codec.
-			std::shared_ptr<const Media::Property::Flags> m_flags;			///< The flags of the codec.
+			/**
+			 * @brief Checks if the codec has an encoder.
+			 * @return True if the codec has an encoder, false otherwise.
+			 */
+			bool 													HasDecoder() const noexcept;
+
+			/**
+			 * @brief Checks if the codec has a decoder.
+			 * @return True if the codec has a decoder, false otherwise.
+			 */
+			bool 													HasEncoder() const noexcept;
+
+		private:
+			int m_codec_id;											///< The Codec ID
+			std::string m_name, m_description;						///< The name and description of the codec
+
+			/**
+			 * @brief Private constructor from AVCodec pointer.
+			 * @param codec_id The Codec ID
+			 * @param name The name of the codec
+			 * @param description The description of the codec
+			 */
+			Codec(int codec_id, const std::string& name, const std::string& description) noexcept;
 	};
 }
