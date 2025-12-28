@@ -134,12 +134,10 @@ else()
 
 	# Show final meson options for FFmpeg (print list with spaces instead of ';')
 	string(REPLACE ";" " " _ffmpeg_plugin_options_str "${FFMPEG_PLUGIN_OPTIONS}")
-	message(STATUS "FFmpeg enabled codecs: ${_ffmpeg_plugin_options_str}")
+	message(STATUS "FFmpeg enabled codec options: ${_ffmpeg_plugin_options_str}")
 
 	# Append values added by codecs
 	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})
-
-	message(STATUS "Configuring FFmpeg build with options: ${FFMPEG_MESON_OPTIONS}")
 
 	# Configure FFmpeg build
 	set(FFMPEG_COMPONENT "ffmpeg")
