@@ -1,8 +1,15 @@
 #include <StormByte/multimedia/codec.hxx>
-#include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/context/audio.hxx>
 #include <StormByte/multimedia/context/video.hxx>
+#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/stream.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+
+#include <cstring>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -11,14 +18,6 @@ extern "C" {
 	#include <libavutil/pixdesc.h>
 	#include <libavutil/mastering_display_metadata.h>
 }
-
-#include <StormByte/multimedia/ffmpeg_pointers.hxx>
-#include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
-#include <cstring>
 
 using namespace StormByte::Multimedia;
 
@@ -132,8 +131,6 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 				if (has_hdr10) {
 					// Define the data holders
 					std::optional<Context::Property::Point> red_point, green_point, blue_point, white_point, luminance, light_level;
-
-					// primaries and transfer already computed above and passed to Color
 
 					// Initialize decoder to read frames via RAII
 					const AVCodecParameters* par = av_stream.CodecParameters();
@@ -308,8 +305,6 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 		stream.Metadata(av_stream.Metadata());
 		file.m_streams.push_back(std::move(stream));
 	}
-
-	// Input will be closed by AVFormatContextPtr deleter when going out of scope
 
 	// Return the File object
 	return file;
