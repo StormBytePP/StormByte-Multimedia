@@ -67,7 +67,7 @@ jobs:
     - name: Add FFmpeg libs to LD_LIBRARY_PATH
       if: ${{ matrix.ffmpeg == 'BUNDLED' }}
       run: |
-        echo "${{ github.workspace }}/build/thirdparty/ffmpeg/install/lib64" >> $GITHUB_PATH
+        echo "LD_LIBRARY_PATH=${{ github.workspace }}/build/thirdparty/ffmpeg/install/lib" >> $GITHUB_ENV
 
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master

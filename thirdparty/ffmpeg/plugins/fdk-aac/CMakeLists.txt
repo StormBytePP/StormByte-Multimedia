@@ -30,4 +30,6 @@ add_custom_target(_fdk-aac_install
 	COMMENT "Installing internally FDK_AAC"
 	DEPENDS _fdk-aac_build
 )
-add_custom_target(fdk-aac DEPENDS _fdk-aac_install)
+add_library(fdk-aac SHARED IMPORTED GLOBAL)
+set_property(TARGET fdk-aac PROPERTY IMPORTED_LOCATION "${FDK_AAC_LIBRARY}")
+add_dependencies(fdk-aac _fdk-aac_install)
