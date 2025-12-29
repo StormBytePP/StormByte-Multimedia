@@ -249,7 +249,7 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
                                     }
 
                                     // HDR10+ detection
-                                    if (const AVFrameSideData* sd = frame.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS)) {
+                                    if (frame.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS)) {
                                         hdr10_plus_detected = true;
                                     }
 
