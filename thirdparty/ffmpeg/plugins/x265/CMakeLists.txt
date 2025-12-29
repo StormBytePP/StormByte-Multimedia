@@ -47,7 +47,7 @@ create_cmake_configure_file(
 	"${X265_COMPONENT_12}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_12}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_12}"
 )
 include("${X265_CMAKE_CONFIGURE_FILE_12}")
@@ -85,7 +85,7 @@ create_cmake_configure_file(
 	"${X265_COMPONENT_10}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_10}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_10}"
 )
 include("${X265_CMAKE_CONFIGURE_FILE_10}")
@@ -125,7 +125,7 @@ create_cmake_configure_file(
 	"${X265_COMPONENT_8}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_8}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_8}"
 )
 

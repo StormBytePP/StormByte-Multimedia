@@ -12,7 +12,7 @@ create_cmake_configure_file(
 	"${VORBIS_COMPONENT}"
 	"${VORBIS_SRC_DIR}"
 	"${VORBIS_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${VORBIS_OPTIONS}"
 )
 

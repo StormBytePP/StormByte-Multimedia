@@ -81,7 +81,7 @@ create_cmake_configure_file(
 	"${OPUS_COMPONENT}"
 	"${OPUS_SRC_DIR}"
 	"${OPUS_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${OPUS_OPTIONS}"
 )
 include("${OPUS_CMAKE_CONFIGURE_FILE}")

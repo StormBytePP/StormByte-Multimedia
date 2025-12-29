@@ -11,7 +11,7 @@ create_cmake_configure_file(
 	"${LAME_COMPONENT}"
 	"${LAME_SRC_DIR}"
 	"${LAME_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${LAME_OPTIONS}"
 )
 include("${LAME_CMAKE_CONFIGURE_FILE}")

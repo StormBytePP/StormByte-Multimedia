@@ -1,6 +1,6 @@
 set(VPX_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 ensure_build_dir(VPX_BUILD_DIR)
-library_import_hint(VPX_LIBRARY "vpx" "${FFMPEG_PLUGINS_INSTALL_LIB_DIR}")
+library_import_hint(VPX_LIBRARY "vpx" "${FFMPEG_INSTALL_LIB_DIR}")
 
 # On Windows it is needed to force static build as of error:
 # ERROR: Problem encountered: Shared library build is only supported
@@ -34,7 +34,7 @@ create_meson_setup_file(
 	"VPX codec"
 	"${VPX_SRC_DIR}"
 	"${VPX_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${VPX_MESON_OPTIONS}"
 )
 

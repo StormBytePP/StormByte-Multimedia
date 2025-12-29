@@ -14,7 +14,7 @@ create_cmake_configure_file(
 	"${OGG_COMPONENT}"
 	"${OGG_SRC_DIR}"
 	"${OGG_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${OGG_OPTIONS}"
 )
 include("${OGG_CMAKE_CONFIGURE_FILE}")

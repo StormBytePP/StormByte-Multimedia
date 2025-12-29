@@ -15,7 +15,7 @@ create_meson_setup_file(
 	"${X264_COMPONENT}"
 	"${X264_SRC_DIR}"
 	"${X264_BUILD_DIR}"
-	"${FFMPEG_PLUGINS_INSTALL_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
 	"${X264_OPTIONS}"
 )
 
