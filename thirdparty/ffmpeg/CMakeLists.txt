@@ -26,6 +26,9 @@ else()
 	set(FFMPEG_INSTALL_LIB_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
 	set(FFMPEG_INSTALL_BIN_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_BINDIR}")
 	set(FFMPEG_INSTALL_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_INCLUDEDIR}")
+
+	# Plugin install lib dir (plugins are built in subdir/plugins)
+	set(FFMPEG_PLUGINS_LIB_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/plugins/install/${CMAKE_INSTALL_LIBDIR}")
 	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}")
 	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_LIB_DIR}")
 	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
@@ -270,7 +273,16 @@ else()
 				)
 			endif()
 			add_dependencies(${_tgt} ffmpeg)
-			set_target_properties(${_tgt} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INSTALL_INCLUDE_DIR}")
+			# Expose include dir and ensure linker can find transitive shared deps
+			set_target_properties(${_tgt} PROPERTIES
+				INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INSTALL_INCLUDE_DIR}"
+			)
+			if(NOT WIN32)
+				set_target_properties(${_tgt} PROPERTIES
+					INTERFACE_LINK_DIRECTORIES "${FFMPEG_LIB_INSTALL_DIR};${FFMPEG_PLUGINS_LIB_INSTALL_DIR}"
+					INTERFACE_LINK_OPTIONS "-Wl,-rpath,${FFMPEG_LIB_INSTALL_DIR};-Wl,-rpath,${FFMPEG_PLUGINS_LIB_INSTALL_DIR};-Wl,-rpath-link,${FFMPEG_LIB_INSTALL_DIR};-Wl,-rpath-link,${FFMPEG_PLUGINS_LIB_INSTALL_DIR}"
+				)
+			endif()
 		endif()
 	endforeach()
 endif()
