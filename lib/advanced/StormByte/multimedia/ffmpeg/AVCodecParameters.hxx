@@ -18,7 +18,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVCodecParameters
 	 * @brief Wrapper class for FFmpeg's AVCodecParameters.
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVCodecParameters: public AVPointer<::AVCodecParameters*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVCodecParameters: public AVPointer<::AVCodecParameters> {
 		public:
 			/**
 			 * @brief Constructor with pointer.

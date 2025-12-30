@@ -123,4 +123,4 @@ void FFmpeg::AVFormatContext::Free() noexcept {
 }
 
 // Explicitly instantiate AVPointer for AVFormatContext*
-template class StormByte::Multimedia::FFmpeg::AVPointer<::AVFormatContext*>;
+template class StormByte::Multimedia::FFmpeg::AVPointer<::AVFormatContext>;

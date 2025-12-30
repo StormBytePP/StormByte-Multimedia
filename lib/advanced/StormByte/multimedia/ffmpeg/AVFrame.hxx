@@ -14,8 +14,9 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVFrame
 	 * @brief Wrapper class for FFmpeg's AVFrame.
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVFrame: public AVPointer<::AVFrame*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVFrame: public AVPointer<::AVFrame> {
 		friend class AVDecoder;
+		friend class AVEncoder;
 		public:
 			/**
 			 * @brief Default constructs an AVFrame and allocates the underlying ::AVFrame.

@@ -52,7 +52,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	return enc;
 }
 
-FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(const AVFrame& frame) noexcept {
+FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
 	int ret = avcodec_send_frame(m_ptr, frame.Get());
 
 	switch (ret) {
@@ -70,7 +70,7 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(const AVFrame& frame) noexc
 FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept {
 	// First, pull packets from encoder into a temporary packet
 	AVPacket tmp;
-	int ret = avcodec_receive_packet(m_ptr, tmp.m_ptr);
+	int ret = avcodec_receive_packet(m_ptr, tmp.Get());
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
 	if (ret == AVERROR_EOF)
@@ -119,4 +119,4 @@ void FFmpeg::AVEncoder::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext*>;
+template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext>;

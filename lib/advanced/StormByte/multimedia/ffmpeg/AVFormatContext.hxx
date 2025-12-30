@@ -23,7 +23,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVFormatContext
 	 * @brief Wrapper class for FFmpeg's AVFormatContext (Demuxer or Muxer).
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVFormatContext: public AVPointer<::AVFormatContext*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVFormatContext: public AVPointer<::AVFormatContext> {
 		public:
 			/** 
 			 * @brief Copy constructor (deleted).

@@ -18,7 +18,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVBSF
 	 * @brief Wrapper class for FFmpeg's AVBSFContext (Bitstream Filter).
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVBSF: public AVPointer<::AVBSFContext*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVBSF: public AVPointer<::AVBSFContext> {
 		public:
 			/**
 			 * @brief Copy constructor (deleted).
@@ -65,7 +65,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @param pkt The packet to send.
 			 * @return OperationResult The result of the operation.
 			 */
-			OperationResult 									SendPacket(const AVPacket& pkt) noexcept;
+			OperationResult 									SendPacket(AVPacket& pkt) noexcept;
 
 			/**
 			 * @brief Receives a filtered packet from the bitstream filter.

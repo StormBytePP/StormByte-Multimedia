@@ -43,7 +43,7 @@ FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(const std::string& name, const AVCod
 	return AVBSF(ctx);
 }
 
-FFmpeg::OperationResult FFmpeg::AVBSF::SendPacket(const AVPacket& pkt) noexcept {
+FFmpeg::OperationResult FFmpeg::AVBSF::SendPacket(AVPacket& pkt) noexcept {
 	int ret = av_bsf_send_packet(m_ptr, pkt.Get());
 
 	if (ret == 0)                 return OperationResult::Success;
@@ -79,4 +79,4 @@ void FFmpeg::AVBSF::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVBSFContext*>;
+template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVBSFContext>;

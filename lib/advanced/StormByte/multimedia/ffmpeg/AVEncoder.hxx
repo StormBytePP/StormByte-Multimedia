@@ -20,7 +20,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVEncoder
 	 * @brief The class representing an FFmpeg encoder.
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVEncoder: public AVPointer<::AVCodecContext*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVEncoder: public AVPointer<::AVCodecContext> {
 		public:
 			/**
 			 * @brief Copy constructor (deleted).
@@ -68,7 +68,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @param frame The frame to send.
 			 * @return OperationResult The result of the send operation.
 			 */
-			FFmpeg::OperationResult 										SendFrame(const AVFrame& frame) noexcept;
+			FFmpeg::OperationResult 										SendFrame(AVFrame& frame) noexcept;
 
 			/**
 			 * @brief Receives a packet from the encoder.

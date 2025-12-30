@@ -15,9 +15,9 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * This class provides a simple wrapper around FFmpeg pointers to ensure type safety
 	 * and provide basic functionality.
 	 *
-	 * @tparam Ptr The type of the FFmpeg pointer.
+	 * @tparam AVType The type of the FFmpeg struct.
 	 */
-	template<StormByte::Type::Pointer Ptr>
+	template<typename AVType>
 	class STORMBYTE_MULTIMEDIA_ADVANCED AVPointer {
 		public:
 			/**
@@ -69,21 +69,29 @@ namespace StormByte::Multimedia::FFmpeg {
 
 			/**
 			 * @brief Get the underlying FFmpeg pointer.
-			 * @return Ptr The underlying FFmpeg pointer as a const pointer.
+			 * @return The underlying FFmpeg pointer as a const pointer.
 			 */
-			constexpr const Ptr 											Get() const noexcept {
+			constexpr const std::decay_t<AVType>*								Get() const noexcept {
 				return m_ptr;
 			}
 
 		protected:
-			Ptr m_ptr = nullptr;											///< The underlying FFmpeg pointer.
+			std::decay_t<AVType>* m_ptr = nullptr;								///< The underlying FFmpeg pointer.
 
 			/**
 			 * @brief Constructor with pointer.
 			 * @param ptr The FFmpeg pointer to wrap.
 			 */
-			explicit constexpr AVPointer(Ptr ptr) noexcept
+			explicit constexpr AVPointer(std::decay_t<AVType>* ptr) noexcept
 			:m_ptr(ptr) {}
+
+			/**
+			 * @brief Get the underlying FFmpeg pointer.
+			 * @return The underlying FFmpeg pointer.
+			 */
+			constexpr std::decay_t<AVType>*										Get() noexcept {
+				return m_ptr;
+			}
 
 			/**
 			 * @brief Pure virtual function to free the underlying FFmpeg pointer.

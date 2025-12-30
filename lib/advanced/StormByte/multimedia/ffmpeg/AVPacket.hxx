@@ -13,9 +13,11 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVPacket
 	 * @brief Wrapper class for FFmpeg's AVPacket.
 	 */
-	class STORMBYTE_MULTIMEDIA_ADVANCED AVPacket: public AVPointer<::AVPacket*> {
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVPacket: public AVPointer<::AVPacket> {
 		friend class AVBSF;
+		friend class AVDecoder;
 		friend class AVEncoder;
+		friend class AVFormatContext;
 		public:
 			/**
 			 * @brief Constructor initializing an empty AVPacket.

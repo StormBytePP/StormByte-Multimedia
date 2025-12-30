@@ -52,7 +52,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 	return dec;
 }
 
-FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(const AVPacket& pkt) noexcept {
+FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(AVPacket& pkt) noexcept {
 	// Ensure packet belongs to the decoder's stream
 	if (pkt.StreamIndex() != m_stream_index)
 		return OperationResult::Error;
@@ -80,7 +80,7 @@ FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(const AVPacket& pkt) noexc
 }
 
 FFmpeg::OperationResult FFmpeg::AVDecoder::ReceiveFrame(AVFrame& frame) noexcept {
-	int ret = avcodec_receive_frame(m_ptr, frame.m_ptr);
+	int ret = avcodec_receive_frame(m_ptr, frame.Get());
 	switch(ret) {
 		case 0:
 			return OperationResult::Success;
@@ -115,4 +115,4 @@ void FFmpeg::AVDecoder::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext*>;
+template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext>;
