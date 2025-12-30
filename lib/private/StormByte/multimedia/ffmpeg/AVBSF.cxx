@@ -1,4 +1,5 @@
 #include <StormByte/multimedia/ffmpeg/AVBSF.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 
@@ -35,12 +36,8 @@ FFmpeg::AVBSF& FFmpeg::AVBSF::operator=(AVBSF&& other) noexcept {
 	return *this;
 }
 
-FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(
-	const char* name,
-	AVCodecParameters* params,
-	AVRational time_base
-) noexcept {
-	if (!name || !params)
+FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(const char* name, const AVCodecParameters& params, AVRational time_base) noexcept {
+	if (!name || !params.m_par)
 		return Unexpected<BSFError>("Invalid BSF name or parameters");
 
 	const AVBitStreamFilter* filter = av_bsf_get_by_name(name);
@@ -50,8 +47,7 @@ FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(
 	if (av_bsf_alloc(filter, &ctx) < 0)
 		return Unexpected<BSFError>("Failed to allocate BSF");
 
-	// Copy codec parameters
-	if (avcodec_parameters_copy(ctx->par_in, params) < 0) {
+	if (avcodec_parameters_copy(ctx->par_in, params.m_par) < 0) {
 		av_bsf_free(&ctx);
 		return Unexpected<BSFError>("Failed to copy parameters to BSF");
 	}

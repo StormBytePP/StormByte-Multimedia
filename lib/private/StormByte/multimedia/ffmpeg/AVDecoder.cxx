@@ -1,4 +1,5 @@
 #include <StormByte/multimedia/ffmpeg/AVBSF.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
@@ -37,8 +38,8 @@ FFmpeg::AVDecoder& FFmpeg::AVDecoder::operator=(AVDecoder&& other) noexcept {
 	return *this;
 }
 
-FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters* params, const AVFormatContext& fmt, int stream_index) noexcept {
-	if (!codec || !params)
+FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept {
+	if (!codec || !params.m_par)
 		return Unexpected<DecoderError>("Invalid codec or parameters");
 
 	// Allocate context
@@ -47,7 +48,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 		return Unexpected<DecoderError>("Out of memory allocating codec context");
 
 	// Copy parameters
-	if (avcodec_parameters_to_context(ctx, params) < 0) {
+	if (avcodec_parameters_to_context(ctx, params.m_par) < 0) {
 		avcodec_free_context(&ctx);
 		return Unexpected<DecoderError>("Failed to copy codec parameters");
 	}
@@ -63,10 +64,10 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 	dec.m_stream_index = stream_index;
 
 	// Checks for required BSF
-	if (const char* name = fmt.NeedsMp4ToAnnexB(params->codec_id)) {
+	if (const char* name = fmt.NeedsMp4ToAnnexB(params.m_par->codec_id)) {
 		auto expected_bsf = FFmpeg::AVBSF::Create(
 			name,
-			const_cast<AVCodecParameters*>(params),
+			params,
 			fmt.m_ctx->streams[stream_index]->time_base
 		);
 		if (expected_bsf)

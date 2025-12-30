@@ -26,7 +26,7 @@ class STORMBYTE_MULTIMEDIA_PRIVATE AVEncoder {
 		 * @brief Copy constructor (deleted).
 		 * @param other The other encoder to copy from.
 		 */
-		AVEncoder(const AVEncoder& other) = delete;
+		AVEncoder(const AVEncoder& other) 								= delete;
 
 		/**
 		 * @brief Move constructor.
@@ -44,7 +44,7 @@ class STORMBYTE_MULTIMEDIA_PRIVATE AVEncoder {
 		 * @param other The other encoder to copy from.
 		 * @return Reference to this encoder.
 		 */
-		AVEncoder& operator=(const AVEncoder&) = delete;
+		AVEncoder& operator=(const AVEncoder&) 							= delete;
 
 		/**
 		 * @brief Move assignment operator.
@@ -54,13 +54,6 @@ class STORMBYTE_MULTIMEDIA_PRIVATE AVEncoder {
 		AVEncoder& operator=(AVEncoder&& other) noexcept;
 
 		/**
-		 * @brief Opens an encoder for the given codec.
-		 * @param codec The codec to use for encoding.
-		 * @return ExpectedAVEncoder The expected AVEncoder or an EncoderError.
-		 */
-		static ExpectedAVEncoder Open(AVCodec* codec) noexcept;
-
-		/**
 		 * @brief Opens an encoder using codec parameters (calls avcodec_parameters_to_context()).
 		 * @param codec The codec to use for encoding.
 		 * @param params The codec parameters from the muxer stream.
@@ -68,36 +61,36 @@ class STORMBYTE_MULTIMEDIA_PRIVATE AVEncoder {
 		 * @param bsf_name Optional bitstream filter name to apply (e.g. "hevc_mp4toannexb").
 		 * @return ExpectedAVEncoder The expected AVEncoder or an EncoderError.
 		 */
-		static ExpectedAVEncoder Open(AVCodec* codec, AVCodecParameters* params, const FFmpeg::AVFormatContext& fmt, int stream_index) noexcept;
+		static ExpectedAVEncoder 										Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 		/**
 		 * @brief Sends a frame to the encoder.
 		 * @param frame The frame to send.
 		 * @return OperationResult The result of the send operation.
 		 */
-		FFmpeg::OperationResult SendFrame(const AVFrame& frame) noexcept;
+		FFmpeg::OperationResult 										SendFrame(const AVFrame& frame) noexcept;
 
 		/**
 		 * @brief Receives a packet from the encoder.
 		 * @param pkt The packet to receive into.
 		 * @return OperationResult The result of the receive operation.
 		 */
-		FFmpeg::OperationResult ReceivePacket(AVPacket& pkt) noexcept;
+		FFmpeg::OperationResult 										ReceivePacket(AVPacket& pkt) noexcept;
 
 		/**
 		 * @brief Returns the stream index this encoder was opened for.
 		 */
-		int StreamIndex() const noexcept;
+		int 															StreamIndex() const noexcept;
 
 		/**
 		 * @brief Flushes the encoder buffers.
 		 */
-		void Flush() noexcept;
+		void 															Flush() noexcept;
 
 		/**
 		 * @brief Sets the encoder to end-of-file state.
 		 */
-		void SetEof() noexcept;
+		void 															SetEof() noexcept;
 
 	private:
 		AVCodecContext* m_ctx = nullptr;

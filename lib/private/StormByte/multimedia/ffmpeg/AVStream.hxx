@@ -16,6 +16,7 @@ namespace StormByte::Multimedia {
 }
 
 namespace StormByte::Multimedia::FFmpeg {
+	class AVCodecParameters;
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVStream {
 		friend class AVFormatContext;
 		friend class StormByte::Multimedia::File;
@@ -42,7 +43,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @brief Gets the codec parameters of the stream.
 			 * @return const AVCodecParameters* The codec parameters.
 			 */
-			const AVCodecParameters* 							CodecParameters() const noexcept;
+			AVCodecParameters 									CodecParameters() const noexcept;
 
 			/**
 			 * @brief Gets the time base of the stream.

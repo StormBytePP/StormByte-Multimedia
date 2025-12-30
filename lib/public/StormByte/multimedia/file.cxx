@@ -3,11 +3,12 @@
 #include <StormByte/multimedia/context/video.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/stream.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 
 #include <cstring>
 
@@ -58,7 +59,8 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 
 	// Iterate over each stream in the file (FFmpeg::AVStream wrappers)
 	for (const auto& av_stream : ff_streams) {
-		auto expected_codec = Codec::Find(av_stream.CodecParameters()->codec_id); // may be used later
+		const FFmpeg::AVCodecParameters par = av_stream.CodecParameters();
+		auto expected_codec = Codec::Find(par.m_par->codec_id); // may be used later
 
 		// Construct a Stream object and set its context according to type
 		Stream stream{*expected_codec, StormByte::Multimedia::Type::Unknown};
@@ -70,11 +72,10 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 				stream = Stream{*expected_codec, StormByte::Multimedia::Type::Audio};
 
 				// Set basic context properties (no profile lookup available here)
-				const AVCodecParameters* par = av_stream.CodecParameters();
 				Context::Audio context(
-					par->sample_rate,
-					par->ch_layout.nb_channels,
-					par->bit_rate,
+					par.m_par->sample_rate,
+					par.m_par->ch_layout.nb_channels,
+					par.m_par->bit_rate,
 					std::nullopt
 				);
 
@@ -86,32 +87,31 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 				stream = Stream{*expected_codec, StormByte::Multimedia::Type::Video};
 
 				// Set basic context properties
-				const AVCodecParameters* par = av_stream.CodecParameters();
 				const char* pix_fmt_name = av_get_pix_fmt_name(
-					static_cast<AVPixelFormat>(par->format)
+					static_cast<AVPixelFormat>(par.m_par->format)
 				);
 				const char* range_name = av_color_range_name(
-					par->color_range
+					par.m_par->color_range
 				);
 				const char* space_name = av_color_space_name(
-					par->color_space
+					par.m_par->color_space
 				);
 				// Get primaries and transfer characteristics (used for Color)
 				std::string primaries = "";
-				if (par->color_primaries != AVCOL_PRI_UNSPECIFIED) {
-					const char* primaries_name = av_color_primaries_name(par->color_primaries);
+				if (par.m_par->color_primaries != AVCOL_PRI_UNSPECIFIED) {
+					const char* primaries_name = av_color_primaries_name(par.m_par->color_primaries);
 					if (primaries_name)
 						primaries = primaries_name;
 				}
 				std::string transfer = "";
-				if (par->color_trc != AVCOL_TRC_UNSPECIFIED) {
-					const char* transfer_name = av_color_transfer_name(par->color_trc);
+				if (par.m_par->color_trc != AVCOL_TRC_UNSPECIFIED) {
+					const char* transfer_name = av_color_transfer_name(par.m_par->color_trc);
 					if (transfer_name)
 						transfer = transfer_name;
 				}
 				Context::Property::Resolution resolution(
-					static_cast<unsigned short>(par->width),
-					static_cast<unsigned short>(par->height)
+					static_cast<unsigned short>(par.m_par->width),
+					static_cast<unsigned short>(par.m_par->height)
 				);
 				Context::Property::Color color(
 					pix_fmt_name ? pix_fmt_name : "unknown",
@@ -133,12 +133,11 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 					std::optional<Context::Property::Point> red_point, green_point, blue_point, white_point, luminance, light_level;
 
 					// Initialize decoder to read frames via RAII
-					const AVCodecParameters* par = av_stream.CodecParameters();
-					const AVCodec* codec = avcodec_find_decoder(par->codec_id);
+					const AVCodec* codec = avcodec_find_decoder(par.m_par->codec_id);
 					if (!codec)
 						break;
 
-					auto expected_dec = FFmpeg::AVDecoder::Open(const_cast<AVCodec*>(codec), const_cast<AVCodecParameters*>(par), fmt, av_stream.Index());
+					auto expected_dec = FFmpeg::AVDecoder::Open(const_cast<AVCodec*>(codec), par, fmt, av_stream.Index());
 					if (!expected_dec)
 						break;
 					FFmpeg::AVDecoder dec = std::move(expected_dec.value());

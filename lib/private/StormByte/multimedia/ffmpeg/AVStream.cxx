@@ -1,3 +1,4 @@
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 
 using namespace StormByte::Multimedia;
@@ -26,8 +27,8 @@ AVMediaType FFmpeg::AVStream::Type() const noexcept {
 	return m_stream ? m_stream->codecpar->codec_type : AVMEDIA_TYPE_UNKNOWN;
 }
 
-const AVCodecParameters* FFmpeg::AVStream::CodecParameters() const noexcept {
-	return m_stream ? m_stream->codecpar : nullptr;
+FFmpeg::AVCodecParameters FFmpeg::AVStream::CodecParameters() const noexcept {
+	return m_stream ? AVCodecParameters(m_stream->codecpar) : AVCodecParameters(nullptr);
 }
 
 AVRational FFmpeg::AVStream::TimeBase() const noexcept {

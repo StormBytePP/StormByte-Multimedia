@@ -31,7 +31,7 @@ namespace StormByte::Multimedia::FFmpeg {
 		 * @param bsf_name Optional bitstream filter name to apply (e.g. "hevc_mp4toannexb").
 		 * @return ExpectedAVDecoder The expected AVDecoder or a DecoderError.
 		 */
-		static ExpectedAVDecoder 							Open(AVCodec* codec, const AVCodecParameters* params, const AVFormatContext& fmt, int stream_index) noexcept;
+		static ExpectedAVDecoder 							Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 		/**
 		 * @brief Sends a packet to the decoder.
