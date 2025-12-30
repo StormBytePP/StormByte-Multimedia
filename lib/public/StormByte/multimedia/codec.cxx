@@ -1,4 +1,7 @@
 #include <StormByte/multimedia/codec.hxx>
+#include <StormByte/multimedia/decoder.hxx>
+#include <StormByte/multimedia/encoder.hxx>
+#include <StormByte/multimedia/registry/codec.hxx>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -69,26 +72,48 @@ StormByte::Multimedia::ExpectedCodec Codec::Find(int id) noexcept {
 	return Unexpected<CodecNotFound>(std::to_string(id));
 }
 
-bool Codec::HasDecoder() const noexcept {
+ExpectedCodec Codec::Find(Type type, const std::optional<Features>& required) noexcept {
+	for (const auto& entry : Registry::Codec) {
+		/* Filter by type */
+		if (entry.Type() != type)
+			continue;
+
+		/* Filter by features (if requested) */
+		if (required.has_value()) {
+			if (!entry.Features().Has(*required))
+				continue;
+		}
+
+		/* Found a matching codec */
+		auto expected_codec = Codec::Find(entry.ID());
+		return *expected_codec;
+	}
+
+	return required.has_value() ? Unexpected(CodecNotFound(type, *required)) : Unexpected(CodecNotFound(type));
+}
+
+Decoders Codec::Decoders() const noexcept {
 	void* opaque = nullptr;
 	const AVCodec* c = nullptr;
+	Multimedia::Decoders decoders;
 
 	while ((c = av_codec_iterate(&opaque))) {
 		if (c->id == m_codec_id && av_codec_is_decoder(c))
-			return true;
+			decoders.push_back(Decoder(c->id, c->name));
 	}
 
-	return false;
+	return decoders;
 }
 
-bool Codec::HasEncoder() const noexcept {
+Encoders Codec::Encoders() const noexcept {
 	void* opaque = nullptr;
 	const AVCodec* c = nullptr;
+	Multimedia::Encoders encoders;
 
 	while ((c = av_codec_iterate(&opaque))) {
 		if (c->id == m_codec_id && av_codec_is_encoder(c))
-			return true;
+			encoders.push_back(Encoder(c->id, c->name));
 	}
 
-	return false;
+	return encoders;
 }

@@ -1,7 +1,8 @@
 #pragma once
 
 #include <StormByte/exception.hxx>
-#include <StormByte/multimedia/visibility.h>
+#include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 /**
  * @namespace Multimedia
@@ -46,6 +47,21 @@ namespace StormByte::Multimedia {
 			 */
 			CodecNotFound(const std::string& codec):
 			Exception("Codec: ", "Codec '{}' not found.", codec) {}
+
+			/**
+			 * @brief Constructor with type
+			 * @param type The type of the codec.
+			 */
+			CodecNotFound(Type type):
+			Exception("Codec: ", "Codec of type '{}' not found.", ToString(type)) {}
+
+			/**
+			 * @brief Constructor with type and features.
+			 * @param type The type of the codec.
+			 * @param features The features of the codec.
+			 */
+			CodecNotFound(Type type, const Features& features):
+			Exception("Codec: ", "Codec of type '{}' with features '{}' not found.", ToString(type), std::string(features)) {}
 
 			using Exception::Exception;
 	};

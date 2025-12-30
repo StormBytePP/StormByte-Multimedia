@@ -1,7 +1,10 @@
 #pragma once
 
+#include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
-#include <StormByte/multimedia/visibility.h>
+
+#include <optional>
 
 /**
  * @namespace Multimedia
@@ -72,16 +75,24 @@ namespace StormByte::Multimedia {
 			static ExpectedCodec 									Find(int id) noexcept;
 
 			/**
+			 * @brief Finds a codec by type and features.
+			 * @param type The type of the codec.
+			 * @param features The features required (optional).
+			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
+			 */
+			static ExpectedCodec 									Find(Type type, const std::optional<Features>& features = std::nullopt) noexcept;
+
+			/**
 			 * @brief Checks if the codec has an encoder.
 			 * @return True if the codec has an encoder, false otherwise.
 			 */
-			bool 													HasDecoder() const noexcept;
+			Decoders 												Decoders() const noexcept;
 
 			/**
 			 * @brief Checks if the codec has a decoder.
 			 * @return True if the codec has a decoder, false otherwise.
 			 */
-			bool 													HasEncoder() const noexcept;
+			Encoders 												Encoders() const noexcept;
 
 		private:
 			int m_codec_id;											///< The Codec ID
