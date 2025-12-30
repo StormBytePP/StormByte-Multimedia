@@ -4,7 +4,6 @@
 #include <StormByte/multimedia/ffmpeg/typedefs.hxx>
 
 #include <deque>
-#include <optional>
 
 /**
  * @namespace FFmpeg
@@ -12,14 +11,49 @@
  */
 namespace StormByte::Multimedia::FFmpeg {
 	class AVPacket;
-	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSFPipeline {
+	/**
+	 * @class AVBSFPipeline
+	 * @brief Class representing a pipeline of bitstream filters (AVBSF).
+	 *
+	 * This class manages a sequence of AVBSF instances, allowing packets to be processed
+	 * through multiple bitstream filters in order.
+	 */
+	class STORMBYTE_MULTIMEDIA_ADVANCED AVBSFPipeline {
 		public:
+			/** 
+			 * @brief Default constructor.
+			 */
 			AVBSFPipeline() noexcept 									= default;
+
+			/** 
+			 * @brief Copy constructor (deleted).
+			 * @param other The other AVBSFPipeline to copy from.
+			 */
 			AVBSFPipeline(const AVBSFPipeline&) 						= delete;
+
+			/** 
+			 * @brief Move constructor.
+			 * @param other The other AVBSFPipeline to move from.
+			 */
 			AVBSFPipeline(AVBSFPipeline&& other) noexcept;
+
+			/** 
+			 * @brief Destructor.
+			 */
 			~AVBSFPipeline() noexcept 									= default;
 
+			/** 
+			 * @brief Copy assignment operator (deleted).
+			 * @param other The other AVBSFPipeline to copy from.
+			 * @return Reference to this AVBSFPipeline.
+			 */
 			AVBSFPipeline& operator=(const AVBSFPipeline&) 				= delete;
+
+			/** 
+			 * @brief Move assignment operator.
+			 * @param other The other AVBSFPipeline to move from.
+			 * @return Reference to this AVBSFPipeline.
+			 */
 			AVBSFPipeline& operator=(AVBSFPipeline&& other) noexcept;
 
 			/** 

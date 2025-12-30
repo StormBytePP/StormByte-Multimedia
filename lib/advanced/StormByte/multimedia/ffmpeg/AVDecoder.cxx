@@ -5,41 +5,22 @@
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 
+extern "C" {
+	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
+}
+
 using namespace StormByte::Multimedia;
 
 FFmpeg::AVDecoder::AVDecoder(::AVCodecContext* ctx) noexcept:
-m_ctx(ctx) {}
-
-FFmpeg::AVDecoder::AVDecoder(AVDecoder&& other) noexcept:
-	m_ctx(other.m_ctx), m_stream_index(other.m_stream_index), m_bsf_pipeline(std::move(other.m_bsf_pipeline)) {
-	other.m_ctx = nullptr;
-	other.m_stream_index = -1;
-}
+AVPointer(ctx) {}
 
 FFmpeg::AVDecoder::~AVDecoder() noexcept {
-	if (m_ctx) {
-		avcodec_free_context(&m_ctx);
-	}
-}
-
-FFmpeg::AVDecoder& FFmpeg::AVDecoder::operator=(AVDecoder&& other) noexcept {
-	if (this != &other) {
-		if (m_ctx) {
-			avcodec_free_context(&m_ctx);
-			m_ctx = nullptr;
-		}
-		m_ctx = other.m_ctx;
-		m_stream_index = other.m_stream_index;
-		m_bsf_pipeline = std::move(other.m_bsf_pipeline);
-
-		other.m_ctx = nullptr;
-		other.m_stream_index = -1;
-	}
-	return *this;
+	Free();
 }
 
 FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept {
-	if (!codec || !params.m_par)
+	if (!codec || !params.Get())
 		return Unexpected<DecoderError>("Invalid codec or parameters");
 
 	// Allocate context
@@ -48,7 +29,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 		return Unexpected<DecoderError>("Out of memory allocating codec context");
 
 	// Copy parameters
-	if (avcodec_parameters_to_context(ctx, params.m_par) < 0) {
+	if (avcodec_parameters_to_context(ctx, params.Get()) < 0) {
 		avcodec_free_context(&ctx);
 		return Unexpected<DecoderError>("Failed to copy codec parameters");
 	}
@@ -64,17 +45,9 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 	dec.m_stream_index = stream_index;
 
 	// Checks for required BSF
-	if (const char* name = fmt.NeedsMp4ToAnnexB(params.m_par->codec_id)) {
-		auto expected_bsf = FFmpeg::AVBSF::Create(
-			name,
-			params,
-			fmt.m_ctx->streams[stream_index]->time_base
-		);
-		if (expected_bsf)
-			dec.m_bsf_pipeline.Add(std::move(expected_bsf.value()));
-		else
-			return Unexpected<DecoderError>("Failed to create BSF: {}", expected_bsf.error()->what());
-	}
+	auto bsf = fmt.Mp4ToAnnexB(params.Get()->codec_id, stream_index, params);
+	if (bsf)
+		dec.m_bsf_pipeline.Add(std::move(*bsf));
 
 	return dec;
 }
@@ -92,7 +65,7 @@ FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(const AVPacket& pkt) noexc
 	}
 
 	// Now send filtered packet to decoder
-	ret = avcodec_send_packet(m_ctx, filtered_pkt.m_pkt);
+	ret = avcodec_send_packet(m_ptr, filtered_pkt.Get());
 
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
@@ -107,7 +80,7 @@ FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(const AVPacket& pkt) noexc
 }
 
 FFmpeg::OperationResult FFmpeg::AVDecoder::ReceiveFrame(AVFrame& frame) noexcept {
-	int ret = avcodec_receive_frame(m_ctx, frame.m_frame);
+	int ret = avcodec_receive_frame(m_ptr, frame.m_ptr);
 	switch(ret) {
 		case 0:
 			return OperationResult::Success;
@@ -125,11 +98,21 @@ int FFmpeg::AVDecoder::StreamIndex() const noexcept {
 }
 
 void FFmpeg::AVDecoder::Flush() noexcept {
-    avcodec_flush_buffers(m_ctx);
+    avcodec_flush_buffers(m_ptr);
     m_bsf_pipeline.Flush();
 }
 
 void FFmpeg::AVDecoder::SetEof() noexcept {
-	avcodec_send_packet(m_ctx, nullptr);
+	avcodec_send_packet(m_ptr, nullptr);
 	m_bsf_pipeline.SetEof();
 }
+
+void FFmpeg::AVDecoder::Free() noexcept {
+	if (m_ptr) {
+		avcodec_free_context(&m_ptr);
+		m_ptr = nullptr;
+	}
+}
+
+// Explicit template instantiation
+template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext*>;

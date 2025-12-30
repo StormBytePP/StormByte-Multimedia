@@ -60,7 +60,7 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 	// Iterate over each stream in the file (FFmpeg::AVStream wrappers)
 	for (const auto& av_stream : ff_streams) {
 		const FFmpeg::AVCodecParameters par = av_stream.CodecParameters();
-		auto expected_codec = Codec::Find(par.m_par->codec_id); // may be used later
+		auto expected_codec = Codec::Find(par.Get()->codec_id); // may be used later
 
 		// Construct a Stream object and set its context according to type
 		Stream stream{*expected_codec, StormByte::Multimedia::Type::Unknown};
@@ -73,9 +73,9 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 
 				// Set basic context properties (no profile lookup available here)
 				Context::Audio context(
-					par.m_par->sample_rate,
-					par.m_par->ch_layout.nb_channels,
-					par.m_par->bit_rate,
+					par.Get()->sample_rate,
+					par.Get()->ch_layout.nb_channels,
+					par.Get()->bit_rate,
 					std::nullopt
 				);
 
@@ -88,30 +88,30 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 
 				// Set basic context properties
 				const char* pix_fmt_name = av_get_pix_fmt_name(
-					static_cast<AVPixelFormat>(par.m_par->format)
+					static_cast<AVPixelFormat>(par.Get()->format)
 				);
 				const char* range_name = av_color_range_name(
-					par.m_par->color_range
+					par.Get()->color_range
 				);
 				const char* space_name = av_color_space_name(
-					par.m_par->color_space
+					par.Get()->color_space
 				);
 				// Get primaries and transfer characteristics (used for Color)
 				std::string primaries = "";
-				if (par.m_par->color_primaries != AVCOL_PRI_UNSPECIFIED) {
-					const char* primaries_name = av_color_primaries_name(par.m_par->color_primaries);
+				if (par.Get()->color_primaries != AVCOL_PRI_UNSPECIFIED) {
+					const char* primaries_name = av_color_primaries_name(par.Get()->color_primaries);
 					if (primaries_name)
 						primaries = primaries_name;
 				}
 				std::string transfer = "";
-				if (par.m_par->color_trc != AVCOL_TRC_UNSPECIFIED) {
-					const char* transfer_name = av_color_transfer_name(par.m_par->color_trc);
+				if (par.Get()->color_trc != AVCOL_TRC_UNSPECIFIED) {
+					const char* transfer_name = av_color_transfer_name(par.Get()->color_trc);
 					if (transfer_name)
 						transfer = transfer_name;
 				}
 				Context::Property::Resolution resolution(
-					static_cast<unsigned short>(par.m_par->width),
-					static_cast<unsigned short>(par.m_par->height)
+					static_cast<unsigned short>(par.Get()->width),
+					static_cast<unsigned short>(par.Get()->height)
 				);
 				Context::Property::Color color(
 					pix_fmt_name ? pix_fmt_name : "unknown",
@@ -133,7 +133,7 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 					std::optional<Context::Property::Point> red_point, green_point, blue_point, white_point, luminance, light_level;
 
 					// Initialize decoder to read frames via RAII
-					const AVCodec* codec = avcodec_find_decoder(par.m_par->codec_id);
+					const AVCodec* codec = avcodec_find_decoder(par.Get()->codec_id);
 					if (!codec)
 						break;
 

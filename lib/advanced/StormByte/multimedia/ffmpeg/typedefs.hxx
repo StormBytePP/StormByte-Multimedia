@@ -18,7 +18,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @enum OperationResult
 	 * @brief The result of an operation.
 	 */
-	enum STORMBYTE_MULTIMEDIA_PRIVATE OperationResult {
+	enum STORMBYTE_MULTIMEDIA_ADVANCED OperationResult {
 		Success,						///< Operation was successful
 		EndOfFile,						///< End of file reached
 		Error,							///< An error occurred
@@ -30,12 +30,12 @@ namespace StormByte::Multimedia::FFmpeg {
 	class AVEncoder;
 	class AVFormatContext;
 	class AVStream;
-	struct StreamLess;
+
 	using ExpectedAVFormatContext = StormByte::Expected<AVFormatContext, FFmpeg::DecoderError>;
 	using ExpectedAVDecoder	= StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;
 	using ExpectedAVEncoder = StormByte::Expected<AVEncoder, FFmpeg::EncoderError>;
 	using ExpectedAVBSF		= StormByte::Expected<AVBSF, FFmpeg::BSFError>;
-	using Streams = std::set<AVStream, StreamLess>;
+	using Streams = std::set<AVStream>;
 
 	inline std::string ErrorToString(int errnum) {
 		char buf[AV_ERROR_MAX_STRING_SIZE] = {0};

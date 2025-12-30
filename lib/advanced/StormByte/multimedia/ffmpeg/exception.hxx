@@ -7,7 +7,7 @@
  * @brief The namespace for all internal FFmpeg related classes and functions.
  */
 namespace StormByte::Multimedia::FFmpeg {
-	class STORMBYTE_MULTIMEDIA_PRIVATE Exception: public Multimedia::Exception {
+	class STORMBYTE_MULTIMEDIA_ADVANCED Exception: public Multimedia::Exception {
 		public:
 			/**
 			 * @brief Constructor forwards the message to the `std::format` function
@@ -33,7 +33,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class BSFError
 	 * @brief The exception for when a bitstream filter error occurs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE BSFError: public Exception {
+	class STORMBYTE_MULTIMEDIA_ADVANCED BSFError: public Exception {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -50,7 +50,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class DecoderError
 	 * @brief The exception for when a decoder error occurs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE DecoderError: public Exception {
+	class STORMBYTE_MULTIMEDIA_ADVANCED DecoderError: public Exception {
 		public:
 			/**
 			 * @brief Default constructor.
@@ -67,7 +67,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class EncoderError
 	 * @brief The exception for when an encoder error occurs.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE EncoderError: public Exception {
+	class STORMBYTE_MULTIMEDIA_ADVANCED EncoderError: public Exception {
 		public:
 			/**
 			 * @brief Default constructor.

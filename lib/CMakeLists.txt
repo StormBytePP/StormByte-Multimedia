@@ -1,3 +1,4 @@
+option(ENABLE_ADVANCED_INSTALL "Enable advanced multimedia features install" OFF)
 include(GNUInstallDirs)
 
 # Sources
@@ -30,6 +31,23 @@ endif()
 
 # Include directories
 target_include_directories(StormByte-Multimedia
-	SYSTEM BEFORE PUBLIC "${CMAKE_CURRENT_LIST_DIR}/public" "${CMAKE_CURRENT_LIST_DIR}/private"
+	SYSTEM BEFORE
+		PUBLIC "${CMAKE_CURRENT_LIST_DIR}/public"
+		PRIVATE "${CMAKE_CURRENT_LIST_DIR}/private"
 )
 
+if(ENABLE_ADVANCED_INSTALL)	
+	# Define macro
+	target_compile_definitions(StormByte-Multimedia PUBLIC ENABLE_ADVANCED)
+
+	# Include advanced headers
+	target_include_directories(StormByte-Multimedia
+		SYSTEM BEFORE
+			PUBLIC "${CMAKE_CURRENT_LIST_DIR}/advanced"
+	)
+else()
+	target_include_directories(StormByte-Multimedia
+		SYSTEM BEFORE
+			PRIVATE "${CMAKE_CURRENT_LIST_DIR}/advanced"
+	)
+endif()

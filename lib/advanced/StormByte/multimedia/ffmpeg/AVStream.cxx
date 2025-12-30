@@ -1,29 +1,24 @@
 #include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 
+extern "C" {
+	#include <libavformat/avformat.h>
+}
+
 using namespace StormByte::Multimedia;
 
 FFmpeg::AVStream::AVStream(::AVStream* stream) noexcept
 :m_stream(stream) {}
 
-FFmpeg::AVStream::AVStream(AVStream&& other) noexcept
-:m_stream(other.m_stream) {
-	other.m_stream = nullptr;
-}
-
-FFmpeg::AVStream& FFmpeg::AVStream::operator=(AVStream&& other) noexcept {
-	if (this != &other) {
-		m_stream = other.m_stream;
-		other.m_stream = nullptr;
-	}
-	return *this;
+bool FFmpeg::AVStream::operator<(const AVStream& other) const noexcept {
+	return Index() < other.Index();
 }
 
 int FFmpeg::AVStream::Index() const noexcept {
 	return m_stream ? m_stream->index : -1;
 }
 
-AVMediaType FFmpeg::AVStream::Type() const noexcept {
+int FFmpeg::AVStream::Type() const noexcept {
 	return m_stream ? m_stream->codecpar->codec_type : AVMEDIA_TYPE_UNKNOWN;
 }
 
