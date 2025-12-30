@@ -1,14 +1,10 @@
 #pragma once
 
+#include <StormByte/multimedia/ffmpeg/AVBSFPipeline.hxx>
 #include <StormByte/multimedia/ffmpeg/typedefs.hxx>
-#include <StormByte/multimedia/visibility.h>
 
 extern "C" {
-	#include <libavcodec/avcodec.h>
-}
-
-extern "C" {
-	#include <libavcodec/bsf.h>
+    #include <libavcodec/avcodec.h>
 }
 
 /**
@@ -16,6 +12,7 @@ extern "C" {
  * @brief The namespace for all internal FFmpeg related classes and functions.
  */
 namespace StormByte::Multimedia::FFmpeg {
+	class AVFormatContext;
 	class AVFrame;
 	class AVPacket;
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVDecoder {
@@ -27,13 +24,6 @@ namespace StormByte::Multimedia::FFmpeg {
 		AVDecoder& operator=(AVDecoder&& other) noexcept;
 
 		/**
-		 * @brief Opens a decoder for the given codec.
-		 * @param codec The codec to use for decoding.
-		 * @return ExpectedAVDecoder The expected AVDecoder or a DecoderError.
-		 */
-		static ExpectedAVDecoder 							Open(AVCodec* codec) noexcept;
-
-		/**
 		 * @brief Opens a decoder using codec parameters (calls avcodec_parameters_to_context()).
 		 * @param codec The codec to use for decoding.
 		 * @param params The codec parameters from the demuxer stream.
@@ -41,7 +31,7 @@ namespace StormByte::Multimedia::FFmpeg {
 		 * @param bsf_name Optional bitstream filter name to apply (e.g. "hevc_mp4toannexb").
 		 * @return ExpectedAVDecoder The expected AVDecoder or a DecoderError.
 		 */
-		static ExpectedAVDecoder 							Open(AVCodec* codec, AVCodecParameters* params, int stream_index, const char* bsf_name = nullptr) noexcept;
+		static ExpectedAVDecoder 							Open(AVCodec* codec, const AVCodecParameters* params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 		/**
 		 * @brief Sends a packet to the decoder.
@@ -75,7 +65,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	private:
 		AVCodecContext* m_ctx = nullptr;
 		int m_stream_index = -1;
-		AVBSFContext* m_bsf = nullptr;
+		AVBSFPipeline m_bsf_pipeline;
 
 		/**
 		 * @brief Private constructor.

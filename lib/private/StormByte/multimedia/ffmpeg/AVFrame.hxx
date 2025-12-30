@@ -16,9 +16,11 @@ namespace StormByte::Multimedia {
  */
 namespace StormByte::Multimedia::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVFrame {
-		friend class StormByte::Multimedia::File;
+		friend class AVBSF;
 		friend class AVDecoder;
+		friend class AVEncoder;
 		friend class AVFormatContext;
+		friend class StormByte::Multimedia::File;
 		public:
 			/**
 			 * @brief Default constructs an AVFrame and allocates the underlying ::AVFrame.

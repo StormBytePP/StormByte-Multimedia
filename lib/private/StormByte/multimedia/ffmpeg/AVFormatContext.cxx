@@ -95,3 +95,25 @@ FFmpeg::Streams FFmpeg::AVFormatContext::Streams() const noexcept {
 
 	return out;
 }
+
+const char* FFmpeg::AVFormatContext::NeedsMp4ToAnnexB(AVCodecID codec_id) const noexcept {
+	if (!m_ctx || !m_ctx->iformat || !m_ctx->iformat->name)
+		return nullptr;
+
+	const char* fmt_name = m_ctx->iformat->name;
+
+	bool is_mp4_like =
+		std::strstr(fmt_name, "mp4") ||
+		std::strstr(fmt_name, "isom") ||
+		std::strstr(fmt_name, "mov");
+
+	if (!is_mp4_like)
+		return nullptr;
+
+	switch (codec_id) {
+		case AV_CODEC_ID_HEVC: return "hevc_mp4toannexb";
+		case AV_CODEC_ID_H264: return "h264_mp4toannexb";
+		case AV_CODEC_ID_AV1:  return "av1_mp4toannexb";
+		default:               return nullptr;
+	}
+}

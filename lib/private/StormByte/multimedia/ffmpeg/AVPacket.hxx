@@ -12,7 +12,9 @@ extern "C" {
  */
 namespace StormByte::Multimedia::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPacket {
+		friend class AVBSF;
 		friend class AVDecoder;
+		friend class AVEncoder;
 		friend class AVFormatContext;
 		public:
 			/**
@@ -24,6 +26,12 @@ namespace StormByte::Multimedia::FFmpeg {
 			~AVPacket() noexcept;
 			AVPacket& operator=(const AVPacket& other)			= delete;
 			AVPacket& operator=(AVPacket&& other) noexcept;
+
+			/**
+			 * @brief Creates a reference to the underlying AVPacket.
+			 * @return AVPacket A new AVPacket that references the same underlying packet.
+			 */
+			FFmpeg::AVPacket 									Ref() const noexcept;
 
 			/**
 			 * @brief Unreferences the AVPacket.

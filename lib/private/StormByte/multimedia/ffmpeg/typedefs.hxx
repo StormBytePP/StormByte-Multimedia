@@ -14,18 +14,27 @@ extern "C" {
  * @brief The namespace for all internal FFmpeg related classes and functions.
  */
 namespace StormByte::Multimedia::FFmpeg {
+	/**
+	 * @enum OperationResult
+	 * @brief The result of an operation.
+	 */
+	enum STORMBYTE_MULTIMEDIA_PRIVATE OperationResult {
+		Success,						///< Operation was successful
+		EndOfFile,						///< End of file reached
+		Error,							///< An error occurred
+		TryAgain,						///< Try the operation again
+	};
+
+	class AVBSF;
 	class AVDecoder;
+	class AVEncoder;
 	class AVFormatContext;
 	class AVStream;
 	struct StreamLess;
-	enum OperationResult {
-		Success,
-		EndOfFile,
-		Error,
-		TryAgain,
-	};
 	using ExpectedAVFormatContext = StormByte::Expected<AVFormatContext, FFmpeg::DecoderError>;
 	using ExpectedAVDecoder	= StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;
+	using ExpectedAVEncoder = StormByte::Expected<AVEncoder, FFmpeg::EncoderError>;
+	using ExpectedAVBSF		= StormByte::Expected<AVBSF, FFmpeg::BSFError>;
 	using Streams = std::set<AVStream, StreamLess>;
 
 	inline std::string ErrorToString(int errnum) {

@@ -23,6 +23,8 @@ namespace StormByte::Multimedia::FFmpeg {
 		bool operator()(const AVStream& a, const AVStream& b) const noexcept;
 	};
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVFormatContext {
+		friend class AVDecoder;
+		friend class AVEncoder;
 		friend class StormByte::Multimedia::File;
 		public:
 			AVFormatContext(const AVFormatContext& other)						= delete;
@@ -65,5 +67,12 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @param ctx The raw AVFormatContext pointer.
 			 */
 			explicit AVFormatContext(::AVFormatContext* ctx) noexcept;
+
+			/**
+			 * @brief Determines if a bitstream filter is needed for the given codec ID.
+			 * @param codec_id The codec ID to check.
+			 * @return const char* The name of the bitstream filter if needed, nullptr otherwise.
+			 */
+			const char* NeedsMp4ToAnnexB(AVCodecID codec_id) const noexcept;
 	};
 }

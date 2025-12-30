@@ -138,16 +138,7 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 					if (!codec)
 						break;
 
-					// Decide whether to apply a container->Annex-B BSF for HEVC in MP4/ISOBMFF
-					const char* bsf_name = nullptr;
-					if (par->codec_id == AV_CODEC_ID_HEVC && fmt.m_ctx && fmt.m_ctx->iformat && fmt.m_ctx->iformat->name) {
-						const char* fmt_name = fmt.m_ctx->iformat->name;
-						if (std::strstr(fmt_name, "mp4") || std::strstr(fmt_name, "isom") || std::strstr(fmt_name, "mov")) {
-							bsf_name = "hevc_mp4toannexb";
-						}
-					}
-
-					auto expected_dec = FFmpeg::AVDecoder::Open(const_cast<AVCodec*>(codec), const_cast<AVCodecParameters*>(par), av_stream.Index(), bsf_name);
+					auto expected_dec = FFmpeg::AVDecoder::Open(const_cast<AVCodec*>(codec), const_cast<AVCodecParameters*>(par), fmt, av_stream.Index());
 					if (!expected_dec)
 						break;
 					FFmpeg::AVDecoder dec = std::move(expected_dec.value());

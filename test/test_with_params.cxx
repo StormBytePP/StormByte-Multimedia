@@ -11,6 +11,7 @@ using namespace StormByte::Multimedia;
 int main(int argc, char** argv) {
 	if (argc < 2) {
 		std::cout << "Usage: " << argv[0] << " <multimedia_file_path>" << std::endl;
+		// Return 0 so ctest still works without parameters as a noop test
 		return 0;
 	}
 	auto expected_file = File::Open(argv[1]);
@@ -22,7 +23,7 @@ int main(int argc, char** argv) {
 		const Stream& stream = *stream_it;
 		std::cout << "Stream Type: ";
 		switch (stream.Type()) {
-			case Type::Audio: {
+			case StormByte::Multimedia::Type::Audio: {
 				std::cout << "Audio" << std::endl;
 				const Codec& codec = stream.Codec();
 				std::cout << "  Codec: " << codec.Name() << " - " << codec.Description() << std::endl;
@@ -36,7 +37,7 @@ int main(int argc, char** argv) {
 				}
 				break;
 			}
-			case Type::Video: {
+			case StormByte::Multimedia::Type::Video: {
 				std::cout << "Video" << std::endl;
 				const Codec& codec = stream.Codec();
 				std::cout << "  Codec: " << codec.Name() << " - " << codec.Description() << std::endl;
@@ -71,7 +72,7 @@ int main(int argc, char** argv) {
 				}
 				break;
 			}
-			case Type::Subtitle:
+			case StormByte::Multimedia::Type::Subtitle:
 				std::cout << "Subtitle" << std::endl;
 				std::cout << "  Codec: " << stream.Codec().Name() << " - " << stream.Codec().Description() << std::endl;
 				break;

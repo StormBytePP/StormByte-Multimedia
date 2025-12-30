@@ -27,6 +27,13 @@ FFmpeg::AVPacket& FFmpeg::AVPacket::operator=(AVPacket&& other) noexcept {
 	return *this;
 }
 
+FFmpeg::AVPacket FFmpeg::AVPacket::Ref() const noexcept {
+	AVPacket copy; // crea un AVPacket con av_packet_alloc()
+	if (m_pkt && copy.m_pkt)
+		av_packet_ref(copy.m_pkt, m_pkt);
+	return copy;
+}
+
 void FFmpeg::AVPacket::Unref() noexcept {
 	if (m_pkt) av_packet_unref(m_pkt);
 }
