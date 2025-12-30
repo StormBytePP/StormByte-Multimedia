@@ -5,14 +5,11 @@ using namespace StormByte::Multimedia;
 Features::operator std::string() const noexcept {
 	std::string result;
 	bool first = true;
+	const std::string separator = " | ";
 
-	for (StormByte::Type::UnderlyingType<Feature> bit = 1; bit != 0; bit <<= 1) {
-		std::string result;
-		bool first = true;
-		const std::string separator = " | ";
-
-		for (StormByte::Type::UnderlyingType<Feature> bit = 1; bit != 0; bit <<= 1) {
-			Feature feature = static_cast<Feature>(bit);
+	for (uint8_t cat = 1; cat <= 5; ++cat) {
+		for (uint8_t idx = 1; idx <= 8; ++idx) {
+			Feature feature = static_cast<Feature>((cat << 4) | idx);
 			if (Has(feature)) {
 				if (!first)
 					result += separator + ToString(feature);

@@ -56,69 +56,6 @@ namespace StormByte::Multimedia {
 		Encodeable							= (0x05 << 4) | 0x2, // 0x52
 	};
 
-	// ------------------------------------------------------------
-	// Bitmask operators (constexpr, modern, safe)
-	// ------------------------------------------------------------
-	/**
-	 * @brief Bitwise OR for Feature flags.
-	 * @param a First feature.
-	 * @param b Second feature.
-	 * @return Feature Resulting feature after OR operation.
-	 */
-	constexpr Feature operator|(Feature a, Feature b) noexcept {
-		return static_cast<Feature>(
-			Type::ToUnderlying(a) | Type::ToUnderlying(b)
-		);
-	}
-
-	/** @brief Bitwise AND for Feature flags.
-	 * @param a First feature.
-	 * @param b Second feature.
-	 * @return Feature Resulting feature after AND operation.
-	 */
-	constexpr Feature operator&(Feature a, Feature b) noexcept {
-		return static_cast<Feature>(
-			Type::ToUnderlying(a) & Type::ToUnderlying(b)
-		);
-	}
-
-	/**
-	 * @brief Bitwise XOR for Feature flags.
-	 * @param a First feature.
-	 * @param b Second feature.
-	 * @return Feature Resulting feature after XOR operation.
-	 */
-	constexpr Feature operator^(Feature a, Feature b) noexcept {
-		return static_cast<Feature>(
-			Type::ToUnderlying(a) ^ Type::ToUnderlying(b)
-		);
-	}
-
-	/**
-	 * @brief Bitwise NOT for Feature flags.
-	 * @param a Feature to negate.
-	 * @return Feature Resulting feature after NOT operation.
-	 */
-	constexpr Feature operator~(Feature a) noexcept {
-		return static_cast<Feature>(
-			~Type::ToUnderlying(a)
-		);
-	}
-
-	/**
-	 * @brief Equality operator for Feature flags.
-	 * @param a First feature.
-	 * @param b Second feature.
-	 * @return true if both features are equal, false otherwise.
-	 */
-	constexpr bool operator==(Feature a, Feature b) noexcept {
-		return Type::ToUnderlying(a) == Type::ToUnderlying(b);
-	}
-
-	constexpr bool operator!=(Feature a, Feature b) noexcept {
-		return Type::ToUnderlying(a) != Type::ToUnderlying(b);
-	}
-
     /**
      * @brief Convert a Feature enum value to a human-readable string.
      * @param feature The feature to convert.
