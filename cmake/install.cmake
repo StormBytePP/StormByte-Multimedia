@@ -15,4 +15,12 @@ elseif (NOT STORMBYTE_AS_DEPENDENCY)
 		PATTERN "*.h"
 		PATTERN "*.hxx"
 	)
+	if(ENABLE_ADVANCED_INSTALL)
+		install(DIRECTORY "${CMAKE_SOURCE_DIR}/lib/advanced/StormByte/"
+			DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/StormByte"
+			FILES_MATCHING
+			PATTERN "*.h"
+			PATTERN "*.hxx"
+		)
+	endif()
 endif()
