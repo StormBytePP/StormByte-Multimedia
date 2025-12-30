@@ -114,6 +114,26 @@ namespace StormByte::Multimedia::Registry {
 		),
 
 		// ============================================================
+		// VP8 (libvpx)
+		// ============================================================
+		DecoderEntry("libvpx",
+			Feature::LowDelay |
+			Feature::Slices
+		),
+
+		// ============================================================
+		// VP9 (libvpx-vp9)
+		// ============================================================
+		DecoderEntry("libvpx-vp9",
+			Feature::LowDelay |
+			Feature::Slices |
+			Feature::TenBit |
+			Feature::TwelveBit |
+			Feature::HDR10 |
+			Feature::WideGamut
+		),
+
+		// ============================================================
 		// AUDIO DECODERS
 		// ============================================================
 
