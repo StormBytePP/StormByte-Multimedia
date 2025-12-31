@@ -77,9 +77,15 @@ StormByte Library is composed by several modules:
 ### Multimedia
 
 #### Overview
-(To be filled)
 
-This expanded section covers all requested features for the configuration file management in your library, with the correct handling and retrieval of comments. If there's anything specific you'd like to adjust or add, let me know!
+StormByte‑Multimedia provides a clean, modular, and cross‑platform backend for working with audio and video in C++.  
+Instead of exposing the complexity of FFmpeg, the module offers a high‑level, type‑safe API built around small, focused components that handle decoding, encoding, format introspection, frame transformation, and container management.
+
+The design follows StormByte’s core philosophy: each operation is isolated in its own module, every resource is managed through RAII, and all low‑level details remain hidden behind stable, expressive abstractions.  
+This allows developers to work with multimedia pipelines—transcoding, analysis, normalization, or format conversion—without dealing with raw pointers, global state, or FFmpeg’s internal structures.
+
+The module automatically adapts to the capabilities available at build time through a plugin‑driven system, enabling only the codecs and features that are actually present if bundled ffmpeg backend is chosen.  
+Combined with components such as the VideoScaler, AudioResampler, and FrameNormalizer, StormByte‑Multimedia ensures that input and output formats are always reconciled safely and predictably, making multimedia processing both powerful and approachable.
 
 ## Contributing
 
