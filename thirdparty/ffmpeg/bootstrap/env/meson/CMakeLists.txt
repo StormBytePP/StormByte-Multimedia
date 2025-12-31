@@ -1,8 +1,0 @@
-find_program(MESON_EXECUTABLE meson)
-if(NOT MESON_EXECUTABLE)
-	message(FATAL_ERROR "Meson executable not found: please install Meson or ensure it's on PATH.")
-endif()
-get_filename_component(MESON_EXECUTABLE "${MESON_EXECUTABLE}" NAME)
-set(_env_meson_list ${ENV_RUNNER} ${MESON_EXECUTABLE})
-prepare_command(ENV_MESON_COMMAND "${_env_meson_list}")
-set(ENV_MESON_COMMAND ${ENV_MESON_COMMAND} PARENT_SCOPE)

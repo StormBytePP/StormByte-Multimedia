@@ -16,12 +16,6 @@ else()
 	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
 	include(GNUInstallDirs)
 
-	# Initialize bootstrap
-	add_subdirectory(bootstrap)
-
-	# Include helpers so they are available
-	include(bootstrap/helpers.cmake)
-
 	set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/install")
 	set(FFMPEG_INSTALL_LIB_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
 	set(FFMPEG_INSTALL_BIN_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_BINDIR}")
@@ -47,7 +41,7 @@ else()
 	set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
 
 	# Update runner with new env vars
-	update_bootstrap_env_runner()
+	update_env_runner()
 
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS

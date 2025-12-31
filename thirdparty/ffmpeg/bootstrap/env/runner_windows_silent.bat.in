@@ -1,7 +1,0 @@
-@echo off
-rem Silent wrapper: invoke the normal runner but suppress its output
-rem Substitutions expected: @ENV_RUNNER_CMD@
-
-:: Build command and redirect stdout/stderr to NUL
-set "CMD=@ENV_RUNNER_CMD@ %*"
-cmd /C "%CMD% >nul 2>&1"

@@ -26,12 +26,13 @@
 [submodule "X265 codec"]
 	path = thirdparty/ffmpeg/plugins/x265/src
 	url = https://github.com/videolan/x265.git
-[submodule "pkgconf"]
-	path = thirdparty/ffmpeg/bootstrap/pkgconf/src
-	url = https://github.com/pkgconf/pkgconf.git
 [submodule "VVenc (H266) codec"]
 	path = thirdparty/ffmpeg/plugins/vvenc/src
 	url = https://github.com/fraunhoferhhi/vvenc.git
 [submodule "thirdparty/ffmpeg/plugins/lame/src"]
 	path = thirdparty/ffmpeg/plugins/lame/src
 	url = https://github.com/lameproject/lame.git
+
+[submodule "thirdparty/buildengine"]
+	path = thirdparty/buildengine
+	url = https://github.com/StormBytePP/StormByte-BuildEngine.git

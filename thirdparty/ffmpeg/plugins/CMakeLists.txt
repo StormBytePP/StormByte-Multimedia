@@ -1,6 +1,5 @@
 # Add helpers so they are available
 include(helpers.cmake)
-include(../bootstrap/helpers.cmake)
 
 # Initialize environment variables for plugins
 if(MSVC)
@@ -17,7 +16,7 @@ endif()
 set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
 
 # Update runner with new env vars
-update_bootstrap_env_runner()
+update_env_runner()
 
 # Create a target that will aggregate all plugins
 add_custom_target(ffmpeg-plugins)
