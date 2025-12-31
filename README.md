@@ -11,7 +11,21 @@ StormByte is a comprehensive, cross-platform C++ library aimed at easing system 
 
 ## Features
 
-- **Multimedia**: Includes a set of classes to work with multimedia files
+- **Multimedia**:
+  - Unified multimedia backend with modular codec and container support.
+  - FFmpeg‑powered plugin system that enables only the codecs actually available.
+  - Automatic codec registration and propagation of build options.
+  - Metadata and format introspection (resolución, duración, framerate, streams…).
+  - Video decoding into safe, typed image buffers.
+  - Video encoding using supported codecs (H.264, H.265, VP8/VP9, AAC, Opus, MP3, Vorbis…).
+  - Pixel format conversion (RGB, YUV, planar/packed).
+  - Colorspace handling (BT.601, BT.709, BT.2020).
+  - High‑quality image scaling via libswscale (upscale/downscale).
+  - Audio decoding and encoding for common formats and codecs.
+  - Container support for MP4, MKV, OGG, WebM, WAV and others.
+  - RAII wrappers for all FFmpeg resources (AVFrame, AVPacket, AVCodecContext…).
+  - Error‑safe API with typed results and no raw FFmpeg exposure.
+  - Plugin‑driven build system: each codec/feature compiles only if available.
 
 ## Table of Contents
 
