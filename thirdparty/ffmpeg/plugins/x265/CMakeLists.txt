@@ -55,7 +55,7 @@ create_cmake_configure_file(
 )
 include("${X265_CMAKE_CONFIGURE_FILE_12}")
 
-add_custom_target(_x265_12bit_build
+add_custom_target(x265_12bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
 	COMMENT "Building X265 codec (12-bit)"
@@ -94,7 +94,7 @@ create_cmake_configure_file(
 )
 include("${X265_CMAKE_CONFIGURE_FILE_10}")
 
-add_custom_target(_x265_10bit_build
+add_custom_target(x265_10bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
 	COMMENT "Building X265 codec (10-bit)"
@@ -133,20 +133,20 @@ create_cmake_configure_file(
 	"${X265_OPTIONS_8}"
 )
 
-add_custom_target(_x265_8bit_configure
+add_custom_target(x265_8bit_configure
 	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_8}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 	USES_TERMINAL
 	COMMENT "Configuring x265 codec (8-bit)"
-	DEPENDS _x265_10bit_build _x265_12bit_build
+	DEPENDS x265_10bit_build x265_12bit_build
 )
 
-add_custom_target(_x265_8bit_build
+add_custom_target(x265_8bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_8}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 	COMMENT "Configure and build x265 (8-bit)"
 	VERBATIM
-	DEPENDS _x265_8bit_configure
+	DEPENDS x265_8bit_configure
 	USES_TERMINAL
 )
 # Hack: In Windows, under "not release" builds, the x265 8-bit target
@@ -156,18 +156,16 @@ add_custom_target(_x265_8bit_build
 # to the expected filename.
 if(WIN32)
 	if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-		add_custom_command(TARGET _x265_8bit_build POST_BUILD
+		add_custom_command(TARGET x265_8bit_build POST_BUILD
 			COMMAND ${ENV_CMAKE_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.pdb" "${X265_BUILD_DIR_8}/x265.pdb"
 			WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 			COMMENT "Correcting x265 codec (8-bit) debug library filenames"
 			VERBATIM
 		)
 	endif()
-	add_custom_command(TARGET _x265_8bit_build POST_BUILD
-		COMMAND ${ENV_CMAKE_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.dll" "${X265_BUILD_DIR_8}/x265.dll"
-		COMMAND ${ENV_CMAKE_COMMAND} -E remove "${X265_BUILD_DIR_8}/libx265.dll"
-		COMMAND ${ENV_CMAKE_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.lib" "${X265_BUILD_DIR_8}/x265.lib"
-		COMMAND ${ENV_CMAKE_COMMAND} -E remove "${X265_BUILD_DIR_8}/libx265.lib"
+	add_custom_command(TARGET x265_8bit_build POST_BUILD
+		COMMAND ${ENV_CMAKE_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.dll" "${X265_BUILD_DIR_8}/x265.dll"
+		COMMAND ${ENV_CMAKE_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.lib" "${X265_BUILD_DIR_8}/x265.lib"
 		WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 		COMMENT "Correcting x265 codec (8-bit) library filenames"
 		VERBATIM
@@ -175,23 +173,25 @@ if(WIN32)
 endif()
 
 # Install 8-bit build (with 10 and 12 bit merged in)
-add_custom_target(_x265_8bit_install
+add_custom_target(x265_8bit_install
 	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_8}" --target install
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 	COMMENT "Installing x265 codec all bit internally"
 	VERBATIM
-	DEPENDS _x265_8bit_build
+	DEPENDS x265_8bit_build
 )
 
 # Restore x265 CMakeLists.txt after the final x265 (8-bit) target has
 # been built. `x265_8bit` depends (via `x265_static_copy`) on the 10/12-bit
 # builds, so a POST_BUILD hook on `x265_8bit` will run once all phases are
 # complete.
-add_custom_command(TARGET _x265_8bit_install POST_BUILD
+add_custom_command(TARGET x265_8bit_install POST_BUILD
 	COMMAND ${ENV_CMAKE_COMMAND} -P "${X265_RESET_REPO}"
 	WORKING_DIRECTORY "${X265_SRC_DIR}"
 	COMMENT "Restoring x265 sources"
 	VERBATIM
 )
 
-add_custom_target(x265 DEPENDS _x265_8bit_install)
+add_custom_target(x265_install DEPENDS x265_8bit_install)
+library_import_hint(X265_LIBRARY "x265" "${FFMPEG_INSTALL_LIB_DIR}")
+set(x265_outputs "${X265_LIBRARY}" PARENT_SCOPE)
