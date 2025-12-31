@@ -41,16 +41,35 @@ macro(register_plugin _plugin_name _plugin_options)
 	endif()
 
 	# Add a library with the plugin outputs
-	add_library(${_plugin_name} SHARED IMPORTED GLOBAL)
-	if(MSVC)
-		set_property(TARGET ${_plugin_name} PROPERTY IMPORTED_IMPLIB "${${_plugin_name}_outputs}")
+	if(FFMPEG_BUNDLED STREQUAL "static")
+		add_library(${_plugin_name} STATIC IMPORTED GLOBAL)
 	else()
-		set_property(TARGET ${_plugin_name} PROPERTY IMPORTED_LOCATION "${${_plugin_name}_outputs}")
+		add_library(${_plugin_name} SHARED IMPORTED GLOBAL)
 	endif()
+	set_target_properties(${_plugin_name} PROPERTIES
+		IMPORTED_LOCATION "${${_plugin_name}_outputs}"
+		IMPORTED_LOCATION_DEBUG "${${_plugin_name}_outputs}"
+		IMPORTED_LOCATION_RELEASE "${${_plugin_name}_outputs}"
+		IMPORTED_LOCATION_MINSIZEREL "${${_plugin_name}_outputs}"
+		IMPORTED_LOCATION_RELWITHDEBINFO "${${_plugin_name}_outputs}"
+	)
 
 	# Add dependency on the plugin target
 	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
 	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_install)
+
+	# Declare the plugin output files as produced by the plugin's install
+	# target so build generators (ninja) know which rule generates the
+	# concrete files and can schedule the install before linking. This
+	# mirrors the approach used for core ffmpeg outputs.
+	add_custom_command(OUTPUT ${${_plugin_name}_outputs} DEPENDS ${_plugin_name}_install)
+
+	# Create a custom target that depends on the output files. This makes
+	# CMake/Ninja generate an explicit rule for producing the files (via
+	# the command above) and lets other targets depend on this target to
+	# ensure correct build ordering.
+	add_custom_target(${_plugin_name}_outputs_target DEPENDS ${${_plugin_name}_outputs})
+	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_outputs_target)
 
 	# Register plugin options: append to a temporary list and export to parent
 	separate_arguments(_opts_list ${_plugin_options} UNIX_COMMAND)

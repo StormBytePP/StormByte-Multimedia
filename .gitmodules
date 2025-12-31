@@ -32,6 +32,6 @@
 [submodule "MP3 LAME codec"]
 	path = thirdparty/ffmpeg/plugins/mp3lame/src
 	url = https://github.com/lameproject/lame.git
-[submodule "StormByte Build Engine"]
-	path = thirdparty/buildengine
-	url = https://github.com/StormBytePP/StormByte-BuildEngine.git
+[submodule "StormByte Build Master"]
+	path = thirdparty/buildmaster
+	url = https://github.com/StormBytePP/StormByte-BuildMaster.git

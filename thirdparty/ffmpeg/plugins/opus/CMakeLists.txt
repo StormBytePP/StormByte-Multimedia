@@ -1,7 +1,11 @@
 message(STATUS "\t\tSetting up Opus codec")
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
-library_import_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+if(FFMPEG_BUNDLED STREQUAL "static")
+	library_import_static_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+else()
+	library_import_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+endif()
 
 # If generated DNN data files are missing, try to download the official
 # opus_data tarball used by upstream autogen.sh. This creates files such
@@ -66,7 +70,7 @@ string(STRIP "${CMAKE_C_FLAGS}" CMAKE_C_FLAGS)
 set(OPUS_COMPONENT "Opus codec")
 set(OPUS_OPTIONS
 	"-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
-	"-DOPUS_BUILD_SHARED_LIBRARY=ON"
+	"-DOPUS_BUILD_SHARED_LIBRARY=${CMAKE_SHARED_MODE}"
 	"-DOPUS_BUILD_TESTING=OFF"
 	"-DOPUS_CUSTOM_MODES=ON"
 	"-DOPUS_BUILD_PROGRAMS=OFF"
@@ -76,6 +80,8 @@ set(OPUS_OPTIONS
 	"-DOPUS_INSTALL_CMAKE_CONFIG_MODULE=OFF"
 	"-DOPUS_DRED=ON"
 	"-DOPUS_OSCE=ON"
+	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
 create_cmake_configure_file(
 	OPUS_CMAKE_CONFIGURE_FILE
@@ -84,7 +90,7 @@ create_cmake_configure_file(
 	"${OPUS_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${OPUS_OPTIONS}"
-	2
+	3
 )
 include("${OPUS_CMAKE_CONFIGURE_FILE}")
 
