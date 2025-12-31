@@ -1,0 +1,34 @@
+set(MP3LAME_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake")
+ensure_build_dir(MP3LAME_BUILD_DIR)
+library_import_hint(MP3LAME_LIBRARY "mp3lame" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+set(MP3LAME_COMPONENT "MP3 encoder LAME")
+set(MP3LAME_OPTIONS
+	"-DBUILD_SHARED_LIBS=ON"
+)
+
+create_cmake_configure_file(
+	MP3LAME_CMAKE_CONFIGURE_FILE
+	"${MP3LAME_COMPONENT}"
+	"${MP3LAME_SRC_DIR}"
+	"${MP3LAME_BUILD_DIR}"
+	"${FFMPEG_INSTALL_DIR}"
+	"${MP3LAME_OPTIONS}"
+	2
+)
+include("${MP3LAME_CMAKE_CONFIGURE_FILE}")
+
+add_custom_target(_mp3lame_build
+	COMMAND ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}"
+	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
+	COMMENT "Building MP3 encoder LAME"
+	USES_TERMINAL
+)
+
+add_custom_target(_mp3lame_install
+	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}" --target install
+	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
+	COMMENT "Installing internally MP3 encoder LAME"
+	DEPENDS _mp3lame_build
+)
+
+add_custom_target(mp3lame DEPENDS _mp3lame_install)

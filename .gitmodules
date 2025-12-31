@@ -29,10 +29,9 @@
 [submodule "VVenc (H266) codec"]
 	path = thirdparty/ffmpeg/plugins/vvenc/src
 	url = https://github.com/fraunhoferhhi/vvenc.git
-[submodule "thirdparty/ffmpeg/plugins/lame/src"]
-	path = thirdparty/ffmpeg/plugins/lame/src
+[submodule "MP3 LAME codec"]
+	path = thirdparty/ffmpeg/plugins/mp3lame/src
 	url = https://github.com/lameproject/lame.git
-
-[submodule "thirdparty/buildengine"]
+[submodule "StormByte Build Engine"]
 	path = thirdparty/buildengine
 	url = https://github.com/StormBytePP/StormByte-BuildEngine.git
