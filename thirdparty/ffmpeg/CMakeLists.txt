@@ -108,6 +108,7 @@ else()
 		"-Dlibtensorflow=disabled"
 		"-Dnanosleep=disabled"
 		"-Dlibvpl=disabled"
+		"-Davdevice=disabled"
 	)
 
 	# Enable GPL components if requested
