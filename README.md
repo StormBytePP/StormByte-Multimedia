@@ -1,4 +1,11 @@
 # StormByte
+![Linux](https://img.shields.io/badge/Linux-Supported-1793D1?logo=linux&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
+![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B&logoColor=white)
+![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
+![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![Status](https://img.shields.io/badge/Status-Active-success)
+[![Compile & Test](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml/badge.svg)](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml)
 
 StormByte is a comprehensive, cross-platform C++ library aimed at easing system programming, configuration management, logging, and database handling tasks. This library provides a unified API that abstracts away the complexities and inconsistencies of different platforms (Windows, Linux).
 
