@@ -3,9 +3,9 @@
 ![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B&logoColor=white)
 ![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
-![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success)
-[![Compile & Test](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml/badge.svg)](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml)
+[![Compile & Test](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml)
 
 StormByte is a comprehensive, cross-platform C++ library aimed at easing system programming, configuration management, logging, and database handling tasks. This library provides a unified API that abstracts away the complexities and inconsistencies of different platforms (Windows, Linux).
 
@@ -73,4 +73,4 @@ Contributions are welcome! Please fork the repository and submit pull requests f
 
 ## License
 
-This project is licensed under GPL v3 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under LGPL v3 License - see the [LICENSE](LICENSE) file for details.
