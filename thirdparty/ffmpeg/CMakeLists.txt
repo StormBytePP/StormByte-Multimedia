@@ -186,11 +186,11 @@ else()
 		COMMAND ${ENV_CMAKE_COMMAND} -E touch ${FFMPEG_CONFIGURED}
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Configuring FFmpeg"
-		DEPENDS ffmpeg-plugins
+		DEPENDS ffmpeg-plugins-install
 		USES_TERMINAL
 	)
 
-	add_custom_target(_ffmpeg_build
+	add_custom_target(ffmpeg_build
 		COMMAND_EXPAND_LISTS
 		COMMAND ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}"
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
@@ -199,12 +199,12 @@ else()
 		DEPENDS ${FFMPEG_CONFIGURED}
 	)
 
-	add_custom_target(_ffmpeg_install
+	add_custom_target(ffmpeg_install
 		COMMAND_EXPAND_LISTS
 		COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}" install
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Installing FFmpeg internally"
-		DEPENDS _ffmpeg_build
+		DEPENDS ffmpeg_build
 	)
 
 	# add_custom_command(TARGET _ffmpeg_install
@@ -217,42 +217,34 @@ else()
 	# Set a list or artifacts that will be installed
 	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
 	set(_ffmpeg_outputs "")
+
+	# First pass: compute the expected output library paths
 	foreach(_lib IN LISTS _ffmpeg_libs)
-		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
 		list(APPEND _ffmpeg_outputs "${_libpath}")
 	endforeach()
 
-	# This is a dummy needed so cmake knows the rules for the ffmpeg libraries
-	add_custom_command(
-		OUTPUT ${_ffmpeg_outputs}
-		DEPENDS _ffmpeg_install
-	)
-
-	# Added so FFmpeg libraries know which files to wait for
+	# Rules so cmake knows how to build the artifacts: declare the custom
+	# command that produces the library files, then create the `ffmpeg`
+	# helper target depending on those files so other targets can depend on it.
+	add_custom_command(OUTPUT ${_ffmpeg_outputs} DEPENDS ffmpeg_install)
 	add_custom_target(ffmpeg DEPENDS ${_ffmpeg_outputs})
 
-	# Expose imported targets for consumers
-	set(FFMPEG_LIB_INSTALL_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
+	# Second pass: create the imported targets that reference the generated files
 	foreach(_lib IN LISTS _ffmpeg_libs)
-		library_import_hint(_libpath "${_lib}" "${FFMPEG_LIB_INSTALL_DIR}")
+		library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
 		set(_tgt "FFmpeg::${_lib}")
 		if(NOT TARGET ${_tgt})
 			add_library(${_tgt} SHARED IMPORTED GLOBAL)
 			if(WIN32)
-				set_target_properties(${_tgt} PROPERTIES
-					IMPORTED_IMPLIB "${_libpath}"
-				)
+				set_target_properties(${_tgt} PROPERTIES IMPORTED_IMPLIB "${_libpath}")
 			else()
-				set_target_properties(${_tgt} PROPERTIES
-					IMPORTED_LOCATION "${_libpath}"
-				)
+				set_target_properties(${_tgt} PROPERTIES IMPORTED_LOCATION "${_libpath}")
 			endif()
 			add_dependencies(${_tgt} ffmpeg)
-			# Expose include dir and ensure linker can find transitive shared deps
-			set_target_properties(${_tgt} PROPERTIES
-				INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INSTALL_INCLUDE_DIR}"
-			)
+			# Ensure consumers also link the plugin target transitively
+			target_link_libraries(${_tgt} INTERFACE ffmpeg-plugins)
+			set_target_properties(${_tgt} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INSTALL_INCLUDE_DIR}")
 		endif()
 	endforeach()
 endif()

@@ -18,17 +18,17 @@ create_cmake_configure_file(
 )
 include("${VVENC_CMAKE_CONFIGURE_FILE}")
 
-add_custom_target(_vvenc_build
+add_custom_target(vvenc_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${VVENC_BUILD_DIR}"
 	WORKING_DIRECTORY "${VVENC_BUILD_DIR}"
 	COMMENT "Building VVenc codec"
 	USES_TERMINAL
 )
 
-add_custom_target(_vvenc_install
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${VVENC_BUILD_DIR}" --target install
+add_custom_target(vvenc_install
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${VVENC_BUILD_DIR}" --target install
 	WORKING_DIRECTORY "${VVENC_BUILD_DIR}"
 	COMMENT "Installing VVenc codec internally"
-	DEPENDS _vvenc_build
+	DEPENDS vvenc_build
 )
-add_custom_target(vvenc DEPENDS _vvenc_install)
+set(vvenc_outputs "${VVENC_LIBRARY}" PARENT_SCOPE)

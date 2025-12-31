@@ -20,18 +20,18 @@ create_cmake_configure_file(
 )
 include("${OGG_CMAKE_CONFIGURE_FILE}")
 
-add_custom_target(_ogg_build
+add_custom_target(ogg_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${OGG_BUILD_DIR}"
 	WORKING_DIRECTORY "${OGG_BUILD_DIR}"
 	COMMENT "Building OGG container"
 	USES_TERMINAL
 )
 
-add_custom_target(_ogg_install
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${OGG_BUILD_DIR}" --target install
+add_custom_target(ogg_install
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${OGG_BUILD_DIR}" --target install
 	WORKING_DIRECTORY "${OGG_BUILD_DIR}"
 	COMMENT "Installing internally OGG container"
-	DEPENDS _ogg_build
+	DEPENDS ogg_build
 )
 
-add_custom_target(ogg DEPENDS _ogg_install)
+set(ogg_outputs "${OGG_LIBRARY}" PARENT_SCOPE)

@@ -19,18 +19,16 @@ create_cmake_configure_file(
 )
 include("${FDK_AAC_CMAKE_CONFIGURE_FILE}")
 
-add_custom_target(_fdk-aac_build
+add_custom_target(fdk-aac_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}"
 	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
 	COMMENT "Building FDK_AAC"
 	USES_TERMINAL
 )
-add_custom_target(_fdk-aac_install
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}" --target install
+add_custom_target(fdk-aac_install
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${FDK_AAC_BUILD_DIR}" --target install
 	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
 	COMMENT "Installing internally FDK_AAC"
-	DEPENDS _fdk-aac_build
+	DEPENDS fdk-aac_build
 )
-add_library(fdk-aac SHARED IMPORTED GLOBAL)
-set_property(TARGET fdk-aac PROPERTY IMPORTED_LOCATION "${FDK_AAC_LIBRARY}")
-add_dependencies(fdk-aac _fdk-aac_install)
+set(fdk-aac_outputs "${FDK_AAC_LIBRARY}" PARENT_SCOPE)

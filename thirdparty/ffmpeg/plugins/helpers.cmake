@@ -31,12 +31,26 @@ macro(register_plugin _plugin_name _plugin_options)
 	add_subdirectory(${_plugin_name})
 
 	# If required target is not set, error out
-	if(NOT TARGET ${_plugin_name})
-		message(FATAL_ERROR "Plugin '${_plugin_name}' did not define required target '${_plugin_name}'")
+	if(NOT TARGET ${_plugin_name}_install)
+		message(FATAL_ERROR "Plugin '${_plugin_name}' did not define required target '${_plugin_name}_install'")
+	endif()
+
+	# If required outputs variable is not set, error out
+	if(NOT DEFINED ${_plugin_name}_outputs)
+		message(FATAL_ERROR "Plugin '${_plugin_name}' did not define required variable '${_plugin_name}_outputs'")
+	endif()
+
+	# Add a library with the plugin outputs
+	add_library(${_plugin_name} SHARED IMPORTED GLOBAL)
+	if(MSVC)
+		set_property(TARGET ${_plugin_name} PROPERTY IMPORTED_IMPLIB "${${_plugin_name}_outputs}")
+	else()
+		set_property(TARGET ${_plugin_name} PROPERTY IMPORTED_LOCATION "${${_plugin_name}_outputs}")
 	endif()
 
 	# Add dependency on the plugin target
-	add_dependencies(ffmpeg-plugins ${_plugin_name})
+	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
+	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_install)
 
 	# Register plugin options: append to a temporary list and export to parent
 	separate_arguments(_opts_list ${_plugin_options} UNIX_COMMAND)

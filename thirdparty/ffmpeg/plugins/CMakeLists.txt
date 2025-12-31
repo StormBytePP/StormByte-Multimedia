@@ -21,7 +21,8 @@ set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
 update_env_runner()
 
 # Create a target that will aggregate all plugins
-add_custom_target(ffmpeg-plugins)
+add_library(ffmpeg-plugins INTERFACE)
+add_custom_target(ffmpeg-plugins-install)
 
 # Initialize FFMPEG plugin options
 set(FFMPEG_PLUGIN_OPTIONS "")

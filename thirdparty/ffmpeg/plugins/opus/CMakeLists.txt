@@ -88,16 +88,16 @@ create_cmake_configure_file(
 )
 include("${OPUS_CMAKE_CONFIGURE_FILE}")
 
-add_custom_target(_opus_build
+add_custom_target(opus_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${OPUS_BUILD_DIR}"
 	WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
 	COMMENT "Building Opus codec"
 	USES_TERMINAL
 )
-add_custom_target(_opus_install
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${OPUS_BUILD_DIR}" --target install
+add_custom_target(opus_install
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${OPUS_BUILD_DIR}" --target install
 	WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
 	COMMENT "Installing Opus codec internally"
-	DEPENDS _opus_build
+	DEPENDS opus_build
 )
-add_custom_target(opus DEPENDS _opus_install)
+set(opus_outputs "${OPUS_LIBRARY}" PARENT_SCOPE)

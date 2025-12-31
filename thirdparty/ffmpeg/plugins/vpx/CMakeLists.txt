@@ -45,7 +45,7 @@ else()
 	message(STATUS "Skipping meson setup; build files already present for vpx")
 endif()
 
-add_custom_target(_vpx_build
+add_custom_target(vpx_build
 	COMMAND_EXPAND_LISTS
 	COMMAND ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}"
 	WORKING_DIRECTORY ${VPX_BUILD_DIR}
@@ -53,12 +53,12 @@ add_custom_target(_vpx_build
 	USES_TERMINAL
 )
 
-add_custom_target(_vpx_install
+add_custom_target(vpx_install
 	COMMAND_EXPAND_LISTS
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}" install
+	COMMAND ${ENV_NINJA_SILENT_COMMAND} -C "${VPX_BUILD_DIR}" install
 	WORKING_DIRECTORY ${VPX_BUILD_DIR}
 	COMMENT "Installing VPX codec internally"
-	DEPENDS _vpx_build
+	DEPENDS vpx_build
 )
 
-add_custom_target(vpx DEPENDS _vpx_install)
+set(vpx_outputs "${VPX_LIBRARY}" PARENT_SCOPE)

@@ -17,18 +17,18 @@ create_cmake_configure_file(
 )
 include("${MP3LAME_CMAKE_CONFIGURE_FILE}")
 
-add_custom_target(_mp3lame_build
+add_custom_target(mp3lame_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}"
 	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
 	COMMENT "Building MP3 encoder LAME"
 	USES_TERMINAL
 )
 
-add_custom_target(_mp3lame_install
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}" --target install
+add_custom_target(mp3lame_install
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${MP3LAME_BUILD_DIR}" --target install
 	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
 	COMMENT "Installing internally MP3 encoder LAME"
-	DEPENDS _mp3lame_build
+	DEPENDS mp3lame_build
 )
 
-add_custom_target(mp3lame DEPENDS _mp3lame_install)
+set(mp3lame_outputs "${MP3LAME_LIBRARY}" PARENT_SCOPE)
