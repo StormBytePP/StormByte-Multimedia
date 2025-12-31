@@ -17,6 +17,7 @@ create_meson_setup_file(
 	"${X264_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X264_OPTIONS}"
+	2
 )
 
 if (NOT EXISTS "${X264_BUILD_DIR}/build.ninja")

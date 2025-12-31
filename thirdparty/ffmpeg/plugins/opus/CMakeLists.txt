@@ -1,3 +1,4 @@
+message(STATUS "\t\tSetting up Opus codec")
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
 library_import_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
@@ -16,7 +17,7 @@ if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn/fargan_data.h")
 		endif()
 	endif()
 
-	message(STATUS "Downloading Opus DNN data with hash ${OPUS_DATA_HASH}")
+	message(STATUS "\t\t\tDownloading Opus DNN data with hash ${OPUS_DATA_HASH}")
 	file(MAKE_DIRECTORY "${OPUS_BUILD_DIR}/tmp")
 	set(OPUS_MODEL_TAR "${OPUS_BUILD_DIR}/tmp/opus_data-${OPUS_DATA_HASH}.tar.gz")
 	if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn")
@@ -83,6 +84,7 @@ create_cmake_configure_file(
 	"${OPUS_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${OPUS_OPTIONS}"
+	2
 )
 include("${OPUS_CMAKE_CONFIGURE_FILE}")
 

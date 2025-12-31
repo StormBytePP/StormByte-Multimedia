@@ -13,6 +13,8 @@ if (WITH_FFMPEG STREQUAL "SYSTEM")
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 	find_package(FFmpeg REQUIRED)
 else()
+	message(STATUS "Setting up bundled FFmpeg")
+
 	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
 	include(GNUInstallDirs)
 
@@ -127,9 +129,11 @@ else()
 	# Add plugins
 	add_subdirectory(plugins)
 
+	message(STATUS "\tSetting up FFmpeg build")
 	# Show final meson options for FFmpeg (print list with spaces instead of ';')
 	string(REPLACE ";" " " _ffmpeg_plugin_options_str "${FFMPEG_PLUGIN_OPTIONS}")
-	message(STATUS "FFmpeg enabled codec options: ${_ffmpeg_plugin_options_str}")
+	list_to_columns(_ffmpeg_plugin_options_columns "\t\t\t" 32 ${FFMPEG_PLUGIN_OPTIONS})
+	message(STATUS "\t\tEnabled codec options:\n${_ffmpeg_plugin_options_columns}")
 
 	# Append values added by codecs
 	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})

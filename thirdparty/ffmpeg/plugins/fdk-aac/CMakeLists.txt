@@ -15,6 +15,7 @@ create_cmake_configure_file(
 	"${FDK_AAC_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${FDK_AAC_OPTIONS}"
+	2
 )
 include("${FDK_AAC_CMAKE_CONFIGURE_FILE}")
 

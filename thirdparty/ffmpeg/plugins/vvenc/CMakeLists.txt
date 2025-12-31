@@ -14,6 +14,7 @@ create_cmake_configure_file(
 	"${VVENC_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${VVENC_OPTIONS}"
+	2
 )
 include("${VVENC_CMAKE_CONFIGURE_FILE}")
 

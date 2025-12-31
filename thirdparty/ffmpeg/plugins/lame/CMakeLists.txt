@@ -13,6 +13,7 @@ create_cmake_configure_file(
 	"${LAME_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${LAME_OPTIONS}"
+	2
 )
 include("${LAME_CMAKE_CONFIGURE_FILE}")
 

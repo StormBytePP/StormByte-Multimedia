@@ -36,6 +36,7 @@ create_meson_setup_file(
 	"${VPX_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${VPX_MESON_OPTIONS}"
+	2
 )
 
 if (NOT EXISTS "${VPX_BUILD_DIR}/build.ninja")

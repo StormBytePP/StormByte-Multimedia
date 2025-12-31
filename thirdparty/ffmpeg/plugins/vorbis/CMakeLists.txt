@@ -14,6 +14,7 @@ create_cmake_configure_file(
 	"${VORBIS_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${VORBIS_OPTIONS}"
+	2
 )
 
 add_custom_target(_vorbis_configure

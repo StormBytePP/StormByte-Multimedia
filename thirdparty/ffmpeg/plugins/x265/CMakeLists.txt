@@ -1,3 +1,5 @@
+message(STATUS "\t\tSetting up x265 codec")
+
 # Set main source
 set(X265_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src/source")
 
@@ -49,6 +51,7 @@ create_cmake_configure_file(
 	"${X265_BUILD_DIR_12}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_12}"
+	3
 )
 include("${X265_CMAKE_CONFIGURE_FILE_12}")
 
@@ -87,6 +90,7 @@ create_cmake_configure_file(
 	"${X265_BUILD_DIR_10}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_10}"
+	3
 )
 include("${X265_CMAKE_CONFIGURE_FILE_10}")
 

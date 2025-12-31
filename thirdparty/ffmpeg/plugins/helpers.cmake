@@ -74,3 +74,52 @@ macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options
 		set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)
 	endif()
 endmacro()
+
+## list_to_columns(_out_var _indent _column_width ...)
+##
+## Format a list of strings into aligned, multi‑column output.
+##
+## Parameters:
+##  - _out_var: variable name (in the parent scope) that will receive the
+##              formatted, multi‑line string.
+##  - _indent: indentation prefix applied to every generated line.
+##  - _column_width: minimum width of each column.
+##  - ...: list of items to format.
+##
+## Behavior:
+##  - Arranges items into two aligned columns per line.
+##  - Pads each item to `_column_width` characters.
+##  - Prepends `_indent` to every generated line.
+##  - Stores the final multi‑line string in `_out_var` (parent scope).
+function(list_to_columns out_var indent col_width)
+	set(result "")
+	set(line "")
+	set(count 0)
+
+	foreach(item IN LISTS ARGN)
+		string(LENGTH "${item}" len)
+		math(EXPR pad "${col_width} - ${len}")
+		if(pad LESS 1)
+			set(pad 1)
+		endif()
+
+		string(REPEAT " " ${pad} spaces)
+		set(line "${line}${item}${spaces}")
+
+		math(EXPR count "${count} + 1")
+
+		# Emit line every 2 items
+		if(count EQUAL 2)
+			set(result "${result}${indent}${line}\n")
+			set(line "")
+			set(count 0)
+		endif()
+	endforeach()
+
+	# Emit last line if odd number of items
+	if(NOT line STREQUAL "")
+		set(result "${result}${indent}${line}\n")
+	endif()
+
+	set(${out_var} "${result}" PARENT_SCOPE)
+endfunction()

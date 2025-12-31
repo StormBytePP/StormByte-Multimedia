@@ -1,3 +1,5 @@
+message(STATUS "\tSetting up FFmpeg plugins")
+
 # Add helpers so they are available
 include(helpers.cmake)
 
