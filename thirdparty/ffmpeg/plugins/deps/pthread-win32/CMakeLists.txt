@@ -59,18 +59,12 @@ else()
 endif()
 add_dependencies(pthread_win32 pthread_win32_install)
 
-cmake_policy(SET CMP0079 NEW)
-target_link_libraries(ffmpeg-plugins INTERFACE pthread_win32)
-
 # Declare the concrete output file(s) produced by the install target so
 # build generators (ninja) know which rule generates the library file and
 # can schedule the install before linking.
 set(pthread_win32_outputs "${PTHREAD_WIN32_LIBRARY}")
 
-add_custom_command(OUTPUT ${pthread_win32_outputs}
-	COMMAND ${CMAKE_COMMAND} -E touch "${PTHREAD_WIN32_LIBRARY}"
-	DEPENDS pthread_win32_install
-)
+add_custom_command(OUTPUT ${pthread_win32_outputs} DEPENDS pthread_win32_install)
 
 add_custom_target(pthread_win32_outputs_target DEPENDS ${pthread_win32_outputs})
 add_dependencies(pthread_win32 pthread_win32_outputs_target)

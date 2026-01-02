@@ -76,10 +76,18 @@ add_custom_target(vmaf_install
 )
 
 if(FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
-	# On Windows, library is installed as libvmaf.a, we need to rename it to vmaf.lib
+	# On Windows, library is installed as libvmaf.a, we need to rename it to vmaf_original.lib (in next step we repack)
 	add_custom_command(TARGET vmaf_install POST_BUILD
-		COMMAND ${ENV_CMAKE_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libvmaf.a" "${FFMPEG_INSTALL_LIB_DIR}/vmaf.lib"
-		COMMENT "Renaming libvmaf.a to vmaf.lib for MSVC compatibility"
+		COMMAND ${ENV_CMAKE_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libvmaf.a" "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib"
+		COMMENT "Renaming libvmaf.a to vmaf_original.lib for MSVC compatibility"
+	)
+
+	# After rename we need to create a bundle with pthread library
+	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVCE3" "${FFMPEG_INSTALL_LIB_DIR}")
+	add_custom_command(TARGET vmaf_install POST_BUILD
+		COMMAND ${ENV_RUNNER_SILENT} lib /OUT:${VMAF_LIBRARY} "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib" "${PTHREAD_WIN32_LIBRARY}"
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib"
+		COMMENT "Copying pthread_win32.lib to install directory for VMAF"
 	)
 endif()
 add_custom_command(TARGET vmaf_install POST_BUILD
