@@ -290,3 +290,33 @@ index 16fe966b..15c276f8 100644
    #else
      int rc = mkdir(pathname, mode);
    #endif
+diff --git a/libvmaf/src/feature/integer_adm.c b/libvmaf/src/feature/integer_adm.c
+index 269dbb5e..4b57294c 100644
+--- a/libvmaf/src/feature/integer_adm.c
++++ b/libvmaf/src/feature/integer_adm.c
+@@ -24,6 +24,25 @@
+ #include "integer_adm.h"
+ #include "log.h"
+ 
++#ifdef _MSC_VER
++#include <intrin.h>
++
++static inline int __builtin_clz(unsigned x) {
++    if (x == 0) return 32;
++    unsigned long index;
++    _BitScanReverse(&index, x);
++    return 31 - (int)index;
++}
++
++static inline int __builtin_clzll(unsigned long long x) {
++    if (x == 0) return 64;
++    unsigned long index;
++    _BitScanReverse64(&index, x);
++    return 63 - (int)index;
++}
++
++#endif
++
+ #if ARCH_X86
+ #include "x86/adm_avx2.h"
+ #elif ARCH_AARCH64
