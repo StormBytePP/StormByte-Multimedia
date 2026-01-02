@@ -169,9 +169,6 @@ else()
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=disabled")
 	endif()
 
-	# Add possible dependencies
-	add_subdirectory(deps)
-	
 	# Add plugins
 	add_subdirectory(plugins)
 

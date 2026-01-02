@@ -18,6 +18,7 @@ create_cmake_configure_file(
 	"${PTHREAD_WIN32_BUILD_DIR}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${PTHREAD_WIN32_OPTIONS}"
+	2
 )
 include(${PTHREAD_WIN32_CMAKE_CONFIGURE_FILE})
 
@@ -41,23 +42,37 @@ else()
 endif()
 if(MSVC AND NOT FFMPEG_BUNDLED STREQUAL "static")
 	set_target_properties(pthread_win32 PROPERTIES
-		IMPORTED_IMPLIB "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_IMPLIB_DEBUG "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_IMPLIB_RELEASE "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_IMPLIB_MINSIZEREL "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_IMPLIB_RELWITHDEBINFO "${PTHREAD_WIN32_ENC_LIBRARY}"
+		IMPORTED_IMPLIB "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_IMPLIB_DEBUG "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_IMPLIB_RELEASE "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_IMPLIB_MINSIZEREL "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_IMPLIB_RELWITHDEBINFO "${PTHREAD_WIN32_LIBRARY}"
 	)
 else()
 	set_target_properties(pthread_win32 PROPERTIES
-		IMPORTED_LOCATION "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_LOCATION_DEBUG "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_LOCATION_RELEASE "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_LOCATION_MINSIZEREL "${PTHREAD_WIN32_ENC_LIBRARY}"
-		IMPORTED_LOCATION_RELWITHDEBINFO "${PTHREAD_WIN32_ENC_LIBRARY}"
+		IMPORTED_LOCATION "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_LOCATION_DEBUG "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_LOCATION_RELEASE "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_LOCATION_MINSIZEREL "${PTHREAD_WIN32_LIBRARY}"
+		IMPORTED_LOCATION_RELWITHDEBINFO "${PTHREAD_WIN32_LIBRARY}"
 	)
 endif()
-add_dependencies(pthread_win32 pthread_win32)
+add_dependencies(pthread_win32 pthread_win32_install)
 
 cmake_policy(SET CMP0079 NEW)
 target_link_libraries(ffmpeg-plugins INTERFACE pthread_win32)
-add_custom_command(OUTPUT ${PTHREAD_WIN32_ENC_LIBRARY} DEPENDS pthread_win32_install)
+
+# Declare the concrete output file(s) produced by the install target so
+# build generators (ninja) know which rule generates the library file and
+# can schedule the install before linking.
+set(pthread_win32_outputs "${PTHREAD_WIN32_LIBRARY}")
+
+add_custom_command(OUTPUT ${pthread_win32_outputs}
+	COMMAND ${CMAKE_COMMAND} -E touch "${PTHREAD_WIN32_LIBRARY}"
+	DEPENDS pthread_win32_install
+)
+
+add_custom_target(pthread_win32_outputs_target DEPENDS ${pthread_win32_outputs})
+add_dependencies(pthread_win32 pthread_win32_outputs_target)
+add_dependencies(ffmpeg-plugins-install pthread_win32_install)
+add_dependencies(ffmpeg-plugins-install pthread_win32_outputs_target)

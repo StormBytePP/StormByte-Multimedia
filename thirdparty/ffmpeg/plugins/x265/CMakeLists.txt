@@ -242,4 +242,3 @@ endif()
 # Add a dummy target for dependencies
 add_custom_target(x265_install DEPENDS x265_8bit_install)
 set(x265_outputs "${X265_LIBRARY}" PARENT_SCOPE)
-set(x265_links pthread_win32 PARENT_SCOPE)

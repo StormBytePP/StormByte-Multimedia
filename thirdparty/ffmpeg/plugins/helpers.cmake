@@ -62,6 +62,11 @@ macro(register_plugin _plugin_name _plugin_options)
 			INTERFACE_LINK_LIBRARIES "${${_plugin_name}_links}")
 	endif()
 
+	# If ${_plugin_name}_deps is defined, add dependencies to the imported target
+	if(DEFINED ${_plugin_name}_deps)
+		add_dependencies(${_plugin_name} ${${_plugin_name}_deps})
+	endif()
+
 	# Add dependency on the plugin target
 	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
 	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_install)

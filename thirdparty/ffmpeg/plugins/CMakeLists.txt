@@ -24,6 +24,9 @@ update_env_runner()
 add_library(ffmpeg-plugins INTERFACE)
 add_custom_target(ffmpeg-plugins-install)
 
+# Add dependencies
+add_subdirectory(deps)
+
 # Initialize FFMPEG plugin options
 set(FFMPEG_PLUGIN_OPTIONS "")
 

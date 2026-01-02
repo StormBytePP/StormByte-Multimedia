@@ -32,12 +32,12 @@
 [submodule "MP3 LAME codec"]
 	path = thirdparty/ffmpeg/plugins/mp3lame/src
 	url = https://github.com/lameproject/lame.git
-[submodule "StormByte Build Master"]
-	path = thirdparty/buildmaster
-	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/vmaf/src
 	url = https://github.com/Netflix/vmaf.git
+[submodule "StormByte Build Master"]
+	path = thirdparty/buildmaster
+	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
 [submodule "pthread-Win32"]
-	path = thirdparty/ffmpeg/deps/pthread-win32/src
+	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
