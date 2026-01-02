@@ -1,7 +1,7 @@
-From 3fabfbd930ac2c55e4e1acda89021e63acfcc263 Mon Sep 17 00:00:00 2001
+From 96eea35e9c78ce232e50ef7f9f104d5e076abd65 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
-Date: Fri, 2 Jan 2026 14:32:55 +0100
-Subject: [PATCH] Add 'enable_tools' option
+Date: Sat, 3 Jan 2026 02:10:13 +0100
+Subject: [PATCH] Disable tool building
 
 ---
  libvmaf/meson_options.txt | 5 +++++
@@ -9,7 +9,7 @@ Subject: [PATCH] Add 'enable_tools' option
  2 files changed, 9 insertions(+)
 
 diff --git a/libvmaf/meson_options.txt b/libvmaf/meson_options.txt
-index b5011831d..69dc53f8d 100644
+index b5011831..69dc53f8 100644
 --- a/libvmaf/meson_options.txt
 +++ b/libvmaf/meson_options.txt
 @@ -8,6 +8,11 @@ option('enable_docs',
@@ -25,7 +25,7 @@ index b5011831d..69dc53f8d 100644
      type: 'boolean',
      value: true,
 diff --git a/libvmaf/tools/meson.build b/libvmaf/tools/meson.build
-index 0016d9c23..a3d2b8059 100644
+index b98300cc..20115aa0 100644
 --- a/libvmaf/tools/meson.build
 +++ b/libvmaf/tools/meson.build
 @@ -1,3 +1,7 @@
@@ -36,3 +36,6 @@ index 0016d9c23..a3d2b8059 100644
  compat_cflags = []
  if cc.has_function('strsep')
    compat_cflags += '-DHAVE_STRSEP'
+-- 
+2.52.0
+

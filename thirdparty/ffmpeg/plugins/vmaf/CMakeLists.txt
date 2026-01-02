@@ -7,19 +7,15 @@ else()
 endif()
 
 # Need to patch to disable tool building
-set(VMAF_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Disable-tool-building.patch")
-set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0002-Fix-Windows-build.patch")
+set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-MSVC-corrections.patch")
+set(VMAF_TOOLS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0002-Disable-tool-building.patch")
 create_git_reset_file(VMAF_RESET_REPO "VMAF Reset repo" "${VMAF_SRC_DIR}")
-create_git_patch_file(VMAF_PATCH_REPO "VMAF Apply patches" "${VMAF_SRC_DIR}" "${VMAF_PATCH_FILE}")
+create_git_patch_file(VMAF_PATCH_REPO1 "VMAF Apply patch 1" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
+create_git_patch_file(VMAF_PATCH_REPO2 "VMAF Apply patch 2" "${VMAF_SRC_DIR}" "${VMAF_TOOLS_PATH_FILE}")
 
 include(${VMAF_RESET_REPO})
-include(${VMAF_PATCH_REPO})
-
-if(MSVC)
-	# Apply Windows-specific patch
-	create_git_patch_file(VMAF_WINDOWS_PATCH_REPO "VMAF Windows Fix" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
-	include(${VMAF_WINDOWS_PATCH_REPO})
-endif()
+include(${VMAF_PATCH_REPO1})
+include(${VMAF_PATCH_REPO2})
 
 set(VMAF_MESON_OPTIONS
     "-Ddefault_library=${MESON_SHARED_MODE}"

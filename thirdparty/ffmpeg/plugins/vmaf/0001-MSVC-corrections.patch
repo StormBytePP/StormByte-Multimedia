@@ -1,0 +1,535 @@
+From 24d4f24d34fd9c81722006a107a652a7f26bb49c Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Sat, 3 Jan 2026 01:52:47 +0100
+Subject: [PATCH] Fix MSVC build
+
+---
+ libvmaf/include/getopt.h             | 36 +++++++++++++++++++
+ libvmaf/src/compat/msvc/stdatomic.h  |  2 --
+ libvmaf/src/feature/ciede.c          |  5 +++
+ libvmaf/src/feature/integer_adm.c    | 20 +++++++++++
+ libvmaf/src/feature/integer_vif.c    | 38 +++++++++++---------
+ libvmaf/src/feature/mkdirp.c         | 28 +++++++++++----
+ libvmaf/src/feature/mkdirp.h         |  5 +++
+ libvmaf/src/libvmaf.c                |  4 ++-
+ libvmaf/src/log.c                    |  8 ++++-
+ libvmaf/src/predict.c                | 13 ++++---
+ libvmaf/src/read_json_model.c        | 20 +++++++----
+ libvmaf/tools/compat/getopt/getopt.c | 52 ++++++++++++++++++++++++++++
+ libvmaf/tools/meson.build            | 19 ++++++----
+ libvmaf/tools/vmaf.c                 | 29 ++++++++++++++--
+ 14 files changed, 231 insertions(+), 48 deletions(-)
+ create mode 100644 libvmaf/include/getopt.h
+ create mode 100644 libvmaf/tools/compat/getopt/getopt.c
+
+diff --git a/libvmaf/include/getopt.h b/libvmaf/include/getopt.h
+new file mode 100644
+index 000000000..57bb43d4a
+--- /dev/null
++++ b/libvmaf/include/getopt.h
+@@ -0,0 +1,36 @@
++#ifndef VMAF_GETOPT_H
++#define VMAF_GETOPT_H
++
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++extern char *optarg;
++extern int optind;
++extern int opterr;
++extern int optopt;
++
++int getopt(int argc, char *const *argv, const char *optstring);
++int getopt_long(int argc, char *const *argv, const char *shortopts,
++                const struct option *longopts, int32_t *longind);
++int getopt_long_only(int argc, char *const *argv, const char *shortopts,
++                     const struct option *longopts, int32_t *longind);
++
++struct option {
++    const char *name;
++    int has_arg;
++    int *flag;
++    int val;
++};
++
++#define no_argument 0
++#define required_argument 1
++#define optional_argument 2
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* VMAF_GETOPT_H */
+diff --git a/libvmaf/src/compat/msvc/stdatomic.h b/libvmaf/src/compat/msvc/stdatomic.h
+index 979ee2ba8..7540775fd 100644
+--- a/libvmaf/src/compat/msvc/stdatomic.h
++++ b/libvmaf/src/compat/msvc/stdatomic.h
+@@ -39,8 +39,6 @@
+ 
+ #include <windows.h>
+ 
+-#include "common/attributes.h"
+-
+ typedef volatile LONG  __declspec(align(32)) atomic_int;
+ typedef volatile ULONG __declspec(align(32)) atomic_uint;
+ 
+diff --git a/libvmaf/src/feature/ciede.c b/libvmaf/src/feature/ciede.c
+index 7bbfa8f60..8e523b507 100644
+--- a/libvmaf/src/feature/ciede.c
++++ b/libvmaf/src/feature/ciede.c
+@@ -52,6 +52,11 @@ SOFTWARE.
+ #include "mem.h"
+ #include "opt.h"
+ 
++#ifndef M_PI
++/* There are a lot of M_PI definitions but none generic to be included */
++#define M_PI 3.14159265358979323846264338327
++#endif // M_PI
++
+ typedef struct CiedeState {
+     VmafPicture ref;
+     VmafPicture dist;
+diff --git a/libvmaf/src/feature/integer_adm.c b/libvmaf/src/feature/integer_adm.c
+index 269dbb5e8..e4f849051 100644
+--- a/libvmaf/src/feature/integer_adm.c
++++ b/libvmaf/src/feature/integer_adm.c
+@@ -31,6 +31,26 @@
+ #include <arm_neon.h>
+ #endif
+ 
++#ifdef _MSC_VER
++#include <intrin.h>
++
++/* Provide small fallbacks for GCC builtins used upstream. These are only
++ * defined for MSVC to avoid interfering with other compilers. */
++static inline int __builtin_clz(unsigned x) {
++    if (x == 0) return 32;
++    unsigned long index;
++    _BitScanReverse(&index, x);
++    return 31 - (int)index;
++}
++
++static inline int __builtin_clzll(unsigned long long x) {
++    if (x == 0) return 64;
++    unsigned long index;
++    _BitScanReverse64(&index, x);
++    return 63 - (int)index;
++}
++#endif
++
+ typedef struct AdmState {
+     size_t integer_stride;
+     AdmBuffer buf;
+diff --git a/libvmaf/src/feature/integer_vif.c b/libvmaf/src/feature/integer_vif.c
+index fd6a82317..1f1135795 100644
+--- a/libvmaf/src/feature/integer_vif.c
++++ b/libvmaf/src/feature/integer_vif.c
+@@ -630,23 +630,27 @@ static int init(VmafFeatureExtractor *fex, enum VmafPixelFormat pix_fmt,
+     if (!data) return -ENOMEM;
+     memset(data, 0, data_sz);
+ 
+-    s->public.buf.data = data; data += pad_size;
+-    s->public.buf.ref = data; data += frame_size + pad_size + pad_size;
+-    s->public.buf.dis = data; data += frame_size + pad_size;
+-    s->public.buf.mu1 = data; data += h * s->public.buf.stride_16;
+-    s->public.buf.mu2 = data; data += h * s->public.buf.stride_16;
+-    s->public.buf.mu1_32 = data; data += s->public.buf.stride_32;
+-    s->public.buf.mu2_32 = data; data += s->public.buf.stride_32;
+-    s->public.buf.ref_sq = data; data += s->public.buf.stride_32;
+-    s->public.buf.dis_sq = data; data += s->public.buf.stride_32;
+-    s->public.buf.ref_dis = data; data += s->public.buf.stride_32;
+-    s->public.buf.tmp.mu1 = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.mu2 = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.ref = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.dis = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.ref_dis = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.ref_convol = data; data += s->public.buf.stride_tmp;
+-    s->public.buf.tmp.dis_convol = data;
++    /* Keep original layout but perform offset arithmetic on a byte pointer.
++    * This avoids undefined behavior on some compilers when doing pointer
++    * arithmetic with non-char pointer types (MSVC is strict about this). */
++    s->public.buf.data = data;
++    unsigned char *d = (unsigned char *)data + pad_size;
++    s->public.buf.ref = (void *)d; d += frame_size + pad_size + pad_size;
++    s->public.buf.dis = (void *)d; d += frame_size + pad_size;
++    s->public.buf.mu1 = (void *)d; d += h * s->public.buf.stride_16;
++    s->public.buf.mu2 = (void *)d; d += h * s->public.buf.stride_16;
++    s->public.buf.mu1_32 = (void *)d; d += s->public.buf.stride_32;
++    s->public.buf.mu2_32 = (void *)d; d += s->public.buf.stride_32;
++    s->public.buf.ref_sq = (void *)d; d += s->public.buf.stride_32;
++    s->public.buf.dis_sq = (void *)d; d += s->public.buf.stride_32;
++    s->public.buf.ref_dis = (void *)d; d += s->public.buf.stride_32;
++    s->public.buf.tmp.mu1 = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.mu2 = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.ref = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.dis = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.ref_dis = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.ref_convol = (void *)d; d += s->public.buf.stride_tmp;
++    s->public.buf.tmp.dis_convol = (void *)d;
+ 
+     s->feature_name_dict =
+         vmaf_feature_name_dict_from_provided_features(fex->provided_features,
+diff --git a/libvmaf/src/feature/mkdirp.c b/libvmaf/src/feature/mkdirp.c
+index 16fe966b3..d4faa220a 100644
+--- a/libvmaf/src/feature/mkdirp.c
++++ b/libvmaf/src/feature/mkdirp.c
+@@ -6,7 +6,15 @@
+ // MIT licensed
+ //
+ 
+-#include <unistd.h>
++#ifdef _MSC_VER
++# include <io.h>
++# include <direct.h> /* _mkdir, _wmkdir */
++# ifndef strdup
++#  define strdup _strdup
++# endif
++#else
++# include <unistd.h>
++#endif
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -64,12 +72,18 @@ mkdirp(const char *path, mode_t mode) {
+   free(parent);
+ 
+   // make this one if parent has been made
+-  #ifdef _WIN32
+-    // http://msdn.microsoft.com/en-us/library/2fkk4dzw.aspx
+-    int rc = mkdir(pathname);
+-  #else
+-    int rc = mkdir(pathname, mode);
+-  #endif
++#ifdef _MSC_VER
++  /* On MSVC use _mkdir which takes only a path.
++   * Microsoft docs: _mkdir and _wmkdir create a new directory and return 0
++   * on success or -1 on error, setting errno accordingly. See CRT docs:
++   * https://learn.microsoft.com/en-us/c-runtime-library/reference/mkdir-wmkdir
++   *
++   * The CRT documents that _mkdir/_wmkdir behave like mkdir but accept only
++   * a path (no mode) and set errno on failure (EEXIST, ENOENT, ...). */
++  int rc = _mkdir(pathname);
++#else
++  int rc = mkdir(pathname, mode);
++#endif
+ 
+   free(pathname);
+ 
+diff --git a/libvmaf/src/feature/mkdirp.h b/libvmaf/src/feature/mkdirp.h
+index 02371fb57..e7776eba4 100644
+--- a/libvmaf/src/feature/mkdirp.h
++++ b/libvmaf/src/feature/mkdirp.h
+@@ -12,6 +12,11 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
++#ifdef _MSC_VER
++/* On MSVC provide a minimal mode_t typedef */
++typedef int mode_t;
++#endif
++
+ /*
+  * Recursively `mkdir(path, mode)`
+  */
+diff --git a/libvmaf/src/libvmaf.c b/libvmaf/src/libvmaf.c
+index 18ccff0e6..4f2d42eca 100644
+--- a/libvmaf/src/libvmaf.c
++++ b/libvmaf/src/libvmaf.c
+@@ -894,7 +894,8 @@ int vmaf_score_pooled_model_collection(VmafContext *vmaf,
+     const char *suffix_stddev = "_stddev";
+     const size_t name_sz =
+         strlen(model_collection->name) + strlen(suffix_lo) + 1;
+-    char name[name_sz];
++    char *name = malloc(name_sz);
++    if (!name) return -ENOMEM;
+     memset(name, 0, name_sz);
+ 
+     snprintf(name, name_sz, "%s%s", model_collection->name, suffix_bagging);
+@@ -917,6 +918,7 @@ int vmaf_score_pooled_model_collection(VmafContext *vmaf,
+                                      &score->bootstrap.ci.p95.hi,
+                                      index_low, index_high);
+ 
++    free(name);
+     return err;
+ }
+ 
+diff --git a/libvmaf/src/log.c b/libvmaf/src/log.c
+index f93c7379f..142e9c35d 100644
+--- a/libvmaf/src/log.c
++++ b/libvmaf/src/log.c
+@@ -19,7 +19,13 @@
+ #include "libvmaf/libvmaf.h"
+ 
+ #include <stdarg.h>
+-#include <unistd.h>
++#ifdef _WIN32
++# include <io.h>
++# define isatty _isatty
++# define fileno _fileno
++#else
++# include <unistd.h>
++#endif
+ 
+ static enum VmafLogLevel vmaf_log_level = VMAF_LOG_LEVEL_INFO;
+ static int istty = 0;
+diff --git a/libvmaf/src/predict.c b/libvmaf/src/predict.c
+index 9926de15b..5a0379d73 100644
+--- a/libvmaf/src/predict.c
++++ b/libvmaf/src/predict.c
+@@ -358,7 +358,9 @@ static int vmaf_bootstrap_predict_score_at_index(
+                                         VmafModelCollectionScore *score)
+ {
+     int err = 0;
+-    double scores[model_collection->cnt];
++    /* Use heap allocation to avoid large stack arrays on MSVC */
++    double *scores = malloc(sizeof(double) * model_collection->cnt);
++    if (!scores) return -ENOMEM;
+ 
+     for (unsigned i = 0; i < model_collection->cnt; i++) {
+         // mean, stddev, etc. are calculated on untransformed/unclipped scores
+@@ -370,7 +372,7 @@ static int vmaf_bootstrap_predict_score_at_index(
+                                           feature_collector, index,
+                                           &scores[i], false,
+                                           false, flags);
+-        if (err) return err;
++        if (err) { free(scores); return err; }
+ 
+         // do not override the model's transform/clip behavior
+         // write the scores to the feature collector
+@@ -378,7 +380,7 @@ static int vmaf_bootstrap_predict_score_at_index(
+         err = vmaf_predict_score_at_index(model_collection->model[i],
+                                           feature_collector, index,
+                                           &score, true, false, 0);
+-        if (err) return err;
++        if (err) { free(scores); return err; }
+     }
+ 
+     score->type = VMAF_MODEL_COLLECTION_SCORE_BOOTSTRAP;
+@@ -424,7 +426,8 @@ static int vmaf_bootstrap_predict_score_at_index(
+     const char *suffix_stddev = "_stddev";
+     const size_t name_sz =
+         strlen(model_collection->name) + strlen(suffix_lo) + 1;
+-    char name[name_sz];
++    char *name = malloc(name_sz);
++    if (!name) { free(scores); return -ENOMEM; }
+     memset(name, 0, name_sz);
+ 
+     snprintf(name, name_sz, "%s%s", model_collection->name, suffix_bagging);
+@@ -443,6 +446,8 @@ static int vmaf_bootstrap_predict_score_at_index(
+     err |= vmaf_feature_collector_append(feature_collector, name,
+                                          score->bootstrap.ci.p95.hi,
+                                          index);
++    free(name);
++    free(scores);
+     return err;
+ }
+ 
+diff --git a/libvmaf/src/read_json_model.c b/libvmaf/src/read_json_model.c
+index 08405d3b7..677f58ef0 100644
+--- a/libvmaf/src/read_json_model.c
++++ b/libvmaf/src/read_json_model.c
+@@ -493,15 +493,19 @@ static int model_collection_parse(json_stream *s, VmafModel **model,
+     if (!c.name) return -ENOMEM;
+ 
+     const size_t cfg_name_sz = strlen(name) + 5 + 1;
+-    char cfg_name[cfg_name_sz];
++    char *cfg_name = malloc(cfg_name_sz);
++    if (!cfg_name) { free((char*)name); return -ENOMEM; }
+ 
+     const size_t generated_key_sz = 4 + 1;
+-    char generated_key[generated_key_sz];
++    char *generated_key = malloc(generated_key_sz);
++    if (!generated_key) { free(cfg_name); free((char*)name); return -ENOMEM; }
+ 
+     unsigned i = 0;
+     while (json_peek(s) != JSON_OBJECT_END && !json_get_error(s)) {
+-        if (json_next(s) != JSON_STRING)
+-            return -EINVAL;
++        if (json_next(s) != JSON_STRING) {
++            err = -EINVAL;
++            goto cleanup;
++        }
+ 
+         const char *key = json_get_string(s, NULL);
+         snprintf(generated_key, generated_key_sz, "%d", i);
+@@ -509,24 +513,26 @@ static int model_collection_parse(json_stream *s, VmafModel **model,
+         if (!strcmp(key, generated_key)) {
+             VmafModel *m;
+             err = vmaf_read_json_model(&m, &c, s);
+-            if (err) return err;
++            if (err) { free(generated_key); free(cfg_name); free((char*)name); return err; }
+ 
+             if (i == 0) {
+                 *model = m;
+                 c.name = cfg_name;
+             } else {
+                 err = vmaf_model_collection_append(model_collection, m);
+-                if (err) return err;
++                if (err) { free(generated_key); free(cfg_name); free((char*)name); return err; }
+             }
+ 
+             sprintf((char*)c.name, "%s_%04d", name, ++i);
+-            continue;
+         }
+ 
+         json_skip(s);
+     }
+ 
++    cleanup:
+     free((char*)name);
++    free(generated_key);
++    free(cfg_name);
+     if (!(*model_collection)) return -EINVAL;
+     return err;
+ }
+diff --git a/libvmaf/tools/compat/getopt/getopt.c b/libvmaf/tools/compat/getopt/getopt.c
+new file mode 100644
+index 000000000..d2ea18308
+--- /dev/null
++++ b/libvmaf/tools/compat/getopt/getopt.c
+@@ -0,0 +1,52 @@
++/* Minimal getopt compatibility implementation for platforms without getopt.h */
++
++#include "getopt.h"
++#include <stdlib.h>
++#include <string.h>
++
++char *optarg = NULL;
++int optind = 1;
++int opterr = 1;
++int optopt = '?';
++
++int getopt(int argc, char *const *argv, const char *optstring) {
++    static int sp = 1;
++    if (optind >= argc) return -1;
++    char *arg = argv[optind];
++    if (arg[0] != '-' || arg[1] == '\0') return -1;
++    if (strcmp(arg, "--") == 0) { optind++; return -1; }
++    char c = arg[sp];
++    const char *oli = strchr(optstring, c);
++    if (!oli) {
++        optopt = c;
++        if (arg[++sp] == '\0') { optind++; sp = 1; }
++        return '?';
++    }
++    if (oli[1] == ':') {
++        if (arg[sp+1] != '\0') {
++            optarg = &arg[sp+1];
++            optind++;
++        } else if (optind+1 < argc) {
++            optarg = argv[++optind];
++            optind++;
++        } else {
++            optopt = c;
++            if (optstring[0] == ':') return ':'; else return '?';
++        }
++        sp = 1;
++    } else {
++        if (arg[++sp] == '\0') { optind++; sp = 1; }
++    }
++    return c;
++}
++
++int getopt_long(int argc, char *const *argv, const char *shortopts,
++                const struct option *longopts, int32_t *longind) {
++    (void)longopts; (void)longind;
++    return getopt(argc, argv, shortopts);
++}
++
++int getopt_long_only(int argc, char *const *argv, const char *shortopts,
++                     const struct option *longopts, int32_t *longind) {
++    return getopt_long(argc, argv, shortopts, longopts, longind);
++}
+diff --git a/libvmaf/tools/meson.build b/libvmaf/tools/meson.build
+index 0016d9c23..b98300cce 100644
+--- a/libvmaf/tools/meson.build
++++ b/libvmaf/tools/meson.build
+@@ -3,14 +3,19 @@ if cc.has_function('strsep')
+   compat_cflags += '-DHAVE_STRSEP'
+ endif
+ 
++compat_getopt = []
++if cc.get_id() == 'msvc'
++  compat_getopt = ['compat/getopt/getopt.c']
++endif
++
+ vmaf = executable(
+-    'vmaf',
+-    ['vmaf.c', 'cli_parse.c', 'y4m_input.c', 'vidinput.c', 'yuv_input.c'],
+-    include_directories : [libvmaf_inc, vmaf_include],
+-    dependencies: [stdatomic_dependency, cuda_dependency],
+-    c_args : [vmaf_cflags_common, compat_cflags],
+-    link_with : get_option('default_library') == 'both' ? libvmaf.get_static_lib() : libvmaf,
+-    install : true,
++  'vmaf',
++  compat_getopt + ['vmaf.c', 'cli_parse.c', 'y4m_input.c', 'vidinput.c', 'yuv_input.c'],
++  include_directories : [libvmaf_inc, vmaf_include],
++  dependencies: [stdatomic_dependency, cuda_dependency],
++  c_args : [vmaf_cflags_common, compat_cflags],
++  link_with : get_option('default_library') == 'both' ? libvmaf.get_static_lib() : libvmaf,
++  install : true,
+ )
+ 
+ subdir('test')
+diff --git a/libvmaf/tools/vmaf.c b/libvmaf/tools/vmaf.c
+index 316a04892..e467cc4d3 100644
+--- a/libvmaf/tools/vmaf.c
++++ b/libvmaf/tools/vmaf.c
+@@ -1,7 +1,17 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <time.h>
++#if defined(_WIN32) || defined(_WIN64)
++#include <io.h>
++#ifndef isatty
++#define isatty _isatty
++#endif
++#ifndef fileno
++#define fileno _fileno
++#endif
++#else
+ #include <unistd.h>
++#endif
+ 
+ #include "cli_parse.h"
+ #include "spinner.h"
+@@ -271,11 +281,24 @@ int main(int argc, char *argv[])
+     VmafModelCollection **model_collection;
+     const size_t model_collection_sz =
+         sizeof(*model_collection) * c.model_cnt;
+-    model_collection = malloc(model_sz);
++    model_collection = malloc(model_collection_sz);
++    if (!model_collection) {
++        fprintf(stderr, "memory allocation error\n");
++        return -1;
++    }
+     memset(model_collection, 0, model_collection_sz);
+ 
+-    const char *model_collection_label[c.model_cnt];
++    const char **model_collection_label = NULL;
+     unsigned model_collection_cnt = 0;
++    if (c.model_cnt) {
++        model_collection_label = malloc(sizeof(*model_collection_label) * c.model_cnt);
++        if (!model_collection_label) {
++            fprintf(stderr, "memory allocation error\n");
++            free(model_collection);
++            free(model);
++            return -1;
++        }
++    }
+ 
+     for (unsigned i = 0; i < c.model_cnt; i++) {
+         if (c.model_config[i].version) {
+@@ -501,6 +524,8 @@ int main(int argc, char *argv[])
+     for (unsigned i = 0; i < model_collection_cnt; i++)
+         vmaf_model_collection_destroy(model_collection[i]);
+     free(model_collection);
++    if (model_collection_label)
++        free((void*)model_collection_label);
+ 
+     video_input_close(&vid_ref);
+     video_input_close(&vid_dist);
