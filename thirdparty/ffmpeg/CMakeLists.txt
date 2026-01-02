@@ -335,7 +335,7 @@ else()
 
 	# According to FFMmpeg documentation, when linking statically,
 	# -Wl,-Bsymbolic should be used to avoid symbol conflicts.
-	if(FFMPEG_BUNDLED STREQUAL "static")
+	if(FFMPEG_BUNDLED STREQUAL "static" AND NOT MSVC)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
 	
