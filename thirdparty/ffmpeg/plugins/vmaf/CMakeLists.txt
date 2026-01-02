@@ -83,7 +83,7 @@ if(FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
 	)
 
 	# After rename we need to create a bundle with pthread library
-	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVCE3" "${FFMPEG_INSTALL_LIB_DIR}")
+	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3" "${FFMPEG_INSTALL_LIB_DIR}")
 	add_custom_command(TARGET vmaf_install POST_BUILD
 		COMMAND ${ENV_RUNNER_SILENT} lib /OUT:${VMAF_LIBRARY} "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib" "${PTHREAD_WIN32_LIBRARY}"
 		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib"

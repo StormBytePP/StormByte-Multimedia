@@ -1,9 +1,9 @@
 set(PTHREAD_WIN32_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 ensure_build_dir(PTHREAD_WIN32_BUILD_DIR)
 if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVCE3" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
 else()
-	library_import_hint(PTHREAD_WIN32_LIBRARY "pthreadVCE3" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+	library_import_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
 endif()
 
 set(PTHREAD_WIN32_COMPONENT "pthread Win32 library")
