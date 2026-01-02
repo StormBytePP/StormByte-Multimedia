@@ -1,0 +1,108 @@
+From 7fbecdb09036d1aa42130d531b5296dbef34d91c Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Fri, 2 Jan 2026 11:49:47 +0100
+Subject: [PATCH] Various changes to make it work
+
+---
+ source/CMakeLists.txt                 | 14 +-------------
+ source/cmake/FindNasm.cmake           |  2 +-
+ source/common/md5.cpp                 |  5 ++++-
+ source/common/primitives.cpp          |  2 +-
+ source/dynamicHDR10/json11/json11.cpp |  1 +
+ 5 files changed, 8 insertions(+), 16 deletions(-)
+
+diff --git a/source/CMakeLists.txt b/source/CMakeLists.txt
+index 9f93b6ec2..150e8ef3c 100755
+--- a/source/CMakeLists.txt
++++ b/source/CMakeLists.txt
+@@ -7,11 +7,6 @@ if(NOT CMAKE_BUILD_TYPE)
+ endif()
+ message(STATUS "cmake version ${CMAKE_VERSION}")
+ 
+-if(POLICY CMP0042)
+-    cmake_policy(SET CMP0042 NEW) # MACOSX_RPATH
+-endif()
+-
+-
+ project (x265)
+ cmake_minimum_required (VERSION 2.8.8...3.10) # OBJECT libraries require 2.8.8
+ include(CheckIncludeFiles)
+@@ -270,14 +265,6 @@ if(GCC)
+     if(NOT INTEL_CXX AND NOT CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
+         add_definitions(-Wno-class-memaccess)
+     endif()
+-    if(ENABLE_HDR10_PLUS)
+-        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.8")
+-            message(FATAL_ERROR "gcc version above 4.8 required to support hdr10plus")
+-        endif()
+-        add_definitions(-std=gnu++11)
+-    else()
+-        add_definitions(-std=gnu++98)
+-    endif()
+     if(ENABLE_PIC)
+          add_definitions(-fPIC)
+     endif(ENABLE_PIC)
+@@ -988,6 +975,7 @@ endif()
+ if(SVTHEVC_FOUND)
+     target_link_libraries(x265-static ${SVT_HEVC_LIBRARY})
+ endif()
++target_link_libraries(x265-static ${PLATFORM_LIBS})
+ install(TARGETS x265-static
+     LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+     ARCHIVE DESTINATION ${LIB_INSTALL_DIR})
+diff --git a/source/cmake/FindNasm.cmake b/source/cmake/FindNasm.cmake
+index ff7eac622..9536ad453 100644
+--- a/source/cmake/FindNasm.cmake
++++ b/source/cmake/FindNasm.cmake
+@@ -20,6 +20,6 @@ if(NASM_EXECUTABLE)
+ endif()
+ 
+ # Provide standardized success/failure messages
+-find_package_handle_standard_args(nasm
++find_package_handle_standard_args(Nasm
+     REQUIRED_VARS NASM_EXECUTABLE
+     VERSION_VAR NASM_VERSION_STRING)
+diff --git a/source/common/md5.cpp b/source/common/md5.cpp
+index a9042f4e5..7e638e762 100644
+--- a/source/common/md5.cpp
++++ b/source/common/md5.cpp
+@@ -185,7 +185,10 @@ void MD5Final(MD5Context *ctx, uint8_t *digest)
+  */
+ void MD5Transform(uint32_t *buf, uint32_t *in)
+ {
+-    register uint32_t a, b, c, d;
++#if __cplusplus < 201703L
++    register
++#endif
++    uint32_t a, b, c, d;
+ 
+     a = buf[0];
+     b = buf[1];
+diff --git a/source/common/primitives.cpp b/source/common/primitives.cpp
+index 55f702c7b..78f905409 100644
+--- a/source/common/primitives.cpp
++++ b/source/common/primitives.cpp
+@@ -297,7 +297,7 @@ void PFX(cpu_emms)(void) {}
+ void PFX(cpu_cpuid)(uint32_t, uint32_t *eax, uint32_t *, uint32_t *, uint32_t *) { *eax = 0; }
+ void PFX(cpu_xgetbv)(uint32_t, uint32_t *, uint32_t *) {}
+ 
+-#if X265_ARCH_ARM == 0
++#if X265_ARCH_ARM == 0 || !defined(ENABLE_ASSEMBLY)
+ void PFX(cpu_neon_test)(void) {}
+ int PFX(cpu_fast_neon_mrc_test)(void) { return 0; }
+ #endif // X265_ARCH_ARM
+diff --git a/source/dynamicHDR10/json11/json11.cpp b/source/dynamicHDR10/json11/json11.cpp
+index 762577735..74f990a51 100644
+--- a/source/dynamicHDR10/json11/json11.cpp
++++ b/source/dynamicHDR10/json11/json11.cpp
+@@ -25,6 +25,7 @@
+ #include <cstdlib>
+ #include <cstdio>
+ #include <limits>
++#include <cstdint>
+ 
+ #if _MSC_VER
+ #pragma warning(disable: 4510) //const member cannot be default initialized
+-- 
+2.52.0
+

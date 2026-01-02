@@ -12,9 +12,8 @@ endif()
 
 # Need to patch CMakeLists to delete invalid POLICY settings for CMake < 3.5
 # and add an include to make it compile with GCC 15+.
-set(X265_PATCH1_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Removed-no-longer-valid-CMake-Policies.patch")
-set(X265_PATCH2_FILE "${CMAKE_CURRENT_LIST_DIR}/0002-Added-include-needed-for-gcc-15.patch")
-set(X265_CUSTOM_PATCHES ${X265_PATCH1_FILE} ${X265_PATCH2_FILE})
+set(X265_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Various-patches-to-make-it-work.patch")
+set(X265_CUSTOM_PATCHES ${X265_PATCH_FILE})
 create_git_reset_file(X265_RESET_REPO "X265" "${X265_SRC_DIR}")
 create_git_patch_file(X265_PATCH_REPO "X265" "${X265_SRC_DIR}" "${X265_CUSTOM_PATCHES}")
 
@@ -30,11 +29,10 @@ ensure_build_dir(X265_BUILD_DIR_12 "12bit")
 library_import_static_hint(X265_LIBRARY_12 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_12}")
 set(X265_COMPONENT_12 "X265 codec (12-bit)")
 set(X265_OPTIONS_12
-	"-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=OFF"
+	"-DENABLE_LIBVMAF=ON"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -51,15 +49,20 @@ create_cmake_configure_file(
 	"${X265_BUILD_DIR_12}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_12}"
-	3
 )
-include("${X265_CMAKE_CONFIGURE_FILE_12}")
+add_custom_target(x265_12bit_configure
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_12}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
+	COMMENT "Configuring X265 codec (12-bit)"
+	DEPENDS vmaf_install
+)
 
 add_custom_target(x265_12bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
 	COMMENT "Building X265 codec (12-bit)"
 	VERBATIM
+	DEPENDS x265_12bit_configure
 )
 
 # 10-bit build
@@ -68,7 +71,6 @@ library_import_static_hint(X265_LIBRARY_10 "x265${X265_SUFFIX_STATIC}" "${X265_B
 library_import_static_hint(X265_LIBRARY_HDR10_PLUS "hdr10plus" "${X265_BUILD_DIR_10}")
 set(X265_COMPONENT_10 "X265 codec (10-bit)")
 set(X265_OPTIONS_10
-	"-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
@@ -90,15 +92,20 @@ create_cmake_configure_file(
 	"${X265_BUILD_DIR_10}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_10}"
-	3
 )
-include("${X265_CMAKE_CONFIGURE_FILE_10}")
+add_custom_target(x265_10bit_configure
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_10}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
+	COMMENT "Configuring X265 codec (10-bit)"
+	DEPENDS vmaf_install
+)
 
 add_custom_target(x265_10bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
 	COMMENT "Building X265 codec (10-bit)"
 	VERBATIM
+	DEPENDS x265_10bit_configure
 )
 
 # 8-bit build
@@ -111,11 +118,10 @@ endif()
 set(X265_COMPONENT_8 "X265 codec (8-bit)")
 set(X265_EXTRA_LIBS "${X265_LIBRARY_12};${X265_LIBRARY_10}")
 set(X265_OPTIONS_8
-	"-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 	"-DENABLE_SHARED=${CMAKE_SHARED_MODE}"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=OFF"
+	"-DENABLE_LIBVMAF=ON"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -137,7 +143,7 @@ create_cmake_configure_file(
 )
 
 add_custom_target(x265_8bit_configure
-	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_8}"
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_8}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
 	COMMENT "Configuring x265 codec (8-bit)"
 	DEPENDS x265_10bit_build x265_12bit_build
