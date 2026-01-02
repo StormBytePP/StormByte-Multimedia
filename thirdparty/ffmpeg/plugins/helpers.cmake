@@ -98,7 +98,24 @@ macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options
 	if(NOT ${ARGC} EQUAL 4)
 		message(FATAL_ERROR "register_plugin_optional requires plugin name, a truthy value, plugin options if enabled and plugin options if disabled")
 	endif()
-	if(${_truthy_value})
+
+	# Resolve the actual boolean-like value. Callers typically pass a
+	# variable name (e.g. MSVC or WITH_NONFREE). If a variable with that
+	# name exists, use its value. If it does not exist, attempt to
+	# interpret common boolean literals (ON/OFF/TRUE/FALSE/1/0). Unknown
+	# bare identifiers (e.g. MSVC on non-Windows) are treated as false.
+	if(DEFINED ${_truthy_value})
+		set(_resolved "${${_truthy_value}}")
+	else()
+		string(TOUPPER "${_truthy_value}" _tv_upper)
+		if(_tv_upper STREQUAL "ON" OR _tv_upper STREQUAL "TRUE" OR _tv_upper STREQUAL "1")
+			set(_resolved "TRUE")
+		else()
+			set(_resolved "")
+		endif()
+	endif()
+
+	if(_resolved)
 		register_plugin(${_plugin_name} ${_enable_plugin_options})
 	else()
 		# Register plugin options: append to a temporary list and export to parent
@@ -133,15 +150,23 @@ macro(register_plugin_optional_negated _plugin_name _truthy_value _enable_plugin
 
 	# Resolve the actual boolean-like value. Callers typically pass a
 	# variable name (e.g. MSVC or WITH_NONFREE). If a variable with that
-	# name exists, use its value; otherwise treat the argument as a literal
-	# value (e.g. "ON", "OFF", "0", "1"). This makes evaluation more
-	# robust across scopes and different caller styles.
+	# name exists, use its value. If it does not exist, attempt to
+	# interpret common boolean literals (ON/OFF/TRUE/FALSE/1/0). If the
+	# argument is an unknown bare identifier (for example `MSVC` on
+	# non-Windows), treat it as false.
 	if(DEFINED ${_truthy_value})
 		set(_resolved "${${_truthy_value}}")
 	else()
-		set(_resolved "${_truthy_value}")
+		string(TOUPPER "${_truthy_value}" _tv_upper)
+		if(_tv_upper STREQUAL "ON" OR _tv_upper STREQUAL "TRUE" OR _tv_upper STREQUAL "1")
+			set(_resolved "TRUE")
+		else()
+			# OFF/FALSE/0/empty and unknown identifiers are treated as false
+			set(_resolved "")
+		endif()
 	endif()
 
+	# _resolved is non-empty for truthy values
 	if(NOT _resolved)
 		register_plugin(${_plugin_name} ${_enable_plugin_options})
 	else()
