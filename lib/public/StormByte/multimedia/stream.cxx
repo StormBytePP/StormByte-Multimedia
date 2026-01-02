@@ -3,7 +3,12 @@
 using namespace StormByte::Multimedia;
 
 Stream::Stream(const class Codec& codec, enum Type type) noexcept:
-m_codec(codec), m_type(type), m_metadata() {}
+m_codec(codec), m_type(type), m_metadata() {
+	// If codec is mjpeg, then stream will be set as Video when it is Attachment
+	if (codec.Name() == "mjpeg") {
+		m_type = Type::Attachment;
+	}
+}
 
 enum Type Stream::Type() const noexcept {
 	return m_type;

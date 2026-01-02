@@ -76,6 +76,13 @@ int main(int argc, char** argv) {
 				std::cout << "Subtitle" << std::endl;
 				std::cout << "  Codec: " << stream.Codec().Name() << " - " << stream.Codec().Description() << std::endl;
 				break;
+			case StormByte::Multimedia::Type::Attachment:
+				std::cout << "Attachment" << std::endl;
+				std::cout << "  Codec: " << stream.Codec().Name() << " - " << stream.Codec().Description() << std::endl;
+				for (const auto& [key, value] : stream.Metadata()) {
+					std::cout << "  Metadata: " << key << " = " << value << std::endl;
+				}
+				break;
 			default:
 				std::cout << "Unknown" << std::endl;
 				break;
