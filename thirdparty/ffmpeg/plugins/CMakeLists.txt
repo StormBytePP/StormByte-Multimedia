@@ -34,7 +34,7 @@ register_plugin_optional("fdk-aac" WITH_NONFREE "-Dlibfdk_aac=enabled" "-Dlibfdk
 register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")
 register_plugin("mp3lame" "-Dlibmp3lame=enabled")
 register_plugin("opus" "-Dlibopus=enabled")
-register_plugin("vmaf" "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled")
+register_plugin_optional_negated("vmaf" MSVC "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled" "-Dlibvmaf=disabled -Dlibvmaf_filter=disabled -Dvmafmotion_filter=disabled")
 register_plugin("vorbis" "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")
 register_plugin("vpx" "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")
 register_plugin("vvenc" "-Dlibvvenc=enabled -Dlibvvenc_encoder=enabled")

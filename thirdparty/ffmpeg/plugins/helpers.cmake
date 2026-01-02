@@ -108,6 +108,50 @@ macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options
 	endif()
 endmacro()
 
+## register_plugin_optional_negated(_plugin_name _truthy_value _enable_plugin_options _disable_plugin_options)
+##
+## Conditionally register a plugin and its associated option fragments.
+##
+## Parameters:
+##  - _plugin_name: plugin target name to register when the condition is false
+##    (this macro is the negated form).
+##  - _truthy_value: expression evaluated as truthy/falsey; if falsy,
+##    `register_plugin(_plugin_name _enable_plugin_options)` is invoked.
+##  - _enable_plugin_options: option fragments appended to
+##    `FFMPEG_PLUGIN_OPTIONS` when the plugin is enabled.
+##  - _disable_plugin_options: option fragments appended when the plugin is
+##    disabled.
+##
+## Behavior:
+##  - Validates argument count and forwards to `register_plugin` when
+##    `_truthy_value` evaluates to false; otherwise appends the disabled
+##    option fragments into `FFMPEG_PLUGIN_OPTIONS`.
+macro(register_plugin_optional_negated _plugin_name _truthy_value _enable_plugin_options _disable_plugin_options)
+	if(NOT ${ARGC} EQUAL 4)
+		message(FATAL_ERROR "register_plugin_optional_negated requires plugin name, a truthy value, plugin options if enabled and plugin options if disabled")
+	endif()
+
+	# Resolve the actual boolean-like value. Callers typically pass a
+	# variable name (e.g. MSVC or WITH_NONFREE). If a variable with that
+	# name exists, use its value; otherwise treat the argument as a literal
+	# value (e.g. "ON", "OFF", "0", "1"). This makes evaluation more
+	# robust across scopes and different caller styles.
+	if(DEFINED ${_truthy_value})
+		set(_resolved "${${_truthy_value}}")
+	else()
+		set(_resolved "${_truthy_value}")
+	endif()
+
+	if(NOT _resolved)
+		register_plugin(${_plugin_name} ${_enable_plugin_options})
+	else()
+		# Register plugin options: append to a temporary list and export to parent
+		separate_arguments(_opts_list ${_disable_plugin_options} UNIX_COMMAND)
+		list(APPEND FFMPEG_PLUGIN_OPTIONS ${_opts_list})
+		set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)
+	endif()
+endmacro()
+
 ## list_to_columns(_out_var _indent _column_width ...)
 ##
 ## Format a list of strings into aligned, multi‑column output.
