@@ -341,4 +341,9 @@ else()
 endif()
 
 cmake_policy(SET CMP0079 NEW)
-target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
+# ASAN for GCC needs the explicit linkage of FFmpeg libraries even if they are bundled into StormByte-Multimedia
+if(ENABLE_ASAN)
+	target_link_libraries(StormByte-Multimedia PUBLIC FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
+else()
+	target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
+endif()
