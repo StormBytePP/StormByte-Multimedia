@@ -27,7 +27,6 @@ add_custom_target(mp3lame_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}"
 	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
 	COMMENT "Building MP3 encoder LAME"
-	USES_TERMINAL
 )
 
 add_custom_target(mp3lame_install

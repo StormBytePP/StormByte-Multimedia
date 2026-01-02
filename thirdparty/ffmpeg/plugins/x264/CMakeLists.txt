@@ -36,7 +36,6 @@ add_custom_target(x264_build
 	COMMAND ${ENV_NINJA_COMMAND} -C "${X264_BUILD_DIR}"
 	WORKING_DIRECTORY ${X264_BUILD_DIR}
 	COMMENT "Building X264 codec"
-	USES_TERMINAL
 )
 
 add_custom_target(x264_install

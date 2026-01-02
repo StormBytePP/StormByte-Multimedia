@@ -221,7 +221,6 @@ else()
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Configuring FFmpeg"
 		DEPENDS ffmpeg-plugins-install
-		USES_TERMINAL
 	)
 
 	add_custom_target(ffmpeg_build
@@ -229,8 +228,8 @@ else()
 		COMMAND ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}"
 		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
 		COMMENT "Building FFmpeg"
-		USES_TERMINAL
 		DEPENDS ${FFMPEG_CONFIGURED}
+		USES_TERMINAL
 	)
 
 	add_custom_target(ffmpeg_install

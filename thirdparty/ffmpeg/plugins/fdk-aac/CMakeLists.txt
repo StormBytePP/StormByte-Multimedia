@@ -29,7 +29,6 @@ add_custom_target(fdk-aac_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}"
 	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
 	COMMENT "Building FDK_AAC"
-	USES_TERMINAL
 )
 add_custom_target(fdk-aac_install
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${FDK_AAC_BUILD_DIR}" --target install

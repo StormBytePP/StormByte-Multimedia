@@ -30,7 +30,6 @@ add_custom_target(ogg_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${OGG_BUILD_DIR}"
 	WORKING_DIRECTORY "${OGG_BUILD_DIR}"
 	COMMENT "Building OGG container"
-	USES_TERMINAL
 )
 
 add_custom_target(ogg_install

@@ -28,7 +28,6 @@ add_custom_target(vvenc_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${VVENC_BUILD_DIR}"
 	WORKING_DIRECTORY "${VVENC_BUILD_DIR}"
 	COMMENT "Building VVenc codec"
-	USES_TERMINAL
 )
 
 add_custom_target(vvenc_install

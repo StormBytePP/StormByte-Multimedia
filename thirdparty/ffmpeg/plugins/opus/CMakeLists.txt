@@ -98,7 +98,6 @@ add_custom_target(opus_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${OPUS_BUILD_DIR}"
 	WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
 	COMMENT "Building Opus codec"
-	USES_TERMINAL
 )
 add_custom_target(opus_install
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${OPUS_BUILD_DIR}" --target install

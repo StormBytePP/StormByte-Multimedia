@@ -60,7 +60,6 @@ add_custom_target(vpx_build
 	COMMAND ${ENV_NINJA_COMMAND} -C "${VPX_BUILD_DIR}"
 	WORKING_DIRECTORY ${VPX_BUILD_DIR}
 	COMMENT "Building VPX codec"
-	USES_TERMINAL
 )
 
 add_custom_target(vpx_install

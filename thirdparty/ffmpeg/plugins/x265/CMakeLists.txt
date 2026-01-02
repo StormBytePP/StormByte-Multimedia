@@ -60,7 +60,6 @@ add_custom_target(x265_12bit_build
 	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
 	COMMENT "Building X265 codec (12-bit)"
 	VERBATIM
-	USES_TERMINAL
 )
 
 # 10-bit build
@@ -100,7 +99,6 @@ add_custom_target(x265_10bit_build
 	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
 	COMMENT "Building X265 codec (10-bit)"
 	VERBATIM
-	USES_TERMINAL
 )
 
 # 8-bit build
@@ -141,7 +139,6 @@ create_cmake_configure_file(
 add_custom_target(x265_8bit_configure
 	COMMAND ${ENV_RUNNER_SILENT} ${ENV_CMAKE_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_8}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-	USES_TERMINAL
 	COMMENT "Configuring x265 codec (8-bit)"
 	DEPENDS x265_10bit_build x265_12bit_build
 )
@@ -152,7 +149,6 @@ add_custom_target(x265_8bit_build
 	COMMENT "Configure and build x265 (8-bit)"
 	VERBATIM
 	DEPENDS x265_8bit_configure
-	USES_TERMINAL
 )
 # Hack: In Windows, under "not release" builds, the x265 8-bit target
 # tries to install x265.pdb to the install directory, but this fails
