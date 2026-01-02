@@ -17,11 +17,6 @@ if (WITH_FFMPEG STREQUAL "SYSTEM")
 else()
 	message(STATUS "Setting up bundled FFmpeg")
 
-	if (NOT CMAKE_BUILD_TYPE)
-		set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
-	endif()
-	string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_LOWERCASE)
-
 	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
 	include(GNUInstallDirs)
 
