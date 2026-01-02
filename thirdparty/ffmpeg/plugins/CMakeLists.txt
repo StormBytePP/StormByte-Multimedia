@@ -53,6 +53,12 @@ register_plugin_optional(
 	"-Dlibx265=enabled -Dlibx265_encoder=enabled"
 	"-Dlibx265=disabled -Dlibx265_encoder=disabled"
 )
+register_plugin_optional(
+	"xvid"
+	WITH_GPL
+	"-Dlibxvid=enabled -Dlibxvid_encoder=enabled"
+	"-Dlibxvid=disabled -Dlibxvid_encoder=disabled"
+)
 
 # Propagate options to ffmpeg build
 set(FFMPEG_PLUGIN_OPTIONS ${FFMPEG_PLUGIN_OPTIONS} PARENT_SCOPE)

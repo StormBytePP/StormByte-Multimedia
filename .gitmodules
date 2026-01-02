@@ -41,3 +41,6 @@
 [submodule "pthread-Win32"]
 	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
+[submodule "XVID codec"]
+	path = thirdparty/ffmpeg/plugins/xvid/cmake-port/src
+	url = https://github.com/delthas/xvid.git
