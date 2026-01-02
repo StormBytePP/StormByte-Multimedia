@@ -38,3 +38,6 @@
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/vmaf/src
 	url = https://github.com/Netflix/vmaf.git
+[submodule "pthread-Win32"]
+	path = thirdparty/ffmpeg/deps/pthread-win32/src
+	url = https://github.com/GerHobbelt/pthread-win32.git

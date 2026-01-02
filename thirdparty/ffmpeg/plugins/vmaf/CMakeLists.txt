@@ -50,3 +50,6 @@ add_custom_target(vmaf_install
 )
 
 set(vmaf_outputs "${VMAF_LIBRARY}" PARENT_SCOPE)
+if(MSVC)
+	set(vmaf_links pthread_win32 PARENT_SCOPE)
+endif()

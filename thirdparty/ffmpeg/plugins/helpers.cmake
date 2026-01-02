@@ -54,6 +54,14 @@ macro(register_plugin _plugin_name _plugin_options)
 		IMPORTED_LOCATION_RELWITHDEBINFO "${${_plugin_name}_outputs}"
 	)
 
+	# If ${_plugin_name}_links is defined, set the INTERFACE_LINK_LIBRARIES
+	# property on the imported target so that consumers linking against the
+	# plugin also link against these libraries.
+	if(DEFINED ${_plugin_name}_links)
+		set_property(TARGET ${_plugin_name} PROPERTY
+			INTERFACE_LINK_LIBRARIES "${${_plugin_name}_links}")
+	endif()
+
 	# Add dependency on the plugin target
 	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
 	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_install)

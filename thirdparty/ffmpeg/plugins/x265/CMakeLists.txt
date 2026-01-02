@@ -24,14 +24,6 @@ include("${X265_RESET_REPO}")
 include("${X265_PATCH_REPO}")
 
 # Build 3 phases: 12bit, 10bit+hdr10+ and 8bit (this last one exposing C API)
-# VMAF is disabled on Windows as it does not compile (requires pthread)
-if(MSVC)
-	set(WITH_VMAF OFF)
-	set(INDENT 3)
-else()
-	set(WITH_VMAF ON)
-	set(INDENT 0)
-endif()
 # 12-bit build
 ensure_build_dir(X265_BUILD_DIR_12 "12bit")
 library_import_static_hint(X265_LIBRARY_12 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_12}")
@@ -40,7 +32,7 @@ set(X265_OPTIONS_12
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=${WITH_VMAF}"
+	"-DENABLE_LIBVMAF=ON"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -57,33 +49,21 @@ create_cmake_configure_file(
 	"${X265_BUILD_DIR_12}"
 	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_12}"
-	${INDENT}
 )
-if(MSVC)
-	include(${X265_CMAKE_CONFIGURE_FILE_12})
+add_custom_target(x265_12bit_configure
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_12}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
+	COMMENT "Configuring X265 codec (12-bit)"
+	DEPENDS vmaf_install
+)
 
-	add_custom_target(x265_12bit_build
-		COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
-		COMMENT "Building X265 codec (12-bit)"
-		VERBATIM
-	)
-else()
-	add_custom_target(x265_12bit_configure
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_12}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
-		COMMENT "Configuring X265 codec (12-bit)"
-		DEPENDS vmaf_install
-	)
-
-	add_custom_target(x265_12bit_build
-		COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
-		COMMENT "Building X265 codec (12-bit)"
-		VERBATIM
-		DEPENDS x265_12bit_configure
-	)
-endif()
+add_custom_target(x265_12bit_build
+	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
+	COMMENT "Building X265 codec (12-bit)"
+	VERBATIM
+	DEPENDS x265_12bit_configure
+)
 
 # 10-bit build
 ensure_build_dir(X265_BUILD_DIR_10 "10bit")
@@ -94,7 +74,7 @@ set(X265_OPTIONS_10
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=${WITH_VMAF}"
+	"-DENABLE_LIBVMAF=ON"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -114,31 +94,20 @@ create_cmake_configure_file(
 	"${X265_OPTIONS_10}"
 	${INDENT}
 )
-if(MSVC)
-	include(${X265_CMAKE_CONFIGURE_FILE_10})
+add_custom_target(x265_10bit_configure
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_10}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
+	COMMENT "Configuring X265 codec (10-bit)"
+	DEPENDS vmaf_install
+)
 
-	add_custom_target(x265_10bit_build
-		COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
-		COMMENT "Building X265 codec (10-bit)"
-		VERBATIM
-	)
-else()
-	add_custom_target(x265_10bit_configure
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_10}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
-		COMMENT "Configuring X265 codec (10-bit)"
-		DEPENDS vmaf_install
-	)
-
-	add_custom_target(x265_10bit_build
-		COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
-		COMMENT "Building X265 codec (10-bit)"
-		VERBATIM
-		DEPENDS x265_10bit_configure
-	)
-endif()
+add_custom_target(x265_10bit_build
+	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
+	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
+	COMMENT "Building X265 codec (10-bit)"
+	VERBATIM
+	DEPENDS x265_10bit_configure
+)
 
 # 8-bit build
 ensure_build_dir(X265_BUILD_DIR_8 "8bit")
@@ -153,7 +122,7 @@ set(X265_OPTIONS_8
 	"-DENABLE_SHARED=${CMAKE_SHARED_MODE}"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=${WITH_VMAF}"
+	"-DENABLE_LIBVMAF=ON"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -273,3 +242,4 @@ endif()
 # Add a dummy target for dependencies
 add_custom_target(x265_install DEPENDS x265_8bit_install)
 set(x265_outputs "${X265_LIBRARY}" PARENT_SCOPE)
+set(x265_links pthread_win32 PARENT_SCOPE)
