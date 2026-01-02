@@ -146,7 +146,7 @@ add_custom_target(x265_8bit_configure
 add_custom_target(x265_8bit_build
 	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_8}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-	COMMENT "Configure and build x265 (8-bit)"
+	COMMENT "Building x265 codec (8-bit)"
 	VERBATIM
 	DEPENDS x265_8bit_configure
 )
