@@ -155,7 +155,7 @@ add_custom_target(x265_8bit_build
 # because its name is libx265.pdb instead. To avoid this, we build the
 # target without the install step, and manually copy the library file
 # to the expected filename.
-if(FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
+if(NOT FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
 	if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
 		add_custom_command(TARGET x265_8bit_build POST_BUILD
 			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.pdb" "${X265_BUILD_DIR_8}/x265.pdb"
