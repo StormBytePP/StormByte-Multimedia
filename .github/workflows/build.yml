@@ -78,7 +78,10 @@ jobs:
           -DWITH_NONFREE=${{ matrix.nonfree }}
           -DWITH_GPL=${{ matrix.gpl }}
           -DWITH_STORMBYTE=BUNDLED
-          ${{ matrix.compiler == 'clang-libc++' && format('-DCMAKE_CXX_FLAGS=-stdlib={0}', 'libc++') || '' }}
+          ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_CXX_FLAGS=-stdlib=libc++' || '' }}
+          ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++' || '' }}
+          ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_SHARED_LINKER_FLAGS=-stdlib=libc++' || '' }}
+          ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_MODULE_LINKER_FLAGS=-stdlib=libc++' || '' }}
         build-type: ${{ env.BUILD_TYPE }}
         run-test: true
         ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
