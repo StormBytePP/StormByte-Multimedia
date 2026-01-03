@@ -206,13 +206,6 @@ else()
 	)
 	include("${FFMPEG_GIT_SWITCH_FILE}")
 
-	# Patch to detect correct libvmaf symbol
-	set(FFMPEG_VMAF_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/vmaf-correct-symbol.patch")
-	create_git_patch_file(FFMPEG_PATCH_REPO "FFMPEG VMAF corrections" "${FFMPEG_SRC_DIR}" "${FFMPEG_VMAF_PATCH_FILE}")
-
-	# Patch the x265 sources
-	include("${FFMPEG_PATCH_REPO}")
-
 	create_meson_setup_file(
 		FFMPEG_MESON_SETUP_FILE
 		"${FFMPEG_COMPONENT}"
