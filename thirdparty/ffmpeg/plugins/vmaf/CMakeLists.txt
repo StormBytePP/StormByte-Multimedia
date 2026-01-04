@@ -56,7 +56,7 @@ include("${VMAF_LIBRARY_CREATE_FILE}")
 
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 	# We have to repack the VMAF static library to link pthread_win32 into it
-	set(VMAF_LIBRARY "${VMAF_BUILD_DIR}/libvmaf.a")
+	set(VMAF_LIBRARY "${VMAF_BUILD_DIR}/src/libvmaf.a")
 	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3")
 	create_bundle_static_libraries(VMAF_BUNDLE_FILE "vmaf" "${VMAF_LIBRARY};${PTHREAD_WIN32_LIBRARY}")
 	add_custom_command(TARGET vmaf_install POST_BUILD
