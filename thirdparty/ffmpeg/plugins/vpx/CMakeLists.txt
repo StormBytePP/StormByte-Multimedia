@@ -45,3 +45,11 @@ create_meson_component(
 	2
 )
 include("${VPX_LIBRARY_CREATE_FILE}")
+
+if(MSVC)
+	# On MSVC library is named libvpx.a so we need to rename it to vpx.lib
+	add_custom_command(TARGET vpx_install POST_BUILD
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libvpx.a" "${BUILDMASTER_INSTALL_LIBDIR}/vpx.lib"
+		COMMENT "Renaming libvpx.a to vpx.lib for MSVC compatibility"
+	)
+endif()
