@@ -32,8 +32,10 @@ macro(register_plugin _plugin_name _plugin_options)
 	endif()
 
 	# Add dependency on the plugin target
-	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
 	add_dependencies(ffmpeg-plugins ${_plugin_name}_install)
+
+	# Add transitive dependencies
+	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
 
 	# Register plugin options: append to a temporary list and export to parent
 	separate_arguments(_opts_list ${_plugin_options} UNIX_COMMAND)

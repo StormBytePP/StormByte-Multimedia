@@ -9,7 +9,7 @@ create_git_reset_file(
 	"${XVID_COMPONENT}"
 	"${XVID_SRC_DIR}/src"
 )
-include("${XVID_GIT_RESET_FILE}"
+include("${XVID_GIT_RESET_FILE}")
 create_git_patch_file(
 	XVID_GIT_PATCH_FILE
 	"${XVID_COMPONENT}"
@@ -19,7 +19,7 @@ create_git_patch_file(
 include("${XVID_GIT_PATCH_FILE}")
 create_cmake_component(
 	XVID_LIBRARY_CREATE_FILE
-	"xvid"
+	"xvidcore"
 	"${XVID_COMPONENT}"
 	"${XVID_SRC_DIR}"
 	"${XVID_BUILD_DIR}"
@@ -31,7 +31,7 @@ create_cmake_component(
 include("${XVID_LIBRARY_CREATE_FILE}")
 
 # Reset repo after install
-add_custom_command(TARGET xvid_install POST_BUILD
+add_custom_command(TARGET xvidcore_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${XVID_GIT_RESET_FILE}"
 	COMMENT "Resetting XVID source directory after installation"
 )

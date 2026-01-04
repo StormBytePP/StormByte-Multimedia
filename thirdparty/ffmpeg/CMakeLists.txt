@@ -1,6 +1,7 @@
 # Configure options
 option(WITH_NONFREE "Enable nonfree codecs in FFmpeg build" OFF)
 option(WITH_GPL "Enable GPL components in FFmpeg build" OFF)
+cmake_policy(SET CMP0079 NEW)
 if(NOT DEFINED WITH_FFMPEG)
 	if(WIN32)
 		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)" FORCE)
@@ -228,22 +229,17 @@ else()
 
 	# Create library aliases
 	foreach(_lib IN LISTS FFMPEG_LIBRARIES)
+		target_include_directories(${_lib}_component SYSTEM INTERFACE ${BUILDMASTER_INSTALL_INCLUDEDIR})
 		add_library(FFmpeg::${_lib} ALIAS ${_lib}_component)
 	endforeach()
-	add_library(FFmpeg::plugins ALIAS ffmpeg-plugins)
-
+	
 	# According to FFMmpeg documentation, when linking statically,
 	# -Wl,-Bsymbolic should be used to avoid symbol conflicts.
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
-	
+
+	target_link_libraries(StormByte-Multimedia PRIVATE ffmpeg-plugins)
 endif()
 
-cmake_policy(SET CMP0079 NEW)
-# ASAN for GCC needs the explicit linkage of FFmpeg libraries even if they are bundled into StormByte-Multimedia
-if(ENABLE_ASAN)
-	target_link_libraries(StormByte-Multimedia PUBLIC FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter FFmpeg::plugins)
-else()
-	target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter FFmpeg::plugins)
-endif()
+target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)

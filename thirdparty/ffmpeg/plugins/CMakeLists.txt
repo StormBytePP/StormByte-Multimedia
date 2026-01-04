@@ -3,7 +3,6 @@ message(STATUS "\tSetting up FFmpeg plugins")
 # Add helpers so they are available
 include(helpers.cmake)
 
-# Create a target that will aggregate all plugins
 add_library(ffmpeg-plugins INTERFACE)
 
 # Add dependencies
@@ -36,7 +35,7 @@ register_plugin_optional(
 	"-Dlibx265=disabled -Dlibx265_encoder=disabled"
 )
 register_plugin_optional(
-	"xvid"
+	"xvidcore"
 	WITH_GPL
 	"-Dlibxvid=enabled -Dlibxvid_encoder=enabled"
 	"-Dlibxvid=disabled -Dlibxvid_encoder=disabled"
