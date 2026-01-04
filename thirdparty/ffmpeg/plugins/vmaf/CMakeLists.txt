@@ -36,7 +36,7 @@ if(MSVC)
 		"${VMAF_OPTIONS}"
 		"${FFMPEG_BUNDLED_TYPE}"
 		"vmaf"
-		"pthread_win32"
+		"pthread-win32_install"
 		2
 	)
 else()

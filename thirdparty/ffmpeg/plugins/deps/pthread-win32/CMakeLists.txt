@@ -10,7 +10,7 @@ create_cmake_component(
 	"${PTHREAD_WIN32_BUILD_DIR}"
 	"${PTHREAD_WIN32_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
-	"pthread-win32"
+	"pthreadVCE3;pthreadVSE3;pthreadVC3"
 	2
 )
 include("${PTHREAD_WIN32_LIBRARY_CREATE_FILE}")
