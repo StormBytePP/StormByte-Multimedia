@@ -1,0 +1,89 @@
+From 1805b2c5748102c0d1e8974f66a84d54edcb3b8f Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Sun, 4 Jan 2026 20:07:52 +0100
+Subject: [PATCH] Enable C++ compiler for some libraries
+
+---
+ meson.build | 31 ++++++++++++++++++-------------
+ 1 file changed, 18 insertions(+), 13 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 25aa2f84b2..e36dd94f4d 100644
+--- a/meson.build
++++ b/meson.build
+@@ -2047,6 +2047,11 @@ foreach check : all_checks
+   check = check[1]
+ 
+   name = check[0]
++  cpp_only = ['libvmaf', 'libvmaf_cuda']
++  probe_compiler = cc
++  if name in cpp_only
++    probe_compiler = meson.get_compiler('cpp')
++  endif
+   opt_name = options_map.get(name, name)
+ 
+   if check_type == 'func'
+@@ -2232,7 +2237,7 @@ foreach check : all_checks
+         endif
+ 
+         if not conf.has(header.underscorify())
+-          has_header = internal_dep or cc.has_header(header, dependencies: extra_deps)
++          has_header = internal_dep or probe_compiler.has_header(header, dependencies: extra_deps)
+           conf.set10(header.underscorify().to_lower(), has_header)
+           found = found and has_header
+         endif
+@@ -2242,15 +2247,15 @@ foreach check : all_checks
+     if found and not internal_dep
+       n_funcs_found = 0
+       foreach symbol : funcs
+-        if check_type == 'header-func'
+-          if cc.has_header_symbol(headers[0], symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args)
+-            n_funcs_found += 1
+-          endif
+-        else
+-          if cc.has_function(symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args)
+-            n_funcs_found += 1
++          if check_type == 'header-func'
++            if probe_compiler.has_header_symbol(headers[0], symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args)
++              n_funcs_found += 1
++            endif
++          else
++            if probe_compiler.has_function(symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args)
++              n_funcs_found += 1
++            endif
+           endif
+-        endif
+       endforeach
+       if has_any_func
+         found = n_funcs_found >= 1
+@@ -2262,7 +2267,7 @@ foreach check : all_checks
+     if found and not internal_dep
+       n_defines_found = 0
+       foreach symbol : defines
+-        if cc.get_define(symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args) != ''
++        if probe_compiler.get_define(symbol, dependencies : extra_deps, prefix: prefix, args : c_args + project_c_args) != ''
+           n_defines_found += 1
+         endif
+       endforeach
+@@ -2270,15 +2275,15 @@ foreach check : all_checks
+     endif
+ 
+     if found and compiles != '' and not internal_dep
+-      found = cc.compiles('\n\n'.join([prefix, compiles]), dependencies : extra_deps, args : c_args + project_c_args, name: name)
++      found = probe_compiler.compiles('\n\n'.join([prefix, compiles]), dependencies : extra_deps, args : c_args + project_c_args, name: name)
+     endif
+ 
+     if found and links != '' and not internal_dep
+-      found = cc.links('\n\n'.join([prefix, links]), dependencies : extra_deps, args : c_args + project_c_args, name: name)
++      found = probe_compiler.links('\n\n'.join([prefix, links]), dependencies : extra_deps, args : c_args + project_c_args, name: name)
+     endif
+ 
+     if found and type != '' and not internal_dep
+-      found = cc.has_type(type, prefix : prefix, dependencies : extra_deps, args : c_args + project_c_args)
++      found = probe_compiler.has_type(type, prefix : prefix, dependencies : extra_deps, args : c_args + project_c_args)
+     endif
+ 
+     if check_type != 'header'
+-- 
+2.52.0
+

@@ -12,27 +12,15 @@ set(XVID_OPTIONS
 	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
-create_cmake_configure_file(
-	XVID_CMAKE_CONFIGURE_FILE
+create_cmake_component(
+	XVID_LIBRARY_CREATE_FILE
+	"xvid"
 	"${XVID_COMPONENT}"
 	"${XVID_SRC_DIR}"
 	"${XVID_BUILD_DIR}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${XVID_OPTIONS}"
+	"${FFMPEG_BUNDLED_TYPE}"
+	"xvidcore"
 	2
 )
-include("${XVID_CMAKE_CONFIGURE_FILE}")
-
-add_custom_target(xvid_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${XVID_BUILD_DIR}"
-	WORKING_DIRECTORY "${XVID_BUILD_DIR}"
-	COMMENT "Building XVID codec"
-)
-
-add_custom_target(xvid_install
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${XVID_BUILD_DIR}" --target install
-	WORKING_DIRECTORY "${XVID_BUILD_DIR}"
-	COMMENT "Installing XVID codec internally"
-	DEPENDS xvid_build
-)
-set(xvid_outputs "${XVID_LIBRARY}" PARENT_SCOPE)
+include("${XVID_LIBRARY_CREATE_FILE}")

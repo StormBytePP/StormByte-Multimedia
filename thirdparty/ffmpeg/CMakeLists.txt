@@ -1,11 +1,9 @@
 # Configure options
 option(WITH_NONFREE "Enable nonfree codecs in FFmpeg build" OFF)
 option(WITH_GPL "Enable GPL components in FFmpeg build" OFF)
-set(FFMPEG_BUNDLED "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)")
 if(NOT DEFINED WITH_FFMPEG)
 	if(WIN32)
 		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)" FORCE)
-		set(FFMPEG_BUNDLED "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)" FORCE)
 	else()
 		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)")
 	endif()
@@ -17,47 +15,16 @@ if (WITH_FFMPEG STREQUAL "SYSTEM")
 else()
 	message(STATUS "Setting up bundled FFmpeg")
 
+	set(FFMPEG_BUNDLED_TYPE "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)")
+
 	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
 	include(GNUInstallDirs)
 
-	set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/install")
-	set(FFMPEG_INSTALL_LIB_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-	set(FFMPEG_INSTALL_BIN_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_BINDIR}")
-	set(FFMPEG_INSTALL_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_INCLUDEDIR}")
-
-	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}")
-	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_LIB_DIR}")
-	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
-	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_BIN_DIR}")
-	file(MAKE_DIRECTORY "${FFMPEG_INSTALL_INCLUDE_DIR}")
-
 	# Set env variables
 	if(WIN32)
-		set(LIB "${FFMPEG_INSTALL_LIB_DIR}")
-		set(INCLUDE "${FFMPEG_INSTALL_INCLUDE_DIR}")
-	else()
-		set(CFLAGS "-I${FFMPEG_INSTALL_INCLUDE_DIR}")
-		set(CXXFLAGS "-I${FFMPEG_INSTALL_INCLUDE_DIR}")
-		set(LDFLAGS "-L${FFMPEG_INSTALL_LIB_DIR}")
-	endif()
-
-	# Set PKG_CONFIG_PATH to include our internal pkgconfig files
-	set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
-
-	# Update runner with new env vars
-	update_env_runner()
-
-	# Configure build mode
-	if(FFMPEG_BUNDLED STREQUAL "static")
-		set(CMAKE_SHARED_MODE OFF)
-		set(MESON_SHARED_MODE "static")
-	else()
-		set(CMAKE_SHARED_MODE ON)
-		set(MESON_SHARED_MODE "shared")
-	endif()
-
-	# Configure compile flags
-	if(MSVC)
+		set(FFMPEG_BUNDLED_TYPE "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)" FORCE)
+		set(LIB "${BUILDMASTER_INSTALL_LIBDIR}")
+		set(INCLUDE "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		# Use /MD or /MT depending on shared/static build
 		if(CMAKE_SHARED_MODE)
 			string(REPLACE "/MT" "/MD" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
@@ -66,18 +33,32 @@ else()
 			string(REPLACE "/MD" "/MT" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 			string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 		endif()
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${FFMPEG_INSTALL_INCLUDE_DIR}")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /I${FFMPEG_INSTALL_INCLUDE_DIR}")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	else()
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${FFMPEG_INSTALL_INCLUDE_DIR}")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${FFMPEG_INSTALL_INCLUDE_DIR}")
+		set(CFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		set(CXXFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		set(LDFLAGS "-L${BUILDMASTER_INSTALL_LIBDIR}")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LDFLAGS}")
 		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LDFLAGS}")
 	endif()
 
+	# Set PKG_CONFIG_PATH to include our internal pkgconfig files
+	set(PKG_CONFIG_PATH "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
+	file(MAKE_DIRECTORY "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
+
+	# Update runner with new env vars
+	update_env_runner()
+
+	# Check build mode
+	if(NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "static" AND NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "shared")
+		message(FATAL_ERROR "FFMPEG_BUNDLED_TYPE must be either 'static' or 'shared'")
+	endif()
+
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
-		"-Ddefault_library=${MESON_SHARED_MODE}"
 		# Disabled features we don't need / want
 		"-Dprograms=disabled"
 		"-Dtests=disabled"
@@ -143,7 +124,7 @@ else()
 		'-Dbzlib=disabled'
 		'-Dlzma=disabled'
 	)
-	if(FFMPEG_BUNDLED STREQUAL "static")
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 		list(APPEND FFMPEG_MESON_OPTIONS "-Db_staticpic=true")
 	endif()
 
@@ -206,125 +187,50 @@ else()
 	)
 	include("${FFMPEG_GIT_SWITCH_FILE}")
 
-	create_meson_setup_file(
-		FFMPEG_MESON_SETUP_FILE
+	# Apply patch
+	create_git_patch_file(
+		FFMPEG_GIT_PATCH_FILE
 		"${FFMPEG_COMPONENT}"
 		"${FFMPEG_SRC_DIR}"
+		"${CMAKE_CURRENT_LIST_DIR}/0001-Enable-C-compiler-for-some-libraries.patch"
+	)
+	include("${FFMPEG_GIT_PATCH_FILE}")
+
+	set(FFMPEG_LIBRARIES "avutil;avcodec;avformat;swscale;swresample;avfilter")
+
+	create_meson_dependant_component(
+		FFMPEG_LIBRARY_CREATE_FILE
+		"ffmpeg"
+		"FFmpeg"
+		"${FFMPEG_SRC_DIR}"
 		"${FFMPEG_BUILD_DIR}"
-		"${FFMPEG_INSTALL_DIR}"
 		"${FFMPEG_OPTIONS}"
+		"${FFMPEG_BUNDLED_TYPE}"
+		"${FFMPEG_LIBRARIES}"
+		"ffmpeg-plugins"
+		1
 	)
+	include("${FFMPEG_LIBRARY_CREATE_FILE}")
+	add_dependencies(ffmpeg_configure ffmpeg-plugins)
 
-	set(FFMPEG_CONFIGURED "${FFMPEG_BUILD_DIR}/.configured")
-	add_custom_command(
-		OUTPUT ${FFMPEG_CONFIGURED}
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P ${FFMPEG_MESON_SETUP_FILE}
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E touch ${FFMPEG_CONFIGURED}
-		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
-		COMMENT "Configuring FFmpeg"
-		DEPENDS ffmpeg-plugins-install
-	)
-
-	add_custom_target(ffmpeg_build
-		COMMAND_EXPAND_LISTS
-		COMMAND ${ENV_NINJA_COMMAND} -C "${FFMPEG_BUILD_DIR}"
-		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
-		COMMENT "Building FFmpeg"
-		DEPENDS ${FFMPEG_CONFIGURED}
-		USES_TERMINAL
-	)
-
-	add_custom_target(ffmpeg_install
-		COMMAND_EXPAND_LISTS
-		COMMAND ${ENV_NINJA_SILENT_COMMAND} -C "${FFMPEG_BUILD_DIR}" install
-		WORKING_DIRECTORY ${FFMPEG_BUILD_DIR}
-		COMMENT "Installing FFmpeg internally"
-		DEPENDS ffmpeg_build
-	)
-
-	if(FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 		# On Windows, libraries are named lib*.a; rename them to *.lib
 		add_custom_command(TARGET ffmpeg_install POST_BUILD
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libavutil.a" "${FFMPEG_INSTALL_LIB_DIR}/avutil.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libavcodec.a" "${FFMPEG_INSTALL_LIB_DIR}/avcodec.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libavformat.a" "${FFMPEG_INSTALL_LIB_DIR}/avformat.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libswscale.a" "${FFMPEG_INSTALL_LIB_DIR}/swscale.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libswresample.a" "${FFMPEG_INSTALL_LIB_DIR}/swresample.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libavfilter.a" "${FFMPEG_INSTALL_LIB_DIR}/avfilter.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavutil.a" "${BUILDMASTER_INSTALL_LIBDIR}/avutil.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavcodec.a" "${BUILDMASTER_INSTALL_LIBDIR}/avcodec.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavformat.a" "${BUILDMASTER_INSTALL_LIBDIR}/avformat.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libswscale.a" "${BUILDMASTER_INSTALL_LIBDIR}/swscale.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libswresample.a" "${BUILDMASTER_INSTALL_LIBDIR}/swresample.lib"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavfilter.a" "${BUILDMASTER_INSTALL_LIBDIR}/avfilter.lib"
 			COMMENT "Renaming FFmpeg libraries to .lib extensions"
 		)
 	endif()
 
-	# Set a list or artifacts that will be installed
-	set(_ffmpeg_libs avutil avcodec avformat swscale swresample avfilter)
-	set(_ffmpeg_outputs "")
-
-	# First pass: compute the expected output library paths
-	foreach(_lib IN LISTS _ffmpeg_libs)
-		if(FFMPEG_BUNDLED STREQUAL "static")
-			library_import_static_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
-		else()
-			library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
-		endif()
-		list(APPEND _ffmpeg_outputs "${_libpath}")
+	# Create library aliases
+	foreach(_lib IN LISTS FFMPEG_LIBRARIES)
+		add_library(FFmpeg::${_lib} ALIAS ${_lib}_component)
 	endforeach()
-
-	# Rules so cmake knows how to build the artifacts: declare the custom
-	# command that produces the library files, then create the `ffmpeg`
-	# helper target depending on those files so other targets can depend on it.
-	add_custom_command(OUTPUT ${_ffmpeg_outputs} DEPENDS ffmpeg_install)
-	add_custom_target(ffmpeg DEPENDS ${_ffmpeg_outputs} ffmpeg-plugins-install)
-
-	# Second pass: create the imported targets that reference the generated files
-	foreach(_lib IN LISTS _ffmpeg_libs)
-		set(_tgt "FFmpeg::${_lib}")
-		if (FFMPEG_BUNDLED STREQUAL "static")
-			library_import_static_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
-			add_library(${_tgt} STATIC IMPORTED GLOBAL)
-		else()
-			library_import_hint(_libpath "${_lib}" "${FFMPEG_INSTALL_LIB_DIR}")
-			add_library(${_tgt} SHARED IMPORTED GLOBAL)
-		endif()
-		if(MSVC)
-			if(FFMPEG_BUNDLED STREQUAL "static")
-				set_target_properties(${_tgt} PROPERTIES
-					IMPORTED_LOCATION "${_libpath}"
-					IMPORTED_LOCATION_DEBUG "${_libpath}"
-					IMPORTED_LOCATION_RELEASE "${_libpath}"
-					IMPORTED_LOCATION_MINSIZEREL "${_libpath}"
-					IMPORTED_LOCATION_RELWITHDEBINFO "${_libpath}"
-				)
-				target_link_libraries(${_tgt}
-					INTERFACE
-						crypt32
-						ws2_32
-						bcrypt
-						secur32
-						ncrypt
-				)
-			else()
-				set_target_properties(${_tgt} PROPERTIES
-					IMPORTED_IMPLIB "${_libpath}"
-					IMPORTED_IMPLIB_DEBUG "${_libpath}"
-					IMPORTED_IMPLIB_RELEASE "${_libpath}"
-					IMPORTED_IMPLIB_MINSIZEREL "${_libpath}"
-					IMPORTED_IMPLIB_RELWITHDEBINFO "${_libpath}"
-				)
-			endif()
-		else()
-			set_target_properties(${_tgt} PROPERTIES
-				IMPORTED_LOCATION "${_libpath}"
-				IMPORTED_LOCATION_DEBUG "${_libpath}"
-				IMPORTED_LOCATION_RELEASE "${_libpath}"
-				IMPORTED_LOCATION_MINSIZEREL "${_libpath}"
-				IMPORTED_LOCATION_RELWITHDEBINFO "${_libpath}"
-			)
-		endif()
-		add_dependencies(${_tgt} ffmpeg)
-		# Ensure consumers also link the plugin target transitively
-		target_link_libraries(${_tgt} INTERFACE ffmpeg-plugins)
-		set_target_properties(${_tgt} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_INSTALL_INCLUDE_DIR}")
-	endforeach()
+	add_library(FFmpeg::plugins ALIAS ffmpeg-plugins)
 
 	cmake_policy(SET CMP0079 NEW)
 	# Ensure the main target builds FFmpeg and plugin installation first so
@@ -336,7 +242,7 @@ else()
 
 	# According to FFMmpeg documentation, when linking statically,
 	# -Wl,-Bsymbolic should be used to avoid symbol conflicts.
-	if(FFMPEG_BUNDLED STREQUAL "static" AND NOT MSVC)
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
 	
@@ -345,7 +251,7 @@ endif()
 cmake_policy(SET CMP0079 NEW)
 # ASAN for GCC needs the explicit linkage of FFmpeg libraries even if they are bundled into StormByte-Multimedia
 if(ENABLE_ASAN)
-	target_link_libraries(StormByte-Multimedia PUBLIC FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
+	target_link_libraries(StormByte-Multimedia PUBLIC FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter FFmpeg::plugins)
 else()
-	target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
+	target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter FFmpeg::plugins)
 endif()

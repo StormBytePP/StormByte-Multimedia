@@ -26,7 +26,8 @@ include("${X265_PATCH_REPO}")
 # Build 3 phases: 12bit, 10bit+hdr10+ and 8bit (this last one exposing C API)
 # 12-bit build
 ensure_build_dir(X265_BUILD_DIR_12 "12bit")
-library_import_static_hint(X265_LIBRARY_12 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_12}")
+# Can't use library_import_static_hint here as the 12-bit build will not be installed
+set(X265_LIBRARY_12 "${X265_BUILD_DIR_12}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${X265_SUFFIX_STATIC}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(X265_COMPONENT_12 "X265 codec (12-bit)")
 set(X265_OPTIONS_12
 	"-DENABLE_SHARED=OFF"
@@ -42,33 +43,32 @@ set(X265_OPTIONS_12
 	"-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}"
 	"-DCMAKE_ASM_NASM_FLAGS=-w-pp-macro-params-legacy"
 )
-create_cmake_configure_file(
-	X265_CMAKE_CONFIGURE_FILE_12
+create_cmake_stages(
+	X265_CONFIGURE_12
+	X265_BUILD_12
+	X265_INSTALL_12
+	x265_12bit
 	"${X265_COMPONENT_12}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_12}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_12}"
+	"static"
+	"${X265_LIBRARY_12}"
 )
 add_custom_target(x265_12bit_configure
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_12}"
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_12}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
-	COMMENT "Configuring X265 codec (12-bit)"
+	COMMENT "Configuring x265 codec (12-bit)"
 	DEPENDS vmaf_install
 )
-
-add_custom_target(x265_12bit_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_12}"
-	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
-	COMMENT "Building X265 codec (12-bit)"
-	VERBATIM
-	DEPENDS x265_12bit_configure
-)
+include("${X265_BUILD_12}")
+add_dependencies(x265_12bit_build x265_12bit_configure)
+# Not installing 12-bit separately, as it will be merged into 8-bit build
 
 # 10-bit build
 ensure_build_dir(X265_BUILD_DIR_10 "10bit")
-library_import_static_hint(X265_LIBRARY_10 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_10}")
-library_import_static_hint(X265_LIBRARY_HDR10_PLUS "hdr10plus" "${X265_BUILD_DIR_10}")
+set(X265_LIBRARY_10 "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${X265_SUFFIX_STATIC}${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(X265_LIBRARY_HDR10_PLUS "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}hdr10plus${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(X265_COMPONENT_10 "X265 codec (10-bit)")
 set(X265_OPTIONS_10
 	"-DENABLE_SHARED=OFF"
@@ -85,37 +85,37 @@ set(X265_OPTIONS_10
 	"-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}"
 	"-DCMAKE_ASM_NASM_FLAGS=-w-pp-macro-params-legacy"
 )
-create_cmake_configure_file(
-	X265_CMAKE_CONFIGURE_FILE_10
+create_cmake_stages(
+	X265_CONFIGURE_10
+	X265_BUILD_10
+	X265_INSTALL_10
+	x265_10bit
 	"${X265_COMPONENT_10}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_10}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_10}"
-	${INDENT}
+	"static"
+	"${X265_LIBRARY_10}"
+	3
 )
 add_custom_target(x265_10bit_configure
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_10}"
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_10}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
-	COMMENT "Configuring X265 codec (10-bit)"
+	COMMENT "Configuring x265 codec (10-bit)"
 	DEPENDS vmaf_install
 )
-
-add_custom_target(x265_10bit_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_10}"
-	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
-	COMMENT "Building X265 codec (10-bit)"
-	VERBATIM
-	DEPENDS x265_10bit_configure
-)
+include("${X265_BUILD_10}")
+add_dependencies(x265_10bit_build x265_10bit_configure)
+# Not installing 10-bit separately, as it will be merged into 8-bit build
 
 # 8-bit build
-ensure_build_dir(X265_BUILD_DIR_8 "8bit")
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(X265_LIBRARY_8 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_8}")
+if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
+	set(CMAKE_SHARED_MODE "OFF")
 else()
-	library_import_hint(X265_LIBRARY_8 "x265${X265_SUFFIX_STATIC}" "${X265_BUILD_DIR_8}")
+	set(CMAKE_SHARED_MODE "ON")
 endif()
+ensure_build_dir(X265_BUILD_DIR_8 "8bit")
+set(X265_LIBRARY_8 "${X265_BUILD_DIR_8}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${X265_SUFFIX_STATIC}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(X265_COMPONENT_8 "X265 codec (8-bit)")
 set(X265_EXTRA_LIBS "${X265_LIBRARY_12};${X265_LIBRARY_10}")
 set(X265_OPTIONS_8
@@ -134,111 +134,77 @@ set(X265_OPTIONS_8
 	"-DLINKED_10BIT=ON"
 	"-DLINKED_12BIT=ON"
 )
-create_cmake_configure_file(
-	X265_CMAKE_CONFIGURE_FILE_8
+create_cmake_dependant_component(
+	X265_LIBRARY_CREATE_FILE
+	"x265"
 	"${X265_COMPONENT_8}"
 	"${X265_SRC_DIR}"
 	"${X265_BUILD_DIR_8}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${X265_OPTIONS_8}"
+	"${FFMPEG_BUNDLED_TYPE}"
+	"x265"
+	"x265_12bit_build;x265_10bit_build"
 )
+include("${X265_LIBRARY_CREATE_FILE}")
 
-add_custom_target(x265_8bit_configure
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CMAKE_CONFIGURE_FILE_8}"
-	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-	COMMENT "Configuring x265 codec (8-bit)"
-	DEPENDS x265_10bit_build x265_12bit_build
-)
-
-add_custom_target(x265_8bit_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${X265_BUILD_DIR_8}"
-	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-	COMMENT "Building x265 codec (8-bit)"
-	VERBATIM
-	DEPENDS x265_8bit_configure
-)
 # Hack: In Windows, under "not release" builds, the x265 8-bit target
 # tries to install x265.pdb to the install directory, but this fails
 # because its name is libx265.pdb instead. To avoid this, we build the
 # target without the install step, and manually copy the library file
 # to the expected filename.
-if(NOT FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
-	if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-		add_custom_command(TARGET x265_8bit_build POST_BUILD
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.pdb" "${X265_BUILD_DIR_8}/x265.pdb"
+
+# Ensure the main 8-bit `x265_build` target runs the 12-bit and 10-bit
+# builds first so their configure/build stages are executed.
+add_dependencies(x265_build x265_12bit_build x265_10bit_build)
+if(MSVC)
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
+		if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+			add_custom_command(TARGET x265_build POST_BUILD
+				COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E copy "${X265_BUILD_DIR_8}/libx265.pdb" "${X265_BUILD_DIR_8}/x265.pdb"
+				WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
+				COMMENT "Correcting x265 codec (8-bit) debug library filenames"
+				VERBATIM
+			)
+		endif()
+		add_custom_command(TARGET x265_build POST_BUILD
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.dll" "${X265_BUILD_DIR_8}/x265.dll"
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.lib" "${X265_BUILD_DIR_8}/x265.lib"
 			WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-			COMMENT "Correcting x265 codec (8-bit) debug library filenames"
+			COMMENT "Correcting x265 codec (8-bit) library filenames"
 			VERBATIM
 		)
+	else()
+		# Windows creates x265-static.lib when we expected x265.lib
+		add_custom_command(TARGET x265_install POST_BUILD
+			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/x265-static.lib" "${BUILDMASTER_INSTALL_LIBDIR}/x265.lib"
+			COMMENT "Renaming x265-static.lib to x265.lib"
+		)
 	endif()
-	add_custom_command(TARGET x265_8bit_build POST_BUILD
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.dll" "${X265_BUILD_DIR_8}/x265.dll"
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${X265_BUILD_DIR_8}/libx265.lib" "${X265_BUILD_DIR_8}/x265.lib"
-		WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-		COMMENT "Correcting x265 codec (8-bit) library filenames"
-		VERBATIM
-	)
-endif()
-
-# Install 8-bit build (with 10 and 12 bit merged in)
-add_custom_target(x265_8bit_install
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${X265_BUILD_DIR_8}" --target install
-	WORKING_DIRECTORY "${X265_BUILD_DIR_8}"
-	COMMENT "Installing x265 codec all bit internally"
-	VERBATIM
-	DEPENDS x265_8bit_build
-)
-
-# Windows creates x265-static.lib when we expected x265.lib
-if(MSVC)
-	add_custom_command(TARGET x265_8bit_install POST_BUILD
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/x265-static.lib" "${FFMPEG_INSTALL_LIB_DIR}/x265.lib"
-		COMMENT "Renaming x265-static.lib to x265.lib"
-	)
 endif()
 
 # Restore x265 CMakeLists.txt after the final x265 (8-bit) target has
-# been built. `x265_8bit` depends (via `x265_static_copy`) on the 10/12-bit
-# builds, so a POST_BUILD hook on `x265_8bit` will run once all phases are
-# complete.
-add_custom_command(TARGET x265_8bit_install POST_BUILD
+# been built.
+add_custom_command(TARGET x265_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_RESET_REPO}"
 	WORKING_DIRECTORY "${X265_SRC_DIR}"
 	COMMENT "Restoring x265 sources"
 	VERBATIM
 )
 
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(X265_LIBRARY "x265" "${FFMPEG_INSTALL_LIB_DIR}")
-	if(MSVC)
-		# Since we build static in Windows, we need to repack all the three libraries into one
-		add_custom_command(TARGET x265_8bit_install POST_BUILD
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${FFMPEG_INSTALL_LIB_DIR}/x265.lib"
-			COMMAND ${ENV_RUNNER_SILENT} lib /OUT:${X265_LIBRARY} "${X265_LIBRARY_8}" "${X265_LIBRARY_10}" "${X265_LIBRARY_HDR10_PLUS}" "${X265_LIBRARY_12}"
-			COMMENT "Repacking x265 static libraries into a single x265.lib"
-		)
-	else()
-		# We need to repack all the object files into a single static library
-		configure_file(
-			${CMAKE_CURRENT_SOURCE_DIR}/x265_repack.sh.in
-			${CMAKE_CURRENT_BINARY_DIR}/x265_repack.sh
-			@ONLY
-		)
-		# Give execution permissions to the script
-		execute_process(
-			COMMAND ${ENV_RUNNER_SILENT} chmod +x "${CMAKE_CURRENT_BINARY_DIR}/x265_repack.sh"
-		)
-		add_custom_command(
-			TARGET x265_8bit_install POST_BUILD
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${FFMPEG_INSTALL_LIB_DIR}/libx265.a"
-			COMMAND ${ENV_RUNNER_SILENT} "${CMAKE_CURRENT_BINARY_DIR}/x265_repack.sh"
-			COMMENT "Repacking x265 static libraries into a single libx265.a (renamed objects)"
-		)
-	endif()
-else()
-	library_import_hint(X265_LIBRARY "x265" "${FFMPEG_INSTALL_LIB_DIR}")
-endif()
+if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
+	# Repack all the libraries altogether into a single x265.lib
+	library_import_static_hint(X265_LIBRARY "x265")
+	# VMAF needs to be included in the static repack for ffmpeg configure to detect it
+	library_import_static_hint(VMAF_LIBRARY "vmaf")
+	create_bundle_static_libraries(
+		BUNDLE_X265_LIBRARIES
+		"x265"
+		"${X265_LIBRARY_8};${X265_LIBRARY_10};${X265_LIBRARY_HDR10_PLUS};${X265_LIBRARY_12};${VMAF_LIBRARY}"
+	)
 
-# Add a dummy target for dependencies
-add_custom_target(x265_install DEPENDS x265_8bit_install)
-set(x265_outputs "${X265_LIBRARY}" PARENT_SCOPE)
+	add_custom_command(TARGET x265_install POST_BUILD
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${X265_LIBRARY}"
+		COMMAND ${BUNDLE_X265_LIBRARIES}
+		COMMENT "Repacking x265 static libraries into a single x265"
+	)
+endif()

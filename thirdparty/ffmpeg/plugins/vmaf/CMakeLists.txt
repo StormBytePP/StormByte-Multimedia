@@ -1,10 +1,5 @@
-set(VMAF_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(VMAF_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/libvmaf")
 ensure_build_dir(VMAF_BUILD_DIR)
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(VMAF_LIBRARY "vmaf" "${FFMPEG_INSTALL_LIB_DIR}")
-else()
-	library_import_hint(VMAF_LIBRARY "vmaf" "${FFMPEG_INSTALL_LIB_DIR}")
-endif()
 
 # Need to patch to disable tool building
 set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-MSVC-corrections.patch")
@@ -17,8 +12,8 @@ include(${VMAF_RESET_REPO})
 include(${VMAF_PATCH_REPO1})
 include(${VMAF_PATCH_REPO2})
 
-set(VMAF_MESON_OPTIONS
-    "-Ddefault_library=${MESON_SHARED_MODE}"
+set(VMAF_COMPONENT "VMAF filter")
+set(VMAF_OPTIONS
     "-Denable_tests=false"
 	"-Denable_docs=false"
 	"-Denable_tools=false"
@@ -30,69 +25,49 @@ set(VMAF_MESON_OPTIONS
 	"-Denable_nvcc=false"
 )
 
-create_meson_setup_file(
-	VMAF_MESON_SETUP_FILE
-	"VMAF library"
-	"${VMAF_SRC_DIR}/libvmaf"
-	"${VMAF_BUILD_DIR}"
-	"${FFMPEG_INSTALL_DIR}"
-	"${VMAF_MESON_OPTIONS}"
-	2
-)
-
-if (NOT EXISTS "${VMAF_BUILD_DIR}/build.ninja")
-	include("${VMAF_MESON_SETUP_FILE}")
-else()
-	message(STATUS "Skipping meson setup; build files already present for VMAF")
-endif()
-
+# In Windows we depend on pthread_win32
 if(MSVC)
-	add_custom_target(vmaf_build
-		COMMAND_EXPAND_LISTS
-		COMMAND ${ENV_NINJA_COMMAND} -C "${VMAF_BUILD_DIR}"
-		WORKING_DIRECTORY ${VMAF_BUILD_DIR}
-		COMMENT "Building VMAF library"
-		DEPENDS pthread_win32_install
+	create_meson_dependant_component(
+		VMAF_LIBRARY_CREATE_FILE
+		"vmaf"
+		"${VMAF_COMPONENT}"
+		"${VMAF_SRC_DIR}"
+		"${VMAF_BUILD_DIR}"
+		"${VMAF_OPTIONS}"
+		"${FFMPEG_BUNDLED_TYPE}"
+		"vmaf"
+		"pthread_win32"
+		2
 	)
 else()
-	add_custom_target(vmaf_build
-		COMMAND_EXPAND_LISTS
-		COMMAND ${ENV_NINJA_COMMAND} -C "${VMAF_BUILD_DIR}"
-		WORKING_DIRECTORY ${VMAF_BUILD_DIR}
-		COMMENT "Building VMAF library"
+	create_meson_component(
+		VMAF_LIBRARY_CREATE_FILE
+		"vmaf"
+		"${VMAF_COMPONENT}"
+		"${VMAF_SRC_DIR}"
+		"${VMAF_BUILD_DIR}"
+		"${VMAF_OPTIONS}"
+		"${FFMPEG_BUNDLED_TYPE}"
+		"vmaf"
+		2
+	)
+endif()
+include("${VMAF_LIBRARY_CREATE_FILE}")
+
+if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
+	# We have to repack the VMAF static library to link pthread_win32 into it
+	set(VMAF_LIBRARY "${VMAF_BUILD_DIR}/libvmaf.a")
+	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3")
+	create_bundle_static_libraries(VMAF_BUNDLE_FILE "vmaf" "${VMAF_LIBRARY};${PTHREAD_WIN32_LIBRARY}")
+	add_custom_command(TARGET vmaf_install POST_BUILD
+		# First remove the original static library (which is also badly named)
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${BUILDMASTER_INSTALL_LIBDIR}/libvmaf.a"
+		COMMAND ${ENV_RUNNER_SILENT} ${VMAF_BUNDLE_FILE}
+		COMMENT "Bundling VMAF with PthreadWin32"
 	)
 endif()
 
-add_custom_target(vmaf_install
-	COMMAND_EXPAND_LISTS
-	COMMAND ${ENV_NINJA_SILENT_COMMAND} -C "${VMAF_BUILD_DIR}" install
-	WORKING_DIRECTORY ${VMAF_BUILD_DIR}
-	COMMENT "Installing VMAF library internally"
-	DEPENDS vmaf_build
-)
-
-if(FFMPEG_BUNDLED STREQUAL "static" AND MSVC)
-	# On Windows, library is installed as libvmaf.a, we need to rename it to vmaf_original.lib (in next step we repack)
-	add_custom_command(TARGET vmaf_install POST_BUILD
-		COMMAND ${ENV_CMAKE_COMMAND} -E rename "${FFMPEG_INSTALL_LIB_DIR}/libvmaf.a" "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib"
-		COMMENT "Renaming libvmaf.a to vmaf_original.lib for MSVC compatibility"
-	)
-
-	# After rename we need to create a bundle with pthread library
-	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3" "${FFMPEG_INSTALL_LIB_DIR}")
-	add_custom_command(TARGET vmaf_install POST_BUILD
-		COMMAND ${ENV_RUNNER_SILENT} lib /OUT:${VMAF_LIBRARY} "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib" "${PTHREAD_WIN32_LIBRARY}"
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${FFMPEG_INSTALL_LIB_DIR}/vmaf_original.lib"
-		COMMENT "Copying pthread_win32.lib to install directory for VMAF"
-	)
-endif()
 add_custom_command(TARGET vmaf_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${VMAF_RESET_REPO}"
 	COMMENT "Resetting VMAF source tree after internal install"
 )
-
-set(vmaf_outputs "${VMAF_LIBRARY}" PARENT_SCOPE)
-if(MSVC)
-	set(vmaf_links pthread_win32 PARENT_SCOPE)
-	set(vmaf_deps pthread_win32_install PARENT_SCOPE)
-endif()

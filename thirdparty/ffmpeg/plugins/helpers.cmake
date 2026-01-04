@@ -23,10 +23,6 @@
 ##    and exports that list to the parent scope for later use when configuring
 ##    the FFmpeg Meson build.
 macro(register_plugin _plugin_name _plugin_options)
-	if(NOT ${ARGC} EQUAL 2)
-		message(FATAL_ERROR "register_plugin requires plugin name and plugin options")
-	endif()
-
 	# Add subdirectory so external project can be built
 	add_subdirectory(${_plugin_name})
 
@@ -35,54 +31,9 @@ macro(register_plugin _plugin_name _plugin_options)
 		message(FATAL_ERROR "Plugin '${_plugin_name}' did not define required target '${_plugin_name}_install'")
 	endif()
 
-	# If required outputs variable is not set, error out
-	if(NOT DEFINED ${_plugin_name}_outputs)
-		message(FATAL_ERROR "Plugin '${_plugin_name}' did not define required variable '${_plugin_name}_outputs'")
-	endif()
-
-	# Add a library with the plugin outputs
-	if(FFMPEG_BUNDLED STREQUAL "static")
-		add_library(${_plugin_name} STATIC IMPORTED GLOBAL)
-	else()
-		add_library(${_plugin_name} SHARED IMPORTED GLOBAL)
-	endif()
-	set_target_properties(${_plugin_name} PROPERTIES
-		IMPORTED_LOCATION "${${_plugin_name}_outputs}"
-		IMPORTED_LOCATION_DEBUG "${${_plugin_name}_outputs}"
-		IMPORTED_LOCATION_RELEASE "${${_plugin_name}_outputs}"
-		IMPORTED_LOCATION_MINSIZEREL "${${_plugin_name}_outputs}"
-		IMPORTED_LOCATION_RELWITHDEBINFO "${${_plugin_name}_outputs}"
-	)
-
-	# If ${_plugin_name}_links is defined, set the INTERFACE_LINK_LIBRARIES
-	# property on the imported target so that consumers linking against the
-	# plugin also link against these libraries.
-	if(DEFINED ${_plugin_name}_links)
-		set_property(TARGET ${_plugin_name} PROPERTY
-			INTERFACE_LINK_LIBRARIES "${${_plugin_name}_links}")
-	endif()
-
-	# If ${_plugin_name}_deps is defined, add dependencies to the imported target
-	if(DEFINED ${_plugin_name}_deps)
-		add_dependencies(${_plugin_name} ${${_plugin_name}_deps})
-	endif()
-
 	# Add dependency on the plugin target
 	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
-	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_install)
-
-	# Declare the plugin output files as produced by the plugin's install
-	# target so build generators (ninja) know which rule generates the
-	# concrete files and can schedule the install before linking. This
-	# mirrors the approach used for core ffmpeg outputs.
-	add_custom_command(OUTPUT ${${_plugin_name}_outputs} DEPENDS ${_plugin_name}_install)
-
-	# Create a custom target that depends on the output files. This makes
-	# CMake/Ninja generate an explicit rule for producing the files (via
-	# the command above) and lets other targets depend on this target to
-	# ensure correct build ordering.
-	add_custom_target(${_plugin_name}_outputs_target DEPENDS ${${_plugin_name}_outputs})
-	add_dependencies(ffmpeg-plugins-install ${_plugin_name}_outputs_target)
+	add_dependencies(ffmpeg-plugins ${_plugin_name}_install)
 
 	# Register plugin options: append to a temporary list and export to parent
 	separate_arguments(_opts_list ${_plugin_options} UNIX_COMMAND)
@@ -108,10 +59,6 @@ endmacro()
 ##    `_truthy_value` evaluates to true; otherwise appends the disabled
 ##    option fragments into `FFMPEG_PLUGIN_OPTIONS`.
 macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options _disable_plugin_options)
-	if(NOT ${ARGC} EQUAL 4)
-		message(FATAL_ERROR "register_plugin_optional requires plugin name, a truthy value, plugin options if enabled and plugin options if disabled")
-	endif()
-
 	# Resolve the actual boolean-like value. Callers typically pass a
 	# variable name (e.g. MSVC or WITH_NONFREE). If a variable with that
 	# name exists, use its value. If it does not exist, attempt to
@@ -129,58 +76,6 @@ macro(register_plugin_optional _plugin_name _truthy_value _enable_plugin_options
 	endif()
 
 	if(_resolved)
-		register_plugin(${_plugin_name} ${_enable_plugin_options})
-	else()
-		# Register plugin options: append to a temporary list and export to parent
-		separate_arguments(_opts_list ${_disable_plugin_options} UNIX_COMMAND)
-		list(APPEND FFMPEG_PLUGIN_OPTIONS ${_opts_list})
-		set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)
-	endif()
-endmacro()
-
-## register_plugin_optional_negated(_plugin_name _truthy_value _enable_plugin_options _disable_plugin_options)
-##
-## Conditionally register a plugin and its associated option fragments.
-##
-## Parameters:
-##  - _plugin_name: plugin target name to register when the condition is false
-##    (this macro is the negated form).
-##  - _truthy_value: expression evaluated as truthy/falsey; if falsy,
-##    `register_plugin(_plugin_name _enable_plugin_options)` is invoked.
-##  - _enable_plugin_options: option fragments appended to
-##    `FFMPEG_PLUGIN_OPTIONS` when the plugin is enabled.
-##  - _disable_plugin_options: option fragments appended when the plugin is
-##    disabled.
-##
-## Behavior:
-##  - Validates argument count and forwards to `register_plugin` when
-##    `_truthy_value` evaluates to false; otherwise appends the disabled
-##    option fragments into `FFMPEG_PLUGIN_OPTIONS`.
-macro(register_plugin_optional_negated _plugin_name _truthy_value _enable_plugin_options _disable_plugin_options)
-	if(NOT ${ARGC} EQUAL 4)
-		message(FATAL_ERROR "register_plugin_optional_negated requires plugin name, a truthy value, plugin options if enabled and plugin options if disabled")
-	endif()
-
-	# Resolve the actual boolean-like value. Callers typically pass a
-	# variable name (e.g. MSVC or WITH_NONFREE). If a variable with that
-	# name exists, use its value. If it does not exist, attempt to
-	# interpret common boolean literals (ON/OFF/TRUE/FALSE/1/0). If the
-	# argument is an unknown bare identifier (for example `MSVC` on
-	# non-Windows), treat it as false.
-	if(DEFINED ${_truthy_value})
-		set(_resolved "${${_truthy_value}}")
-	else()
-		string(TOUPPER "${_truthy_value}" _tv_upper)
-		if(_tv_upper STREQUAL "ON" OR _tv_upper STREQUAL "TRUE" OR _tv_upper STREQUAL "1")
-			set(_resolved "TRUE")
-		else()
-			# OFF/FALSE/0/empty and unknown identifiers are treated as false
-			set(_resolved "")
-		endif()
-	endif()
-
-	# _resolved is non-empty for truthy values
-	if(NOT _resolved)
 		register_plugin(${_plugin_name} ${_enable_plugin_options})
 	else()
 		# Register plugin options: append to a temporary list and export to parent

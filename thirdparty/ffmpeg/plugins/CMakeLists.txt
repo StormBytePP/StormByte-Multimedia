@@ -3,26 +3,8 @@ message(STATUS "\tSetting up FFmpeg plugins")
 # Add helpers so they are available
 include(helpers.cmake)
 
-# Initialize environment variables for plugins
-if(MSVC)
-  	windows_path(_include_path "${FFMPEG_INSTALL_INCLUDE_DIR}")
-  	windows_path(_lib_path "${FFMPEG_INSTALL_LIB_DIR}")
-	set(INCLUDE "${_include_path}")
-	set(LIB "${_lib_path}")
-else()
-	set(_include_flags "-I${FFMPEG_INSTALL_INCLUDE_DIR}")
-	set(CFLAGS "${_include_flags}")
-	set(CXXFLAGS "${_include_flags}")
-  	set(LDFLAGS "-L${FFMPEG_INSTALL_LIB_DIR}")
-endif()
-set(PKG_CONFIG_PATH "${FFMPEG_INSTALL_LIB_DIR}/pkgconfig")
-
-# Update runner with new env vars
-update_env_runner()
-
 # Create a target that will aggregate all plugins
 add_library(ffmpeg-plugins INTERFACE)
-add_custom_target(ffmpeg-plugins-install)
 
 # Add dependencies
 add_subdirectory(deps)
@@ -34,8 +16,8 @@ set(FFMPEG_PLUGIN_OPTIONS "")
 # register_plugin functions which make add_subdirectory if needed and add their corresponding options
 # to FFMPEG_PLUGIN_OPTIONS variable.
 register_plugin_optional("fdk-aac" WITH_NONFREE "-Dlibfdk_aac=enabled" "-Dlibfdk_aac=disabled")
-register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")
 register_plugin("mp3lame" "-Dlibmp3lame=enabled")
+register_plugin("ogg" "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")
 register_plugin("opus" "-Dlibopus=enabled")
 register_plugin("vmaf" "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled")
 register_plugin("vorbis" "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")

@@ -1,39 +1,21 @@
 set(FDK_AAC_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(FDK_AAC_BUILD_DIR)
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(FDK_AAC_LIBRARY "fdk-aac" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-else()
-	library_import_hint(FDK_AAC_LIBRARY "fdk-aac" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-endif()
 set(FDK_AAC_COMPONENT "FDK_AAC codec")
 set(FDK_AAC_OPTIONS
-	"-DBUILD_SHARED_LIBS=${CMAKE_SHARED_MODE}"
 	"-DBUILD_PROGRAMS=OFF"
 	"-DFDK_AAC_INSTALL_CMAKE_CONFIG_MODULE=OFF"
 	"-DFDK_AAC_INSTALL_PKGCONFIG_MODULE=ON"
-	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
-create_cmake_configure_file(
-	FDK_AAC_CMAKE_CONFIGURE_FILE
+create_cmake_component(
+	FDK_LIBRARY_CREATE_FILE
+	"fdk-aac"
 	"${FDK_AAC_COMPONENT}"
 	"${FDK_AAC_SRC_DIR}"
 	"${FDK_AAC_BUILD_DIR}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${FDK_AAC_OPTIONS}"
+	"${FFMPEG_BUNDLED_TYPE}"
+	"fdk-aac"
 	2
 )
-include("${FDK_AAC_CMAKE_CONFIGURE_FILE}")
-
-add_custom_target(fdk-aac_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${FDK_AAC_BUILD_DIR}"
-	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
-	COMMENT "Building FDK_AAC"
-)
-add_custom_target(fdk-aac_install
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${FDK_AAC_BUILD_DIR}" --target install
-	WORKING_DIRECTORY "${FDK_AAC_BUILD_DIR}"
-	COMMENT "Installing internally FDK_AAC"
-	DEPENDS fdk-aac_build
-)
-set(fdk-aac_outputs "${FDK_AAC_LIBRARY}" PARENT_SCOPE)
+include("${FDK_LIBRARY_CREATE_FILE}")

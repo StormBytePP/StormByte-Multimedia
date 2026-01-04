@@ -1,11 +1,6 @@
 message(STATUS "\t\tSetting up Opus codec")
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-else()
-	library_import_hint(OPUS_LIBRARY "opus" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-endif()
 
 # If generated DNN data files are missing, try to download the official
 # opus_data tarball used by upstream autogen.sh. This creates files such
@@ -67,10 +62,15 @@ endif()
 # Ensure no leading/trailing whitespace that would break command-line -D parsing
 string(STRIP "${CMAKE_C_FLAGS}" CMAKE_C_FLAGS)
 
+if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
+	set(OPUS_SHARED_MODE OFF)
+else()
+	set(OPUS_SHARED_MODE ON)
+endif()
 set(OPUS_COMPONENT "Opus codec")
 set(OPUS_OPTIONS
 	"-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
-	"-DOPUS_BUILD_SHARED_LIBRARY=${CMAKE_SHARED_MODE}"
+	"-DOPUS_BUILD_SHARED_LIBRARY=${OPUS_SHARED_MODE}"
 	"-DOPUS_BUILD_TESTING=OFF"
 	"-DOPUS_CUSTOM_MODES=ON"
 	"-DOPUS_BUILD_PROGRAMS=OFF"
@@ -80,29 +80,17 @@ set(OPUS_OPTIONS
 	"-DOPUS_INSTALL_CMAKE_CONFIG_MODULE=OFF"
 	"-DOPUS_DRED=ON"
 	"-DOPUS_OSCE=ON"
-	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
-create_cmake_configure_file(
-	OPUS_CMAKE_CONFIGURE_FILE
+create_cmake_component(
+	OPUS_LIBRARY_CREATE_FILE
+	"opus"
 	"${OPUS_COMPONENT}"
 	"${OPUS_SRC_DIR}"
 	"${OPUS_BUILD_DIR}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${OPUS_OPTIONS}"
-	3
+	"${FFMPEG_BUNDLED_TYPE}"
+	"opus"
+	2
 )
-include("${OPUS_CMAKE_CONFIGURE_FILE}")
-
-add_custom_target(opus_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${OPUS_BUILD_DIR}"
-	WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
-	COMMENT "Building Opus codec"
-)
-add_custom_target(opus_install
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${OPUS_BUILD_DIR}" --target install
-	WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
-	COMMENT "Installing Opus codec internally"
-	DEPENDS opus_build
-)
-set(opus_outputs "${OPUS_LIBRARY}" PARENT_SCOPE)
+include("${OPUS_LIBRARY_CREATE_FILE}")

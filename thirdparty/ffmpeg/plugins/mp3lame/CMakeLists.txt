@@ -1,39 +1,18 @@
 set(MP3LAME_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake")
 ensure_build_dir(MP3LAME_BUILD_DIR)
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(MP3LAME_LIBRARY "mp3lame" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-else()
-	library_import_hint(MP3LAME_LIBRARY "mp3lame" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-endif()
 set(MP3LAME_COMPONENT "MP3 encoder LAME")
 set(MP3LAME_OPTIONS
-	"-DBUILD_SHARED_LIBS=${CMAKE_SHARED_MODE}"
-	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
-
-create_cmake_configure_file(
-	MP3LAME_CMAKE_CONFIGURE_FILE
+create_cmake_component(
+	MP3LAME_LIBRARY_CREATE_FILE
+	"mp3lame"
 	"${MP3LAME_COMPONENT}"
 	"${MP3LAME_SRC_DIR}"
 	"${MP3LAME_BUILD_DIR}"
-	"${FFMPEG_INSTALL_DIR}"
 	"${MP3LAME_OPTIONS}"
+	"${FFMPEG_BUNDLED_TYPE}"
+	"mp3lame"
 	2
 )
-include("${MP3LAME_CMAKE_CONFIGURE_FILE}")
-
-add_custom_target(mp3lame_build
-	COMMAND ${ENV_CMAKE_COMMAND} --build "${MP3LAME_BUILD_DIR}"
-	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
-	COMMENT "Building MP3 encoder LAME"
-)
-
-add_custom_target(mp3lame_install
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} --build "${MP3LAME_BUILD_DIR}" --target install
-	WORKING_DIRECTORY "${MP3LAME_BUILD_DIR}"
-	COMMENT "Installing internally MP3 encoder LAME"
-	DEPENDS mp3lame_build
-)
-
-set(mp3lame_outputs "${MP3LAME_LIBRARY}" PARENT_SCOPE)
+include("${MP3LAME_LIBRARY_CREATE_FILE}")
