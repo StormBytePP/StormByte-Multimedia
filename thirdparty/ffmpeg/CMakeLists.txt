@@ -232,14 +232,6 @@ else()
 	endforeach()
 	add_library(FFmpeg::plugins ALIAS ffmpeg-plugins)
 
-	cmake_policy(SET CMP0079 NEW)
-	# Ensure the main target builds FFmpeg and plugin installation first so
-	# the imported library files exist when the linker runs. Some build
-	# generators (ninja) may attempt to link the main target before the
-	# plugin install step is executed; adding explicit dependencies ensures
-	# the correct ordering.
-	add_dependencies(StormByte-Multimedia ffmpeg)
-
 	# According to FFMmpeg documentation, when linking statically,
 	# -Wl,-Bsymbolic should be used to avoid symbol conflicts.
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC)

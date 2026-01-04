@@ -1,0 +1,27 @@
+From 7d21491f9f9682906e9b2abf342c1cadab3ceec2 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Sun, 4 Jan 2026 21:30:41 +0100
+Subject: [PATCH] Guard old typedef bool
+
+---
+ xvidcore/src/encoder.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/xvidcore/src/encoder.h b/xvidcore/src/encoder.h
+index e9e0367..f48a392 100644
+--- a/xvidcore/src/encoder.h
++++ b/xvidcore/src/encoder.h
+@@ -41,8 +41,9 @@
+ /*****************************************************************************
+  * Types
+  ****************************************************************************/
+-
++#if !defined(__cplusplus) && (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
+ typedef int bool;
++#endif
+ 
+ /*****************************************************************************
+  * Structures
+-- 
+2.52.0
+

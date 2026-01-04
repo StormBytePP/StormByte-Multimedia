@@ -1,17 +1,22 @@
 set(XVID_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake-port")
 ensure_build_dir(XVID_BUILD_DIR)
-if(FFMPEG_BUNDLED STREQUAL "static")
-	library_import_static_hint(XVID_LIBRARY "xvidcore" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-else()
-	library_import_hint(XVID_LIBRARY "xvidcore" "${FFMPEG_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
-endif()
-
 set(XVID_COMPONENT "XVID codec")
 set(XVID_OPTIONS
-	"-DBUILD_SHARED_LIBS=${CMAKE_SHARED_MODE}"
-	"-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
+create_git_reset_file(
+	XVID_GIT_RESET_FILE
+	"${XVID_COMPONENT}"
+	"${XVID_SRC_DIR}/src"
+)
+include("${XVID_GIT_RESET_FILE}"
+create_git_patch_file(
+	XVID_GIT_PATCH_FILE
+	"${XVID_COMPONENT}"
+	"${XVID_SRC_DIR}/src"
+	"${CMAKE_CURRENT_LIST_DIR}/0001-Guard-old-typedef-bool.patch"
+)
+include("${XVID_GIT_PATCH_FILE}")
 create_cmake_component(
 	XVID_LIBRARY_CREATE_FILE
 	"xvid"
@@ -24,3 +29,9 @@ create_cmake_component(
 	2
 )
 include("${XVID_LIBRARY_CREATE_FILE}")
+
+# Reset repo after install
+add_custom_command(TARGET xvid_install POST_BUILD
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${XVID_GIT_RESET_FILE}"
+	COMMENT "Resetting XVID source directory after installation"
+)
