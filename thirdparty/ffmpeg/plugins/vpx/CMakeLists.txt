@@ -29,9 +29,6 @@ set(VPX_OPTIONS
     "-Dforce_disable_features=neon,neon_asm,arm,arm64,sve,sve2,msa"
     "-Dmultithread=enabled"
 )
-if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-	list(APPEND VPX_OPTIONS "-Db_staticpic=true")
-endif()
 
 create_meson_component(
 	VPX_LIBRARY_CREATE_FILE

@@ -125,9 +125,6 @@ else()
 		'-Dbzlib=disabled'
 		'-Dlzma=disabled'
 	)
-	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-		list(APPEND FFMPEG_MESON_OPTIONS "-Db_staticpic=true")
-	endif()
 
 	# Enable GPL components if requested
 	if(WITH_GPL)
@@ -240,6 +237,16 @@ else()
 	endif()
 
 	target_link_libraries(StormByte-Multimedia PRIVATE ffmpeg-plugins)
+
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
+		target_link_libraries(StormByte-Multimedia PRIVATE
+			ws2_32     # Windows Sockets API: socket, bind, connect, recv, send, shutdown, WSAStartup, etc.
+			secur32    # Security Support Provider Interface (SSPI): TLS handshake, credentials, EncryptMessage, etc.
+			bcrypt     # Windows CNG (Cryptography API: Next Generation): random generation, algorithm providers
+			ncrypt     # Windows CNG key storage: persisted keys, self-signed certs, key export/import
+			crypt32    # Windows CryptoAPI: certificate store, encoding, self-signing, PEM/DER conversion
+		)
+	endif()
 endif()
 
 target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)
