@@ -214,6 +214,7 @@ else()
 		1
 	)
 	include("${FFMPEG_LIBRARY_CREATE_FILE}")
+
 	add_dependencies(ffmpeg_configure ffmpeg-plugins)
 
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
@@ -289,5 +290,9 @@ else()
 			"$<LINK_GROUP:RESCAN,${FFMPEG_LINK_LIBS}>"
 		)
 	endif()
+
+	# Include directories and dependencies
+	target_include_directories(StormByte-Multimedia SYSTEM PRIVATE "${BUILDMASTER_INSTALL_INCLUDEDIR}")
+	add_dependencies(StormByte-Multimedia ffmpeg_install)
 endif()
 
