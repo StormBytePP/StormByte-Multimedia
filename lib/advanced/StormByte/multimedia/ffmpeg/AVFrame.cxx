@@ -31,4 +31,4 @@ void FFmpeg::AVFrame::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVFrame>;
+template class StormByte::Multimedia::FFmpeg::AVPointer<::AVFrame>;

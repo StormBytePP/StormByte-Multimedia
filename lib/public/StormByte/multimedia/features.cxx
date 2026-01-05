@@ -35,4 +35,4 @@ template STORMBYTE_MULTIMEDIA_PUBLIC Feature operator~(Feature);
 // ------------------------------------------------------------
 // Explicit instantiation for Features Bitmask
 // ------------------------------------------------------------
-template class STORMBYTE_MULTIMEDIA_PUBLIC StormByte::Bitmask<StormByte::Multimedia::Features, StormByte::Multimedia::Feature>;
+template class StormByte::Bitmask<StormByte::Multimedia::Features, StormByte::Multimedia::Feature>;

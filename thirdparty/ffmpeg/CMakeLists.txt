@@ -13,6 +13,15 @@ endif()
 if (WITH_FFMPEG STREQUAL "SYSTEM")
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 	find_package(FFmpeg REQUIRED)
+	# If ffmpeg is not bundled, link normally with found libraries
+	target_link_libraries(StormByte-Multimedia PRIVATE
+		FFmpeg::avutil
+		FFmpeg::avcodec
+		FFmpeg::avformat
+		FFmpeg::swscale
+		FFmpeg::swresample
+		FFmpeg::avfilter
+	)
 else()
 	message(STATUS "Setting up bundled FFmpeg")
 
@@ -57,6 +66,11 @@ else()
 	if(NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "static" AND NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "shared")
 		message(FATAL_ERROR "FFMPEG_BUNDLED_TYPE must be either 'static' or 'shared'")
 	endif()
+
+	# LTO is broken in gcc for static builds with ffmpeg; disable it
+	# if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	# 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
+	# endif()
 
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
@@ -185,15 +199,6 @@ else()
 	)
 	include("${FFMPEG_GIT_SWITCH_FILE}")
 
-	# Apply patch
-	create_git_patch_file(
-		FFMPEG_GIT_PATCH_FILE
-		"${FFMPEG_COMPONENT}"
-		"${FFMPEG_SRC_DIR}"
-		"${CMAKE_CURRENT_LIST_DIR}/0001-Enable-C-compiler-for-some-libraries.patch"
-	)
-	include("${FFMPEG_GIT_PATCH_FILE}")
-
 	set(FFMPEG_LIBRARIES "avutil;avcodec;avformat;swscale;swresample;avfilter")
 
 	create_meson_dependant_component(
@@ -224,10 +229,26 @@ else()
 		)
 	endif()
 
-	# Create library aliases
+	# Create library aliases and gathering libraries
+	add_library(FFMpeg::plugins ALIAS ffmpeg-plugins)
+	set(FFMPEG_LINK_LIBS "")
 	foreach(_lib IN LISTS FFMPEG_LIBRARIES)
 		target_include_directories(${_lib}_component SYSTEM INTERFACE ${BUILDMASTER_INSTALL_INCLUDEDIR})
 		add_library(FFmpeg::${_lib} ALIAS ${_lib}_component)
+		get_target_property(_FFMPEG_LIB FFmpeg::${_lib} IMPORTED_LOCATION)
+		list(APPEND FFMPEG_LINK_LIBS "${_FFMPEG_LIB}")
+	endforeach()
+
+	# Gather all real plugin libraries (not just their interface targets)
+	get_target_property(_FFMPEG_ALL_PLUGINS_INTERFATE ffmpeg-plugins INTERFACE_LINK_LIBRARIES) # Can not use alias here
+	foreach(_lib IN LISTS _FFMPEG_ALL_PLUGINS_INTERFATE)
+		# All the libraries are INTERFACE libraries; get their linked libraries instead
+		get_target_property(_interfacelibs ${_lib} INTERFACE_LINK_LIBRARIES)
+		foreach(_interfacelib IN LISTS _interfacelibs)
+			# Get the real library file location
+			get_target_property(_reallib ${_interfacelib} IMPORTED_LOCATION)
+			list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
+		endforeach()
 	endforeach()
 	
 	# According to FFMmpeg documentation, when linking statically,
@@ -235,8 +256,6 @@ else()
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
-
-	target_link_libraries(StormByte-Multimedia PRIVATE ffmpeg-plugins)
 
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 		target_link_libraries(StormByte-Multimedia PRIVATE
@@ -247,6 +266,28 @@ else()
 			crypt32    # Windows CryptoAPI: certificate store, encoding, self-signing, PEM/DER conversion
 		)
 	endif()
+
+	# Linking: In gcc, we need to group all ffmpeg libraries together with plugins
+	# in order to not have undefined references due to library ordering issues.
+	# Despite it is only needed for GCC, having a separate link to other toolchains
+	# is more complex than just using the same method everywhere.
+	# This only applies to static build and UNIX-like systems (not Windows).
+
+	if(MSVC)
+		target_link_libraries(StormByte-Multimedia PRIVATE
+			FFmpeg::avutil
+			FFmpeg::avcodec
+			FFmpeg::avformat
+			FFmpeg::swscale
+			FFmpeg::swresample
+			FFmpeg::avfilter
+			FFMpeg::plugins
+		)
+	else()
+		target_link_libraries(StormByte-Multimedia
+			PRIVATE
+			"$<LINK_GROUP:RESCAN,${FFMPEG_LINK_LIBS}>"
+		)
+	endif()
 endif()
 
-target_link_libraries(StormByte-Multimedia PRIVATE FFmpeg::avutil FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avfilter)

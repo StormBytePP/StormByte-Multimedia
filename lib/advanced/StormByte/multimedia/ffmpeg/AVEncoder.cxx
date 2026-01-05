@@ -119,4 +119,4 @@ void FFmpeg::AVEncoder::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class STORMBYTE_MULTIMEDIA_ADVANCED StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext>;
+template class StormByte::Multimedia::FFmpeg::AVPointer<::AVCodecContext>;
