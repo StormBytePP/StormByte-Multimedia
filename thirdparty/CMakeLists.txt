@@ -1,4 +1,5 @@
 add_subdirectory(StormByte)
+set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS "pkgconf")
 add_subdirectory(buildmaster)
 include(buildmaster/helpers.cmake)
 add_subdirectory(ffmpeg)

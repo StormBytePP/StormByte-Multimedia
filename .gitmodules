@@ -35,12 +35,12 @@
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/vmaf/src
 	url = https://github.com/Netflix/vmaf.git
-[submodule "StormByte Build Master"]
-	path = thirdparty/buildmaster
-	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
 [submodule "pthread-Win32"]
 	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
 [submodule "XVID codec"]
 	path = thirdparty/ffmpeg/plugins/xvidcore/cmake-port/src
 	url = https://github.com/delthas/xvid.git
+[submodule "Build Master"]
+	path = thirdparty/buildmaster
+	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
