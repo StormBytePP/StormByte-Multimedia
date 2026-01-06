@@ -1,5 +1,5 @@
 [submodule "StormByte base"]
-	path = thirdparty/StormByte/base
+	path = thirdparty/StormByte/base/src
 	url = https://github.com/StormBytePP/StormByte.git
 [submodule "Opus codec"]
 	path = thirdparty/ffmpeg/plugins/opus/src

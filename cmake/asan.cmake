@@ -3,7 +3,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 	set(ENABLE_ASAN OFF CACHE BOOL "Disable ASan for Release builds" FORCE)
 endif()
 
-if(ENABLE_ASAN AND NOT STORMBYTE_AS_DEPENDENCY AND NOT WIN32)
+if(ENABLE_ASAN AND NOT WIN32)
 	# Recommend Debug builds for ASan
 	set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 

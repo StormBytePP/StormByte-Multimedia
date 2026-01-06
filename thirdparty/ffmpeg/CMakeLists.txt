@@ -1,7 +1,6 @@
 # Configure options
 option(WITH_NONFREE "Enable nonfree codecs in FFmpeg build" OFF)
 option(WITH_GPL "Enable GPL components in FFmpeg build" OFF)
-cmake_policy(SET CMP0079 NEW)
 if(NOT DEFINED WITH_FFMPEG)
 	if(WIN32)
 		set(WITH_FFMPEG "BUNDLED" CACHE STRING "Use FFmpeg libraries (SYSTEM or BUNDLED)" FORCE)
@@ -55,10 +54,6 @@ else()
 		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LDFLAGS}")
 	endif()
 
-	# Set PKG_CONFIG_PATH to include our internal pkgconfig files
-	set(PKG_CONFIG_PATH "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
-	file(MAKE_DIRECTORY "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
-
 	# Update runner with new env vars
 	update_env_runner()
 
@@ -66,11 +61,6 @@ else()
 	if(NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "static" AND NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "shared")
 		message(FATAL_ERROR "FFMPEG_BUNDLED_TYPE must be either 'static' or 'shared'")
 	endif()
-
-	# LTO is broken in gcc for static builds with ffmpeg; disable it
-	# if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	# 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
-	# endif()
 
 	# Configure FFMPEG meson build options
 	set(FFMPEG_MESON_OPTIONS
