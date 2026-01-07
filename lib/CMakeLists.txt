@@ -1,8 +1,18 @@
-option(ENABLE_ADVANCED_INSTALL "Enable advanced multimedia features install" OFF)
 include(GNUInstallDirs)
 
 # Sources
 file(GLOB_RECURSE STORMBYTE_MULTIMEDIA_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.cxx")
+
+# Generate implemented backends file
+set(IMPLEMENTED_BACKENDS "Implementation::FFmpeg") # Improve this when there is more than one backend available
+set(SOURCE_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/implementation.cxx.in")
+set(GENERATED_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_BINARY_DIR}/implementation.cxx")
+configure_file(
+	${SOURCE_IMPLEMENTED_BACKENDS_FILE}
+	${GENERATED_IMPLEMENTED_BACKENDS_FILE}
+	@ONLY
+)
+list(APPEND STORMBYTE_MULTIMEDIA_SOURCES "${GENERATED_IMPLEMENTED_BACKENDS_FILE}")
 
 # Library
 add_library(StormByte-Multimedia SHARED ${STORMBYTE_MULTIMEDIA_SOURCES})
@@ -23,7 +33,7 @@ if(MSVC)
 	target_compile_options(StormByte-Multimedia PRIVATE /EHsc)
 	target_compile_options(StormByte-Multimedia PRIVATE $<$<CONFIG:Release>:/O2>)
 	target_compile_options(StormByte-Multimedia PRIVATE $<$<CONFIG:Debug>:/Od>)
-	target_link_options(StormByte-Multimedia PRIVATE $<$<CONFIG:Release>:/LTCG /GL>)
+	target_compile_definitions(StormByte-Multimedia PUBLIC UNICODE NOMINMAX) # Create problems if disabled
 else()
 	set(CMAKE_CXX_FLAGS_DEBUG "-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0")
 	target_compile_options(StormByte-Multimedia PRIVATE -fvisibility=hidden $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>)
@@ -36,18 +46,3 @@ target_include_directories(StormByte-Multimedia
 		PRIVATE "${CMAKE_CURRENT_LIST_DIR}/private"
 )
 
-if(ENABLE_ADVANCED_INSTALL)	
-	# Define macro
-	target_compile_definitions(StormByte-Multimedia PUBLIC ENABLE_ADVANCED)
-
-	# Include advanced headers
-	target_include_directories(StormByte-Multimedia
-		SYSTEM BEFORE
-			PUBLIC "${CMAKE_CURRENT_LIST_DIR}/advanced"
-	)
-else()
-	target_include_directories(StormByte-Multimedia
-		SYSTEM BEFORE
-			PRIVATE "${CMAKE_CURRENT_LIST_DIR}/advanced"
-	)
-endif()

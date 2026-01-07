@@ -13,9 +13,3 @@
     #define STORMBYTE_MULTIMEDIA_PUBLIC		__attribute__ ((visibility ("default")))
     #define STORMBYTE_MULTIMEDIA_PRIVATE	__attribute__ ((visibility ("hidden")))
 #endif
-
-#ifdef ENABLE_ADVANCED
-	#define STORMBYTE_MULTIMEDIA_ADVANCED	STORMBYTE_MULTIMEDIA_PUBLIC
-#else
-	#define STORMBYTE_MULTIMEDIA_ADVANCED	STORMBYTE_MULTIMEDIA_PRIVATE
-#endif

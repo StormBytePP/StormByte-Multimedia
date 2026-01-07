@@ -62,23 +62,5 @@ namespace StormByte::Multimedia {
 			 */
 			CodecNotFound(Type type, const Features& features):
 			Exception("Codec: ", "Codec of type '{}' with features '{}' not found.", ToString(type), std::string(features)) {}
-
-			using Exception::Exception;
-	};
-
-	/**
-	 * @class FileError
-	 * @brief The exception for when a file error occurs.
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC FileError: public Exception {
-		public:
-			/**
-			 * @brief Default constructor.
-			 * @param codec The message of the exception.
-			 */
-			FileError(const std::string& message):
-			Exception("File: ", "File error occurred: {}", message) {}
-
-			using Exception::Exception;
 	};
 }

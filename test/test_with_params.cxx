@@ -1,7 +1,4 @@
-#include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/stream.hxx>
-#include <StormByte/multimedia/context/audio.hxx>
-#include <StormByte/multimedia/context/video.hxx>
+#include <StormByte/multimedia/engine/demuxer.hxx>
 
 #include <iostream>
 #include <memory>
@@ -14,20 +11,20 @@ int main(int argc, char** argv) {
 		// Return 0 so ctest still works without parameters as a noop test
 		return 0;
 	}
-	auto expected_file = File::Open(argv[1]);
+	auto expected_file = Engine::Demuxer::Open(argv[1], Engine::Implementation::FFmpeg);
 	if (!expected_file) {
 		std::cerr << "Error opening file: " << expected_file.error()->what() << std::endl;
 		return 1;
 	}
-	for (auto stream_it = expected_file->StreamsBegin(); stream_it != expected_file->StreamsEnd(); ++stream_it) {
-		const Stream& stream = *stream_it;
+	for (auto stream_it = expected_file->Streams().begin(); stream_it != expected_file->Streams().end(); ++stream_it) {
+		const std::shared_ptr<Engine::Stream> stream = *stream_it;
 		std::cout << "Stream Type: ";
-		switch (stream.Type()) {
+		switch (stream->Type()) {
 			case StormByte::Multimedia::Type::Audio: {
 				std::cout << "Audio" << std::endl;
-				const Codec& codec = stream.Codec();
+				const Engine::Codec& codec = stream->Codec();
 				std::cout << "  Codec: " << codec.Name() << " - " << codec.Description() << std::endl;
-				auto ctx = stream.Context();
+				auto ctx = stream->Context();
 				if (auto audio = std::dynamic_pointer_cast<const Context::Audio>(ctx)) {
 					std::cout << "  SampleRate: " << audio->SampleRate() << std::endl;
 					std::cout << "  Channels: " << audio->Channels() << std::endl;
@@ -39,9 +36,9 @@ int main(int argc, char** argv) {
 			}
 			case StormByte::Multimedia::Type::Video: {
 				std::cout << "Video" << std::endl;
-				const Codec& codec = stream.Codec();
+				const Engine::Codec& codec = stream->Codec();
 				std::cout << "  Codec: " << codec.Name() << " - " << codec.Description() << std::endl;
-				auto ctx = stream.Context();
+				auto ctx = stream->Context();
 				if (auto video = std::dynamic_pointer_cast<const Context::Video>(ctx)) {
 					const auto& res = video->Resolution();
 					const auto& color = video->Color();
@@ -74,12 +71,12 @@ int main(int argc, char** argv) {
 			}
 			case StormByte::Multimedia::Type::Subtitle:
 				std::cout << "Subtitle" << std::endl;
-				std::cout << "  Codec: " << stream.Codec().Name() << " - " << stream.Codec().Description() << std::endl;
+				std::cout << "  Codec: " << stream->Codec().Name() << " - " << stream->Codec().Description() << std::endl;
 				break;
 			case StormByte::Multimedia::Type::Attachment:
 				std::cout << "Attachment" << std::endl;
-				std::cout << "  Codec: " << stream.Codec().Name() << " - " << stream.Codec().Description() << std::endl;
-				for (const auto& [key, value] : stream.Metadata()) {
+				std::cout << "  Codec: " << stream->Codec().Name() << " - " << stream->Codec().Description() << std::endl;
+				for (const auto& [key, value] : stream->Metadata()) {
 					std::cout << "  Metadata: " << key << " = " << value << std::endl;
 				}
 				break;

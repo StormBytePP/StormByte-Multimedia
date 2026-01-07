@@ -1,0 +1,9 @@
+#include <StormByte/multimedia/engine/implementation.hxx>
+
+namespace StormByte::Multimedia::Engine {
+	std::unordered_set<Implementation> ImplementedBackends() noexcept {
+		return {
+			@IMPLEMENTED_BACKENDS@
+		};
+	}
+}
