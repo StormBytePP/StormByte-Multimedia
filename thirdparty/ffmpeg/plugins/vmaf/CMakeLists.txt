@@ -3,14 +3,11 @@ ensure_build_dir(VMAF_BUILD_DIR)
 
 # Need to patch to disable tool building
 set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-MSVC-corrections.patch")
-set(VMAF_TOOLS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0002-Disable-tool-building.patch")
 create_git_reset_file(VMAF_RESET_REPO "VMAF Reset repo" "${VMAF_SRC_DIR}")
 create_git_patch_file(VMAF_PATCH_REPO1 "VMAF Apply patch 1" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
-create_git_patch_file(VMAF_PATCH_REPO2 "VMAF Apply patch 2" "${VMAF_SRC_DIR}" "${VMAF_TOOLS_PATH_FILE}")
 
 include(${VMAF_RESET_REPO})
 include(${VMAF_PATCH_REPO1})
-include(${VMAF_PATCH_REPO2})
 
 set(VMAF_COMPONENT "VMAF filter")
 set(VMAF_OPTIONS
@@ -23,6 +20,7 @@ set(VMAF_OPTIONS
 	"-Denable_cuda=false"
 	"-Denable_nvtx=false"
 	"-Denable_nvcc=false"
+	"-Dbundled_winpthreads=false"
 )
 
 # In Windows we depend on pthread_win32

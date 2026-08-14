@@ -21,8 +21,10 @@ set(VPX_OPTIONS
     "-Ddecode_perf_tests=disabled"
     "-Dencode_perf_tests=disabled"
     "-Dunit_tests=disabled"
-    "-Dvp8=enabled"
-    "-Dvp9=enabled"
+    "-Dvp8_encoder=enabled"
+	"-Dvp8_decoder=enabled"
+    "-Dvp9_encoder=enabled"
+    "-Dvp9_decoder=enabled"
 	"-Dvp9_highbitdepth=enabled"
     # Force-disable non-x86 architecture features to avoid selecting ARM/NEON sources
     "-Ddisable_features=neon,neon_asm,sve,sve2,msa"

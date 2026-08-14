@@ -12,16 +12,10 @@ endif()
 
 # Need to patch CMakeLists to delete invalid POLICY settings for CMake < 3.5
 # and add an include to make it compile with GCC 15+.
-set(X265_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Various-patches-to-make-it-work.patch")
-set(X265_CUSTOM_PATCHES ${X265_PATCH_FILE})
 create_git_reset_file(X265_RESET_REPO "X265" "${X265_SRC_DIR}")
-create_git_patch_file(X265_PATCH_REPO "X265" "${X265_SRC_DIR}" "${X265_CUSTOM_PATCHES}")
 
 # First reset the repo to a clean state
 include("${X265_RESET_REPO}")
-
-# Patch the x265 sources
-include("${X265_PATCH_REPO}")
 
 # Build 3 phases: 12bit, 10bit+hdr10+ and 8bit (this last one exposing C API)
 # 12-bit build
