@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 jobs:
   docs:
@@ -17,3 +18,4 @@ jobs:
       doc_target: StormByteMultimediaDoc
       extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM
       extra-install: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
+      docs_output_dir: ./_site
