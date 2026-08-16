@@ -1,9 +1,13 @@
 set(XVID_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake-port")
 ensure_build_dir(XVID_BUILD_DIR)
 set(XVID_COMPONENT "XVID codec")
-set(XVID_OPTIONS
-	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
-)
+
+set(XVID_OPTIONS "")
+# NASM is x86-only; xvidcore ASM is classic x86 — do not pass NASM flags on ARM
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
+	list(APPEND XVID_OPTIONS "-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy")
+endif()
+
 create_git_reset_file(
 	XVID_GIT_RESET_FILE
 	"${XVID_COMPONENT}"

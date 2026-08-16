@@ -10,6 +10,16 @@ else()
 	set(X265_SUFFIX_STATIC "")
 endif()
 
+# NASM flags only make sense on x86 / x86_64 (ARM uses NEON, not NASM)
+set(X265_NASM_FLAGS "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
+	set(X265_NASM_FLAGS "-DCMAKE_ASM_NASM_FLAGS=-w-pp-macro-params-legacy")
+endif()
+set(X265_NASM_FLAGS_PIC "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
+	set(X265_NASM_FLAGS_PIC "-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy")
+endif()
+
 # Need to patch CMakeLists to delete invalid POLICY settings for CMake < 3.5
 # and add an include to make it compile with GCC 15+.
 create_git_reset_file(X265_RESET_REPO "X265" "${X265_SRC_DIR}")
@@ -18,7 +28,12 @@ create_git_reset_file(X265_RESET_REPO "X265" "${X265_SRC_DIR}")
 include("${X265_RESET_REPO}")
 
 # Build 3 phases: 12bit, 10bit+hdr10+ and 8bit (this last one exposing C API)
+# Order is critical: 12-bit and 10-bit must be built before 8-bit links them.
+# Dependencies between phases are established via create_cmake_dependant_component.
+
+# ---------------------------------------------------------------------------
 # 12-bit build
+# ---------------------------------------------------------------------------
 ensure_build_dir(X265_BUILD_DIR_12 "12bit")
 # Can't use library_import_static_hint here as the 12-bit build will not be installed
 set(X265_LIBRARY_12 "${X265_BUILD_DIR_12}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${X265_SUFFIX_STATIC}${CMAKE_STATIC_LIBRARY_SUFFIX}")
@@ -27,7 +42,7 @@ set(X265_OPTIONS_12
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=ON"
+	"-DENABLE_LIBVMAF=OFF"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
@@ -35,8 +50,10 @@ set(X265_OPTIONS_12
 	"-DMAIN12=ON"
 	"-DEXPORT_C_API=OFF"
 	"-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}"
-	"-DCMAKE_ASM_NASM_FLAGS=-w-pp-macro-params-legacy"
 )
+if(X265_NASM_FLAGS)
+	list(APPEND X265_OPTIONS_12 "${X265_NASM_FLAGS}")
+endif()
 create_cmake_stages(
 	X265_CONFIGURE_12
 	X265_BUILD_12
@@ -53,13 +70,14 @@ add_custom_target(x265_12bit_configure
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_12}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_12}"
 	COMMENT "Configuring x265 codec (12-bit)"
-	DEPENDS vmaf_install
 )
 include("${X265_BUILD_12}")
 add_dependencies(x265_12bit_build x265_12bit_configure)
 # Not installing 12-bit separately, as it will be merged into 8-bit build
 
-# 10-bit build
+# ---------------------------------------------------------------------------
+# 10-bit build (+ HDR10+)
+# ---------------------------------------------------------------------------
 ensure_build_dir(X265_BUILD_DIR_10 "10bit")
 set(X265_LIBRARY_10 "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}x265${X265_SUFFIX_STATIC}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(X265_LIBRARY_HDR10_PLUS "${X265_BUILD_DIR_10}/${CMAKE_STATIC_LIBRARY_PREFIX}hdr10plus${CMAKE_STATIC_LIBRARY_SUFFIX}")
@@ -68,17 +86,19 @@ set(X265_OPTIONS_10
 	"-DENABLE_SHARED=OFF"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=ON"
+	"-DENABLE_LIBVMAF=OFF"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
 	"-DENABLE_HDR10_PLUS=ON"
 	"-DHIGH_BIT_DEPTH=ON"
 	"-DMAIN12=OFF"
-	"-DEXPORT_C_API=OFF" # Static build needs this whilst static don't
+	"-DEXPORT_C_API=OFF"
 	"-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}"
-	"-DCMAKE_ASM_NASM_FLAGS=-w-pp-macro-params-legacy"
 )
+if(X265_NASM_FLAGS)
+	list(APPEND X265_OPTIONS_10 "${X265_NASM_FLAGS}")
+endif()
 create_cmake_stages(
 	X265_CONFIGURE_10
 	X265_BUILD_10
@@ -96,13 +116,14 @@ add_custom_target(x265_10bit_configure
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_10}"
 	WORKING_DIRECTORY "${X265_BUILD_DIR_10}"
 	COMMENT "Configuring x265 codec (10-bit)"
-	DEPENDS vmaf_install
 )
 include("${X265_BUILD_10}")
 add_dependencies(x265_10bit_build x265_10bit_configure)
 # Not installing 10-bit separately, as it will be merged into 8-bit build
 
-# 8-bit build
+# ---------------------------------------------------------------------------
+# 8-bit build (exports C API; links 10-bit + 12-bit via BuildMaster deps)
+# ---------------------------------------------------------------------------
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 	set(CMAKE_SHARED_MODE "OFF")
 else()
@@ -116,18 +137,20 @@ set(X265_OPTIONS_8
 	"-DENABLE_SHARED=${CMAKE_SHARED_MODE}"
 	"-DENABLE_PIC=ON"
 	"-DENABLE_SVT_HEVC=OFF"
-	"-DENABLE_LIBVMAF=ON"
+	"-DENABLE_LIBVMAF=OFF"
 	"-DENABLE_LIBNUMA=OFF"
 	"-DGIT_ARCHETYPE=1"
 	"-DENABLE_CLI=OFF"
 	"-DHIGH_BIT_DEPTH=OFF"
 	"-DEXPORT_C_API=ON"
 	"-DLIB_INSTALL_DIR=${CMAKE_INSTALL_LIBDIR}"
-	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 	"-DEXTRA_LIB='${X265_EXTRA_LIBS}'"
 	"-DLINKED_10BIT=ON"
 	"-DLINKED_12BIT=ON"
 )
+if(X265_NASM_FLAGS_PIC)
+	list(APPEND X265_OPTIONS_8 "${X265_NASM_FLAGS_PIC}")
+endif()
 create_cmake_dependant_component(
 	X265_LIBRARY_CREATE_FILE
 	"x265"
@@ -146,10 +169,6 @@ include("${X265_LIBRARY_CREATE_FILE}")
 # because its name is libx265.pdb instead. To avoid this, we build the
 # target without the install step, and manually copy the library file
 # to the expected filename.
-
-# Ensure the main 8-bit `x265_build` target runs the 12-bit and 10-bit
-# builds first so their configure/build stages are executed.
-add_dependencies(x265_build x265_12bit_build x265_10bit_build)
 if(MSVC)
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
 		if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -186,14 +205,12 @@ add_custom_command(TARGET x265_install POST_BUILD
 )
 
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-	# Repack all the libraries altogether into a single x265.lib
+	# Repack 8/10/12-bit static libs into a single x265
 	library_import_static_hint(X265_LIBRARY "x265")
-	# VMAF needs to be included in the static repack for ffmpeg configure to detect it
-	library_import_static_hint(VMAF_LIBRARY "vmaf")
 	create_bundle_static_libraries(
 		BUNDLE_X265_LIBRARIES
 		"x265"
-		"${X265_LIBRARY_8};${X265_LIBRARY_10};${X265_LIBRARY_12};${VMAF_LIBRARY}"
+		"${X265_LIBRARY_8};${X265_LIBRARY_10};${X265_LIBRARY_12}"
 	)
 
 	add_custom_command(TARGET x265_install POST_BUILD

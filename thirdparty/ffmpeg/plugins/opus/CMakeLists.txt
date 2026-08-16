@@ -4,7 +4,7 @@ ensure_build_dir(OPUS_BUILD_DIR)
 
 # If generated DNN data files are missing, try to download the official
 # opus_data tarball used by upstream autogen.sh. This creates files such
-# as dnn/fargan_data.h which Meson expects.
+# as dnn/fargan_data.h which Meson/CMake expects.
 if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn/fargan_data.h")
 	# Try to extract expected hash from autogen.sh, fallback to known hash
 	set(OPUS_DATA_HASH "a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e")
@@ -26,7 +26,6 @@ if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn/fargan_data.h")
 		file(DOWNLOAD
 			"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
 			"${OPUS_MODEL_TAR}"
-			#SHOW_PROGRESS
 			EXPECTED_HASH SHA256=${OPUS_DATA_HASH}
 			STATUS _opus_dl_status
 			LOG _opus_dl_log
@@ -48,18 +47,16 @@ if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn/fargan_data.h")
 			message(WARNING "Failed to extract ${OPUS_MODEL_TAR}: ${_opus_tar_err}")
 		endif()
 	else()
-		message(WARNING "Opus DNN model archive not available; Meson may fail if generated DNN files are required.")
+		message(WARNING "Opus DNN model archive not available; build may fail if generated DNN files are required.")
 	endif()
 endif()
 
-# Setup CFLAGS and CXXFLAGS to include build dir to use downloaded models
+# Include downloaded DNN headers
 if(MSVC)
-  	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${OPUS_BUILD_DIR}/dnn")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${OPUS_BUILD_DIR}/dnn")
 else()
-  	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${OPUS_BUILD_DIR}/dnn")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${OPUS_BUILD_DIR}/dnn")
 endif()
-
-# Ensure no leading/trailing whitespace that would break command-line -D parsing
 string(STRIP "${CMAKE_C_FLAGS}" CMAKE_C_FLAGS)
 
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
@@ -67,6 +64,7 @@ if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 else()
 	set(OPUS_SHARED_MODE ON)
 endif()
+
 set(OPUS_COMPONENT "Opus codec")
 set(OPUS_OPTIONS
 	"-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
@@ -80,8 +78,13 @@ set(OPUS_OPTIONS
 	"-DOPUS_INSTALL_CMAKE_CONFIG_MODULE=OFF"
 	"-DOPUS_DRED=ON"
 	"-DOPUS_OSCE=ON"
-	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
+
+# NASM flags only make sense on x86/x86_64 (ARM uses intrinsics/NEON, not NASM)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
+	list(APPEND OPUS_OPTIONS "-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy")
+endif()
+
 create_cmake_component(
 	OPUS_LIBRARY_CREATE_FILE
 	"opus"

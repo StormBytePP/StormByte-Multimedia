@@ -1,7 +1,7 @@
 set(VMAF_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/libvmaf")
 ensure_build_dir(VMAF_BUILD_DIR)
 
-# Need to patch to disable tool building
+# Need to patch to disable tool building / MSVC fixes
 set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-MSVC-corrections.patch")
 create_git_reset_file(VMAF_RESET_REPO "VMAF Reset repo" "${VMAF_SRC_DIR}")
 create_git_patch_file(VMAF_PATCH_REPO1 "VMAF Apply patch 1" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
@@ -11,17 +11,23 @@ include(${VMAF_PATCH_REPO1})
 
 set(VMAF_COMPONENT "VMAF filter")
 set(VMAF_OPTIONS
-    "-Denable_tests=false"
+	"-Denable_tests=false"
 	"-Denable_docs=false"
 	"-Denable_tools=false"
 	"-Denable_asm=true"
-	"-Denable_avx512=true"
 	"-Dbuilt_in_models=true"
 	"-Denable_cuda=false"
 	"-Denable_nvtx=false"
 	"-Denable_nvcc=false"
 	"-Dbundled_winpthreads=false"
 )
+
+# AVX-512 is x86_64-only; leave enabled only there
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+	list(APPEND VMAF_OPTIONS "-Denable_avx512=true")
+else()
+	list(APPEND VMAF_OPTIONS "-Denable_avx512=false")
+endif()
 
 # In Windows we depend on pthread_win32
 if(MSVC)

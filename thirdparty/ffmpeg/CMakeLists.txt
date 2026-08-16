@@ -9,7 +9,7 @@ if(NOT DEFINED WITH_FFMPEG)
 	endif()
 endif()
 
-if (WITH_FFMPEG STREQUAL "SYSTEM")
+if(WITH_FFMPEG STREQUAL "SYSTEM")
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 	find_package(FFmpeg REQUIRED)
 	# If ffmpeg is not bundled, link normally with found libraries
@@ -241,10 +241,10 @@ else()
 			list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
 		endforeach()
 	endforeach()
-	
-	# According to FFMmpeg documentation, when linking statically,
-	# -Wl,-Bsymbolic should be used to avoid symbol conflicts.
-	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC)
+
+	# According to FFmpeg documentation, when linking statically on GNU ld,
+	# -Wl,-Bsymbolic helps avoid symbol conflicts. Not valid on Apple ld64.
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC AND NOT APPLE)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
 
@@ -258,12 +258,10 @@ else()
 		)
 	endif()
 
-	# Linking: In gcc, we need to group all ffmpeg libraries together with plugins
-	# in order to not have undefined references due to library ordering issues.
-	# Despite it is only needed for GCC, having a separate link to other toolchains
-	# is more complex than just using the same method everywhere.
-	# This only applies to static build and UNIX-like systems (not Windows).
-
+	# Linking: static FFmpeg has circular deps between libs.
+	# - MSVC: normal imported targets + plugins
+	# - Linux (GNU ld): LINK_GROUP RESCAN (--start-group / --end-group)
+	# - Apple ld64: RESCAN unsupported — link archive list as-is
 	if(MSVC)
 		target_link_libraries(StormByte-Multimedia PRIVATE
 			FFmpeg::avutil
@@ -274,9 +272,12 @@ else()
 			FFmpeg::avfilter
 			FFMpeg::plugins
 		)
+	elseif(APPLE)
+		target_link_libraries(StormByte-Multimedia PRIVATE
+			${FFMPEG_LINK_LIBS}
+		)
 	else()
-		target_link_libraries(StormByte-Multimedia
-			PRIVATE
+		target_link_libraries(StormByte-Multimedia PRIVATE
 			"$<LINK_GROUP:RESCAN,${FFMPEG_LINK_LIBS}>"
 		)
 	endif()
@@ -285,4 +286,3 @@ else()
 	target_include_directories(StormByte-Multimedia SYSTEM PRIVATE "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	add_dependencies(StormByte-Multimedia ffmpeg_install)
 endif()
-

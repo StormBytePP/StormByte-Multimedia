@@ -1,12 +1,16 @@
 set(OGG_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OGG_BUILD_DIR)
 set(OGG_COMPONENT "OGG container")
+
 set(OGG_OPTIONS
 	"-DBUILD_TESTING=OFF"
 	"-DINSTALL_DOCS=OFF"
 	"-DCMAKE_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}"
-	"-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy"
 )
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86|x86)$")
+	list(APPEND OGG_OPTIONS "-DCMAKE_ASM_NASM_FLAGS=-DPIC -w-pp-macro-params-legacy")
+endif()
+
 create_cmake_component(
 	OGG_LIBRARY_CREATE_FILE
 	"ogg"

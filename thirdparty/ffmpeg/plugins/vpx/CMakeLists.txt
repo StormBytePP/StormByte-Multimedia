@@ -1,36 +1,58 @@
 set(VPX_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 ensure_build_dir(VPX_BUILD_DIR)
 set(VPX_COMPONENT "VPX codec")
-# We need to patch sources so arm files are not picked when building on x86_64
+
+# On x86_64, avoid picking ARM sources; on aarch64/arm64, do the opposite.
 set(VPX_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Only-add-arm-asm-files-when-target-is-arm.patch")
 create_git_reset_file(VPX_RESET_REPO "VPX" "${VPX_SRC_DIR}")
 create_git_patch_file(VPX_PATCH_REPO "VPX" "${VPX_SRC_DIR}" "${VPX_PATCH_FILE}")
 include("${VPX_RESET_REPO}")
 include("${VPX_PATCH_REPO}")
 
-# On Windows it is needed to force static build as of error:
-# ERROR: Problem encountered: Shared library build is only supported
-# on ELF and Darwin for now
+# Shared library builds are limited on some platforms (see upstream);
+# Windows still needs static as before.
 set(VPX_OPTIONS
-    "-Dcpu=x86_64"
-    "-Dlibs=enabled"
-    "-Dexamples=disabled"
-    "-Dtools=disabled"
-    "-Ddocs=disabled"
-    "-Dinstall_docs=disabled"
-    "-Ddecode_perf_tests=disabled"
-    "-Dencode_perf_tests=disabled"
-    "-Dunit_tests=disabled"
-    "-Dvp8_encoder=enabled"
+	"-Dlibs=enabled"
+	"-Dexamples=disabled"
+	"-Dtools=disabled"
+	"-Ddocs=disabled"
+	"-Dinstall_docs=disabled"
+	"-Ddecode_perf_tests=disabled"
+	"-Dencode_perf_tests=disabled"
+	"-Dunit_tests=disabled"
+	"-Dvp8_encoder=enabled"
 	"-Dvp8_decoder=enabled"
-    "-Dvp9_encoder=enabled"
-    "-Dvp9_decoder=enabled"
+	"-Dvp9_encoder=enabled"
+	"-Dvp9_decoder=enabled"
 	"-Dvp9_highbitdepth=enabled"
-    # Force-disable non-x86 architecture features to avoid selecting ARM/NEON sources
-    "-Ddisable_features=neon,neon_asm,sve,sve2,msa"
-    "-Dforce_disable_features=neon,neon_asm,arm,arm64,sve,sve2,msa"
-    "-Dmultithread=enabled"
+	"-Dmultithread=enabled"
 )
+
+# Architecture-specific CPU / feature flags
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+	list(APPEND VPX_OPTIONS
+		"-Dcpu=aarch64"
+	)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7)")
+	list(APPEND VPX_OPTIONS
+		"-Dcpu=arm"
+	)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+	list(APPEND VPX_OPTIONS
+		"-Dcpu=x86_64"
+		# Force-disable non-x86 architecture features to avoid selecting ARM/NEON sources
+		"-Ddisable_features=neon,neon_asm,sve,sve2,msa"
+		"-Dforce_disable_features=neon,neon_asm,arm,arm64,sve,sve2,msa"
+	)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86)$")
+	list(APPEND VPX_OPTIONS
+		"-Dcpu=x86"
+		"-Ddisable_features=neon,neon_asm,sve,sve2,msa"
+		"-Dforce_disable_features=neon,neon_asm,arm,arm64,sve,sve2,msa"
+	)
+else()
+	message(STATUS "VPX: unknown processor '${CMAKE_SYSTEM_PROCESSOR}', letting Meson auto-detect cpu")
+endif()
 
 create_meson_component(
 	VPX_LIBRARY_CREATE_FILE

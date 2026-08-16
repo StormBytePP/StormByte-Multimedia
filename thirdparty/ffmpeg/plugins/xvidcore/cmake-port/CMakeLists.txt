@@ -1,12 +1,31 @@
 cmake_minimum_required(VERSION 3.16)
-project(xvidcore LANGUAGES C ASM_NASM)
+project(xvidcore LANGUAGES C)
+
+# Solo activamos NASM si realmente vamos a usarlo (x86)
+set(XVID_IS_X86 FALSE)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86|x86")
+	set(XVID_IS_X86 TRUE)
+endif()
+
+# En Apple también respetamos la arquitectura de destino (por si hay universal)
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+	list(FIND CMAKE_OSX_ARCHITECTURES "x86_64" _idx)
+	if(_idx GREATER -1)
+		set(XVID_IS_X86 TRUE)
+	else()
+		set(XVID_IS_X86 FALSE)
+	endif()
+endif()
+
+if(XVID_IS_X86)
+	enable_language(ASM_NASM)
+endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ---------------------------------------------
-# Sources
+# Sources (C siempre)
 # ---------------------------------------------
-# Explicit source list (no globs). Pick only x86-compatible files.
 set(XVID_SRC
 	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/decoder.c
 	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/encoder.c
@@ -62,60 +81,63 @@ set(XVID_SRC
 	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/xvid.c
 )
 
-# Explicit list of x86 ASM files (no globs)
-set(XVID_ASM
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm/cbp_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm/cbp_sse2.asm
+# ---------------------------------------------
+# ASM (solo x86)
+# ---------------------------------------------
+set(XVID_ASM)
+if(XVID_IS_X86)
+	set(XVID_ASM
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm/cbp_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm/cbp_sse2.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_mmx_ffmpeg.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_mmx_skal.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_sse2_skal.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_3dne.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_sse2_dmitry.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_mmx_ffmpeg.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_mmx_skal.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/fdct_sse2_skal.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_3dne.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm/idct_sse2_dmitry.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_rgb_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_yuv_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_yuyv_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/deintl_sse.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/gmc_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_3dn.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_3dne.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_xmm.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/postprocessing_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/postprocessing_sse2.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/qpel_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/reduced_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_rgb_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_yuv_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/colorspace_yuyv_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/deintl_sse.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/gmc_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_3dn.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_3dne.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/interpolate8x8_xmm.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/postprocessing_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/postprocessing_sse2.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/qpel_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm/reduced_mmx.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_3dn.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_3dne.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_sse2.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_xmm.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_3dn.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_3dne.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_sse2.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm/sad_xmm.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_h263_3dne.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_h263_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_mpeg_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_mpeg_xmm.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_h263_3dne.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_h263_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_mpeg_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm/quantize_mpeg_xmm.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/cpuid.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/interlacing_mmx.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/mem_transfer_3dne.asm
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/mem_transfer_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/cpuid.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/interlacing_mmx.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/mem_transfer_3dne.asm
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm/mem_transfer_mmx.asm
 
-	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm/plugin_ssim-a.asm
-)
+		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm/plugin_ssim-a.asm
+	)
 
-# Ensure NASM can find per-module include files (e.g. colorspace_mmx.inc)
-set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm")
-
+	# NASM include paths
+	set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm")
+endif()
 
 # ---------------------------------------------
 # Platform-specific configuration
 # ---------------------------------------------
 if(MSVC)
-	# Windows / MSVC
 	add_compile_definitions(
 		WIN32
 		_WINDOWS
@@ -123,50 +145,52 @@ if(MSVC)
 		HAVE_PTHREAD
 	)
 
-	# Architecture-specific defines
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		add_compile_definitions(ARCH_IS_X86_64 ARCH_IS_64BIT)
-		set(NASM_FORMAT win64)
+	if(XVID_IS_X86)
+		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+			add_compile_definitions(ARCH_IS_X86_64 ARCH_IS_64BIT)
+			set(NASM_FORMAT win64)
+		else()
+			add_compile_definitions(ARCH_IS_IA32 ARCH_IS_32BIT)
+			set(NASM_FORMAT win32)
+		endif()
+
+		set(CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_FORMAT})
+		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+			set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DWINDOWS -DNO_PREFIX -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
+		else()
+			set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DWINDOWS -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
+		endif()
 	else()
-		add_compile_definitions(ARCH_IS_IA32 ARCH_IS_32BIT)
-		set(NASM_FORMAT win32)
+		# ARM64 Windows (raro, pero por si acaso)
+		add_compile_definitions(ARCH_IS_64BIT)
 	endif()
 
-	# NASM flags
-	set(CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_FORMAT})
-	# On Windows: pass NO_PREFIX to NASM for x86_64 builds so we don't need to
-	# modify third-party NASM headers to change symbol decoration.
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DWINDOWS -DNO_PREFIX -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
-	else()
-		set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DWINDOWS -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
-	endif()
-
-	# MSVC compile flags
-	set(MSVC_FLAGS
-		/W3
-		/MP
-	)
+	set(MSVC_FLAGS /W3 /MP)
 
 else()
-	# Linux / macOS / MinGW / Clang / GCC
-	add_compile_definitions(
-		HAVE_PTHREAD
-	)
+	# Linux / macOS / Clang / GCC
+	add_compile_definitions(HAVE_PTHREAD)
 
-	# Architecture-specific defines
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		add_compile_definitions(ARCH_IS_X86_64 ARCH_IS_64BIT)
-		set(NASM_FORMAT elf64)
+	if(XVID_IS_X86)
+		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+			add_compile_definitions(ARCH_IS_X86_64 ARCH_IS_64BIT)
+			set(NASM_FORMAT elf64)
+		else()
+			add_compile_definitions(ARCH_IS_IA32 ARCH_IS_32BIT)
+			set(NASM_FORMAT elf32)
+		endif()
+
+		set(CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_FORMAT})
+		set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
 	else()
-		add_compile_definitions(ARCH_IS_IA32 ARCH_IS_32BIT)
-		set(NASM_FORMAT elf32)
+		# ARM64 / aarch64 / Apple Silicon / cualquier no-x86 → pure C
+		add_compile_definitions(ARCH_IS_GENERIC)
+		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+			add_compile_definitions(ARCH_IS_64BIT)
+		else()
+			add_compile_definitions(ARCH_IS_32BIT)
+		endif()
 	endif()
-
-	# NASM flags
-	set(CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_FORMAT})
-	set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
-
 endif()
 
 # ---------------------------------------------
@@ -174,15 +198,9 @@ endif()
 # ---------------------------------------------
 option(BUILD_SHARED_LIBS "Build XVID as shared library" OFF)
 if(BUILD_SHARED_LIBS)
-	add_library(xvidcore SHARED
-		${XVID_SRC}
-		${XVID_ASM}
-	)
+	add_library(xvidcore SHARED ${XVID_SRC} ${XVID_ASM})
 else()
-	add_library(xvidcore STATIC
-		${XVID_SRC}
-		${XVID_ASM}
-	)
+	add_library(xvidcore STATIC ${XVID_SRC} ${XVID_ASM})
 endif()
 
 target_include_directories(xvidcore PRIVATE
@@ -193,11 +211,8 @@ target_include_directories(xvidcore PRIVATE
 # Compiler flags
 # ---------------------------------------------
 if(MSVC)
-	# Apply MSVC options only when compiling C sources to avoid passing
-	# MSVC-style switches (e.g. /W3 /MP) to the NASM assembler.
 	target_compile_options(xvidcore PRIVATE $<$<COMPILE_LANGUAGE:C>:${MSVC_FLAGS}>)
 else()
-	# Apply GCC/Clang flags only for C language so they are not forwarded to NASM.
 	target_compile_options(xvidcore PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wno-unused-function>)
 endif()
 
@@ -214,7 +229,6 @@ endif()
 # ---------------------------------------------
 # Install
 # ---------------------------------------------
-# Use GNUInstallDirs so install locations follow standard CMake vars
 include(GNUInstallDirs)
 
 install(TARGETS xvidcore
@@ -223,8 +237,6 @@ install(TARGETS xvidcore
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-# Install only the public header `xvid.h`
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/xvid.h
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
-# ---------------------------------------------
