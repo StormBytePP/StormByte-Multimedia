@@ -13,8 +13,6 @@ on:
 
 env:
   BUILD_TYPE: Debug
-
-  # Windows only — pin Chocolatey NASM (avoid untested latest, e.g. 3.2.x AV in GHA)
   NASM_VERSION: "3.1.0"
 
 jobs:
@@ -29,7 +27,6 @@ jobs:
         exclude:
           - compiler: clang-libc++
             ffmpeg: SYSTEM
-          # SYSTEM packages don't exercise bundled nonfree/GPL codecs
           - ffmpeg: SYSTEM
             extra: true
     name: linux-${{ matrix.compiler }}-ffmpeg(${{ matrix.ffmpeg }})-extra(${{ matrix.extra }})
@@ -71,9 +68,6 @@ jobs:
             -DWITH_GPL=${{ matrix.extra && 'ON' || 'OFF' }}
             -DWITH_STORMBYTE=BUNDLED
             ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_CXX_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_SHARED_LINKER_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_MODULE_LINKER_FLAGS=-stdlib=libc++' || '' }}
           run-tests: true
           ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
@@ -82,9 +76,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [clang, clang-libc++, gcc]
+        compiler: [gcc, clang]
         extra: [true, false]
-    name: macos-${{ matrix.compiler }}-ffmpeg(BUNDLED)-extra(${{ matrix.extra }})
+    name: macos-${{ matrix.compiler == 'clang' && 'clang-libc++' || matrix.compiler }}-ffmpeg(BUNDLED)-extra(${{ matrix.extra }})
     env:
       DYLD_LIBRARY_PATH: ${{ github.workspace }}/build/thirdparty/buildmaster/install/lib:${{ github.workspace }}/build/lib
 
@@ -114,10 +108,6 @@ jobs:
             -DWITH_NONFREE=${{ matrix.extra && 'ON' || 'OFF' }}
             -DWITH_GPL=${{ matrix.extra && 'ON' || 'OFF' }}
             -DWITH_STORMBYTE=BUNDLED
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_CXX_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_SHARED_LINKER_FLAGS=-stdlib=libc++' || '' }}
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_MODULE_LINKER_FLAGS=-stdlib=libc++' || '' }}
           run-tests: true
           ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
