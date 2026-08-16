@@ -13,7 +13,7 @@ on:
 
 env:
   BUILD_TYPE: Debug
-  BUILDMASTER_DEBUG: 1
+
   # Windows only — pin Chocolatey NASM (avoid untested latest, e.g. 3.2.x AV in GHA)
   NASM_VERSION: "3.1.0"
 
