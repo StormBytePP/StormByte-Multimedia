@@ -62,14 +62,37 @@ else()
 		message(FATAL_ERROR "FFMPEG_BUNDLED_TYPE must be either 'static' or 'shared'")
 	endif()
 
-	# Configure FFMPEG meson build options
+	# Configure FFmpeg meson options (headless library use: no CLIs, HW stacks, or host UI/device deps)
 	set(FFMPEG_MESON_OPTIONS
-		# Disabled features we don't need / want
+		# --- Build surface: library-only, no tools/tests ---
 		"-Dprograms=disabled"
 		"-Dtests=disabled"
+		"-Davdevice=disabled"
 		"-Ddevices=disabled"
+
+		# --- Compression helpers (not required for our plugin set) ---
+		"-Dzlib=disabled"
+		"-Dbzlib=disabled"
+		"-Dlzma=disabled"
+
+		# --- Text / charset (avoid pulling libiconv into static consumers) ---
+		"-Diconv=disabled"
+
+		# --- Linux audio / capture devices ---
+		"-Dalsa=disabled"
+		"-Dlibpulse=disabled"
+		"-Dlibjack=disabled"
+		"-Dlibv4l2=disabled"
+
+		# --- Linux display / X11 / DRM ---
+		"-Dxlib=disabled"
+		"-Dlibxcb=disabled"
+		"-Dlibdrm=disabled"
+
+		# --- VA-API (and filters that only make sense with it) ---
 		"-Dvaapi=disabled"
 		"-Dvaapi_drm=disabled"
+		"-Dvaapi_x11=disabled"
 		"-Ddeinterlace_vaapi_filter=disabled"
 		"-Ddenoise_vaapi_filter=disabled"
 		"-Doverlay_vaapi_filter=disabled"
@@ -83,51 +106,52 @@ else()
 		"-Dxstack_vaapi_filter=disabled"
 		"-Dpad_vaapi_filter=disabled"
 		"-Ddrawbox_vaapi_filter=disabled"
-		"-Dvaapi_x11=disabled"
-		"-Dalsa=disabled"
-		"-Dlibpulse=disabled"
-		"-Dlibjack=disabled"
+
+		# --- VDPAU ---
+		"-Dvdpau=disabled"
+		"-Dvdpau_x11=disabled"
+
+		# --- NVIDIA / CUDA ---
 		"-Dffnvcodec=disabled"
 		"-Dnvenc=disabled"
 		"-Dnvdec=disabled"
 		"-Dcuda=disabled"
 		"-Dcuvid=disabled"
 		"-Dff_cuda_nvcc=disabled"
+
+		# --- Other HW encode/decode stacks ---
 		"-Dlibmfx=disabled"
+		"-Dlibvpl=disabled"
 		"-Drkmpp=disabled"
 		"-Drockchip_mpp=disabled"
 		"-Dmmal=disabled"
 		"-Domx=disabled"
 		"-Domx_rpi=disabled"
-		"-Dvaapi=disabled"
-		"-Dvaapi_drm=disabled"
-		"-Dvaapi_x11=disabled"
-		"-Dvdpau=disabled"
-		"-Dvdpau_x11=disabled"
+		"-Dmediandk=disabled"
+		"-Dmediafoundation=disabled"
+
+		# --- GPU / graphics APIs we do not use ---
 		"-Dvulkan=disabled"
 		"-Dopencl=disabled"
 		"-Dopengl=disabled"
 		"-Dsdl2=disabled"
+
+		# --- Apple frameworks (static link would otherwise require system frameworks) ---
 		"-Dappkit=disabled"
 		"-Davfoundation=disabled"
 		"-Dvideotoolbox=disabled"
+		"-Daudiotoolbox=disabled"
 		"-Dmetal=disabled"
-		"-Dxlib=disabled"
-		"-Dlibxcb=disabled"
-		"-Dlibdrm=disabled"
-		"-Dlibv4l2=disabled"
-		"-Dmediandk=disabled"
-		"-Dmediafoundation=disabled"
+		"-Dsecuretransport=disabled"
+
+		# --- Optional network / ML libs (not part of our codec plugin set) ---
 		"-Dlibsrt=disabled"
 		"-Dlibrtmp=disabled"
 		"-Dlibssh=disabled"
 		"-Dlibtensorflow=disabled"
+
+		# --- Misc platform probes we force off for a deterministic minimal build ---
 		"-Dnanosleep=disabled"
-		"-Dlibvpl=disabled"
-		"-Davdevice=disabled"
-		'-Dzlib=disabled'
-		'-Dbzlib=disabled'
-		'-Dlzma=disabled'
 	)
 
 	# Enable GPL components if requested
