@@ -8,9 +8,9 @@ permissions:
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 env:
@@ -19,10 +19,15 @@ env:
 
 jobs:
   ###########################################################################
-  # 0a. Warm submodule cache (all OS / matrix jobs share the same key)
+  # 0a. Warm submodule cache (one save per OS — Actions cache is OS-scoped)
   ###########################################################################
   checkout-bootstrap:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    name: checkout-bootstrap (${{ matrix.os }})
     steps:
       - name: Warm repository + submodule cache
         uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
@@ -31,10 +36,11 @@ jobs:
           submodules: recursive
 
   ###########################################################################
-  # 0b. Warm APT lists only (Linux + docs consumers)
+  # 0b. Warm APT lists only (Linux + docs)
   ###########################################################################
   apt-bootstrap:
     runs-on: ubuntu-latest
+    name: apt-bootstrap
     steps:
       - name: Warm APT package indexes
         uses: stormbytepp/githubactions/.github/actions/update-apt-cached@master
@@ -67,7 +73,7 @@ jobs:
       - name: Install nasm/yasm (bundled FFmpeg)
         uses: stormbytepp/githubactions/.github/actions/install-cached@master
         with:
-          packages: 'nasm yasm'
+          packages: "nasm yasm"
           cache-key: apt-nasm-yasm
           lists-cache-key: apt-lists
           rotate-weekly: true
@@ -76,7 +82,7 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: ${{ matrix.compiler }}
-          ccache-key: v1-extra-${{ matrix.extra }}
+          ccache-key: v1-${{ matrix.compiler }}-extra-${{ matrix.extra }}
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
             -DENABLE_TEST=ON
@@ -109,7 +115,7 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: ${{ matrix.compiler }}
-          ccache-key: v1-extra-${{ matrix.extra }}
+          ccache-key: v1-${{ matrix.compiler }}-extra-${{ matrix.extra }}
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
             -DENABLE_TEST=ON
@@ -152,7 +158,7 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: msvc
-          ccache-key: v1-extra-${{ matrix.extra }}
+          ccache-key: v1-msvc-extra-${{ matrix.extra }}
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
             -DENABLE_TEST=ON
@@ -179,5 +185,5 @@ jobs:
     with:
       doc_target: StormByteMultimediaDoc
       extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM
-      extra-install: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
+      extra-install: "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev"
       docs_output_dir: ./_site
