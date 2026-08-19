@@ -74,3 +74,9 @@ if(MSVC)
 		COMMENT "Renaming libvpx.a to vpx.lib for MSVC compatibility"
 	)
 endif()
+
+# Drop in-tree patch so the submodule working tree stays clean
+add_custom_command(TARGET vpx_install POST_BUILD
+	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${VPX_RESET_REPO}"
+	COMMENT "Resetting VPX source tree after internal install"
+)
