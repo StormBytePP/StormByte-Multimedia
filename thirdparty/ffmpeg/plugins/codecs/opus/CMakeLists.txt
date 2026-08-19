@@ -1,4 +1,4 @@
-message(STATUS "\t\t\tSetting up Opus codec extra data")
+message_indented("Setting up Opus codec extra data" ${PLUGIN_LEVEL})
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
 
@@ -14,12 +14,13 @@ if(EXISTS "${OPUS_SRC_DIR}/autogen.sh")
 	endif()
 endif()
 
+math(EXPR SETTINGS_LEVEL "${PLUGIN_LEVEL} + 1")
 # Cache-aware download (destination is automatic under BUILDMASTER_DOWNLOADSDIR)
 file_download_cached(OPUS_DNN_DOWNLOAD
 	"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
 	TITLE "Opus DNN data"
 	EXPECTED_HASH "SHA256=${OPUS_DATA_HASH}"
-	4
+	${SETTINGS_LEVEL}
 )
 include(${OPUS_DNN_DOWNLOAD})
 
@@ -31,7 +32,7 @@ file_decompress(OPUS_DNN_UNPACK
 	"${OPUS_MODEL_TAR}"
 	"${OPUS_BUILD_DIR}"
 	TITLE "Opus DNN data"
-	4
+	${SETTINGS_LEVEL}
 )
 include(${OPUS_DNN_UNPACK})
 
@@ -78,7 +79,7 @@ create_cmake_component(
 	"${OPUS_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"opus"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${OPUS_LIBRARY_CREATE_FILE}")
 

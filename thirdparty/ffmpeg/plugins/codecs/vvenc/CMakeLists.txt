@@ -19,7 +19,7 @@ create_cmake_component(
 	"${VVENC_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"vvenc"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${VVENC_LIBRARY_CREATE_FILE}")
 

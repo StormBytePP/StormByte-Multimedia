@@ -11,6 +11,6 @@ create_cmake_component(
 	"${PTHREAD_WIN32_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"pthreadVCE3;pthreadVSE3;pthreadVC3"
-	2
+	${PLUGIN_LEVEL}
 )
 include("${PTHREAD_WIN32_LIBRARY_CREATE_FILE}")

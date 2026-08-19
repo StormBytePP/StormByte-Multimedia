@@ -16,7 +16,7 @@ create_cmake_component(
 	"${MP3LAME_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"mp3lame"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${MP3LAME_LIBRARY_CREATE_FILE}")
 

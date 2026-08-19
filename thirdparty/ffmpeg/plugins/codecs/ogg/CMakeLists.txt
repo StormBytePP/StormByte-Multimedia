@@ -20,7 +20,7 @@ create_cmake_component(
 	"${OGG_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"ogg"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${OGG_LIBRARY_CREATE_FILE}")
 

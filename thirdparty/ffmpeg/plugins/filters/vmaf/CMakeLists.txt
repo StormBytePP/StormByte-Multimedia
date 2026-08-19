@@ -41,7 +41,7 @@ if(MSVC)
 		"${FFMPEG_BUNDLED_TYPE}"
 		"vmaf"
 		"pthread-win32_install"
-		3
+		${PLUGIN_LEVEL}
 	)
 else()
 	create_meson_component(

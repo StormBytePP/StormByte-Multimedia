@@ -1,8 +1,13 @@
-message(STATUS "\tSetting up FFmpeg plugins")
-
 include(helpers.cmake)
 
+# For BuildMaster messages
+set(PLUGIN_LEVEL 1)
+
+message_indented("Setting up FFmpeg plugins" ${PLUGIN_LEVEL})
+
 add_library(ffmpeg-plugins INTERFACE)
+
+math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 
 # Always (MSVC-only logic lives inside deps/)
 add_subdirectory(deps)

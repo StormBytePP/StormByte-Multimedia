@@ -100,3 +100,21 @@ function(list_to_columns out_var indent col_width)
 
 	set(${out_var} "${result}" PARENT_SCOPE)
 endfunction()
+
+## @brief Print a STATUS message with a configurable tab indentation.
+## @param[in] _message      Text to show after the leading tabs.
+## @param[in] _indent_level Number of tab characters to prepend (non-negative
+##                          integer). Values that are not a non-negative integer
+##                          are treated as 0.
+## @note Uses message(STATUS …). Safe to call from functions or macros.
+## @example
+##   message_indented("Configuring Opus codec" 2)
+##   # → -- \t\tConfiguring Opus codec
+function(message_indented _message _indent_level)
+	if(_indent_level MATCHES "^[0-9]+$")
+		string(REPEAT "\t" ${_indent_level} _indent)
+	else()
+		set(_indent "")
+	endif()
+	message(STATUS "${_indent}${_message}")
+endfunction()

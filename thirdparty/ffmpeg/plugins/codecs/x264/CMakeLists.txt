@@ -24,7 +24,7 @@ create_meson_component(
 	"${X264_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"x264"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${X264_LIBRARY_CREATE_FILE}")
 

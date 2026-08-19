@@ -32,7 +32,7 @@ create_cmake_component(
 	"${XVID_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"xvidcore"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${XVID_LIBRARY_CREATE_FILE}")
 

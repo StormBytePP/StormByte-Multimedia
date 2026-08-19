@@ -1,5 +1,6 @@
-message(STATUS "\t\tCodecs:")
+message_indented("Codecs:" ${PLUGIN_LEVEL})
 
+math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(fdk-aac)
 add_subdirectory(mp3lame)
 add_subdirectory(ogg)

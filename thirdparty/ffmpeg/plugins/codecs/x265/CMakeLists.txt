@@ -1,6 +1,6 @@
 plugin_require(WITH_GPL "-Dlibx265=disabled -Dlibx265_encoder=disabled")
 
-message(STATUS "\t\t\tSetting up x265 codec")
+message_indented("Setting up x265 codec" ${PLUGIN_LEVEL})
 
 # Set main source
 set(X265_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src/source")
@@ -112,7 +112,7 @@ create_cmake_stages(
 	"${X265_OPTIONS_10}"
 	"static"
 	"${X265_LIBRARY_10}"
-	4
+	${PLUGIN_LEVEL}
 )
 add_custom_target(x265_10bit_configure
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_10}"

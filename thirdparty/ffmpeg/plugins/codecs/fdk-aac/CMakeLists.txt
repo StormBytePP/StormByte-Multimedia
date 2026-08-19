@@ -22,7 +22,7 @@ create_cmake_component(
 	"${FDK_AAC_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"fdk-aac"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${FDK_LIBRARY_CREATE_FILE}")
 

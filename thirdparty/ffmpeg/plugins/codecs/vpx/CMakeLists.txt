@@ -63,7 +63,7 @@ create_meson_component(
 	"${VPX_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"vpx"
-	3
+	${PLUGIN_LEVEL}
 )
 include("${VPX_LIBRARY_CREATE_FILE}")
 
