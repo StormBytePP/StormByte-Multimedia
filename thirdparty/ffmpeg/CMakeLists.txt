@@ -244,6 +244,11 @@ else()
 		)
 	endif()
 
+	add_custom_command(TARGET ffmpeg_install POST_BUILD
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${FFMPEG_GIT_RESET_FILE}"
+		COMMENT "Resetting FFmpeg source tree after internal install"
+	)
+
 	# Create library aliases and gathering libraries
 	add_library(FFMpeg::plugins ALIAS ffmpeg-plugins)
 	set(FFMPEG_LINK_LIBS "")
