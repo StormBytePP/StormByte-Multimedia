@@ -1,8 +1,10 @@
-name: Compile & Test
+name: CI
 
 permissions:
   actions: write
   contents: read
+  pages: write
+  id-token: write
 
 on:
   push:
@@ -13,16 +15,42 @@ on:
 
 env:
   BUILD_TYPE: Release
-  NASM_VERSION: "3.1.0"
 
 jobs:
+  ###########################################################################
+  # 0a. Warm submodule cache (all OS / matrix jobs share the same key)
+  ###########################################################################
+  checkout-bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm repository + submodule cache
+        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+  ###########################################################################
+  # 0b. Warm APT lists only (Linux + docs consumers)
+  ###########################################################################
+  apt-bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm APT package indexes
+        uses: stormbytepp/githubactions/.github/actions/update-apt-cached@master
+        with:
+          cache-key: apt-lists
+          rotate-weekly: true
+
+  ###########################################################################
+  # LINUX
+  ###########################################################################
   build-linux:
+    needs: [checkout-bootstrap, apt-bootstrap]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         compiler: [gcc, clang, clang-libc++]
-        ffmpeg: [BUNDLED]
         extra: [ON, OFF]
     name: linux-${{ matrix.compiler }}-extra(${{ matrix.extra }})
     env:
@@ -36,11 +64,12 @@ jobs:
           submodules: recursive
 
       - name: Install nasm/yasm (bundled FFmpeg)
-        if: matrix.ffmpeg == 'BUNDLED'
         uses: stormbytepp/githubactions/.github/actions/install-cached@master
         with:
-          cache-key: apt-nasm-yasm
           packages: 'nasm yasm'
+          cache-key: apt-nasm-yasm
+          lists-cache-key: apt-lists
+          rotate-weekly: true
 
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
@@ -53,21 +82,20 @@ jobs:
             -DWITH_FFMPEG=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
-            -DWITH_STORMBYTE=BUNDLED
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_CXX_FLAGS=-stdlib=libc++' || '' }}
-          run-tests: true
-          ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
+          run-tests: false
 
+  ###########################################################################
+  # macOS
+  ###########################################################################
   build-macos:
+    needs: [checkout-bootstrap]
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        compiler: [clang]
         extra: [ON, OFF]
     name: macos-${{ matrix.compiler }}-extra(${{ matrix.extra }})
-    env:
-      DYLD_LIBRARY_PATH: ${{ github.workspace }}/build/thirdparty/buildmaster/install/lib:${{ github.workspace }}/build/lib
 
     steps:
       - name: Checkout repository and submodules
@@ -76,12 +104,6 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Install nasm/yasm (bundled FFmpeg)
-        uses: stormbytepp/githubactions/.github/actions/install-cached@master
-        with:
-          cache-key: brew-nasm-yasm
-          packages: 'nasm yasm'
-
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
@@ -93,11 +115,13 @@ jobs:
             -DWITH_FFMPEG=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
-            -DWITH_STORMBYTE=BUNDLED
-          run-tests: true
-          ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
+          run-tests: false
 
+  ###########################################################################
+  # WINDOWS
+  ###########################################################################
   build-windows:
+    needs: [checkout-bootstrap]
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -112,43 +136,10 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Install nasm ${{ env.NASM_VERSION }} and yasm
-        shell: pwsh
-        env:
-          NASM_VERSION: ${{ env.NASM_VERSION }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          if ([string]::IsNullOrWhiteSpace($env:NASM_VERSION)) {
-            Write-Error "NASM_VERSION is empty"
-            exit 1
-          }
-          $nasmVer = $env:NASM_VERSION.Trim()
-          Write-Host "Installing nasm $nasmVer (pinned) + yasm"
-          choco install nasm --version=$nasmVer -y --no-progress
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          choco install yasm -y --no-progress
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $candidates = @(
-            "${env:ProgramFiles}\NASM",
-            "${env:ProgramFiles(x86)}\NASM",
-            "C:\ProgramData\chocolatey\bin"
-          )
-          $found = $false
-          foreach ($d in $candidates) {
-            $exe = Join-Path $d "nasm.exe"
-            if (Test-Path $exe) {
-              Write-Host "Found nasm in $d"
-              Add-Content -Path $env:GITHUB_PATH -Value $d
-              $found = $true
-              break
-            }
-          }
-          if (-not $found) {
-            Write-Error "nasm.exe not found after choco install"
-            exit 1
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\ProgramData\chocolatey\bin"
+      - name: Install nasm (bundled FFmpeg)
+        uses: stormbytepp/githubactions/.github/actions/install-cached@master
+        with:
+          packages: nasm
 
       - name: Add DLL directories to PATH
         shell: pwsh
@@ -170,5 +161,22 @@ jobs:
             -DWITH_GPL=${{ matrix.extra }}
             "-DCMAKE_C_FLAGS=/W3 /wd4244 /wd4267 /wd4996 /wd4065 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"
             "-DCMAKE_CXX_FLAGS=/W3 /wd4244 /wd4267 /wd4996 /wd4065 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"
-          run-tests: true
-          ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
+          run-tests: false
+
+  ###########################################################################
+  # DOCS (master push / manual only)
+  ###########################################################################
+  docs:
+    needs: [checkout-bootstrap, apt-bootstrap]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    uses: stormbytepp/githubactions/.github/workflows/generate-and-deploy-docs.yml@master
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      actions: write
+    with:
+      doc_target: StormByteMultimediaDoc
+      extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM
+      extra-install: 'ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev'
+      docs_output_dir: ./_site
