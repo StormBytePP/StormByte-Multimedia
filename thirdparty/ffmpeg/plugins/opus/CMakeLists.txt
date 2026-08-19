@@ -2,54 +2,38 @@ message(STATUS "\t\tSetting up Opus codec")
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
 
-# If generated DNN data files are missing, try to download the official
-# opus_data tarball used by upstream autogen.sh. This creates files such
-# as dnn/fargan_data.h which Meson/CMake expects.
-if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn/fargan_data.h")
-	# Try to extract expected hash from autogen.sh, fallback to known hash
-	set(OPUS_DATA_HASH "a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e")
-	if(EXISTS "${OPUS_SRC_DIR}/autogen.sh")
-		file(READ "${OPUS_SRC_DIR}/autogen.sh" _autogen_contents)
-		string(REGEX MATCH "[0-9a-f]{64}" _match "${_autogen_contents}")
-		if(_match)
-			set(OPUS_DATA_HASH "${CMAKE_MATCH_0}")
-		endif()
-	endif()
-
-	message(STATUS "\t\t\tDownloading Opus DNN data with hash ${OPUS_DATA_HASH}")
-	file(MAKE_DIRECTORY "${OPUS_BUILD_DIR}/tmp")
-	set(OPUS_MODEL_TAR "${OPUS_BUILD_DIR}/tmp/opus_data-${OPUS_DATA_HASH}.tar.gz")
-	if(NOT EXISTS "${OPUS_BUILD_DIR}/dnn")
-		file(MAKE_DIRECTORY "${OPUS_BUILD_DIR}/dnn")
-	endif()
-	if(NOT EXISTS "${OPUS_MODEL_TAR}")
-		file(DOWNLOAD
-			"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
-			"${OPUS_MODEL_TAR}"
-			EXPECTED_HASH SHA256=${OPUS_DATA_HASH}
-			STATUS _opus_dl_status
-			LOG _opus_dl_log
-		)
-		list(GET _opus_dl_status 0 _opus_dl_code)
-		if(NOT _opus_dl_code EQUAL 0)
-			message(WARNING "Failed to download Opus data: ${_opus_dl_log}")
-		endif()
-	endif()
-	if(EXISTS "${OPUS_MODEL_TAR}")
-		execute_process(
-			COMMAND ${ENV_CMAKE_COMMAND} -E tar xzf "${OPUS_MODEL_TAR}"
-			WORKING_DIRECTORY "${OPUS_BUILD_DIR}"
-			RESULT_VARIABLE _opus_tar_res
-			OUTPUT_VARIABLE _opus_tar_out
-			ERROR_VARIABLE _opus_tar_err
-		)
-		if(NOT _opus_tar_res EQUAL 0)
-			message(WARNING "Failed to extract ${OPUS_MODEL_TAR}: ${_opus_tar_err}")
-		endif()
-	else()
-		message(WARNING "Opus DNN model archive not available; build may fail if generated DNN files are required.")
+# Always let BuildMaster handle the download (it is cache-aware).
+# The official opus_data tarball is required by upstream autogen.sh
+# and produces files such as dnn/fargan_data.h.
+set(OPUS_DATA_HASH "a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e")
+if(EXISTS "${OPUS_SRC_DIR}/autogen.sh")
+	file(READ "${OPUS_SRC_DIR}/autogen.sh" _autogen_contents)
+	string(REGEX MATCH "[0-9a-f]{64}" _match "${_autogen_contents}")
+	if(_match)
+		set(OPUS_DATA_HASH "${CMAKE_MATCH_0}")
 	endif()
 endif()
+
+# Cache-aware download (destination is automatic under BUILDMASTER_DOWNLOADSDIR)
+file_download_cached(OPUS_DNN_DOWNLOAD
+	"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
+	TITLE "Opus DNN data"
+	EXPECTED_HASH "SHA256=${OPUS_DATA_HASH}"
+	3
+)
+include(${OPUS_DNN_DOWNLOAD})
+
+# The file is now at ${BUILDMASTER_DOWNLOADSDIR}/opus_data-${OPUS_DATA_HASH}.tar.gz
+set(OPUS_MODEL_TAR "${BUILDMASTER_DOWNLOADSDIR}/opus_data-${OPUS_DATA_HASH}.tar.gz")
+
+# Decompress into the build directory
+file_decompress(OPUS_DNN_UNPACK
+	"${OPUS_MODEL_TAR}"
+	"${OPUS_BUILD_DIR}"
+	TITLE "Opus DNN data"
+	3
+)
+include(${OPUS_DNN_UNPACK})
 
 # Include downloaded DNN headers
 if(MSVC)
