@@ -1,3 +1,5 @@
+plugin_require(WITH_NONFREE "-Dlibfdk_aac=disabled")
+
 set(FDK_AAC_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(FDK_AAC_BUILD_DIR)
 set(FDK_AAC_COMPONENT "FDK_AAC codec")
@@ -20,6 +22,8 @@ create_cmake_component(
 	"${FDK_AAC_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"fdk-aac"
-	2
+	3
 )
 include("${FDK_LIBRARY_CREATE_FILE}")
+
+register_plugin(fdk-aac "-Dlibfdk_aac=enabled")

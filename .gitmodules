@@ -2,44 +2,44 @@
 	path = thirdparty/StormByte/base/src
 	url = https://github.com/StormBytePP/StormByte.git
 [submodule "Opus codec"]
-	path = thirdparty/ffmpeg/plugins/opus/src
+	path = thirdparty/ffmpeg/plugins/codecs/opus/src
 	url = https://gitlab.xiph.org/xiph/opus.git
 [submodule "FDK-AAC codec"]
-	path = thirdparty/ffmpeg/plugins/fdk-aac/src
+	path = thirdparty/ffmpeg/plugins/codecs/fdk-aac/src
 	url = https://github.com/mstorsjo/fdk-aac.git
 [submodule "Ogg container"]
-	path = thirdparty/ffmpeg/plugins/ogg/src
+	path = thirdparty/ffmpeg/plugins/codecs/ogg/src
 	url = https://gitlab.xiph.org/xiph/ogg.git
 [submodule "Vorbis codec"]
-	path = thirdparty/ffmpeg/plugins/vorbis/src
+	path = thirdparty/ffmpeg/plugins/codecs/vorbis/src
 	url = https://gitlab.xiph.org/xiph/vorbis.git
 [submodule "FFmpeg"]
 	path = thirdparty/ffmpeg/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg.git
 	branch = meson-8.0.1
 [submodule "VPX codec"]
-	path = thirdparty/ffmpeg/plugins/vpx/src
+	path = thirdparty/ffmpeg/plugins/codecs/vpx/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/libvpx.git
 [submodule "X264 codec"]
-	path = thirdparty/ffmpeg/plugins/x264/src
+	path = thirdparty/ffmpeg/plugins/codecs/x264/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/x264.git
 [submodule "X265 codec"]
-	path = thirdparty/ffmpeg/plugins/x265/src
+	path = thirdparty/ffmpeg/plugins/codecs/x265/src
 	url = https://bitbucket.org/multicoreware/x265_git.git
 [submodule "VVenc (H266) codec"]
-	path = thirdparty/ffmpeg/plugins/vvenc/src
+	path = thirdparty/ffmpeg/plugins/codecs/vvenc/src
 	url = https://github.com/fraunhoferhhi/vvenc.git
 [submodule "MP3 LAME codec"]
-	path = thirdparty/ffmpeg/plugins/mp3lame/src
+	path = thirdparty/ffmpeg/plugins/codecs/mp3lame/src
 	url = https://github.com/lameproject/lame.git
 [submodule "VMAF library"]
-	path = thirdparty/ffmpeg/plugins/vmaf/src
+	path = thirdparty/ffmpeg/plugins/filters/vmaf/src
 	url = https://github.com/Netflix/vmaf.git
 [submodule "pthread-Win32"]
 	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
 [submodule "XVID codec"]
-	path = thirdparty/ffmpeg/plugins/xvidcore/cmake-port/src
+	path = thirdparty/ffmpeg/plugins/codecs/xvidcore/cmake-port/src
 	url = https://github.com/delthas/xvid.git
 [submodule "Build Master"]
 	path = thirdparty/buildmaster

@@ -41,7 +41,7 @@ if(MSVC)
 		"${FFMPEG_BUNDLED_TYPE}"
 		"vmaf"
 		"pthread-win32_install"
-		2
+		3
 	)
 else()
 	create_meson_component(
@@ -53,7 +53,7 @@ else()
 		"${VMAF_OPTIONS}"
 		"${FFMPEG_BUNDLED_TYPE}"
 		"vmaf"
-		2
+		3
 	)
 endif()
 include("${VMAF_LIBRARY_CREATE_FILE}")
@@ -75,3 +75,5 @@ add_custom_command(TARGET vmaf_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${VMAF_RESET_REPO}"
 	COMMENT "Resetting VMAF source tree after internal install"
 )
+
+register_plugin(vmaf "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled")

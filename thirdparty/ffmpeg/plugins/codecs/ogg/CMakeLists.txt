@@ -20,6 +20,8 @@ create_cmake_component(
 	"${OGG_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"ogg"
-	2
+	3
 )
 include("${OGG_LIBRARY_CREATE_FILE}")
+
+register_plugin(ogg "-Doga_muxer=enabled -Dogg_muxer=enabled -Dogv_muxer=enabled -Dogg_demuxer=enabled")

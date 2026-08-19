@@ -21,3 +21,5 @@ create_cmake_dependant_component(
 	"ogg_install"
 )
 include("${VORBIS_LIBRARY_CREATE_FILE}")
+
+register_plugin(vorbis "-Dlibvorbis=enabled -Dlibvorbisenc=enabled")

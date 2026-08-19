@@ -16,6 +16,8 @@ create_cmake_component(
 	"${MP3LAME_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"mp3lame"
-	2
+	3
 )
 include("${MP3LAME_LIBRARY_CREATE_FILE}")
+
+register_plugin(mp3lame "-Dlibmp3lame=enabled")

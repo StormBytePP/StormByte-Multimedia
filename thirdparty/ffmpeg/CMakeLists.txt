@@ -170,16 +170,14 @@ else()
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=disabled")
 	endif()
 
-	# Add plugins
+	# Plugins (self-register; fill FFMPEG_PLUGIN_OPTIONS)
 	add_subdirectory(plugins)
 
 	message(STATUS "\tSetting up FFmpeg build")
-	# Show final meson options for FFmpeg (print list with spaces instead of ';')
-	string(REPLACE ";" " " _ffmpeg_plugin_options_str "${FFMPEG_PLUGIN_OPTIONS}")
 	list_to_columns(_ffmpeg_plugin_options_columns "\t\t\t" 32 ${FFMPEG_PLUGIN_OPTIONS})
 	message(STATUS "\t\tEnabled codec options:\n${_ffmpeg_plugin_options_columns}")
 
-	# Append values added by codecs
+	# Append values added by plugins
 	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})
 
 	# Configure FFmpeg build
@@ -249,27 +247,46 @@ else()
 		COMMENT "Resetting FFmpeg source tree after internal install"
 	)
 
-	# Create library aliases and gathering libraries
+	# Create library aliases and gather link libraries
 	add_library(FFMpeg::plugins ALIAS ffmpeg-plugins)
 	set(FFMPEG_LINK_LIBS "")
 	foreach(_lib IN LISTS FFMPEG_LIBRARIES)
 		target_include_directories(${_lib}_component SYSTEM INTERFACE ${BUILDMASTER_INSTALL_INCLUDEDIR})
 		add_library(FFmpeg::${_lib} ALIAS ${_lib}_component)
 		get_target_property(_FFMPEG_LIB FFmpeg::${_lib} IMPORTED_LOCATION)
-		list(APPEND FFMPEG_LINK_LIBS "${_FFMPEG_LIB}")
+		if(_FFMPEG_LIB AND NOT _FFMPEG_LIB STREQUAL "_FFMPEG_LIB-NOTFOUND")
+			list(APPEND FFMPEG_LINK_LIBS "${_FFMPEG_LIB}")
+		endif()
 	endforeach()
 
-	# Gather all real plugin libraries (not just their interface targets)
-	get_target_property(_FFMPEG_ALL_PLUGINS_INTERFATE ffmpeg-plugins INTERFACE_LINK_LIBRARIES) # Can not use alias here
-	foreach(_lib IN LISTS _FFMPEG_ALL_PLUGINS_INTERFATE)
-		# All the libraries are INTERFACE libraries; get their linked libraries instead
-		get_target_property(_interfacelibs ${_lib} INTERFACE_LINK_LIBRARIES)
-		foreach(_interfacelib IN LISTS _interfacelibs)
-			# Get the real library file location
-			get_target_property(_reallib ${_interfacelib} IMPORTED_LOCATION)
-			list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
+	# Walk ffmpeg-plugins INTERFACE graph for real plugin .a/.lib paths.
+	# Skip non-targets (generator expressions, etc.) — avoids get_target_property on "::@…".
+	get_target_property(_FFMPEG_ALL_PLUGINS_INTERFACE ffmpeg-plugins INTERFACE_LINK_LIBRARIES)
+	if(_FFMPEG_ALL_PLUGINS_INTERFACE AND NOT _FFMPEG_ALL_PLUGINS_INTERFACE STREQUAL "_FFMPEG_ALL_PLUGINS_INTERFACE-NOTFOUND")
+		foreach(_lib IN LISTS _FFMPEG_ALL_PLUGINS_INTERFACE)
+			if(NOT TARGET "${_lib}")
+				continue()
+			endif()
+			get_target_property(_interfacelibs "${_lib}" INTERFACE_LINK_LIBRARIES)
+			if(_interfacelibs AND NOT _interfacelibs STREQUAL "_interfacelibs-NOTFOUND")
+				foreach(_interfacelib IN LISTS _interfacelibs)
+					if(NOT TARGET "${_interfacelib}")
+						continue()
+					endif()
+					get_target_property(_reallib "${_interfacelib}" IMPORTED_LOCATION)
+					if(_reallib AND NOT _reallib STREQUAL "_reallib-NOTFOUND")
+						list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
+					endif()
+				endforeach()
+			else()
+				# Target may itself be an imported library
+				get_target_property(_reallib "${_lib}" IMPORTED_LOCATION)
+				if(_reallib AND NOT _reallib STREQUAL "_reallib-NOTFOUND")
+					list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
+				endif()
+			endif()
 		endforeach()
-	endforeach()
+	endif()
 
 	# According to FFmpeg documentation, when linking statically on GNU ld,
 	# -Wl,-Bsymbolic helps avoid symbol conflicts. Not valid on Apple ld64.

@@ -1,4 +1,4 @@
-message(STATUS "\t\tSetting up Opus codec")
+message(STATUS "\t\t\tSetting up Opus codec extra data")
 set(OPUS_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(OPUS_BUILD_DIR)
 
@@ -19,7 +19,7 @@ file_download_cached(OPUS_DNN_DOWNLOAD
 	"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
 	TITLE "Opus DNN data"
 	EXPECTED_HASH "SHA256=${OPUS_DATA_HASH}"
-	3
+	4
 )
 include(${OPUS_DNN_DOWNLOAD})
 
@@ -31,7 +31,7 @@ file_decompress(OPUS_DNN_UNPACK
 	"${OPUS_MODEL_TAR}"
 	"${OPUS_BUILD_DIR}"
 	TITLE "Opus DNN data"
-	3
+	4
 )
 include(${OPUS_DNN_UNPACK})
 
@@ -78,6 +78,8 @@ create_cmake_component(
 	"${OPUS_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"opus"
-	2
+	3
 )
 include("${OPUS_LIBRARY_CREATE_FILE}")
+
+register_plugin(opus "-Dlibopus=enabled")

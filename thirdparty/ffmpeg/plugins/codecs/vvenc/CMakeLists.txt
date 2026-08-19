@@ -19,6 +19,8 @@ create_cmake_component(
 	"${VVENC_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"vvenc"
-	2
+	3
 )
 include("${VVENC_LIBRARY_CREATE_FILE}")
+
+register_plugin(vvenc "-Dlibvvenc=enabled -Dlibvvenc_encoder=enabled")

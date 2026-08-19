@@ -1,3 +1,5 @@
+plugin_require(WITH_GPL "-Dlibx264=disabled -Dlibx264_encoder=disabled -Dlibx264rgb_encoder=disabled")
+
 set(X264_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 ensure_build_dir(X264_BUILD_DIR)
 set(X264_COMPONENT "X264 codec")
@@ -22,7 +24,7 @@ create_meson_component(
 	"${X264_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"x264"
-	2
+	3
 )
 include("${X264_LIBRARY_CREATE_FILE}")
 
@@ -33,3 +35,5 @@ if(MSVC)
 		COMMENT "Renaming libx264.a to x264.lib"
 	)
 endif()
+
+register_plugin(x264 "-Dlibx264=enabled -Dlibx264_encoder=enabled -Dlibx264rgb_encoder=enabled")

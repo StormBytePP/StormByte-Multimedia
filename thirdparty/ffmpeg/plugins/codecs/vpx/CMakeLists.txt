@@ -63,7 +63,7 @@ create_meson_component(
 	"${VPX_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"vpx"
-	2
+	3
 )
 include("${VPX_LIBRARY_CREATE_FILE}")
 
@@ -80,3 +80,5 @@ add_custom_command(TARGET vpx_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${VPX_RESET_REPO}"
 	COMMENT "Resetting VPX source tree after internal install"
 )
+
+register_plugin(vpx "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")

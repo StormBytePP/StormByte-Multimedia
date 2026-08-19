@@ -1,4 +1,6 @@
-message(STATUS "\t\tSetting up x265 codec")
+plugin_require(WITH_GPL "-Dlibx265=disabled -Dlibx265_encoder=disabled")
+
+message(STATUS "\t\t\tSetting up x265 codec")
 
 # Set main source
 set(X265_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src/source")
@@ -110,7 +112,7 @@ create_cmake_stages(
 	"${X265_OPTIONS_10}"
 	"static"
 	"${X265_LIBRARY_10}"
-	3
+	4
 )
 add_custom_target(x265_10bit_configure
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_CONFIGURE_10}"
@@ -213,3 +215,5 @@ if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 		COMMENT "Repacking x265 static libraries into a single x265"
 	)
 endif()
+
+register_plugin(x265 "-Dlibx265=enabled -Dlibx265_encoder=enabled")

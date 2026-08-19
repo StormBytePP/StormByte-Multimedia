@@ -1,3 +1,5 @@
+plugin_require(WITH_GPL "-Dlibxvid=disabled -Dlibxvid_encoder=disabled")
+
 set(XVID_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake-port")
 ensure_build_dir(XVID_BUILD_DIR)
 set(XVID_COMPONENT "XVID codec")
@@ -30,7 +32,7 @@ create_cmake_component(
 	"${XVID_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"xvidcore"
-	2
+	3
 )
 include("${XVID_LIBRARY_CREATE_FILE}")
 
@@ -39,3 +41,5 @@ add_custom_command(TARGET xvidcore_install POST_BUILD
 	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${XVID_GIT_RESET_FILE}"
 	COMMENT "Resetting XVID source directory after installation"
 )
+
+register_plugin(xvidcore "-Dlibxvid=enabled -Dlibxvid_encoder=enabled")
