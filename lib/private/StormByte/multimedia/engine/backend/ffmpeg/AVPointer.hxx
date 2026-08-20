@@ -5,58 +5,52 @@
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @class AVPointer
-	 * @brief Wrapper class for FFmpeg pointers.
+	 * @brief Move-only RAII base for FFmpeg C pointers.
+	 * @tparam AVType Underlying FFmpeg struct type.
 	 *
-	 * This class provides a simple wrapper around FFmpeg pointers to ensure type safety
-	 * and provide basic functionality.
-	 *
-	 * @tparam AVType The type of the FFmpeg struct.
+	 * Derived classes must implement Free().
 	 */
 	template<typename AVType>
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer {
 		public:
 			/**
-			 * @brief Default constructor (delete).
+			 * Default constructor (deleted).
 			 */
-			constexpr AVPointer() noexcept 									= delete;
+			constexpr AVPointer() noexcept = delete;
 
 			/**
-			 * @brief Copy constructor (delete).
-			 * @param other The other AVPointer to copy from.
+			 * Copy constructor (deleted).
 			 */
-			constexpr AVPointer(const AVPointer&) noexcept 					= delete;
+			constexpr AVPointer(const AVPointer&) noexcept = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other AVPointer to move from.
+			 * Move constructor.
+			 * @param other Source pointer wrapper.
 			 */
 			constexpr AVPointer(AVPointer&& other) noexcept
-			:m_ptr(other.m_ptr) {
+			: m_ptr(other.m_ptr) {
 				other.m_ptr = nullptr;
 			}
 
 			/**
-			 * @brief Destructor.
-			 * @note Does not free the underlying FFmpeg pointer, that is responsibility of the derived class.
+			 * Destructor (does not free; derived Free() is responsible).
 			 */
-			virtual ~AVPointer() noexcept 									= default;
+			virtual ~AVPointer() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator (delete).
-			 * @param other The other AVPointer to copy from.
-			 * @return Reference to this AVPointer.
+			 * Copy assignment (deleted).
 			 */
-			constexpr AVPointer& operator=(const AVPointer&) noexcept 		= delete;
+			constexpr AVPointer& operator=(const AVPointer&) noexcept = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other AVPointer to move from.
-			 * @return Reference to this AVPointer.
+			 * Move assignment.
+			 * @param other Source pointer wrapper.
+			 * @return *this
 			 */
 			constexpr AVPointer& operator=(AVPointer&& other) noexcept {
 				if (this != &other) {
@@ -68,37 +62,31 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			}
 
 			/**
-			 * @brief Get the underlying FFmpeg pointer.
-			 * @return The underlying FFmpeg pointer as a const pointer.
+			 * @return Const underlying pointer.
 			 */
-			constexpr const std::decay_t<AVType>*								Get() const noexcept {
+			constexpr const std::decay_t<AVType>* Get() const noexcept {
 				return m_ptr;
 			}
 
 		protected:
-			std::decay_t<AVType>* m_ptr = nullptr;								///< The underlying FFmpeg pointer.
+			std::decay_t<AVType>* m_ptr = nullptr;	///< Owned FFmpeg pointer
 
 			/**
-			 * @brief Constructor with pointer.
-			 * @param ptr The FFmpeg pointer to wrap.
+			 * @param ptr Raw pointer to adopt.
 			 */
 			explicit constexpr AVPointer(std::decay_t<AVType>* ptr) noexcept
-			:m_ptr(ptr) {}
+			: m_ptr(ptr) {}
 
 			/**
-			 * @brief Get the underlying FFmpeg pointer.
-			 * @return The underlying FFmpeg pointer.
+			 * @return Mutable underlying pointer.
 			 */
-			constexpr std::decay_t<AVType>*										Get() noexcept {
+			constexpr std::decay_t<AVType>* Get() noexcept {
 				return m_ptr;
 			}
 
 			/**
-			 * @brief Pure virtual function to free the underlying FFmpeg pointer.
-			 *
-			 * This function must be implemented by derived classes to properly free
-			 * the FFmpeg pointer when needed.
+			 * Releases the underlying resource.
 			 */
-			virtual void 													Free() noexcept = 0;
+			virtual void Free() noexcept = 0;
 	};
 }

@@ -6,79 +6,68 @@
 
 /**
  * @namespace Property
- * @brief The namespace for all context properties.
+ * @brief Video/audio property value types.
  */
 namespace StormByte::Multimedia::Context::Property {
 	/**
 	 * @class Resolution
-	 * @brief The struct for size properties.
+	 * @brief Frame width and height with display helpers.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Resolution final {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param width The width of the resolution.
-			 * @param height The height of the resolution.
+			 * @param width Width in pixels.
+			 * @param height Height in pixels.
 			 */
 			Resolution(unsigned short width, unsigned short height);
-			
-			/**
-			 * @brief Copy constructor.
-			 * @param resolution The Resolution to copy.
-			 */
-			Resolution(const Resolution& resolution) 						= default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param resolution The Resolution to move.
+			 * Copy constructor.
 			 */
-			Resolution(Resolution&& resolution) noexcept 					= default;
+			Resolution(const Resolution& resolution) = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param resolution The Resolution to copy.
-			 * @return The copied Resolution.
+			 * Move constructor.
 			 */
-			Resolution& operator=(const Resolution& resolution) 			= default;
+			Resolution(Resolution&& resolution) noexcept = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param resolution The Resolution to move.
-			 * @return The moved Resolution.
+			 * Copy assignment.
 			 */
-			Resolution& operator=(Resolution&& resolution) noexcept			= default;
+			Resolution& operator=(const Resolution& resolution) = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Move assignment.
 			 */
-			~Resolution() noexcept 											= default;
+			Resolution& operator=(Resolution&& resolution) noexcept = default;
 
 			/**
-			 * @brief Gets the width of the resolution.
-			 * @return The width of the resolution.
+			 * Destructor.
 			 */
-			unsigned short 													Width() const noexcept;
+			~Resolution() noexcept = default;
 
 			/**
-			 * @brief Gets the height of the resolution.
-			 * @return The height of the resolution.
+			 * @return Width in pixels.
 			 */
-			unsigned short 													Height() const noexcept;
+			unsigned short Width() const noexcept;
 
 			/**
-			 * @brief Gets the name of the resolution.
-			 * @return The name of the resolution. (Example 1920x1080)
+			 * @return Height in pixels.
 			 */
-			std::string 													Name() const noexcept;
+			unsigned short Height() const noexcept;
 
 			/**
-			 * @brief Gets the standard name of the resolution.
-			 * @return The standard name of the resolution. (Example 1080p)
+			 * @return "WIDTHxHEIGHT" string.
 			 */
-			std::string 													StandardName() const noexcept;
+			std::string Name() const noexcept;
+
+			/**
+			 * @return Coarse label (e.g. "1080p", "4K").
+			 */
+			std::string StandardName() const noexcept;
 
 		private:
-			unsigned short m_width;											///< The width of the resolution.
-			unsigned short m_height;										///< The height of the resolution.
+			unsigned short m_width;		///< Width
+			unsigned short m_height;	///< Height
 	};
 }

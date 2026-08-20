@@ -10,7 +10,7 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVCodecParameters;
@@ -18,84 +18,77 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class AVBSF
-	 * @brief Wrapper class for FFmpeg's AVBSFContext (Bitstream Filter).
+	 * @brief RAII bitstream filter context.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSF: public AVPointer<::AVBSFContext> {
 		public:
 			/**
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVBSF to copy from.
+			 * Copy constructor (deleted).
 			 */
-			AVBSF(const AVBSF&) 								= delete;
+			AVBSF(const AVBSF&) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other AVBSF to move from.
+			 * Move constructor.
 			 */
-			AVBSF(AVBSF&& other) noexcept						= default;
+			AVBSF(AVBSF&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * Destructor.
 			 */
 			~AVBSF() noexcept override;
 
 			/**
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVBSF to copy from.
-			 * @return Reference to this AVBSF.
+			 * Copy assignment (deleted).
 			 */
-			AVBSF& operator=(const AVBSF&) 						= delete;
+			AVBSF& operator=(const AVBSF&) = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other AVBSF to move from.
-			 * @return Reference to this AVBSF.
+			 * Move assignment.
 			 */
 			AVBSF& operator=(AVBSF&& other) noexcept;
 
 			/**
-			 * @brief Creates and initializes a bitstream filter context.
-			 * @param name The name of the bitstream filter.
-			 * @param params The codec parameters to initialize the filter with.
-			 * @param time_base The time base for the filter.
-			 * @return ExpectedAVBSF The created AVBSF or an error.
+			 * Creates and initializes a named BSF.
+			 * @param name Filter name (e.g. "h264_mp4toannexb").
+			 * @param params Input codec parameters.
+			 * @param time_base Input time base.
+			 * @return AVBSF or BSFError.
 			 */
-			static ExpectedAVBSF 								Create(const std::string& name, const AVCodecParameters& params, AVRational time_base) noexcept;
+			static ExpectedAVBSF Create(const std::string& name, const AVCodecParameters& params, AVRational time_base) noexcept;
 
 			/**
-			 * @brief Sends a packet to the bitstream filter.
-			 * @param pkt The packet to send.
-			 * @return OperationResult The result of the operation.
+			 * Sends a packet into the filter.
+			 * @param pkt Packet to send.
+			 * @return Operation result.
 			 */
-			OperationResult 									SendPacket(AVPacket& pkt) noexcept;
+			OperationResult SendPacket(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Receives a filtered packet from the bitstream filter.
-			 * @param pkt The packet to receive into.
-			 * @return OperationResult The result of the operation.
+			 * Receives a filtered packet.
+			 * @param pkt Destination packet.
+			 * @return Operation result.
 			 */
-			OperationResult 									ReceivePacket(AVPacket& pkt) noexcept;
+			OperationResult ReceivePacket(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Flushes the bitstream filter.
+			 * Flushes the filter.
 			 */
-			void 												Flush() noexcept;
+			void Flush() noexcept;
 
 			/**
-			 * @brief Sets the end-of-file flag for the bitstream filter.
+			 * Signals EOF (null packet).
 			 */
-			void 												SetEof() noexcept;
+			void SetEof() noexcept;
 
 		private:
 			/**
-			 * @brief Private constructor.
-			 * @param ctx The AVBSFContext pointer to wrap.
+			 * @param ctx Allocated BSF context.
 			 */
 			explicit AVBSF(AVBSFContext* ctx) noexcept;
 
 			/**
-			 * @brief Frees the underlying AVBSFContext.
+			 * Frees the BSF (av_bsf_free).
 			 */
-			void 												Free() noexcept override;
-		};
+			void Free() noexcept override;
+	};
 }

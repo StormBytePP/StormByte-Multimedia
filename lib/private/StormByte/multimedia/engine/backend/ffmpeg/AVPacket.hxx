@@ -8,76 +8,68 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @class AVPacket
-	 * @brief Wrapper class for FFmpeg's AVPacket.
+	 * @brief RAII wrapper for ::AVPacket.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPacket: public AVPointer<::AVPacket> {
 		friend class AVBSF;
 		friend class AVDecoder;
 		friend class AVEncoder;
 		friend class AVFormatContext;
-		public:
-			/**
-			 * @brief Constructor initializing an empty AVPacket.
-			 */
-			AVPacket() noexcept;
+	public:
+		/**
+		 * Allocates an empty packet.
+		 */
+		AVPacket() noexcept;
 
-			/**
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVPacket to copy from.
-			 */
-			AVPacket(const AVPacket& other)						= delete;
+		/**
+		 * Copy constructor (deleted).
+		 */
+		AVPacket(const AVPacket& other) = delete;
 
-			/**
-			 * @brief Move constructor.
-			 * @param other The other AVPacket to move from.
-			 */
-			AVPacket(AVPacket&& other) noexcept 				= default;
+		/**
+		 * Move constructor.
+		 */
+		AVPacket(AVPacket&& other) noexcept = default;
 
-			/**
-			 * @brief Destructor.
-			 */
-			~AVPacket() noexcept override;
+		/**
+		 * Destructor.
+		 */
+		~AVPacket() noexcept override;
 
-			/**
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVPacket to copy from.
-			 * @return Reference to this AVPacket.
-			 */
-			AVPacket& operator=(const AVPacket& other)			= delete;
+		/**
+		 * Copy assignment (deleted).
+		 */
+		AVPacket& operator=(const AVPacket& other) = delete;
 
-			/**
-			 * @brief Move assignment operator.
-			 * @param other The other AVPacket to move from.
-			 * @return Reference to this AVPacket.
-			 */
-			AVPacket& operator=(AVPacket&& other) noexcept 		= default;
+		/**
+		 * Move assignment.
+		 */
+		AVPacket& operator=(AVPacket&& other) noexcept = default;
 
-			/**
-			 * @brief Creates a reference to the underlying AVPacket.
-			 * @return AVPacket A new AVPacket that references the same underlying packet.
-			 */
-			FFmpeg::AVPacket 									Ref() const noexcept;
+		/**
+		 * @return New packet referencing the same data (av_packet_ref).
+		 */
+		FFmpeg::AVPacket Ref() const noexcept;
 
-			/**
-			 * @brief Unreferences the AVPacket.
-			 */
-			void 												Unref() noexcept;
+		/**
+		 * Unreferences packet data (av_packet_unref).
+		 */
+		void Unref() noexcept;
 
-			/**
-			 * @brief Get the stream index of the underlying packet.
-			 * @return int The stream index, or -1 if not available.
-			 */
-			int 												StreamIndex() const noexcept;
+		/**
+		 * @return stream_index, or -1 if empty.
+		 */
+		int StreamIndex() const noexcept;
 
-		private:
-			/**
-			 * @brief Frees the underlying AVPacket.
-			 */
-			void 												Free() noexcept override;
+	private:
+		/**
+		 * Frees the packet (av_packet_free).
+		 */
+		void Free() noexcept override;
 	};
 }

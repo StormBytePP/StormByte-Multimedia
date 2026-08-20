@@ -8,99 +8,85 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVCodecParameters;
 
 	/**
 	 * @class AVStream
-	 * @brief Wrapper class for FFmpeg's AVStream.
-	 * @note Memory for streams is not owned by this class; it is managed by AVFormatContext.
+	 * @brief Non-owning view of an ::AVStream (owned by AVFormatContext).
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVStream {
 		public:
 			/**
-			 * @brief Private constructor.
-			 * @param stream The raw AVStream pointer.
+			 * @param stream Raw stream pointer (not owned).
 			 */
 			explicit AVStream(::AVStream* stream) noexcept;
-			
-			/**
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVStream to copy from.
-			 */
-			AVStream(const AVStream&) 							= delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other AVStream to move from.
+			 * Copy constructor (deleted).
 			 */
-			AVStream(AVStream&& other) noexcept					= default;
+			AVStream(const AVStream&) = delete;
 
 			/**
-			 * @brief Destructor.
+			 * Move constructor.
 			 */
-			~AVStream() noexcept								= default;
+			AVStream(AVStream&& other) noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVStream to copy from.
-			 * @return Reference to this AVStream.
+			 * Destructor.
 			 */
-			AVStream& operator=(const AVStream&) 				= delete;
+			~AVStream() noexcept = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other AVStream to move from.
-			 * @return Reference to this AVStream.
+			 * Copy assignment (deleted).
 			 */
-			AVStream& operator=(AVStream&& other) noexcept 		= default;
+			AVStream& operator=(const AVStream&) = delete;
 
 			/**
-			 * @brief Less-than operator for comparing stream indices.
-			 * @param other The other AVStream to compare with.
-			 * @return true if this stream's index is less than the other's index.
+			 * Move assignment.
+			 */
+			AVStream& operator=(AVStream&& other) noexcept = default;
+
+			/**
+			 * Orders by stream index (for std::set).
+			 * @param other Other stream.
+			 * @return true if this index is less.
 			 */
 			bool operator<(const AVStream& other) const noexcept;
 
 			/**
-			 * @brief Gets the index of the stream.
-			 * @return int The index of the stream.
+			 * @return Stream index, or -1.
 			 */
-			int 												Index() const noexcept;
+			int Index() const noexcept;
 
 			/**
-			 * @brief Gets the type of the stream.
-			 * @return int The type of the stream.
+			 * @return AVMediaType as int.
 			 */
-			int 												Type() const noexcept;
+			int Type() const noexcept;
 
 			/**
-			 * @brief Gets the codec parameters of the stream.
-			 * @return const AVCodecParameters* The codec parameters.
+			 * @return Copy of codec parameters.
 			 */
-			AVCodecParameters 									CodecParameters() const noexcept;
+			AVCodecParameters CodecParameters() const noexcept;
 
 			/**
-			 * @brief Gets the time base of the stream.
-			 * @return AVRational The time base.
+			 * @return Stream time base.
 			 */
-			AVRational 											TimeBase() const noexcept;
+			AVRational TimeBase() const noexcept;
 
 			/**
-			 * @brief Get an estimated frame rate for the stream.
-			 * @return double Frames per second (0.0 if unknown).
+			 * @return Estimated FPS (avg or r_frame_rate), or 0.
 			 */
-			double 												FrameRate() const noexcept;
+			double FrameRate() const noexcept;
 
 			/**
-			 * @brief Gets the metadata of the stream.
-			 * @return Metadata The metadata object.
+			 * @return Stream-level metadata tags.
 			 */
-			StormByte::Multimedia::Metadata						Metadata() const noexcept;
+			StormByte::Multimedia::Metadata Metadata() const noexcept;
 
 		private:
-			::AVStream* m_stream = nullptr;						///< Pointer to the underlying AVStream.
-		};
+			::AVStream* m_stream = nullptr;	///< Non-owning
+	};
 }

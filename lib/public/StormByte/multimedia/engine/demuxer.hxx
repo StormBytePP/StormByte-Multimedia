@@ -9,89 +9,78 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @class Demuxer
-	 * @brief The class representing a multimedia demuxer.
+	 * @brief Opened multimedia file: path, container metadata and streams.
+	 *
+	 * Non-copyable; move-only. Create via Open().
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final {
 		public:
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other file to copy from.
+			 * Copy constructor (deleted).
 			 */
-
-			Demuxer(const Demuxer& other)							= delete;
+			Demuxer(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other file to move from.
+			 * Move constructor.
 			 */
-			Demuxer(Demuxer&& other) noexcept						= default;
+			Demuxer(Demuxer&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Demuxer() noexcept										= default;
+			~Demuxer() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other file to copy from.
-			 * @return Reference to this file.
+			 * Copy assignment (deleted).
 			 */
-
-			Demuxer& operator=(const Demuxer& other)				= delete;
+			Demuxer& operator=(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other file to move from.
-			 * @return Reference to this file.
+			 * Move assignment.
 			 */
-			Demuxer& operator=(Demuxer&& other) noexcept			= default;
+			Demuxer& operator=(Demuxer&& other) noexcept = default;
 
 			/**
-			 * @brief Get the path to the multimedia file.
-			 * @return The path to the multimedia file.
+			 * @return Path of the opened file.
 			 */
-			const std::filesystem::path& 							File() const noexcept;
+			const std::filesystem::path& File() const noexcept;
 
 			/**
-			 * @brief Get the metadata of the multimedia file.
-			 * @return The metadata of the multimedia file.
+			 * @return Container-level metadata.
 			 */
-			inline const class Metadata& 							Metadata() const noexcept {
+			inline const class Metadata& Metadata() const noexcept {
 				return m_metadata;
 			}
 
 			/**
-			 * @brief Get the streams of the multimedia file.
-			 * @return The streams of the multimedia file.
+			 * @return Discovered streams.
 			 */
-			inline const class Streams& 							Streams() const noexcept {
+			inline const class Streams& Streams() const noexcept {
 				return m_streams;
 			}
 
 			/**
-			 * @brief Open a multimedia file and create a Demuxer object.
-			 * @param path The path to the multimedia file.
-			 * @param backend The backend to use for demuxing.
-			 * @return ExpectedDemuxer The created Demuxer or an error.
+			 * Opens a file with the given backend.
+			 * @param path File path.
+			 * @param implementation Backend to use.
+			 * @return Demuxer or engine exception.
 			 */
-			static ExpectedDemuxer 									Open(const std::filesystem::path& path, enum Implementation implementation) noexcept;
-		
+			static ExpectedDemuxer Open(const std::filesystem::path& path, enum Implementation implementation) noexcept;
+
 		private:
-			std::filesystem::path m_path;							///< Path to the multimedia file
-			class Metadata m_metadata;								///< Metadata of the multimedia file
-			class Streams m_streams;								///< Streams in the multimedia file
+			std::filesystem::path m_path;		///< File path
+			class Metadata m_metadata;			///< Container metadata
+			class Streams m_streams;			///< Streams
 
 			/**
-			 * @brief Private constructor used by the Open function.
-			 * @param backend The backend used by the demuxer.
-			 * @param path The path to the multimedia file.
-			 * @param metadata The metadata of the multimedia file.
-			 * @param streams The streams in the multimedia file.
+			 * @param path File path.
+			 * @param metadata Container metadata.
+			 * @param streams Stream list.
 			 */
 			Demuxer(const std::filesystem::path& path, class Metadata&& metadata, class Streams&& streams) noexcept;
 	};

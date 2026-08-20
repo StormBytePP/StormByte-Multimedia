@@ -7,91 +7,80 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @class Decoder
-	 * @brief Class representing a decoder.
+	 * @brief Concrete decoder implementation (name + feature set).
+	 *
+	 * Constructed only via Codec::Decoders().
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Decoder final {
 		friend class Codec;
-		public:
-			/**
-			 * @brief The default copy constructor.
-			 * @param other The other decoder to copy from.
-			 */
-			Decoder(const Decoder& other) 					= default;
+	public:
+		/**
+		 * Copy constructor.
+		 */
+		Decoder(const Decoder& other) = default;
 
-			/**
-			 * @brief The default move constructor.
-			 * @param other The other decoder to move from.
-			 */
-			Decoder(Decoder&& other) noexcept 				= default;
+		/**
+		 * Move constructor.
+		 */
+		Decoder(Decoder&& other) noexcept = default;
 
-			/**
-			 * @brief Default destructor.
-			 */
-			~Decoder() noexcept 							= default;
+		/**
+		 * Destructor.
+		 */
+		~Decoder() noexcept = default;
 
-			/**
-			 * @brief The default copy assignment operator.
-			 * @param other The other decoder to copy from.
-			 * @return Decoder& Reference to this decoder.
-			 */
-			Decoder& operator=(const Decoder& other) 		= default;
+		/**
+		 * Copy assignment.
+		 */
+		Decoder& operator=(const Decoder& other) = default;
 
-			/**
-			 * @brief The default move assignment operator.
-			 * @param other The other decoder to move from.
-			 * @return Decoder& Reference to this decoder.
-			 */
-			Decoder& operator=(Decoder&& other) noexcept 	= default;
+		/**
+		 * Move assignment.
+		 */
+		Decoder& operator=(Decoder&& other) noexcept = default;
 
-			/**
-			 * @brief Gets the ID of the decoder.
-			 * @return int The ID of the decoder.
-			 */
-			int 											CodecID() const noexcept;
+		/**
+		 * @return Underlying codec id.
+		 */
+		int CodecID() const noexcept;
 
-			/**
-			 * @brief Gets the capabilities of the decoder.
-			 * @return int The capabilities of the decoder.
-			 */
-			const StormByte::Multimedia::Features&			Features() const noexcept;
+		/**
+		 * @return Detected capability flags.
+		 */
+		const StormByte::Multimedia::Features& Features() const noexcept;
 
-			/**
-			 * @brief Gets the name of the decoder.
-			 * @return const std::string& The name of the decoder.
-			 */
-			const std::string& 								Name() const noexcept;
+		/**
+		 * @return Implementation name (e.g. "hevc_nvdec").
+		 */
+		const std::string& Name() const noexcept;
 
-		private:
-			int m_id;
-			std::string m_name;
-			class Features m_features;
+	private:
+		int m_id;										///< Codec id
+		std::string m_name;								///< Implementation name
+		class Features m_features;						///< Capabilities
 
-			/**
-			 * @brief Private constructor.
-			 * @param id The ID of the decoder.
-			 * @param name The name of the decoder.
-			 * @param features The features of the decoder.
-			 */
-			Decoder(int id, const std::string& name) noexcept;
+		/**
+		 * @param id Codec id.
+		 * @param name Implementation name.
+		 */
+		Decoder(int id, const std::string& name) noexcept;
 
-			/**
-			 * @brief Private move constructor.
-			 * @param id The ID of the decoder.
-			 * @param name The name of the decoder.
-			 * @param features The features of the decoder.
-			 */
-			Decoder(int id, std::string&& name) noexcept;
+		/**
+		 * @param id Codec id.
+		 * @param name Implementation name.
+		 */
+		Decoder(int id, std::string&& name) noexcept;
 
-			/**
-			 * @brief Detects features based on the decoder name.
-			 * @param name The name of the decoder.
-			 * @return Features The detected features.
-			 */
-			static StormByte::Multimedia::Features			DetectFeatures(const std::string_view& name) noexcept;
+		/**
+		 * Merges registry + FFmpeg capability bits for @p name.
+		 * @param name Implementation name.
+		 * @return Feature set.
+		 */
+		static StormByte::Multimedia::Features DetectFeatures(const std::string_view& name) noexcept;
 	};
 }

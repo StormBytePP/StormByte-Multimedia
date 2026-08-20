@@ -5,56 +5,50 @@
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @class Demuxer
-	 * @brief The class representing a multimedia demuxer.
+	 * @brief FFmpeg implementation of Backend::Demuxer.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Demuxer final: public Backend::Demuxer {
 		public:
 			/**
-			 * @brief Constructor.
+			 * Default constructor.
 			 */
-			Demuxer() noexcept											= default;
+			Demuxer() noexcept = default;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other file to copy from.
+			 * Copy constructor (deleted).
 			 */
-			Demuxer(const Demuxer& other)								= delete;
+			Demuxer(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other file to move from.
+			 * Move constructor (deleted).
 			 */
-			Demuxer(Demuxer&& other) noexcept							= delete;
+			Demuxer(Demuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Demuxer() noexcept override								= default;
+			~Demuxer() noexcept override = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other file to copy from.
-			 * @return Reference to this file.
+			 * Copy assignment (deleted).
 			 */
-			Demuxer& operator=(const Demuxer& other)					= delete;
+			Demuxer& operator=(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other file to move from.
-			 * @return Reference to this file.
+			 * Move assignment (deleted).
 			 */
-			Demuxer& operator=(Demuxer&& other) noexcept				= delete;
+			Demuxer& operator=(Demuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Opens demuxer for the specified file and gets its components.
-			 * @param file The path to the multimedia file.
-			 * @return Tuple containing path, metadata and streams or exception on failure.
+			 * Opens @p file via AVFormatContext and builds Engine streams (incl. HDR probe).
+			 * @param file Media path.
+			 * @return Metadata + streams, or error.
 			 */
-			ExpectedDemuxerTuple 										Open(const std::filesystem::path& file) const noexcept override;
+			ExpectedDemuxerTuple Open(const std::filesystem::path& file) const noexcept override;
 	};
 }

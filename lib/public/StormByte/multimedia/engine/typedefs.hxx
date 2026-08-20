@@ -7,17 +7,16 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
-	// Forwards
 	class Codec;
 	class Decoder;
 	class Demuxer;
 	class Encoder;
 
-	using Decoders = std::list<Decoder>;										///< List of Decoders
-	using Encoders = std::list<Encoder>;										///< List of Encoders
-	using ExpectedCodec	= StormByte::Expected<Codec, CodecNotFound>;			///< Expected type for Codec or Exception
-	using ExpectedDemuxer = StormByte::Expected<const Demuxer, Exception>;		///< Expected type for Demuxer or Exception
+	using Decoders = std::list<Decoder>;									///< List of decoders
+	using Encoders = std::list<Encoder>;									///< List of encoders
+	using ExpectedCodec = StormByte::Expected<Codec, CodecNotFound>;		///< Codec lookup result
+	using ExpectedDemuxer = StormByte::Expected<const Demuxer, Exception>;	///< Demuxer open result
 }

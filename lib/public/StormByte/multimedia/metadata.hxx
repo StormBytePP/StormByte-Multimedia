@@ -11,42 +11,40 @@
  * @brief The namespace for all multimedia classes.
  */
 namespace StormByte::Multimedia {
+	/**
+	 * @class Metadata
+	 * @brief Key/value metadata map (file or stream tags).
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Metadata final: public StormByte::Iterable<std::map<std::string, std::string>> {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * Default constructor.
 			 */
-			Metadata() noexcept										= default;
+			Metadata() noexcept = default;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other metadata to copy from.
+			 * Copy constructor.
 			 */
-			Metadata(const Metadata& other)							= default;
+			Metadata(const Metadata& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other metadata to move from.
+			 * Move constructor.
 			 */
-			Metadata(Metadata&& other) noexcept						= default;
+			Metadata(Metadata&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Metadata() noexcept 									= default;
+			~Metadata() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other metadata to copy from.
-			 * @return Reference to this metadata.
+			 * Copy assignment.
 			 */
-			Metadata& operator=(const Metadata& other)				= default;
+			Metadata& operator=(const Metadata& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other metadata to move from.
-			 * @return Reference to this metadata.
+			 * Move assignment.
 			 */
-			Metadata& operator=(Metadata&& other)					= default;
+			Metadata& operator=(Metadata&& other) = default;
 	};
 }

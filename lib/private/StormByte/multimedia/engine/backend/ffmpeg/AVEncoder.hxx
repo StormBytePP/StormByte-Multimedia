@@ -11,7 +11,7 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVFormatContext;
@@ -20,93 +20,86 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class AVEncoder
-	 * @brief The class representing an FFmpeg encoder.
+	 * @brief RAII encoder context with optional BSF pipeline.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVEncoder: public AVPointer<::AVCodecContext> {
 		public:
 			/**
-			 * @brief Copy constructor (deleted).
-			 * @param other The other encoder to copy from.
+			 * Copy constructor (deleted).
 			 */
-			AVEncoder(const AVEncoder& other) 								= delete;
+			AVEncoder(const AVEncoder& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other encoder to move from.
+			 * Move constructor.
 			 */
-			AVEncoder(AVEncoder&& other) noexcept							= default;
+			AVEncoder(AVEncoder&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * Destructor.
 			 */
 			~AVEncoder() noexcept override;
 
 			/**
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other encoder to copy from.
-			 * @return Reference to this encoder.
+			 * Copy assignment (deleted).
 			 */
-			AVEncoder& operator=(const AVEncoder&) 							= delete;
+			AVEncoder& operator=(const AVEncoder&) = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other encoder to move from.
-			 * @return Reference to this encoder.
+			 * Move assignment.
 			 */
 			AVEncoder& operator=(AVEncoder&& other) noexcept;
 
 			/**
-			 * @brief Opens an encoder using codec parameters (calls avcodec_parameters_to_context()).
-			 * @param codec The codec to use for encoding.
-			 * @param params The codec parameters from the muxer stream.
-			 * @param stream_index The index of the stream these parameters came from.
-			 * @param bsf_name Optional bitstream filter name to apply (e.g. "hevc_mp4toannexb").
-			 * @return ExpectedAVEncoder The expected AVEncoder or an EncoderError.
+			 * Opens an encoder from codec + parameters; may attach BSF.
+			 * @param codec Encoder codec.
+			 * @param params Stream codec parameters.
+			 * @param fmt Format context (for BSF decision).
+			 * @param stream_index Stream index.
+			 * @return Encoder or EncoderError.
 			 */
-			static ExpectedAVEncoder 										Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
+			static ExpectedAVEncoder Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 			/**
-			 * @brief Sends a frame to the encoder.
-			 * @param frame The frame to send.
-			 * @return OperationResult The result of the send operation.
+			 * Sends a frame to the encoder.
+			 * @param frame Source frame.
+			 * @return Operation result.
 			 */
-			FFmpeg::OperationResult 										SendFrame(AVFrame& frame) noexcept;
+			FFmpeg::OperationResult SendFrame(AVFrame& frame) noexcept;
 
 			/**
-			 * @brief Receives a packet from the encoder.
-			 * @param pkt The packet to receive into.
-			 * @return OperationResult The result of the receive operation.
+			 * Receives an encoded packet (after BSF).
+			 * @param pkt Destination packet.
+			 * @return Operation result.
 			 */
-			FFmpeg::OperationResult 										ReceivePacket(AVPacket& pkt) noexcept;
+			FFmpeg::OperationResult ReceivePacket(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Returns the stream index this encoder was opened for.
+			 * @return Stream index this encoder was opened for.
 			 */
-			int 															StreamIndex() const noexcept;
+			int StreamIndex() const noexcept;
 
 			/**
-			 * @brief Flushes the encoder buffers.
+			 * Flushes encoder and BSF.
 			 */
-			void 															Flush() noexcept;
+			void Flush() noexcept;
 
 			/**
-			 * @brief Sets the encoder to end-of-file state.
+			 * Signals EOF to encoder and BSF.
 			 */
-			void 															SetEof() noexcept;
+			void SetEof() noexcept;
 
 		private:
-			int m_stream_index = -1;
-			FFmpeg::AVBSFPipeline m_bsf_pipeline;
+			int m_stream_index = -1;					///< Bound stream index
+			FFmpeg::AVBSFPipeline m_bsf_pipeline;	///< Optional BSF chain
 
 			/**
-			 * @brief Constructor with codec context.
-			 * @param ctx The codec context to use for encoding.
+			 * @param ctx Opened codec context.
 			 */
 			explicit AVEncoder(AVCodecContext* ctx) noexcept;
 
 			/**
-			 * @brief Frees the underlying AVCodecContext pointer.
+			 * Frees the codec context.
 			 */
-			void 															Free() noexcept override;
+			void Free() noexcept override;
 	};
 }

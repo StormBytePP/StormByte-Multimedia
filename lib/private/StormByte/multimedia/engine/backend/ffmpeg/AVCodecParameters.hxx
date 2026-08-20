@@ -9,56 +9,50 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @class AVCodecParameters
-	 * @brief Wrapper class for FFmpeg's AVCodecParameters.
+	 * @brief Deep-copying RAII wrapper for ::AVCodecParameters.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVCodecParameters: public AVPointer<::AVCodecParameters> {
 		public:
 			/**
-			 * @brief Constructor with pointer.
-			 * @param par The AVCodecParameters pointer to wrap.
+			 * Allocates and optionally copies from @p par.
+			 * @param par Source parameters (may be null).
 			 */
 			explicit AVCodecParameters(::AVCodecParameters* par) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other AVCodecParameters to copy from.
+			 * Copy constructor (deep copy).
 			 */
 			AVCodecParameters(const AVCodecParameters& other) noexcept;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other AVCodecParameters to move from.
+			 * Move constructor.
 			 */
-			AVCodecParameters(AVCodecParameters&& other) noexcept				= default;
+			AVCodecParameters(AVCodecParameters&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * Destructor.
 			 */
 			~AVCodecParameters() noexcept override;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other AVCodecParameters to copy from.
-			 * @return Reference to this AVCodecParameters.
+			 * Copy assignment (deep copy).
 			 */
 			AVCodecParameters& operator=(const AVCodecParameters& other) noexcept;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other AVCodecParameters to move from.
-			 * @return Reference to this AVCodecParameters.
+			 * Move assignment.
 			 */
-			AVCodecParameters& operator=(AVCodecParameters&& other) noexcept	= default;
+			AVCodecParameters& operator=(AVCodecParameters&& other) noexcept = default;
 
 		private:
 			/**
-			 * @brief Frees the underlying AVCodecParameters pointer.
+			 * Frees parameters (avcodec_parameters_free).
 			 */
-			void 																Free() noexcept override;
-		};
+			void Free() noexcept override;
+	};
 }

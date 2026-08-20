@@ -4,18 +4,20 @@
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+	/**
+	 * @class Exception
+	 * @brief Base for FFmpeg backend errors (AV::…).
+	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Exception: public Multimedia::Exception {
 		public:
 			/**
-			 * @brief Constructor forwards the message to the `std::format` function
-			 * @tparam Args Format argument types
-			 * @param fmt Format string
-			 * @param args Arguments for formatting
-			 * 
-			 * If no arguments are provided, the format string is used as the exception message directly.
+			 * @tparam Args Format argument types.
+			 * @param component Subsystem label.
+			 * @param fmt Format string.
+			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
@@ -24,20 +26,21 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			using Multimedia::Exception::Exception;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			virtual ~Exception() noexcept 								= default;
+			virtual ~Exception() noexcept = default;
 	};
 
 	/**
 	 * @class BSFError
-	 * @brief The exception for when a bitstream filter error occurs.
+	 * @brief Bitstream filter failure.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE BSFError: public Exception {
 		public:
 			/**
-			 * @brief Default constructor.
-			 * @param codec The message of the exception.
+			 * @tparam Args Format argument types.
+			 * @param fmt Format string.
+			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			BSFError(std::format_string<Args...> fmt, Args&&... args):
@@ -48,13 +51,14 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class DecoderError
-	 * @brief The exception for when a decoder error occurs.
+	 * @brief Decoder open/process failure.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE DecoderError: public Exception {
 		public:
 			/**
-			 * @brief Default constructor.
-			 * @param codec The message of the exception.
+			 * @tparam Args Format argument types.
+			 * @param fmt Format string.
+			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			DecoderError(std::format_string<Args...> fmt, Args&&... args):
@@ -65,13 +69,14 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class EncoderError
-	 * @brief The exception for when an encoder error occurs.
+	 * @brief Encoder open/process failure.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE EncoderError: public Exception {
 		public:
 			/**
-			 * @brief Default constructor.
-			 * @param codec The message of the exception.
+			 * @tparam Args Format argument types.
+			 * @param fmt Format string.
+			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			EncoderError(std::format_string<Args...> fmt, Args&&... args):

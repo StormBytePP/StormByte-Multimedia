@@ -8,93 +8,82 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @class Stream
-	 * @brief The class representing a multimedia stream.
+	 * @brief One media stream: codec, type, metadata and optional context.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param codec The codec of the stream.
-			 * @param type The type of the stream.
+			 * @param codec Stream codec.
+			 * @param type Stream type (may be adjusted for mjpeg → Attachment).
 			 */
 			Stream(const Codec& codec, enum Type type) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other stream to copy from.
+			 * Copy constructor.
 			 */
-			Stream(const Stream& other)								= default;
+			Stream(const Stream& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other stream to move from.
+			 * Move constructor.
 			 */
-			Stream(Stream&& other) noexcept							= default;
+			Stream(Stream&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Stream() noexcept 										= default;
+			~Stream() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other stream to copy from.
-			 * @return Reference to this stream.
+			 * Copy assignment.
 			 */
-			Stream& operator=(const Stream& other)					= default;
+			Stream& operator=(const Stream& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other stream to move from.
-			 * @return Reference to this stream.
+			 * Move assignment.
 			 */
-			Stream& operator=(Stream&& other)						= default;
+			Stream& operator=(Stream&& other) = default;
 
 			/**
-			 * @brief Gets the type of the stream.
-			 * @return The type of the stream.
+			 * @return Stream type.
 			 */
-			enum Type												Type() const noexcept;
+			enum Type Type() const noexcept;
 
 			/**
-			 * @brief Gets the metadata of the stream.
-			 * @return The metadata of the stream.
+			 * @return Stream metadata tags.
 			 */
-			const StormByte::Multimedia::Metadata&					Metadata() const noexcept;
+			const StormByte::Multimedia::Metadata& Metadata() const noexcept;
 
 			/**
-			 * @brief Sets the metadata of the stream.
-			 * @param metadata The metadata of the stream.
+			 * Replaces stream metadata.
+			 * @param metadata New tags.
 			 */
-			void													Metadata(class Metadata&& metadata) noexcept;
+			void Metadata(class Metadata&& metadata) noexcept;
 
 			/**
-			 * @brief Gets the context of the stream.
-			 * @return The context of the stream.
+			 * @return Optional typed context (audio/video), or null.
 			 */
-			std::shared_ptr<const Context::Generic>					Context() const noexcept;
+			std::shared_ptr<const Context::Generic> Context() const noexcept;
 
 			/**
-			 * @brief Sets the context of the stream.
-			 * @param context The context of the stream.
+			 * Sets stream context (takes ownership via Move()).
+			 * @param context Context object.
 			 */
-			void													Context(Context::Generic&& context) noexcept;
+			void Context(Context::Generic&& context) noexcept;
 
 			/**
-			 * @brief Gets the codec of the stream.
-			 * @return The codec of the stream.
+			 * @return Stream codec.
 			 */
-			const class Codec&										Codec() const noexcept;
+			const class Codec& Codec() const noexcept;
 
 		private:
-			class Codec m_codec;									///< The codec of the stream
-			enum Type m_type;										///< The type of the stream
-			class Metadata m_metadata;								///< The metadata of the stream
-			std::shared_ptr<Context::Generic> m_context;			///< The context of the stream
+			class Codec m_codec;									///< Codec
+			enum Type m_type;										///< Type
+			class Metadata m_metadata;								///< Tags
+			std::shared_ptr<Context::Generic> m_context;			///< Optional context
 	};
 }

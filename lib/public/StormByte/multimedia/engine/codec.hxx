@@ -8,101 +8,91 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @class Codec
-	 * @brief The class representing a multimedia codec.
+	 * @brief Logical codec (id, name, description) with decoder/encoder lists.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Codec {
 		public:
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other codec to copy from.
+			 * Copy constructor.
 			 */
-			Codec(const Codec& other)								= default;
+			Codec(const Codec& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other codec to move from.
+			 * Move constructor.
 			 */
-			Codec(Codec&& other) noexcept							= default;
+			Codec(Codec&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Codec() noexcept 										= default;
+			~Codec() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other codec to copy from.
-			 * @return Reference to this codec.
+			 * Copy assignment.
 			 */
-			Codec& operator=(const Codec& other)					= default;
+			Codec& operator=(const Codec& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other codec to move from.
-			 * @return Reference to this codec.
+			 * Move assignment.
 			 */
-			Codec& operator=(Codec&& other)							= default;
+			Codec& operator=(Codec&& other) = default;
 
 			/**
-			 * @brief Gets the name of the codec.
-			 * @return The name of the codec.
+			 * @return Short codec name (e.g. "h264").
 			 */
-			std::string 											Name() const noexcept;
+			std::string Name() const noexcept;
 
 			/**
-			 * @brief Gets the description of the codec.
-			 * @return The description of the codec.
+			 * @return Long description from the backend.
 			 */
-			std::string 											Description() const noexcept;
+			std::string Description() const noexcept;
 
 			/**
-			 * @brief Finds a codec by name.
-			 * @param name The name of the codec.
-			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
+			 * Finds a codec by short name.
+			 * @param name Codec name.
+			 * @return Codec or CodecNotFound.
 			 */
-			static ExpectedCodec 									Find(const std::string& name) noexcept;
+			static ExpectedCodec Find(const std::string& name) noexcept;
 
 			/**
-			 * @brief Finds a codec by ID.
-			 * @param id The ID of the codec.
-			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
+			 * Finds a codec by AVCodecID-compatible id.
+			 * @param id Codec id.
+			 * @return Codec or CodecNotFound.
 			 */
-			static ExpectedCodec 									Find(int id) noexcept;
+			static ExpectedCodec Find(int id) noexcept;
 
 			/**
-			 * @brief Finds a codec by type and features.
-			 * @param type The type of the codec.
-			 * @param features The features required (optional).
-			 * @return ExpectedCodec containing the found codec or CodecNotFound exception.
+			 * Finds a codec by media type and optional required features (registry).
+			 * @param type Media type.
+			 * @param features Optional required feature set.
+			 * @return Codec or CodecNotFound.
 			 */
-			static ExpectedCodec 									Find(Type type, const std::optional<Features>& features = std::nullopt) noexcept;
+			static ExpectedCodec Find(Type type, const std::optional<Features>& features = std::nullopt) noexcept;
 
 			/**
-			 * @brief Checks if the codec has an encoder.
-			 * @return True if the codec has an encoder, false otherwise.
+			 * @return Available decoders for this codec id.
 			 */
-			Decoders 												Decoders() const noexcept;
+			Decoders Decoders() const noexcept;
 
 			/**
-			 * @brief Checks if the codec has a decoder.
-			 * @return True if the codec has a decoder, false otherwise.
+			 * @return Available encoders for this codec id.
 			 */
-			Encoders 												Encoders() const noexcept;
+			Encoders Encoders() const noexcept;
 
 		private:
-			int m_codec_id;											///< The Codec ID
-			std::string m_name, m_description;						///< The name and description of the codec
+			int m_codec_id;						///< Backend codec id
+			std::string m_name;					///< Short name
+			std::string m_description;			///< Long description
 
 			/**
-			 * @brief Private constructor from AVCodec pointer.
-			 * @param codec_id The Codec ID
-			 * @param name The name of the codec
-			 * @param description The description of the codec
+			 * @param codec_id Backend codec id.
+			 * @param name Short name.
+			 * @param description Long description.
 			 */
 			Codec(int codec_id, const std::string& name, const std::string& description) noexcept;
 	};

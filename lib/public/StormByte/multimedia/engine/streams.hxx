@@ -8,49 +8,43 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @class Streams
-	 * @brief The class representing a collection of multimedia streams.
+	 * @brief Ordered collection of Stream shared_ptrs.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Streams final: public Iterable<std::vector<std::shared_ptr<Stream>>> {
 		public:
 			/**
-			 * @brief Constructor.
+			 * Default constructor.
 			 */
-			Streams() noexcept									= default;
+			Streams() noexcept = default;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other streams to copy from.
+			 * Copy constructor.
 			 */
-			Streams(const Streams& other)						= default;
+			Streams(const Streams& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other streams to move from.
+			 * Move constructor.
 			 */
-			Streams(Streams&& other) noexcept					= default;
+			Streams(Streams&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Streams() noexcept									= default;
+			~Streams() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other streams to copy from.
-			 * @return Reference to this streams.
+			 * Copy assignment.
 			 */
-			Streams& operator=(const Streams& other)			= default;
+			Streams& operator=(const Streams& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other streams to move from.
-			 * @return Reference to this streams.
+			 * Move assignment.
 			 */
-			Streams& operator=(Streams&& other) noexcept		= default;
+			Streams& operator=(Streams&& other) noexcept = default;
 	};
 }

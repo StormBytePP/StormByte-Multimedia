@@ -7,90 +7,81 @@
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVPacket;
+
 	/**
 	 * @class AVBSFPipeline
-	 * @brief Class representing a pipeline of bitstream filters (AVBSF).
-	 *
-	 * This class manages a sequence of AVBSF instances, allowing packets to be processed
-	 * through multiple bitstream filters in order.
+	 * @brief Ordered chain of bitstream filters applied to packets.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSFPipeline {
 		public:
-			/** 
-			 * @brief Default constructor.
+			/**
+			 * Default constructor.
 			 */
-			AVBSFPipeline() noexcept 									= default;
+			AVBSFPipeline() noexcept = default;
 
-			/** 
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVBSFPipeline to copy from.
+			/**
+			 * Copy constructor (deleted).
 			 */
-			AVBSFPipeline(const AVBSFPipeline&) 						= delete;
+			AVBSFPipeline(const AVBSFPipeline&) = delete;
 
-			/** 
-			 * @brief Move constructor.
-			 * @param other The other AVBSFPipeline to move from.
+			/**
+			 * Move constructor.
 			 */
 			AVBSFPipeline(AVBSFPipeline&& other) noexcept;
 
-			/** 
-			 * @brief Destructor.
+			/**
+			 * Destructor.
 			 */
-			~AVBSFPipeline() noexcept 									= default;
+			~AVBSFPipeline() noexcept = default;
 
-			/** 
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVBSFPipeline to copy from.
-			 * @return Reference to this AVBSFPipeline.
+			/**
+			 * Copy assignment (deleted).
 			 */
-			AVBSFPipeline& operator=(const AVBSFPipeline&) 				= delete;
+			AVBSFPipeline& operator=(const AVBSFPipeline&) = delete;
 
-			/** 
-			 * @brief Move assignment operator.
-			 * @param other The other AVBSFPipeline to move from.
-			 * @return Reference to this AVBSFPipeline.
+			/**
+			 * Move assignment.
 			 */
 			AVBSFPipeline& operator=(AVBSFPipeline&& other) noexcept;
 
-			/** 
-			 * @brief Adds a bitstream filter to the pipeline.
-			 * @param bsf The bitstream filter to add.
+			/**
+			 * Appends a filter to the chain.
+			 * @param bsf Filter to take ownership of.
 			 */
-			void 														Add(AVBSF&& bsf) noexcept;
+			void Add(AVBSF&& bsf) noexcept;
 
-			/** 
-			 * @brief Processes a packet through the pipeline of bitstream filters.
-			 * @param pkt The packet to process.
-			 * @return OperationResult The result of the processing operation.
+			/**
+			 * Runs @p pkt through all filters in order.
+			 * @param pkt Packet in/out.
+			 * @return Operation result.
 			 */
-			OperationResult 											Process(AVPacket& pkt) noexcept;
+			OperationResult Process(AVPacket& pkt) noexcept;
 
-			/** 
-			 * @brief Flushes all bitstream filters in the pipeline.
+			/**
+			 * Flushes every filter.
 			 */
-			void 														Flush() noexcept;
+			void Flush() noexcept;
 
-			/** 
-			 * @brief Sets end-of-file on all bitstream filters in the pipeline.
+			/**
+			 * Signals EOF on every filter.
 			 */
-			void 														SetEof() noexcept;
+			void SetEof() noexcept;
 
-			/** 
-			 * @brief Clears all bitstream filters from the pipeline.
+			/**
+			 * Removes all filters.
 			 */
-			void 														Clear() noexcept;
+			void Clear() noexcept;
 
-			/** 
-			 * @brief Checks if the pipeline is empty.
-			 * @return true if the pipeline is empty, false otherwise.
+			/**
+			 * @return true if no filters are registered.
 			 */
-			bool 														Empty() const noexcept;
+			bool Empty() const noexcept;
 
 		private:
-			std::deque<AVBSF> m_filters;								///< The deque of bitstream filters in the pipeline.
+			std::deque<AVBSF> m_filters;	///< Filter chain
 	};
 }

@@ -13,7 +13,7 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVBSF;
@@ -23,86 +23,77 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class AVFormatContext
-	 * @brief Wrapper class for FFmpeg's AVFormatContext (Demuxer or Muxer).
+	 * @brief RAII input format context (demuxer).
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVFormatContext: public AVPointer<::AVFormatContext> {
 		public:
-			/** 
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVFormatContext to copy from.
+			/**
+			 * Copy constructor (deleted).
 			 */
-			AVFormatContext(const AVFormatContext& other)						= delete;
+			AVFormatContext(const AVFormatContext& other) = delete;
 
-			/** 
-			 * @brief Move constructor.
-			 * @param other The other AVFormatContext to move from.
+			/**
+			 * Move constructor.
 			 */
-			AVFormatContext(AVFormatContext&& other) noexcept					= default;
+			AVFormatContext(AVFormatContext&& other) noexcept = default;
 
-			/** 
-			 * @brief Destructor.
+			/**
+			 * Destructor.
 			 */
 			~AVFormatContext() noexcept override;
 
-			/** 
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVFormatContext to copy from.
-			 * @return Reference to this AVFormatContext.
+			/**
+			 * Copy assignment (deleted).
 			 */
-			AVFormatContext& operator=(const AVFormatContext& other)			= delete;
-
-			/** 
-			 * @brief Move assignment operator.
-			 * @param other The other AVFormatContext to move from.
-			 * @return Reference to this AVFormatContext.
-			 */
-			AVFormatContext& operator=(AVFormatContext&& other) noexcept		= default;
+			AVFormatContext& operator=(const AVFormatContext& other) = delete;
 
 			/**
-			 * @brief Opens a multimedia file and returns the AVFormatContext.
-			 * @param path The path to the multimedia file.
-			 * @return ExpectedAVFormatContext The expected AVFormatContext or a DecoderError.
+			 * Move assignment.
 			 */
-			static ExpectedAVFormatContext 										Open(const std::filesystem::path& path);
+			AVFormatContext& operator=(AVFormatContext&& other) noexcept = default;
 
 			/**
-			 * @brief Gets the metadata of the AVFormatContext.
-			 * @return Metadata The metadata object.
+			 * Opens a file and finds stream info.
+			 * @param path Media path.
+			 * @return Context or DecoderError.
 			 */
-			StormByte::Multimedia::Metadata 									Metadata() const noexcept;
+			static ExpectedAVFormatContext Open(const std::filesystem::path& path);
 
 			/**
-			 * @brief Reads a packet from the AVFormatContext.
-			 * @param packet The packet to read into.
-			 * @return OperationResult The result of the read operation.
+			 * @return Container metadata dictionary as Metadata.
 			 */
-			OperationResult														ReadPacket(AVPacket& packet) noexcept;
+			StormByte::Multimedia::Metadata Metadata() const noexcept;
 
 			/**
-			 * @brief Gets the streams of the AVFormatContext.
-			 * @return Streams The vector of AVStream objects.
+			 * Reads the next packet.
+			 * @param packet Destination packet.
+			 * @return Operation result.
 			 */
-			Streams																Streams() const noexcept;
+			OperationResult ReadPacket(AVPacket& packet) noexcept;
 
 			/**
-			 * @brief Determines if a bitstream filter is needed for the given codec ID.
-			 * @param codec_id The codec ID to check.
-			 * @param stream_index The index of the stream to consider for time base.
-			 * @param params The codec parameters to consider.
-			 * @return std::optional<AVBSF> The bitstream filter if needed, std::nullopt otherwise.
+			 * @return Set of non-owning stream views.
 			 */
-			std::optional<AVBSF>												Mp4ToAnnexB(int codec_id, int stream_id, const AVCodecParameters& params) const noexcept;
+			Streams Streams() const noexcept;
+
+			/**
+			 * Returns an mp4→Annex-B BSF when the container and codec require it.
+			 * @param codec_id Codec id.
+			 * @param stream_id Stream index (time base).
+			 * @param params Codec parameters.
+			 * @return BSF or nullopt.
+			 */
+			std::optional<AVBSF> Mp4ToAnnexB(int codec_id, int stream_id, const AVCodecParameters& params) const noexcept;
 
 		private:
 			/**
-			 * @brief Private constructor.
-			 * @param ctx The raw AVFormatContext pointer.
+			 * @param ctx Raw format context (owned).
 			 */
 			explicit AVFormatContext(::AVFormatContext* ctx) noexcept;
 
-			/** 
-			 * @brief Frees the underlying AVFormatContext pointer.
+			/**
+			 * Closes input (avformat_close_input).
 			 */
-			void 																Free() noexcept override;
+			void Free() noexcept override;
 	};
 }

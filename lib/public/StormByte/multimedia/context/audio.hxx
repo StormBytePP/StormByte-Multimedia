@@ -7,87 +7,83 @@
 
 /**
  * @namespace Context
- * @brief The namespace for all context classes.
+ * @brief Media stream context types (audio, video, …).
  */
 namespace StormByte::Multimedia::Context {
+	/**
+	 * @class Audio
+	 * @brief Audio stream context (sample rate, channels, bitrate, profile).
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Generic {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * @param sample_rate Sample rate in Hz.
+			 * @param channels Channel count.
+			 * @param bitrate Bitrate in bits/s (0 if unknown).
+			 * @param profile Optional codec profile name.
 			 */
-			Audio(unsigned int sample_rate, unsigned short channels, unsigned int bitrate, const std::optional<std::string>& profile = std::nullopt) noexcept;
+			Audio(unsigned int sample_rate, unsigned short channels, unsigned int bitrate,
+				const std::optional<std::string>& profile = std::nullopt) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other context to copy from.
+			 * Copy constructor.
 			 */
-			Audio(const Audio& other)								= default;
+			Audio(const Audio& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other context to move from.
+			 * Move constructor.
 			 */
-			Audio(Audio&& other) noexcept							= default;
+			Audio(Audio&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Audio() noexcept 										= default;
+			~Audio() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other context to copy from.
-			 * @return Reference to this context.
+			 * Copy assignment.
 			 */
-			Audio& operator=(const Audio& other)					= default;
+			Audio& operator=(const Audio& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other context to move from.
-			 * @return Reference to this context.
+			 * Move assignment.
 			 */
-			Audio& operator=(Audio&& other)							= default;
+			Audio& operator=(Audio&& other) = default;
 
 			/**
-			 * @brief Gets the sample rate.
-			 * @return The sample rate.
+			 * @return Sample rate in Hz.
 			 */
-			unsigned int											SampleRate() const noexcept;
+			unsigned int SampleRate() const noexcept;
 
 			/**
-			 * @brief Gets the number of channels.
-			 * @return The number of channels.
+			 * @return Number of channels.
 			 */
-			unsigned short											Channels() const noexcept;
+			unsigned short Channels() const noexcept;
 
 			/**
-			 * @brief Gets the bitrate.
-			 * @return The bitrate.
+			 * @return Bitrate in bits/s.
 			 */
-			unsigned int											Bitrate() const noexcept;
+			unsigned int Bitrate() const noexcept;
 
 			/**
-			 * @brief Gets the profile.
-			 * @return The profile.
+			 * @return Optional profile name.
 			 */
-			const std::optional<std::string>&						Profile() const noexcept;
+			const std::optional<std::string>& Profile() const noexcept;
 
 			/**
-			 * @brief Clones the context.
-			 * @return A pointer to the cloned context.
+			 * @return Cloned context.
 			 */
-			PointerType 											Clone() const override;
+			PointerType Clone() const override;
 
 			/**
-			 * @brief Moves the context.
-			 * @return A pointer to the moved context.
+			 * @return Moved context as new pointer.
 			 */
-			PointerType 											Move() override;
+			PointerType Move() override;
 
 		private:
-			unsigned int m_sample_rate;								///< The sample rate
-			unsigned short m_channels;								///< The number of channels
-			unsigned int m_bitrate;									///< The bitrate
-			std::optional<std::string> m_profile;					///< The profile (optional)
+			unsigned int m_sample_rate;					///< Sample rate (Hz)
+			unsigned short m_channels;					///< Channel count
+			unsigned int m_bitrate;						///< Bitrate (bits/s)
+			std::optional<std::string> m_profile;		///< Optional profile
 	};
 }

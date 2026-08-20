@@ -5,50 +5,43 @@
 
 /**
  * @namespace Context
- * @brief The namespace for all context classes.
+ * @brief Media stream context types (audio, video, …).
  */
 namespace StormByte::Multimedia::Context {
 	/**
 	 * @class Generic
-	 * @brief The Generic class for media contexts.
+	 * @brief Base class for stream contexts (Clonable).
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Generic: public StormByte::Clonable<Generic> {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * Default constructor.
 			 */
-			Generic() noexcept											= default;
+			Generic() noexcept = default;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other context to copy from.
+			 * Copy constructor.
 			 */
-			Generic(const Generic& other)								= default;
+			Generic(const Generic& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other context to move from.
+			 * Move constructor.
 			 */
-			Generic(Generic&& other) noexcept							= default;
+			Generic(Generic&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			virtual ~Generic() noexcept 								= default;
+			virtual ~Generic() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other context to copy from.
-			 * @return Reference to this context.
+			 * Copy assignment.
 			 */
-			Generic& operator=(const Generic& other)					= default;
+			Generic& operator=(const Generic& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other context to move from.
-			 * @return Reference to this context.
+			 * Move assignment.
 			 */
-			Generic& operator=(Generic&& other)							= default;
+			Generic& operator=(Generic&& other) = default;
 	};
-
 }

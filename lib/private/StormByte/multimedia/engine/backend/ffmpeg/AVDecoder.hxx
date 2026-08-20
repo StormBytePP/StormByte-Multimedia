@@ -11,7 +11,7 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVFormatContext;
@@ -20,93 +20,86 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class AVDecoder
-	 * @brief Wrapper class for FFmpeg's AVCodecContext (Decoder).
+	 * @brief RAII decoder context with optional BSF pipeline.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVDecoder: public AVPointer<::AVCodecContext> {
 		public:
-			/** 
-			 * @brief Copy constructor (deleted).
-			 * @param other The other AVDecoder to copy from.
+			/**
+			 * Copy constructor (deleted).
 			 */
-			AVDecoder(const AVDecoder&) 									= delete;
+			AVDecoder(const AVDecoder&) = delete;
 
-			/** 
-			 * @brief Move constructor.
-			 * @param other The other AVDecoder to move from.
+			/**
+			 * Move constructor.
 			 */
-			AVDecoder(AVDecoder&& other) noexcept							= default;
+			AVDecoder(AVDecoder&& other) noexcept = default;
 
-			/** 
-			 * @brief Destructor.
+			/**
+			 * Destructor.
 			 */
 			~AVDecoder() noexcept override;
 
-			/** 
-			 * @brief Copy assignment operator (deleted).
-			 * @param other The other AVDecoder to copy from.
-			 * @return Reference to this AVDecoder.
+			/**
+			 * Copy assignment (deleted).
 			 */
-			AVDecoder& operator=(const AVDecoder&) 							= delete;
-
-			/** 
-			 * @brief Move assignment operator.
-			 * @param other The other AVDecoder to move from.
-			 * @return Reference to this AVDecoder.
-			 */
-			AVDecoder& operator=(AVDecoder&& other) noexcept				= default;
+			AVDecoder& operator=(const AVDecoder&) = delete;
 
 			/**
-			 * @brief Opens a decoder using codec parameters (calls avcodec_parameters_to_context()).
-			 * @param codec The codec to use for decoding.
-			 * @param params The codec parameters from the demuxer stream.
-			 * @param stream_index The index of the stream these parameters came from.
-			 * @param bsf_name Optional bitstream filter name to apply (e.g. "hevc_mp4toannexb").
-			 * @return ExpectedAVDecoder The expected AVDecoder or a DecoderError.
+			 * Move assignment.
 			 */
-			static ExpectedAVDecoder 										Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
+			AVDecoder& operator=(AVDecoder&& other) noexcept = default;
 
 			/**
-			 * @brief Sends a packet to the decoder.
-			 * @param pkt The packet to send.
-			 * @return OperationResult The result of the send operation.
+			 * Opens a decoder from codec + parameters; may attach mp4→Annex-B BSF.
+			 * @param codec Decoder codec.
+			 * @param params Stream codec parameters.
+			 * @param fmt Parent format context (for BSF decision).
+			 * @param stream_index Stream index this decoder serves.
+			 * @return Decoder or DecoderError.
 			 */
-			FFmpeg::OperationResult 										SendPacket(AVPacket& pkt) noexcept;
+			static ExpectedAVDecoder Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 			/**
-			 * @brief Receives a frame from the decoder.
-			 * @param frame The frame to receive into.
-			 * @return OperationResult The result of the receive operation.
+			 * Sends a packet (after BSF) to the decoder.
+			 * @param pkt Packet for this stream.
+			 * @return Operation result.
 			 */
-			FFmpeg::OperationResult 										ReceiveFrame(AVFrame& frame) noexcept;
-			
-			/**
-			 * @brief Returns the stream index this decoder was opened for.
-			 */
-			int 															StreamIndex() const noexcept;
+			FFmpeg::OperationResult SendPacket(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Flushes the decoder buffers (without draining frames).
+			 * Receives a decoded frame.
+			 * @param frame Destination frame.
+			 * @return Operation result.
 			 */
-			void 															Flush() noexcept;
+			FFmpeg::OperationResult ReceiveFrame(AVFrame& frame) noexcept;
 
 			/**
-			 * @brief Sets the decoder to end-of-file state so the last frames can be received.
+			 * @return Stream index this decoder was opened for.
 			 */
-			void 															SetEof() noexcept;
+			int StreamIndex() const noexcept;
+
+			/**
+			 * Flushes decoder and BSF buffers.
+			 */
+			void Flush() noexcept;
+
+			/**
+			 * Signals EOF to decoder and BSF.
+			 */
+			void SetEof() noexcept;
 
 		private:
-			int m_stream_index = -1;
-			AVBSFPipeline m_bsf_pipeline;
+			int m_stream_index = -1;			///< Bound stream index
+			AVBSFPipeline m_bsf_pipeline;	///< Optional BSF chain
 
 			/**
-			 * @brief Private constructor.
-			 * @param ctx The codec context to use for decoding.
+			 * @param ctx Opened codec context.
 			 */
 			explicit AVDecoder(AVCodecContext* ctx) noexcept;
 
 			/**
-			 * @brief Frees the underlying AVCodecContext pointer.
+			 * Frees the codec context.
 			 */
-			void 															Free() noexcept override;
+			void Free() noexcept override;
 	};
 }

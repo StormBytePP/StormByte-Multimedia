@@ -6,133 +6,115 @@
 
 /**
  * @namespace Property
- * @brief The namespace for all context properties.
+ * @brief Video/audio property value types.
  */
 namespace StormByte::Multimedia::Context::Property {
 	/**
 	 * @class HDR10
-	 * @brief The class for HDR10 properties.
+	 * @brief Mastering display and content light level metadata.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC HDR10 final {
 		public:
 			/**
-			 * @brief Default constructor
+			 * Uses DEFAULT primaries / luminance.
 			 */
 			HDR10() noexcept;
 
 			/**
-			 * @brief Constructor.
-			 * @param red The red point.
-			 * @param green The green point.
-			 * @param blue The blue point.
-			 * @param white The white point.
-			 * @param luminance The luminance.
-			 * @param light_level The light level.
+			 * @param red Red primary.
+			 * @param green Green primary.
+			 * @param blue Blue primary.
+			 * @param white White point.
+			 * @param luminance Min/max luminance pair.
+			 * @param light_level Optional MaxCLL/MaxFALL.
 			 */
-			HDR10(const Point& red, const Point& green, const Point& blue, const Point& white, const Point& luminance, const std::optional<Point>& light_level = std::nullopt) noexcept;
+			HDR10(const Point& red, const Point& green, const Point& blue, const Point& white,
+				const Point& luminance, const std::optional<Point>& light_level = std::nullopt) noexcept;
 
 			/**
-			 * @brief Constructor.
-			 * @param red The red point.
-			 * @param green The green point.
-			 * @param blue The blue point.
-			 * @param white The white point.
-			 * @param luminance The luminance.
-			 * @param light_level The light level.
+			 * Move overload of the full constructor.
 			 */
-			HDR10(Point&& red, Point&& green, Point&& blue, Point&& white, Point&& luminance, std::optional<Point>&& light_level = std::nullopt) noexcept;
+			HDR10(Point&& red, Point&& green, Point&& blue, Point&& white,
+				Point&& luminance, std::optional<Point>&& light_level = std::nullopt) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param hdr10 The HDR10 to copy.
+			 * Copy constructor.
 			 */
-			HDR10(const HDR10& hdr10)										= default;
+			HDR10(const HDR10& hdr10) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param hdr10 The HDR10 to move.
+			 * Move constructor.
 			 */
-			HDR10(HDR10&& hdr10) noexcept									= default;
+			HDR10(HDR10&& hdr10) noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param hdr10 The HDR10 to copy.
-			 * @return The copied HDR10.
+			 * Copy assignment.
 			 */
-			HDR10& operator=(const HDR10& hdr10)							= default;
+			HDR10& operator=(const HDR10& hdr10) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param hdr10 The HDR10 to move.
-			 * @return The moved HDR10.
+			 * Move assignment.
 			 */
-			HDR10& operator=(HDR10&& hdr10) noexcept						= default;
+			HDR10& operator=(HDR10&& hdr10) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~HDR10() noexcept 												= default;
+			~HDR10() noexcept = default;
 
 			/**
-			 * @brief Gets the red point.
-			 * @return The red point.
+			 * @return Red primary.
 			 */
-			const Point& 													Red() const noexcept;
+			const Point& Red() const noexcept;
 
 			/**
-			 * @brief Gets the green point.
-			 * @return The green point.
+			 * @return Green primary.
 			 */
-			const Point& 													Green() const noexcept;
+			const Point& Green() const noexcept;
 
 			/**
-			 * @brief Gets the blue point.
-			 * @return The blue point.
+			 * @return Blue primary.
 			 */
-			const Point& 													Blue() const noexcept;
+			const Point& Blue() const noexcept;
 
 			/**
-			 * @brief Gets the white point.
-			 * @return The white point.
+			 * @return White point.
 			 */
-			const Point& 													White() const noexcept;
+			const Point& White() const noexcept;
 
 			/**
-			 * @brief Gets the luminance.
-			 * @return The luminance.
+			 * @return Luminance (min, max).
 			 */
-			const Point& 													Luminance() const noexcept;
+			const Point& Luminance() const noexcept;
 
 			/**
-			 * @brief Gets the light level.
-			 * @return The light level.
+			 * @return Optional content light level (MaxCLL, MaxFALL).
 			 */
-			const std::optional<Point>& 									LightLevel() const noexcept;
+			const std::optional<Point>& LightLevel() const noexcept;
 
 			/**
-			 * @brief Checks if it is HDR10+ compatible.
-			 * @return True if it is HDR10+ compatible, false otherwise.
+			 * @return true if HDR10+ dynamic metadata was detected.
 			 */
-			bool 															IsHDR10Plus() const noexcept;
+			bool IsHDR10Plus() const noexcept;
 
 			/**
-			 * @brief Sets HDR10+ compatible status.
-			 * @param hdrplus The HDR10+ compatible status.
+			 * Sets HDR10+ flag.
+			 * @param hdrplus New value.
 			 */
-			void 															HDR10Plus(bool hdrplus) noexcept;
+			void HDR10Plus(bool hdrplus) noexcept;
 
 			/**
-			 * @brief The default HDR10 properties.
+			 * Default mastering display constants when source metadata is missing.
 			 */
-			static const HDR10 DEFAULT;										///< The default HDR10 properties.
+			static const HDR10 DEFAULT;
 
 		private:
-			Point m_red;													///< The red point.
-			Point m_green;													///< The green point.
-			Point m_blue;													///< The blue point.
-			Point m_white;													///< The white point.
-			Point m_luminance;												///< The luminance.
-			std::optional<Point> m_light_level;								///< The light level.
-			bool m_hdr10plus;												///< The HDR10+ status.
+			Point m_red;							///< Red primary
+			Point m_green;							///< Green primary
+			Point m_blue;							///< Blue primary
+			Point m_white;							///< White point
+			Point m_luminance;						///< Min/max luminance
+			std::optional<Point> m_light_level;		///< MaxCLL / MaxFALL
+			bool m_hdr10plus;						///< HDR10+ present
 	};
 }

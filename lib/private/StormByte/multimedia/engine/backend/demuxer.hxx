@@ -9,57 +9,51 @@
 
 /**
  * @namespace Backend
- * @brief The namespace for all internal Backend related classes and functions.
+ * @brief Internal demuxer backends.
  */
 namespace StormByte::Multimedia::Engine::Backend {
 	/**
 	 * @class Demuxer
-	 * @brief The class representing a multimedia demuxer.
+	 * @brief Abstract backend demuxer (Open → metadata + streams).
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Demuxer {
 		public:
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other file to copy from.
+			 * Copy constructor (deleted).
 			 */
-			Demuxer(const Demuxer& other)								= delete;
+			Demuxer(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other file to move from.
+			 * Move constructor (deleted).
 			 */
-			Demuxer(Demuxer&& other) noexcept							= delete;
+			Demuxer(Demuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			virtual ~Demuxer() noexcept									= default;
+			virtual ~Demuxer() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other file to copy from.
-			 * @return Reference to this file.
+			 * Copy assignment (deleted).
 			 */
-			Demuxer& operator=(const Demuxer& other)					= delete;
+			Demuxer& operator=(const Demuxer& other) = delete;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other file to move from.
-			 * @return Reference to this file.
+			 * Move assignment (deleted).
 			 */
-			Demuxer& operator=(Demuxer&& other) noexcept				= delete;
+			Demuxer& operator=(Demuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Opens demuxer for the specified file and gets its components.
-			 * @param file The path to the multimedia file.
-			 * @return Tuple containing path, metadata and streams or exception on failure.
+			 * Opens @p file and extracts container metadata and streams.
+			 * @param file Path to the media file.
+			 * @return Metadata + streams, or DemuxerException.
 			 */
-			virtual ExpectedDemuxerTuple 								Open(const std::filesystem::path& file) const noexcept = 0;
+			virtual ExpectedDemuxerTuple Open(const std::filesystem::path& file) const noexcept = 0;
 
 		protected:
 			/**
-			 * @brief Protected constructor used by derived classes.
+			 * Protected default constructor for derived backends.
 			 */
-			Demuxer() noexcept 											= default;
+			Demuxer() noexcept = default;
 	};
 }

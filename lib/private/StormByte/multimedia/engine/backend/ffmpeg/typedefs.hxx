@@ -11,18 +11,18 @@ extern "C" {
 
 /**
  * @namespace FFmpeg
- * @brief The namespace for all internal FFmpeg related classes and functions.
+ * @brief Internal FFmpeg wrappers.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @enum OperationResult
-	 * @brief The result of an operation.
+	 * @brief Result of send/receive style FFmpeg calls.
 	 */
 	enum STORMBYTE_MULTIMEDIA_PRIVATE OperationResult {
-		Success,						///< Operation was successful
-		EndOfFile,						///< End of file reached
-		Error,							///< An error occurred
-		TryAgain,						///< Try the operation again
+		Success,	///< Completed successfully
+		EndOfFile,	///< EOF reached
+		Error,		///< Hard error
+		TryAgain,	///< EAGAIN — need more input/output
 	};
 
 	class AVBSF;
@@ -32,11 +32,16 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVStream;
 
 	using ExpectedAVFormatContext = StormByte::Expected<AVFormatContext, FFmpeg::DecoderError>;
-	using ExpectedAVDecoder	= StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;
+	using ExpectedAVDecoder = StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;
 	using ExpectedAVEncoder = StormByte::Expected<AVEncoder, FFmpeg::EncoderError>;
-	using ExpectedAVBSF		= StormByte::Expected<AVBSF, FFmpeg::BSFError>;
+	using ExpectedAVBSF = StormByte::Expected<AVBSF, FFmpeg::BSFError>;
 	using Streams = std::set<AVStream>;
 
+	/**
+	 * Converts an FFmpeg error code to a string.
+	 * @param errnum av_strerror code.
+	 * @return Human-readable message.
+	 */
 	inline std::string ErrorToString(int errnum) {
 		char buf[AV_ERROR_MAX_STRING_SIZE] = {0};
 		av_strerror(errnum, buf, sizeof(buf));

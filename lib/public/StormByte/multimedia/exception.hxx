@@ -11,54 +11,49 @@
 namespace StormByte::Multimedia {
 	/**
 	 * @class Exception
-	 * @brief The base exception for multimedia.
+	 * @brief Base exception for the multimedia module.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Exception: public StormByte::Exception {
 		public:
 			/**
-			 * @brief Constructor forwards the message to the `std::format` function
-			 * @tparam Args Format argument types
-			 * @param fmt Format string
-			 * @param args Arguments for formatting
-			 * 
-			 * If no arguments are provided, the format string is used as the exception message directly.
+			 * @tparam Args Format argument types.
+			 * @param component Subsystem name.
+			 * @param fmt Format string.
+			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
-			StormByte::Exception("Multimedia::" +component, fmt, std::forward<Args>(args)...) {}
+			StormByte::Exception("Multimedia::" + component, fmt, std::forward<Args>(args)...) {}
 
 			using StormByte::Exception::Exception;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			virtual ~Exception() noexcept 								= default;
+			virtual ~Exception() noexcept = default;
 	};
 
 	/**
 	 * @class CodecNotFound
-	 * @brief The exception for when a codec is not found.
+	 * @brief Thrown when a codec cannot be resolved.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFound: public Exception {
 		public:
 			/**
-			 * @brief Default constructor.
-			 * @param codec The message of the exception.
+			 * @param codec Codec name or identifier string.
 			 */
 			CodecNotFound(const std::string& codec):
 			Exception("Codec: ", "Codec '{}' not found.", codec) {}
 
 			/**
-			 * @brief Constructor with type
-			 * @param type The type of the codec.
+			 * @param type Requested media type.
 			 */
 			CodecNotFound(Type type):
 			Exception("Codec: ", "Codec of type '{}' not found.", ToString(type)) {}
 
 			/**
-			 * @brief Constructor with type and features.
-			 * @param type The type of the codec.
-			 * @param features The features of the codec.
+			 * @param type Requested media type.
+			 * @param features Required feature set.
 			 */
 			CodecNotFound(Type type, const Features& features):
 			Exception("Codec: ", "Codec of type '{}' with features '{}' not found.", ToString(type), std::string(features)) {}

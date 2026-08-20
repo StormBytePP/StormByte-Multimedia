@@ -9,83 +9,76 @@
 
 /**
  * @namespace Context
- * @brief The namespace for all context classes.
+ * @brief Media stream context types (audio, video, …).
  */
 namespace StormByte::Multimedia::Context {
+	/**
+	 * @class Video
+	 * @brief Video stream context (color, resolution, optional HDR10).
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Video final: public Generic {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param color The color properties.
-			 * @param resolution The resolution properties.
-			 * @param hdr10 The HDR10 properties (optional).
+			 * @param color Color properties.
+			 * @param resolution Frame size.
+			 * @param hdr10 Optional HDR10 metadata (filled with DEFAULT if color allows HDR10 and none given).
 			 */
-			Video(Property::Color&& color, Property::Resolution&& resolution, std::optional<Property::HDR10>&& hdr10) noexcept;
+			Video(Property::Color&& color, Property::Resolution&& resolution,
+				std::optional<Property::HDR10>&& hdr10) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other The other context to copy from.
+			 * Copy constructor.
 			 */
-			Video(const Video& other)								= default;
+			Video(const Video& other) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The other context to move from.
+			 * Move constructor.
 			 */
-			Video(Video&& other) noexcept							= default;
+			Video(Video&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Video() noexcept 										= default;
+			~Video() noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param other The other context to copy from.
-			 * @return Reference to this context.
+			 * Copy assignment.
 			 */
-			Video& operator=(const Video& other)					= default;
+			Video& operator=(const Video& other) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param other The other context to move from.
-			 * @return Reference to this context.
+			 * Move assignment.
 			 */
-			Video& operator=(Video&& other)							= default;
+			Video& operator=(Video&& other) = default;
 
 			/**
-			 * @brief Gets the color properties.
-			 * @return The color properties.
+			 * @return Color properties.
 			 */
-			const Property::Color&									Color() const noexcept;
+			const Property::Color& Color() const noexcept;
 
 			/**
-			 * @brief Gets the resolution properties.
-			 * @return The resolution properties.
+			 * @return Resolution.
 			 */
-			const Property::Resolution&								Resolution() const noexcept;
+			const Property::Resolution& Resolution() const noexcept;
 
 			/**
-			 * @brief Gets the HDR10 properties.
-			 * @return The HDR10 properties.
+			 * @return Optional HDR10 data.
 			 */
-			const std::optional<Property::HDR10>&					HDR10() const noexcept;
+			const std::optional<Property::HDR10>& HDR10() const noexcept;
 
 			/**
-			 * @brief Clones the object
-			 * @return cloned object
+			 * @return Cloned context.
 			 */
-			PointerType 											Clone() const override;
+			PointerType Clone() const override;
 
 			/**
-			 * @brief Moves the object
-			 * @return moved object
+			 * @return Moved context as new pointer.
 			 */
-			PointerType 											Move() override;
+			PointerType Move() override;
 
 		private:
-			Property::Color m_color;								///< The color properties.
-			Property::Resolution m_resolution;						///< The resolution properties.
-			std::optional<Property::HDR10> m_hdr10;					///< The HDR10 properties.
+			Property::Color m_color;						///< Color properties
+			Property::Resolution m_resolution;				///< Frame size
+			std::optional<Property::HDR10> m_hdr10;			///< Optional HDR10
 	};
 }

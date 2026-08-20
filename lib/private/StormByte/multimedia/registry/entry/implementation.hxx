@@ -4,78 +4,70 @@
 
 /**
  * @namespace Implementation
- * @brief The namespace for registering decoders and encoders entries.
+ * @brief Registry entry for named decoder/encoder implementations.
  */
 namespace StormByte::Multimedia::Registry::Entry::Implementation {
 	/**
 	 * @class Entry
-	 * @brief Represents a registry entry for an encoder/decoder.
+	 * @brief Compile-time implementation name + feature set.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Entry {
 		public:
 			/**
-			 * @brief Construct an entry from a name and a single Feature.
-			 * @param name Human-readable name.
-			 * @param feature Base feature.
+			 * @param name Implementation name (e.g. "libx264").
+			 * @param feature Single feature.
 			 */
 			constexpr Entry(const char* name, Feature feature) noexcept
-			:m_name(name), m_features(feature) {}
+			: m_name(name), m_features(feature) {}
 
 			/**
-			 * @brief Construct an entry from a name and a Features bitmask.
-			 * @param name Human-readable name.
-			 * @param features Base features.
+			 * @param name Implementation name.
+			 * @param features Feature bitmask.
 			 */
 			constexpr Entry(const char* name, Features features) noexcept
-			:m_name(name), m_features(features) {}
+			: m_name(name), m_features(features) {}
 
 			/**
-			 * @brief Default copy constructor.
-			 * @param other The other entry to copy from.
+			 * Copy constructor.
 			 */
-			constexpr Entry(const Entry& other) noexcept 				= default;
+			constexpr Entry(const Entry& other) noexcept = default;
 
 			/**
-			 * @brief Default move constructor.
-			 * @param other The other entry to move from.
+			 * Move constructor.
 			 */
-			constexpr Entry(Entry&& other) noexcept 					= default;
+			constexpr Entry(Entry&& other) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			constexpr ~Entry() noexcept 								= default;
+			constexpr ~Entry() noexcept = default;
 
 			/**
-			 * @brief Default copy assignment operator.
-			 * @param other The other entry to copy from.
-			 * @return Entry& Reference to this entry.
+			 * Copy assignment.
 			 */
-			constexpr Entry& operator=(const Entry& other) noexcept 	= default;
+			constexpr Entry& operator=(const Entry& other) noexcept = default;
 
 			/**
-			 * @brief Default move assignment operator.
-			 * @param other The other entry to move from.
-			 * @return Entry& Reference to this entry.
+			 * Move assignment.
 			 */
-			constexpr Entry& operator=(Entry&& other) noexcept 			= default;
+			constexpr Entry& operator=(Entry&& other) noexcept = default;
 
 			/**
-			 * @brief Get the entry name.
+			 * @return Implementation name.
 			 */
-			[[nodiscard]] constexpr const char* 						Name() const noexcept {
+			[[nodiscard]] constexpr const char* Name() const noexcept {
 				return m_name;
 			}
 
 			/**
-			 * @brief Get the feature set.
+			 * @return Feature set.
 			 */
-			[[nodiscard]] constexpr const class Features& 				Features() const noexcept {
+			[[nodiscard]] constexpr const class Features& Features() const noexcept {
 				return m_features;
 			}
 
 		private:
-			const char* m_name;											///< Human-readable name
-			class Features m_features;									///< Supported features
+			const char* m_name;				///< Name
+			class Features m_features;		///< Capabilities
 	};
 }

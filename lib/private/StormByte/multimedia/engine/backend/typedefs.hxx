@@ -10,9 +10,9 @@
 
 /**
  * @namespace Backend
- * @brief The namespace for all internal Backend related classes and functions.
+ * @brief Internal demuxer backends.
  */
 namespace StormByte::Multimedia::Engine::Backend {
-	using DemuxerTuple = std::tuple<Metadata, Streams>;								///< Tuple type for Demuxer components
-	using ExpectedDemuxerTuple = Expected<DemuxerTuple, DemuxerException>;			///< Expected type for Demuxer components or Exception
+	using DemuxerTuple = std::tuple<Metadata, Streams>;							///< Metadata + streams
+	using ExpectedDemuxerTuple = Expected<DemuxerTuple, DemuxerException>;		///< Open result
 }

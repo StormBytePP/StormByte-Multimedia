@@ -10,23 +10,21 @@ using CodecEntry = StormByte::Multimedia::Registry::Entry::Codec::Entry;
 
 /**
  * @namespace Registry
- * @brief The namespace for registering decoders and encoders properties.
+ * @brief Compile-time capability tables for codecs and implementations.
  */
 namespace StormByte::Multimedia::Registry {
 	/**
-	 * @brief Codec registry (video + audio).
+	 * @brief Logical codec registry (video + audio).
 	 *
-	 * This registry encodes *capabilities* of encoders as understood by StormByte,
-	 * not just what FFmpeg exposes directly.
+	 * Encodes capabilities as understood by StormByte (not a 1:1 dump of FFmpeg).
+	 * Used by Codec::Find(Type, Features) to pick a matching codec id.
 	 */
 	STORMBYTE_MULTIMEDIA_PRIVATE constexpr auto Codec = std::array{
-		// ============================================================
-		// VIDEO CODECS
-		// ============================================================
+		// ----------------------------------------------------------------
+		// Video
+		// ----------------------------------------------------------------
 
-		// ============================================================
-		// H.264 / AVC
-		// ============================================================
+		/** @brief H.264 / AVC */
 		CodecEntry{
 			AV_CODEC_ID_H264,
 			Type::Video,
@@ -35,9 +33,7 @@ namespace StormByte::Multimedia::Registry {
 			Feature::ProfileBased
 		},
 
-		// ============================================================
-		// H.265 / HEVC
-		// ============================================================
+		/** @brief H.265 / HEVC */
 		CodecEntry{
 			AV_CODEC_ID_HEVC,
 			Type::Video,
@@ -51,9 +47,7 @@ namespace StormByte::Multimedia::Registry {
 			Feature::ProfileBased
 		},
 
-		// ============================================================
-		// AV1
-		// ============================================================
+		/** @brief AV1 */
 		CodecEntry{
 			AV_CODEC_ID_AV1,
 			Type::Video,
@@ -66,13 +60,11 @@ namespace StormByte::Multimedia::Registry {
 			Feature::ProfileBased
 		},
 
-		// ============================================================
-		// AUDIO CODECS
-		// ============================================================
+		// ----------------------------------------------------------------
+		// Audio
+		// ----------------------------------------------------------------
 
-		// ============================================================
-		// AAC
-		// ============================================================
+		/** @brief AAC */
 		CodecEntry{
 			AV_CODEC_ID_AAC,
 			Type::Audio,
@@ -80,18 +72,14 @@ namespace StormByte::Multimedia::Registry {
 			Feature::ProfileBased
 		},
 
-		// ============================================================
-		// Vorbis
-		// ============================================================
+		/** @brief Vorbis */
 		CodecEntry{
 			AV_CODEC_ID_VORBIS,
 			Type::Audio,
 			Feature::SurroundSound
 		},
 
-		// ============================================================
-		// Opus
-		// ============================================================
+		/** @brief Opus */
 		CodecEntry{
 			AV_CODEC_ID_OPUS,
 			Type::Audio,
@@ -99,18 +87,14 @@ namespace StormByte::Multimedia::Registry {
 			Feature::LowDelay
 		},
 
-		// ============================================================
-		// MP3
-		// ============================================================
+		/** @brief MP3 */
 		CodecEntry{
 			AV_CODEC_ID_MP3,
 			Type::Audio,
 			Feature::SurroundSound
 		},
 
-		// ============================================================
-		// FLAC
-		// ============================================================
+		/** @brief FLAC (lossless) */
 		CodecEntry{
 			AV_CODEC_ID_FLAC,
 			Type::Audio,
@@ -118,9 +102,7 @@ namespace StormByte::Multimedia::Registry {
 			Feature::SurroundSound
 		},
 
-		// ============================================================
-		// ALAC
-		// ============================================================
+		/** @brief ALAC (lossless) */
 		CodecEntry{
 			AV_CODEC_ID_ALAC,
 			Type::Audio,

@@ -6,23 +6,23 @@
 
 /**
  * @namespace Engine
- * @brief The namespace for all multimedia engine classes.
+ * @brief Multimedia engine (demux, codecs, backends).
  */
 namespace StormByte::Multimedia::Engine {
 	/**
 	 * @enum Implementation
-	 * @brief Enumeration of supported multimedia implementations.
+	 * @brief Available demux/codec backends.
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Implementation {
-		FFmpeg,															///< FFmpeg multimedia implementation
+		FFmpeg,	///< FFmpeg-based backend
 	};
 
 	/**
-	 * @brief Convert Implementation enum to string representation.
-	 * @param implementation The implementation enum value.
-	 * @return The string representation of the implementation.
+	 * Converts Implementation to a string.
+	 * @param implementation Backend enum.
+	 * @return Null-terminated name.
 	 */
-	constexpr const char* 												ToString(Implementation implementation) noexcept {
+	constexpr const char* ToString(Implementation implementation) noexcept {
 		switch (implementation) {
 			case Implementation::FFmpeg:	return "FFmpeg";
 			default:						return "Unknown";
@@ -30,8 +30,7 @@ namespace StormByte::Multimedia::Engine {
 	}
 
 	/**
-	 * @brief Get the set of available multimedia implementations.
-	 * @return The set of available implementations.
+	 * @return Set of backends compiled into this build.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC std::unordered_set<Implementation> 		ImplementedBackends() noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC std::unordered_set<Implementation> ImplementedBackends() noexcept;
 }

@@ -9,33 +9,30 @@ using DecoderEntry = StormByte::Multimedia::Registry::Entry::Implementation::Ent
 
 /**
  * @namespace Registry
- * @brief The namespace for registering decoders and encoders properties.
+ * @brief Compile-time capability tables for codecs and implementations.
  */
 namespace StormByte::Multimedia::Registry {
-
 	/**
-	 * @brief Decoder registry (video + audio).
+	 * @brief Named decoder implementation registry (video + audio).
 	 *
-	 * This registry encodes *capabilities* of decoders as understood by StormByte,
-	 * not just what FFmpeg exposes directly.
+	 * Maps FFmpeg decoder names to StormByte Feature flags. Runtime detection
+	 * may still add MultiThreaded / HardwareAcceleration from AVCodec caps.
 	 */
 	STORMBYTE_MULTIMEDIA_PRIVATE constexpr auto Decoder = std::array{
-
-		// ============================================================
-		// VIDEO DECODERS
-		// ============================================================
-
-		// ============================================================
+		// ----------------------------------------------------------------
 		// H.264 / AVC
-		// ============================================================
+		// ----------------------------------------------------------------
+
+		/** @brief Software H.264 decoder */
 		DecoderEntry("h264",
 			Feature::BFrames |
 			Feature::Slices |
 			Feature::IntraOnly |
 			Feature::Interlaced |
-			Feature::TenBit     // High 10 Profile decoding
+			Feature::TenBit
 		),
 
+		/** @brief NVIDIA NVDEC H.264 */
 		DecoderEntry("h264_nvdec",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
@@ -43,9 +40,9 @@ namespace StormByte::Multimedia::Registry {
 			Feature::BFrames |
 			Feature::Slices |
 			Feature::IntraOnly
-			// No TenBit, no HDR10
 		),
 
+		/** @brief Intel QSV H.264 */
 		DecoderEntry("h264_qsv",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
@@ -53,21 +50,22 @@ namespace StormByte::Multimedia::Registry {
 			Feature::BFrames |
 			Feature::Slices |
 			Feature::IntraOnly
-			// No TenBit, no HDR10
 		),
 
+		/** @brief Apple VideoToolbox H.264 */
 		DecoderEntry("h264_videotoolbox",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
 			Feature::RealTime |
 			Feature::BFrames |
 			Feature::Slices
-			// No TenBit, no HDR10
 		),
 
-		// ============================================================
+		// ----------------------------------------------------------------
 		// H.265 / HEVC
-		// ============================================================
+		// ----------------------------------------------------------------
+
+		/** @brief Software HEVC decoder */
 		DecoderEntry("hevc",
 			Feature::BFrames |
 			Feature::Slices |
@@ -76,10 +74,11 @@ namespace StormByte::Multimedia::Registry {
 			Feature::TenBit |
 			Feature::TwelveBit |
 			Feature::HDR10 |
-			Feature::HDR10Plus |    // software only
+			Feature::HDR10Plus |
 			Feature::WideGamut
 		),
 
+		/** @brief NVIDIA NVDEC HEVC */
 		DecoderEntry("hevc_nvdec",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
@@ -89,9 +88,9 @@ namespace StormByte::Multimedia::Registry {
 			Feature::TenBit |
 			Feature::HDR10 |
 			Feature::WideGamut
-			// No HDR10Plus
 		),
 
+		/** @brief Intel QSV HEVC */
 		DecoderEntry("hevc_qsv",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
@@ -100,9 +99,9 @@ namespace StormByte::Multimedia::Registry {
 			Feature::Slices |
 			Feature::TenBit |
 			Feature::HDR10
-			// No HDR10Plus, no 12-bit
 		),
 
+		/** @brief Apple VideoToolbox HEVC */
 		DecoderEntry("hevc_videotoolbox",
 			Feature::HardwareAcceleration |
 			Feature::LowDelay |
@@ -110,20 +109,19 @@ namespace StormByte::Multimedia::Registry {
 			Feature::BFrames |
 			Feature::Slices |
 			Feature::TenBit
-			// No HDR10Plus, no 12-bit
 		),
 
-		// ============================================================
-		// VP8 (libvpx)
-		// ============================================================
+		// ----------------------------------------------------------------
+		// VP8 / VP9
+		// ----------------------------------------------------------------
+
+		/** @brief libvpx VP8 decoder */
 		DecoderEntry("libvpx",
 			Feature::LowDelay |
 			Feature::Slices
 		),
 
-		// ============================================================
-		// VP9 (libvpx-vp9)
-		// ============================================================
+		/** @brief libvpx VP9 decoder */
 		DecoderEntry("libvpx-vp9",
 			Feature::LowDelay |
 			Feature::Slices |
@@ -133,98 +131,80 @@ namespace StormByte::Multimedia::Registry {
 			Feature::WideGamut
 		),
 
-		// ============================================================
-		// AUDIO DECODERS
-		// ============================================================
+		// ----------------------------------------------------------------
+		// Audio
+		// ----------------------------------------------------------------
 
-		// ============================================================
-		// AAC
-		// ============================================================
+		/** @brief Native AAC decoder */
 		DecoderEntry("aac",
 			Feature::LowDelay
 		),
 
-		// ============================================================
-		// AC3 / E-AC3
-		// ============================================================
+		/** @brief AC-3 / E-AC-3 */
 		DecoderEntry("ac3",
 			Feature::HighQuality
 		),
 
-		// ============================================================
-		// Fraunhofer FDK AAC
-		// ============================================================
+		/** @brief Fraunhofer FDK AAC */
 		DecoderEntry("fdk_aac",
 			Feature::HighQuality |
 			Feature::LowDelay
 		),
 
-		// ============================================================
-		// Vorbis
-		// ============================================================
+		/** @brief Native Vorbis */
 		DecoderEntry("vorbis",
 			Feature::LowDelay
 		),
 
+		/** @brief libvorbis */
 		DecoderEntry("libvorbis",
 			Feature::HighQuality |
 			Feature::LowDelay
 		),
 
-		// ============================================================
-		// Opus
-		// ============================================================
+		/** @brief Native Opus */
 		DecoderEntry("opus",
 			Feature::LowDelay
 		),
 
+		/** @brief libopus */
 		DecoderEntry("libopus",
 			Feature::HighQuality |
 			Feature::LowDelay
 		),
 
-		// ============================================================
-		// MP3
-		// ============================================================
+		/** @brief Native MP3 */
 		DecoderEntry("mp3",
 			Feature::LowDelay
 		),
 
+		/** @brief LAME MP3 (as decoder name where applicable) */
 		DecoderEntry("libmp3lame",
 			Feature::HighQuality |
 			Feature::LowDelay
 		),
 
-		// ============================================================
-		// FLAC
-		// ============================================================
+		/** @brief FLAC */
 		DecoderEntry("flac",
 			Feature::HighQuality |
 			Feature::Lossless
 		),
 
-		// ============================================================
-		// DTS / DCA
-		// ============================================================
+		/** @brief DTS / DCA */
 		DecoderEntry("dca",
 			Feature::HighQuality
 		),
-		
-		// ============================================================
-		// TrueHD / MLP
-		// ============================================================
+
+		/** @brief TrueHD / MLP */
 		DecoderEntry("truehd",
 			Feature::HighQuality |
 			Feature::Lossless
 		),
 
-		// ============================================================
-		// ALAC
-		// ============================================================
+		/** @brief ALAC */
 		DecoderEntry("alac",
 			Feature::HighQuality |
 			Feature::Lossless
 		),
-
 	};
 }

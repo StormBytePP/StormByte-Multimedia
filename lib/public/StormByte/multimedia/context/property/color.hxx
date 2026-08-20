@@ -7,111 +7,99 @@
 
 /**
  * @namespace Property
- * @brief The namespace for all context properties.
+ * @brief Video/audio property value types.
  */
 namespace StormByte::Multimedia::Context::Property {
 	/**
 	 * @class Color
-	 * @brief The class for color properties.
+	 * @brief Pixel format and colorimetry strings.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Color final {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param pix_fmt The pixel format.
-			 * @param range The range.
-			 * @param space The space.
-			 * @param primaries The color primaries.
-			 * @param transfer The transfer characteristics.
+			 * Full color description.
+			 * @param pix_fmt Pixel format name.
+			 * @param range Color range name.
+			 * @param space Color space name.
+			 * @param primaries Color primaries name.
+			 * @param transfer Transfer characteristics name.
 			 */
 			Color(const std::string& pix_fmt, const std::string& range, const std::string& space,
 				const std::string& primaries, const std::string& transfer) noexcept;
 
 			/**
-			 * @brief Constructor.
-			 * @param pix_fmt The pixel format.
-			 * @param range The range.
-			 * @param space The space.
+			 * Minimal color description (primaries/transfer empty).
+			 * @param pix_fmt Pixel format name.
+			 * @param range Color range name.
+			 * @param space Color space name.
 			 */
 			Color(std::string&& pix_fmt, std::string&& range, std::string&& space) noexcept;
 
 			/**
-			 * @brief Copy constructor
-			 * @param color The Color to copy.
+			 * Copy constructor.
 			 */
-			Color(const Color& color)								= default;
+			Color(const Color& color) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param color The Color to move.
+			 * Move constructor.
 			 */
-			Color(Color&& color) noexcept							= default;
+			Color(Color&& color) noexcept = default;
 
 			/**
-			 * Copy assignment operator.
-			 * @param color The Color to copy.
-			 * @return The copied Color.
+			 * Copy assignment.
 			 */
-			Color& operator=(const Color& color)					= default;
+			Color& operator=(const Color& color) = default;
 
 			/**
-			 * Move assignment operator.
-			 * @param color The Color to move.
-			 * @return The moved Color.
+			 * Move assignment.
 			 */
-			Color& operator=(Color&& color) noexcept				= default;
+			Color& operator=(Color&& color) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			virtual ~Color() noexcept								= default;
+			virtual ~Color() noexcept = default;
 
 			/**
-			 * @brief Gets the primaries.
-			 * @return The primaries.
+			 * @return Pixel format name.
 			 */
-			const std::string&										PixelFormat() const noexcept;
+			const std::string& PixelFormat() const noexcept;
 
 			/**
-			 * @brief Sets the color range.
+			 * @return Color range name.
 			 */
-			const std::string&										Range() const noexcept;
+			const std::string& Range() const noexcept;
 
 			/**
-			 * @brief Gets the matrix.
-			 * @return The matrix.
+			 * @return Color space name.
 			 */
-			const std::string&										Space() const noexcept;
+			const std::string& Space() const noexcept;
 
 			/**
-			 * @brief Gets the transfer characteristics.
-			 * @return The transfer characteristics.
+			 * @return Transfer characteristics name.
 			 */
-			const std::string&										Transfer() const noexcept;
+			const std::string& Transfer() const noexcept;
 
 			/**
-			 * @brief Gets the color primaries.
-			 * @return The color primaries.
+			 * @return Color primaries name.
 			 */
-			const std::string&										Primaries() const noexcept;
+			const std::string& Primaries() const noexcept;
 
 			/**
-			 * @brief Checks if HDR10 is possible.
-			 * @return True if HDR10 is possible, false otherwise.
+			 * @return true if format/range/space look like HDR10-capable.
 			 */
-			bool 													IsHDR10Possible() const noexcept;
+			bool IsHDR10Possible() const noexcept;
 
 			/**
-			 * @brief Checks if HLG is possible.
-			 * @return True if HLG is possible, false otherwise.
+			 * @return true if format/range/space look like HLG-capable.
 			 */
-			bool 													IsHLGPossible() const noexcept;
+			bool IsHLGPossible() const noexcept;
 
 		protected:
-			std::string m_pix_fmt;									///< The pixel format.
-			std::string m_range;									///< The range.
-			std::string m_space;									///< The space.
-			std::string m_primaries;								///< The color primaries.
-			std::string m_transfer;									///< The transfer characteristics.
+			std::string m_pix_fmt;		///< Pixel format
+			std::string m_range;		///< Range
+			std::string m_space;		///< Space
+			std::string m_primaries;	///< Primaries
+			std::string m_transfer;		///< Transfer
 	};
 }

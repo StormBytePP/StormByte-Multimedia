@@ -4,78 +4,69 @@
 
 /**
  * @namespace Property
- * @brief The namespace for all context properties.
+ * @brief Video/audio property value types.
  */
 namespace StormByte::Multimedia::Context::Property {
 	/**
 	 * @class Point
-	 * @brief Represents a color point in BT.2020 color space.
+	 * @brief Integer 2D point (e.g. chromaticity / luminance pair).
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Point final {
 		public:
 			/**
-			 * @brief Constructor.
-			 * @param x The x coordinate.
-			 * @param y The y coordinate.
+			 * @param x X coordinate.
+			 * @param y Y coordinate.
 			 */
 			Point(int x, int y) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param point The Point to copy.
+			 * Copy constructor.
 			 */
-			Point(const Point& point)									= default;
+			Point(const Point& point) = default;
 
 			/**
-			 * @brief Move constructor.
-			 * @param point The Point to move.
+			 * Move constructor.
 			 */
-			Point(Point&& point) noexcept								= default;
+			Point(Point&& point) noexcept = default;
 
 			/**
-			 * @brief Copy assignment operator.
-			 * @param point The Point to copy.
-			 * @return The copied Point.
+			 * Copy assignment.
 			 */
-			Point& operator=(const Point& point)						= default;
+			Point& operator=(const Point& point) = default;
 
 			/**
-			 * @brief Move assignment operator.
-			 * @param point The Point to move.
-			 * @return The moved Point.
+			 * Move assignment.
 			 */
-			Point& operator=(Point&& point) noexcept					= default;
+			Point& operator=(Point&& point) noexcept = default;
 
 			/**
-			 * @brief Default destructor.
+			 * Destructor.
 			 */
-			~Point() noexcept 											= default;
+			~Point() noexcept = default;
 
 			/**
-			 * @brief Gets the x coordinate.
-			 * @return The x coordinate.
+			 * @return X coordinate.
 			 */
-			int															X() const noexcept;
+			int X() const noexcept;
 
 			/**
-			 * @brief Gets the y coordinate.
-			 * @return The y coordinate.
+			 * @return Y coordinate.
 			 */
-			int															Y() const noexcept;
+			int Y() const noexcept;
 
 			/**
-			 * @brief Creates a normalized Point.
-			 * @param numerator_x The numerator for the x coordinate.
-			 * @param denominator_x The denominator for the x coordinate.
-			 * @param numerator_y The numerator for the y coordinate.
-			 * @param denominator_y The denominator for the y coordinate.
-			 * @param denominator The common denominator.
-			 * @return The normalized Point.
+			 * Builds a point scaled to a common denominator.
+			 * @param numerator_x X numerator.
+			 * @param denominator_x X denominator.
+			 * @param numerator_y Y numerator.
+			 * @param denominator_y Y denominator.
+			 * @param denominator Target scale denominator.
+			 * @return Normalized point.
 			 */
-			static Point 												Normalized(int numerator_x, int denominator_x, int numerator_y, int denominator_y, int denominator) noexcept;
+			static Point Normalized(int numerator_x, int denominator_x, int numerator_y, int denominator_y, int denominator) noexcept;
 
 		protected:
-			int m_x;													///< The x coordinate.
-			int m_y;													///< The y coordinate.
+			int m_x;	///< X
+			int m_y;	///< Y
 	};
 }
