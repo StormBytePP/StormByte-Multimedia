@@ -44,3 +44,12 @@
 [submodule "Build Master"]
 	path = thirdparty/buildmaster
 	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
+[submodule "zlib"]
+	path = thirdparty/ffmpeg/plugins/compressors/zlib/src
+	url = https://github.com/madler/zlib.git
+[submodule "bzip2"]
+	path = thirdparty/ffmpeg/plugins/compressors/bzip2/src
+	url = https://sourceware.org/git/bzip2.git
+[submodule "lzma"]
+	path = thirdparty/ffmpeg/plugins/compressors/lzma/src
+	url = https://github.com/tukaani-project/xz.git
