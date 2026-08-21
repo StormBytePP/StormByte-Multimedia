@@ -1,6 +1,7 @@
 [submodule "StormByte base"]
 	path = thirdparty/StormByte/base/src
 	url = https://github.com/StormBytePP/StormByte.git
+	branch = master
 [submodule "Opus codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/opus/src
 	url = https://gitlab.xiph.org/xiph/opus.git
@@ -35,6 +36,7 @@
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/filters/vmaf/src
 	url = https://github.com/Netflix/vmaf.git
+	branch = master # Until a release containing MSVC patches is released
 [submodule "pthread-Win32"]
 	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
