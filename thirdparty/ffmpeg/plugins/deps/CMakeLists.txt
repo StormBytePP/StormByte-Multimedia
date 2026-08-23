@@ -1,4 +1,5 @@
 if(MSVC)
+	message_indented("Dependencies:" ${PLUGIN_LEVEL})
 	math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 	add_subdirectory(pthread-win32)
 endif()
