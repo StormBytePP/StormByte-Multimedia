@@ -1,0 +1,14 @@
+diff --git a/src/liblzma/liblzma.pc.in b/src/liblzma/liblzma.pc.in
+index 5efb4945..81ba1a11 100644
+--- a/src/liblzma/liblzma.pc.in
++++ b/src/liblzma/liblzma.pc.in
+@@ -11,7 +11,7 @@ Description: General purpose data compression library
+ License: 0BSD
+ URL: @PACKAGE_URL@
+ Version: @PACKAGE_VERSION@
+-Cflags: -I${includedir}
+-Cflags.private: -DLZMA_API_STATIC
++Cflags: -I${includedir} -DLZMA_API_STATIC
++Cflags.private:
+ Libs: -L${libdir} -llzma
+ Libs.private: @PTHREAD_CFLAGS@ @LIBS@

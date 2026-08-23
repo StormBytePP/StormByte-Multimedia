@@ -14,6 +14,7 @@ add_subdirectory(deps)
 
 set(FFMPEG_PLUGIN_OPTIONS "")
 
+add_subdirectory(compressors)
 add_subdirectory(codecs)
 add_subdirectory(filters)
 

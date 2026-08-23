@@ -78,11 +78,6 @@ else()
 		"-Davdevice=disabled"
 		"-Ddevices=disabled"
 
-		# --- Compression helpers (not required for our plugin set) ---
-		"-Dzlib=disabled"
-		"-Dbzlib=disabled"
-		"-Dlzma=disabled"
-
 		# --- Text / charset (avoid pulling libiconv into static consumers) ---
 		"-Diconv=disabled"
 
@@ -221,6 +216,18 @@ else()
 		"meson-8.0.1"
 	)
 	include("${FFMPEG_GIT_SWITCH_FILE}")
+
+	# Local workaround until upstream MR lands (error message shows library name)
+	set(FFMPEG_PATCH_EXPLICIT_MSG
+		"${CMAKE_CURRENT_LIST_DIR}/fix-compressors-pkconfig-usage.patch")
+	create_git_patch_file(
+		FFMPEG_GIT_PATCH_FILE
+		ffmpeg
+		"FFmpeg explicit missing-lib error messages"
+		"${FFMPEG_SRC_DIR}"
+		"${FFMPEG_PATCH_EXPLICIT_MSG}"
+	)
+	include("${FFMPEG_GIT_PATCH_FILE}")
 
 	set(FFMPEG_LIBRARIES "avutil;avcodec;avformat;swscale;swresample;avfilter")
 
