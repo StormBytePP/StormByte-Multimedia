@@ -3,7 +3,7 @@
 ![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B&logoColor=white)
 ![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
-![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)
+![License: LGPL v3 / Commercial](https://img.shields.io/badge/License-LGPL_v3%20%2F%20Commercial-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success)
 [![Compile & Test](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/StormBytePP/StormByte-Multimedia/actions/workflows/build.yml)
 
@@ -46,7 +46,7 @@ StormByte is a comprehensive, cross-platform C++ library aimed at easing system 
 
 ## Repository
 
-You can visit the code repository at [GitHub](https://github.com/StormBytePP/StormByte-Config)
+You can visit the code repository at [GitHub](https://github.com/StormBytePP/StormByte-Multimedia)
 
 ## Installation
 
@@ -93,4 +93,15 @@ Contributions are welcome! Please fork the repository and submit pull requests f
 
 ## License
 
-This project is licensed under LGPL v3 License - see the [LICENSE](LICENSE) file for details.
+StormByte-Multimedia is **dual-licensed**:
+
+1. **GNU Lesser General Public License v3.0 (or later)**  
+   Free for open-source use under the terms of the LGPL v3 (or any later version).  
+   See the [LICENSE](LICENSE) file for the full text of the LGPL.
+
+2. **Commercial license**  
+   Available for proprietary/closed-source use under a commercial license agreement  
+   with the sole copyright holder (David C. Manuelda <StormByte@gmail.com>).  
+   Contact the copyright holder for more information and pricing.
+
+You may choose either license according to your needs.
