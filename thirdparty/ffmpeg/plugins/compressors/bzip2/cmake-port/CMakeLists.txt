@@ -34,10 +34,27 @@ if(NOT MSVC)
 endif()
 
 include(GNUInstallDirs)
+
+# pkg-config: FFmpeg meson-ports probes dependency('bzip2') / -lbz2
+set(prefix "${CMAKE_INSTALL_PREFIX}")
+set(exec_prefix "\${prefix}")
+set(libdir "\${exec_prefix}/${CMAKE_INSTALL_LIBDIR}")
+set(includedir "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+set(VERSION "1.0.8")
+
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/bzip2.pc.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/bzip2.pc"
+	@ONLY
+)
+
 install(TARGETS bzip2
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 install(FILES ${BZIP2_UPSTREAM_DIR}/bzlib.h
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bzip2.pc"
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )

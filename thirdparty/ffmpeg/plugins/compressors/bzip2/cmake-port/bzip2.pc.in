@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: bzip2
+Description: High-quality block-sorting file compressor library
+Version: @VERSION@
+Libs: -L${libdir} -lbz2
+Cflags: -I${includedir}
