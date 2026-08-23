@@ -3,8 +3,8 @@ ensure_build_dir(VMAF_BUILD_DIR)
 
 # Need to patch to disable tool building / MSVC fixes
 set(VMAF_WINDOWS_PATH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-MSVC-corrections.patch")
-create_git_reset_file(VMAF_RESET_REPO "VMAF Reset repo" "${VMAF_SRC_DIR}")
-create_git_patch_file(VMAF_PATCH_REPO1 "VMAF Apply patch 1" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
+create_git_reset_file(VMAF_RESET_REPO vmaf "VMAF reset" "${VMAF_SRC_DIR}")
+create_git_patch_file(VMAF_PATCH_REPO1 vmaf "VMAF MSVC patch" "${VMAF_SRC_DIR}" "${VMAF_WINDOWS_PATH_FILE}")
 
 include(${VMAF_RESET_REPO})
 include(${VMAF_PATCH_REPO1})
@@ -70,5 +70,7 @@ if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 		COMMENT "Bundling VMAF with PthreadWin32"
 	)
 endif()
+
+# Post-install git reset is handled automatically by BuildMaster (component id: vmaf)
 
 register_plugin(vmaf "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled")

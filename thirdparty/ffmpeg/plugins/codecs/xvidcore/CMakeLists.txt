@@ -12,13 +12,15 @@ endif()
 
 create_git_reset_file(
 	XVID_GIT_RESET_FILE
-	"${XVID_COMPONENT}"
+	xvidcore
+	"XVID reset"
 	"${XVID_SRC_DIR}/src"
 )
 include("${XVID_GIT_RESET_FILE}")
 create_git_patch_file(
 	XVID_GIT_PATCH_FILE
-	"${XVID_COMPONENT}"
+	xvidcore
+	"XVID bool typedef patch"
 	"${XVID_SRC_DIR}/src"
 	"${CMAKE_CURRENT_LIST_DIR}/0001-Guard-old-typedef-bool.patch"
 )
@@ -36,10 +38,6 @@ create_cmake_component(
 )
 include("${XVID_LIBRARY_CREATE_FILE}")
 
-# Reset repo after install
-add_custom_command(TARGET xvidcore_install POST_BUILD
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${XVID_GIT_RESET_FILE}"
-	COMMENT "Resetting XVID source directory after installation"
-)
+# Post-install git reset is handled automatically by BuildMaster (component id: xvidcore)
 
 register_plugin(xvidcore "-Dlibxvid=enabled -Dlibxvid_encoder=enabled")

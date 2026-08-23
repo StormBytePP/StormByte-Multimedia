@@ -24,9 +24,10 @@ endif()
 
 # Need to patch CMakeLists to delete invalid POLICY settings for CMake < 3.5
 # and add an include to make it compile with GCC 15+.
-create_git_reset_file(X265_RESET_REPO "X265" "${X265_SRC_DIR}")
+# Bound to component id "x265" (8-bit install target); shared source tree for all bit-depths.
+create_git_reset_file(X265_RESET_REPO x265 "X265 reset" "${X265_SRC_DIR}")
 
-# First reset the repo to a clean state
+# First reset the repo to a clean state (parent configure)
 include("${X265_RESET_REPO}")
 
 # Shared options for all bit-depth builds
@@ -191,14 +192,7 @@ if(MSVC)
 	endif()
 endif()
 
-# Restore x265 CMakeLists.txt after the final x265 (8-bit) target has
-# been built.
-add_custom_command(TARGET x265_install POST_BUILD
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${X265_RESET_REPO}"
-	WORKING_DIRECTORY "${X265_SRC_DIR}"
-	COMMENT "Restoring x265 sources"
-	VERBATIM
-)
+# Post-install git reset is handled automatically by BuildMaster (component id: x265)
 
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 	# Repack 8/10/12-bit static libs into a single x265

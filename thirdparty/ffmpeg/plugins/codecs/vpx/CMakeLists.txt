@@ -4,8 +4,8 @@ set(VPX_COMPONENT "VPX codec")
 
 # On x86_64, avoid picking ARM sources; on aarch64/arm64, do the opposite.
 set(VPX_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-Only-add-arm-asm-files-when-target-is-arm.patch")
-create_git_reset_file(VPX_RESET_REPO "VPX" "${VPX_SRC_DIR}")
-create_git_patch_file(VPX_PATCH_REPO "VPX" "${VPX_SRC_DIR}" "${VPX_PATCH_FILE}")
+create_git_reset_file(VPX_RESET_REPO vpx "VPX reset" "${VPX_SRC_DIR}")
+create_git_patch_file(VPX_PATCH_REPO vpx "VPX patch" "${VPX_SRC_DIR}" "${VPX_PATCH_FILE}")
 include("${VPX_RESET_REPO}")
 include("${VPX_PATCH_REPO}")
 
@@ -74,5 +74,7 @@ if(MSVC)
 		COMMENT "Renaming libvpx.a to vpx.lib for MSVC compatibility"
 	)
 endif()
+
+# Post-install git reset is handled automatically by BuildMaster (component id: vpx)
 
 register_plugin(vpx "-Dlibvpx=enabled -Dlibvpx_vp8_encoder=enabled -Dlibvpx_vp8_decoder=enabled -Dlibvpx_vp9_encoder=enabled -Dlibvpx_vp9_decoder=enabled")

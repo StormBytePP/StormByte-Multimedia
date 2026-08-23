@@ -186,10 +186,11 @@ else()
 	ensure_build_dir(FFMPEG_BUILD_DIR)
 	set(FFMPEG_OPTIONS "${FFMPEG_MESON_OPTIONS}")
 
-	# Fetch latest data
+	# Fetch latest data (component id must match create_meson_* id: ffmpeg)
 	create_git_fetch(
 		FFMPEG_GIT_FETCH_FILE
-		"${FFMPEG_COMPONENT}"
+		ffmpeg
+		"FFmpeg fetch"
 		"${FFMPEG_SRC_DIR}"
 	)
 	include("${FFMPEG_GIT_FETCH_FILE}")
@@ -197,7 +198,8 @@ else()
 	# Reset changes
 	create_git_reset_file(
 		FFMPEG_GIT_RESET_FILE
-		"${FFMPEG_COMPONENT}"
+		ffmpeg
+		"FFmpeg reset"
 		"${FFMPEG_SRC_DIR}"
 	)
 	include("${FFMPEG_GIT_RESET_FILE}")
@@ -205,7 +207,8 @@ else()
 	# Switch to branch meson-8.0.1 which is more recent than default master
 	create_git_switch_branch(
 		FFMPEG_GIT_SWITCH_FILE
-		"${FFMPEG_COMPONENT}"
+		ffmpeg
+		"FFmpeg switch to meson-8.0.1"
 		"${FFMPEG_SRC_DIR}"
 		"meson-8.0.1"
 	)
@@ -242,10 +245,7 @@ else()
 		)
 	endif()
 
-	add_custom_command(TARGET ffmpeg_install POST_BUILD
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${FFMPEG_GIT_RESET_FILE}"
-		COMMENT "Resetting FFmpeg source tree after internal install"
-	)
+	# Post-install git reset is handled automatically by BuildMaster (component id: ffmpeg)
 
 	# Create library aliases and gather link libraries
 	add_library(FFMpeg::plugins ALIAS ffmpeg-plugins)
