@@ -71,9 +71,4 @@ if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 	)
 endif()
 
-add_custom_command(TARGET vmaf_install POST_BUILD
-	COMMAND ${ENV_CMAKE_SILENT_COMMAND} -P "${VMAF_RESET_REPO}"
-	COMMENT "Resetting VMAF source tree after internal install"
-)
-
 register_plugin(vmaf "-Dlibvmaf=enabled -Dlibvmaf_filter=enabled -Dvmafmotion_filter=enabled")
