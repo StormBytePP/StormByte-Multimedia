@@ -44,12 +44,20 @@ else()
 		endif()
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		# Enable COMDAT folding-friendly packaging so the final link can drop unreferenced sections
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Gy")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Gy")
 	else()
 		set(CFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CXXFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(LDFLAGS "-L${BUILDMASTER_INSTALL_LIBDIR}")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
+		# Per-function/data sections so the linker can GC unused FFmpeg objects into Multimedia
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
+		set(CFLAGS "${CFLAGS} -ffunction-sections -fdata-sections")
+		set(CXXFLAGS "${CXXFLAGS} -ffunction-sections -fdata-sections")
 		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LDFLAGS}")
 		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LDFLAGS}")
 	endif()
@@ -292,6 +300,16 @@ else()
 	# -Wl,-Bsymbolic helps avoid symbol conflicts. Not valid on Apple ld64.
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC AND NOT APPLE)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
+	endif()
+
+	# Drop unreferenced sections from static FFmpeg/plugins when linking Multimedia
+	# (requires -ffunction-sections/-fdata-sections or /Gy on the object files above).
+	if(MSVC)
+		target_link_options(StormByte-Multimedia PRIVATE /OPT:REF /OPT:ICF)
+	elseif(APPLE)
+		target_link_options(StormByte-Multimedia PRIVATE -Wl,-dead_strip)
+	else()
+		target_link_options(StormByte-Multimedia PRIVATE -Wl,--gc-sections)
 	endif()
 
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
