@@ -1,0 +1,137 @@
+diff --git a/src/gen-harfbuzzcc.py b/src/gen-harfbuzzcc.py
+index faddfef1b..3da7896db 100755
+--- a/src/gen-harfbuzzcc.py
++++ b/src/gen-harfbuzzcc.py
+@@ -10,15 +10,31 @@ if len (sys.argv) < 3:
+ OUTPUT = sys.argv[1]
+ CURRENT_SOURCE_DIR = sys.argv[2]
+ 
++def _load_sources(argv_rest):
++	# Single listfile argument (plain path or @path) keeps the Ninja/CreateProcess
++	# command line short on Windows (error 87).
++	if len(argv_rest) == 1:
++		listfile = argv_rest[0]
++		if listfile.startswith("@"):
++			listfile = listfile[1:]
++		with open(listfile, encoding="utf-8") as fh:
++			return [ln.strip() for ln in fh if ln.strip()]
++	return list(argv_rest)
++
+ # make sure input files are unique
+-sources = sorted(set(sys.argv[3:]))
++sources = sorted(set(_load_sources(sys.argv[3:])))
+ 
+-with open (OUTPUT, "wb") as f:
+-	f.write ("".join ('#include "{}"\n'.format (pathlib.Path( os.path.relpath (os.path.abspath (x), CURRENT_SOURCE_DIR) ).as_posix()) for x in sources if x.endswith (".cc")).encode ())
++with open(OUTPUT, "wb") as f:
++	f.write("".join(
++		'#include "{}"\n'.format(
++			pathlib.Path(os.path.relpath(os.path.abspath(x), CURRENT_SOURCE_DIR)).as_posix()
++		)
++		for x in sources if x.endswith(".cc")
++	).encode())
+ 
+ # copy it also to the source tree, but only if it has changed
+-baseline_filename = os.path.join (CURRENT_SOURCE_DIR, os.path.basename (OUTPUT))
++baseline_filename = os.path.join(CURRENT_SOURCE_DIR, os.path.basename(OUTPUT))
+ with open(baseline_filename, "rb") as baseline:
+ 	with open(OUTPUT, "rb") as generated:
+ 		if baseline.read() != generated.read():
+-			shutil.copyfile (OUTPUT, baseline_filename)
++			shutil.copyfile(OUTPUT, baseline_filename)
+diff --git a/src/meson.build b/src/meson.build
+index 035bed87b..93d8d1271 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -472,17 +472,43 @@ else
+   endforeach
+ endif
+ 
++# ---------------------------------------------------------------------------
++# Amalgam generators (harfbuzz.cc / harfbuzz-subset.cc)
++# Pass a listfile instead of @INPUT@ so Windows CreateProcess stays under the
++# ~8191 character limit (Ninja error 87). `input:` still tracks dependencies.
++# ---------------------------------------------------------------------------
++_hb_python = find_program('python3', 'python', required: true)
++_hb_gen_harfbuzzcc = find_program('gen-harfbuzzcc.py')
++
++hb_cc_amalgam_sources = (
++  hb_base_sources + hb_glib_sources + hb_ft_sources +
++  hb_graphite2_sources + hb_uniscribe_sources + hb_gdi_sources +
++  hb_directwrite_sources + hb_coretext_sources + hb_wasm_sources
++)
++
++_hb_cc_list_rel = []
++foreach _f : hb_cc_amalgam_sources
++  _hb_cc_list_rel += ['@0@'.format(_f)]
++endforeach
++
++_hb_cc_listfile = join_paths(meson.current_build_dir(), 'harfbuzz-cc-inputs.txt')
++run_command(
++  _hb_python,
++  '-c',
++  'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("\\n".join(sys.argv[2:]), encoding="utf-8")',
++  _hb_cc_listfile,
++  _hb_cc_list_rel,
++  check: true,
++)
++
+ custom_target('harfbuzz.cc',
+   build_by_default: true,
+   output: 'harfbuzz.cc',
+-  input: hb_base_sources + hb_glib_sources + hb_ft_sources +
+-         hb_graphite2_sources + hb_uniscribe_sources + hb_gdi_sources +
+-         hb_directwrite_sources + hb_coretext_sources + hb_wasm_sources,
+-  command: [find_program('gen-harfbuzzcc.py'),
+-            '@OUTPUT@', meson.current_source_dir(), '@INPUT@'],
++  input: hb_cc_amalgam_sources,
++  command: [_hb_gen_harfbuzzcc,
++            '@OUTPUT@', meson.current_source_dir(), _hb_cc_listfile],
+ )
+ 
+-
+ incsrc = include_directories('.')
+ 
+ hb_sources = hb_base_sources + hb_base_ragel_generated_sources
+@@ -702,12 +728,29 @@ if not get_option('subset').disabled()
+     link_language: chosen_linker,
+   )
+ 
++  hb_subset_amalgam_sources = hb_base_sources + hb_subset_sources
++
++  _hb_subset_list_rel = []
++  foreach _f : hb_subset_amalgam_sources
++    _hb_subset_list_rel += ['@0@'.format(_f)]
++  endforeach
++
++  _hb_subset_listfile = join_paths(meson.current_build_dir(), 'harfbuzz-subset-cc-inputs.txt')
++  run_command(
++    _hb_python,
++    '-c',
++    'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("\\n".join(sys.argv[2:]), encoding="utf-8")',
++    _hb_subset_listfile,
++    _hb_subset_list_rel,
++    check: true,
++  )
++
+   custom_target('harfbuzz-subset.cc',
+     build_by_default: true,
+     output: 'harfbuzz-subset.cc',
+-    input: hb_base_sources + hb_subset_sources,
+-    command: [find_program('gen-harfbuzzcc.py'),
+-              '@OUTPUT@', meson.current_source_dir(), '@INPUT@'],
++    input: hb_subset_amalgam_sources,
++    command: [_hb_gen_harfbuzzcc,
++              '@OUTPUT@', meson.current_source_dir(), _hb_subset_listfile],
+   )
+ 
+   libharfbuzz_subset_dep = declare_dependency(
+@@ -1364,7 +1407,7 @@ if not get_option('subset').disabled()
+ endif
+ 
+ custom_target('harfbuzz-world.cc',
+-  build_by_default: true,
++  build_by_default: false,   # was true — not needed for libharfbuzz install
+   output: 'harfbuzz-world.cc',
+   input: ['harfbuzz-world.cc.in'],
+   command: [find_program('gen-harfbuzz-world.py'),

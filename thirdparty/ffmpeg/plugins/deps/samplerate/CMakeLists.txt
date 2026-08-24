@@ -1,0 +1,34 @@
+set(SAMPLERATE_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+ensure_build_dir(SAMPLERATE_BUILD_DIR)
+set(SAMPLERATE_COMPONENT "libsamplerate")
+
+set(SAMPLERATE_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/0001-cmake4-minimum-version.patch")
+create_git_reset_file(SAMPLERATE_RESET_REPO samplerate "libsamplerate reset" "${SAMPLERATE_SRC_DIR}")
+create_git_patch_file(SAMPLERATE_PATCH_REPO samplerate "libsamplerate CMake 4 patch" "${SAMPLERATE_SRC_DIR}" "${SAMPLERATE_PATCH_FILE}")
+include("${SAMPLERATE_RESET_REPO}")
+include("${SAMPLERATE_PATCH_REPO}")
+
+set(SAMPLERATE_OPTIONS
+	"-DLIBSAMPLERATE_EXAMPLES=OFF"
+	"-DBUILD_TESTING=OFF"
+	"-DBUILD_SHARED_LIBS=OFF"
+)
+
+if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
+	list(APPEND SAMPLERATE_OPTIONS "-DBUILD_SHARED_LIBS=ON")
+endif()
+
+create_cmake_component(
+	SAMPLERATE_LIBRARY_CREATE_FILE
+	"samplerate"
+	"${SAMPLERATE_COMPONENT}"
+	"${SAMPLERATE_SRC_DIR}"
+	"${SAMPLERATE_BUILD_DIR}"
+	"${SAMPLERATE_OPTIONS}"
+	"${FFMPEG_BUNDLED_TYPE}"
+	"samplerate"
+	${PLUGIN_LEVEL}
+)
+include("${SAMPLERATE_LIBRARY_CREATE_FILE}")
+
+register_dependency(samplerate)

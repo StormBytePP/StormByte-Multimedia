@@ -118,3 +118,19 @@ function(message_indented _message _indent_level)
 	endif()
 	message(STATUS "${_indent}${_message}")
 endfunction()
+
+## @brief Register a build dependency that does not enable any FFmpeg feature.
+## @param _plugin_name Base name; expects target ${_plugin_name}_install and
+##        interface/imported library ${_plugin_name}.
+macro(register_dependency _plugin_name)
+	if(NOT TARGET ffmpeg-plugins)
+		message(FATAL_ERROR "register_dependency: target 'ffmpeg-plugins' does not exist yet")
+	endif()
+	if(NOT TARGET ${_plugin_name}_install)
+		message(FATAL_ERROR
+			"Dependency '${_plugin_name}' did not define required target '${_plugin_name}_install'")
+	endif()
+
+	add_dependencies(ffmpeg-plugins ${_plugin_name}_install)
+	target_link_libraries(ffmpeg-plugins INTERFACE ${_plugin_name})
+endmacro()

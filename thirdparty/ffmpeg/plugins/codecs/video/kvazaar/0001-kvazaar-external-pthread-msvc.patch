@@ -1,0 +1,59 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 78b54dbe..d71a44a5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -139,9 +139,9 @@ if(BUILD_SHARED_LIBS)
+   add_definitions(-DPIC)
+ endif()
+ 
+-# For visual studio / windows we also need our own pthread implementation and getopt
++# For visual studio / windows: getopt only; use external winpthreads (no embedded threadwrapper)
+ if(MSVC)
+-  list(APPEND LIB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/extras/getopt.c ${CMAKE_CURRENT_SOURCE_DIR}/src/threadwrapper/src/pthread.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/threadwrapper/src/semaphore.cpp)
++  list(APPEND LIB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/extras/getopt.c)
+   add_definitions(-DWIN32_LEAN_AND_MEAN -D_WIN32 -DWIN32 -DWIN64)
+ endif()
+ 
+@@ -210,9 +210,9 @@ file(GLOB LIB_SOURCES_STRATEGIES_SSE41 RELATIVE ${PROJECT_SOURCE_DIR} "src/strat
+ 
+ set(CLI_SOURCES "src/encmain.c" "src/cli.c" "src/cli.h" "src/yuv_io.c" "src/yuv_io.h")
+ 
+-# Add the getopt and pthread for visual studio
++# Add getopt for visual studio (pthread via external winpthreads)
+ if(MSVC) 
+-  list(APPEND CLI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/extras/getopt.c ${CMAKE_CURRENT_SOURCE_DIR}/src/threadwrapper/src/pthread.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/threadwrapper/src/semaphore.cpp)
++  list(APPEND CLI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/extras/getopt.c)
+ endif()
+ 
+ if(BUILD_KVAZAAR_BINARY)
+@@ -241,10 +241,29 @@ endif()
+ list(APPEND ALLOW_AVX2 "x86_64" "AMD64")
+ 
+ if(MSVC)
+-  target_include_directories(kvazaar PUBLIC src/threadwrapper/include)
+   if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST ALLOW_AVX2) 
+     set_property( SOURCE ${LIB_SOURCES_STRATEGIES_AVX2} APPEND PROPERTY COMPILE_FLAGS "/arch:AVX2" )  
+   endif()
++  find_library(PTHREAD_WIN32_LIB
++    NAMES libpthreadVC3 pthreadVC3 pthread
++    PATHS
++      "${CMAKE_PREFIX_PATH}"
++      "${CMAKE_INSTALL_PREFIX}"
++      ENV LIB
++    PATH_SUFFIXES lib lib64
++  )
++  if(NOT PTHREAD_WIN32_LIB)
++    message(FATAL_ERROR "MSVC kvazaar: external winpthreads not found (libpthreadVC3)")
++  endif()
++  target_link_libraries(kvazaar PUBLIC "${PTHREAD_WIN32_LIB}")
++  target_compile_definitions(kvazaar PUBLIC
++    __PTW32_STATIC_LIB
++    __PTW32_CLEANUP_C
++    PTW32_STATIC_LIB
++  )
++  if(BUILD_KVAZAAR_BINARY)
++    target_link_libraries(kvazaar-bin PUBLIC "${PTHREAD_WIN32_LIB}")
++  endif()
+ else()
+   if(BUILD_KVAZAAR_BINARY)
+     set_target_properties(kvazaar-bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src)

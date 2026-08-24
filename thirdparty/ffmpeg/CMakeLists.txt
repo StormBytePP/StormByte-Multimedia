@@ -12,7 +12,7 @@ endif()
 if(WITH_FFMPEG STREQUAL "SYSTEM")
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 	find_package(FFmpeg REQUIRED)
-	# If ffmpeg is not bundled, link normally with found libraries
+	# System FFmpeg: normal shared/import linkage
 	target_link_libraries(StormByte-Multimedia PRIVATE
 		FFmpeg::avutil
 		FFmpeg::avcodec
@@ -26,15 +26,22 @@ else()
 
 	set(FFMPEG_BUNDLED_TYPE "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)")
 
-	# Add GNUInstallDirs for CMAKE_INSTALL_LIBDIR, etc
+	# Helpers for MSVC operations
+	if(MSVC)
+		include("${CMAKE_CURRENT_LIST_DIR}/helpers.cmake")
+	endif()
+
+	# GNUInstallDirs → CMAKE_INSTALL_LIBDIR, etc. (BuildMaster install layout)
 	include(GNUInstallDirs)
 
-	# Set env variables
-	if(WIN32)
+	# ---------------------------------------------------------------------------
+	# Compiler / linker env for plugins + FFmpeg meson (prefix includes/libs)
+	# ---------------------------------------------------------------------------
+	if(MSVC)
 		set(FFMPEG_BUNDLED_TYPE "static" CACHE STRING "Build FFmpeg as static or shared library (static or shared)" FORCE)
 		set(LIB "${BUILDMASTER_INSTALL_LIBDIR}")
 		set(INCLUDE "${BUILDMASTER_INSTALL_INCLUDEDIR}")
-		# Use /MD or /MT depending on shared/static build
+		# /MD vs /MT according to shared vs static consumer build
 		if(CMAKE_SHARED_MODE)
 			string(REPLACE "/MT" "/MD" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 			string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -44,33 +51,25 @@ else()
 		endif()
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /I${BUILDMASTER_INSTALL_INCLUDEDIR}")
-		# Enable COMDAT folding-friendly packaging so the final link can drop unreferenced sections
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Gy")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Gy")
 	else()
 		set(CFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CXXFLAGS "-I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(LDFLAGS "-L${BUILDMASTER_INSTALL_LIBDIR}")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${BUILDMASTER_INSTALL_INCLUDEDIR}")
-		# Per-function/data sections so the linker can GC unused FFmpeg objects into Multimedia
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
-		set(CFLAGS "${CFLAGS} -ffunction-sections -fdata-sections")
-		set(CXXFLAGS "${CXXFLAGS} -ffunction-sections -fdata-sections")
 		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LDFLAGS}")
 		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LDFLAGS}")
 	endif()
 
-	# Update runner with new env vars
 	update_env_runner()
 
-	# Check build mode
 	if(NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "static" AND NOT ${FFMPEG_BUNDLED_TYPE} STREQUAL "shared")
 		message(FATAL_ERROR "FFMPEG_BUNDLED_TYPE must be either 'static' or 'shared'")
 	endif()
 
-	# Configure FFmpeg meson options (headless library use: no CLIs, HW stacks, or host UI/device deps)
+	# ---------------------------------------------------------------------------
+	# FFmpeg meson options (headless library: no CLIs, host UI, or unused HW)
+	# ---------------------------------------------------------------------------
 	set(FFMPEG_MESON_OPTIONS
 		# --- Build surface: library-only, no tools/tests ---
 		"-Dprograms=disabled"
@@ -126,38 +125,51 @@ else()
 		"-Dlibmfx=disabled"
 		"-Dlibvpl=disabled"
 		"-Drkmpp=disabled"
-		"-Drockchip_mpp=disabled"
 		"-Dmmal=disabled"
 		"-Domx=disabled"
 		"-Domx_rpi=disabled"
 		"-Dmediandk=disabled"
 		"-Dmediafoundation=disabled"
 
-		# --- GPU / graphics APIs we do not use ---
-		"-Dvulkan=disabled"
+		# --- GPU / graphics APIs (not used) ---
 		"-Dopencl=disabled"
 		"-Dopengl=disabled"
 		"-Dsdl2=disabled"
+		"-Dvulkan=disabled"
 
-		# --- Apple frameworks (static link would otherwise require system frameworks) ---
-		"-Dappkit=disabled"
-		"-Davfoundation=disabled"
-		"-Dvideotoolbox=disabled"
-		"-Daudiotoolbox=disabled"
-		"-Dmetal=disabled"
-		"-Dsecuretransport=disabled"
-
-		# --- Optional network / ML libs (not part of our codec plugin set) ---
+		# --- Optional network / ML libs ---
 		"-Dlibsrt=disabled"
 		"-Dlibrtmp=disabled"
 		"-Dlibssh=disabled"
 		"-Dlibtensorflow=disabled"
 
-		# --- Misc platform probes we force off for a deterministic minimal build ---
+		# --- Misc ---
 		"-Dnanosleep=disabled"
 	)
 
-	# Enable GPL components if requested
+	# --- Apple frameworks (system frameworks only; no extra installs) ---
+	# Useful: VideoToolbox / AudioToolbox (HW path). AppKit/Metal/SecureTransport: skip for headless lib.
+	if(APPLE)
+		list(APPEND FFMPEG_MESON_OPTIONS
+			"-Dvideotoolbox=enabled"
+			"-Daudiotoolbox=enabled"
+			"-Davfoundation=disabled"   # enable later if you need capture / high-level AV APIs
+			"-Dappkit=disabled"
+			"-Dmetal=disabled"
+			"-Dsecuretransport=disabled"
+		)
+	else()
+		list(APPEND FFMPEG_MESON_OPTIONS
+			"-Dappkit=disabled"
+			"-Davfoundation=disabled"
+			"-Dvideotoolbox=disabled"
+			"-Daudiotoolbox=disabled"
+			"-Dmetal=disabled"
+			"-Dsecuretransport=disabled"
+		)
+	endif()
+
+	# GPL / LGPL-3 upgrade when requested
 	if(WITH_GPL)
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dgpl=enabled")
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dversion3=enabled")
@@ -166,69 +178,30 @@ else()
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dversion3=disabled")
 	endif()
 
-	# Enable nonfree codecs if requested
+	# Nonfree (e.g. FDK-AAC) when requested
 	if(WITH_NONFREE)
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=enabled")
 	else()
 		list(APPEND FFMPEG_MESON_OPTIONS "-Dnonfree=disabled")
 	endif()
 
-	# Plugins (self-register; fill FFMPEG_PLUGIN_OPTIONS)
+	# Plugins self-register into FFMPEG_PLUGIN_OPTIONS (and build deps)
 	add_subdirectory(plugins)
 
 	message(STATUS "\tSetting up FFmpeg build")
 	list_to_columns(_ffmpeg_plugin_options_columns "\t\t\t" 32 ${FFMPEG_PLUGIN_OPTIONS})
 	message(STATUS "\t\tEnabled codec options:\n${_ffmpeg_plugin_options_columns}")
 
-	# Append values added by plugins
 	list(APPEND FFMPEG_MESON_OPTIONS ${FFMPEG_PLUGIN_OPTIONS})
 
-	# Configure FFmpeg build
+	# ---------------------------------------------------------------------------
+	# FFmpeg source tree
+	# Branch is tracked in .gitmodules (meson-8.1)
+	# ---------------------------------------------------------------------------
 	set(FFMPEG_COMPONENT "ffmpeg")
 	set(FFMPEG_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
 	ensure_build_dir(FFMPEG_BUILD_DIR)
 	set(FFMPEG_OPTIONS "${FFMPEG_MESON_OPTIONS}")
-
-	# Fetch latest data (component id must match create_meson_* id: ffmpeg)
-	create_git_fetch(
-		FFMPEG_GIT_FETCH_FILE
-		ffmpeg
-		"FFmpeg fetch"
-		"${FFMPEG_SRC_DIR}"
-	)
-	include("${FFMPEG_GIT_FETCH_FILE}")
-
-	# Reset changes
-	create_git_reset_file(
-		FFMPEG_GIT_RESET_FILE
-		ffmpeg
-		"FFmpeg reset"
-		"${FFMPEG_SRC_DIR}"
-	)
-	include("${FFMPEG_GIT_RESET_FILE}")
-
-	# Switch to branch meson-8.0.1 which is more recent than default master
-	create_git_switch_branch(
-		FFMPEG_GIT_SWITCH_FILE
-		ffmpeg
-		"FFmpeg switch to meson-8.0.1"
-		"${FFMPEG_SRC_DIR}"
-		"meson-8.0.1"
-	)
-	include("${FFMPEG_GIT_SWITCH_FILE}")
-
-	# Local workaround until upstream MR lands (error message shows library name)
-	set(FFMPEG_PATCH_EXPLICIT_MSG
-		"${CMAKE_CURRENT_LIST_DIR}/fix-compressors-pkconfig-usage.patch")
-	create_git_patch_file(
-		FFMPEG_GIT_PATCH_FILE
-		ffmpeg
-		"FFmpeg explicit missing-lib error messages"
-		"${FFMPEG_SRC_DIR}"
-		"${FFMPEG_PATCH_EXPLICIT_MSG}"
-	)
-	include("${FFMPEG_GIT_PATCH_FILE}")
-
 	set(FFMPEG_LIBRARIES "avutil;avcodec;avformat;swscale;swresample;avfilter")
 
 	create_meson_dependant_component(
@@ -248,21 +221,76 @@ else()
 	add_dependencies(ffmpeg_configure ffmpeg-plugins)
 
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
-		# On Windows, libraries are named lib*.a; rename them to *.lib
 		add_custom_command(TARGET ffmpeg_install POST_BUILD
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavutil.a" "${BUILDMASTER_INSTALL_LIBDIR}/avutil.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavcodec.a" "${BUILDMASTER_INSTALL_LIBDIR}/avcodec.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavformat.a" "${BUILDMASTER_INSTALL_LIBDIR}/avformat.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libswscale.a" "${BUILDMASTER_INSTALL_LIBDIR}/swscale.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libswresample.a" "${BUILDMASTER_INSTALL_LIBDIR}/swresample.lib"
-			COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libavfilter.a" "${BUILDMASTER_INSTALL_LIBDIR}/avfilter.lib"
-			COMMENT "Renaming FFmpeg libraries to .lib extensions"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libavutil.a
+				-DOUT=avutil.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libavcodec.a
+				-DOUT=avcodec.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libavformat.a
+				-DOUT=avformat.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libswscale.a
+				-DOUT=swscale.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libswresample.a
+				-DOUT=swresample.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
+				-DPATTERN=libavfilter.a
+				-DOUT=avfilter.lib
+				-DMODE=copy
+				-P "${FFMPEG_RENAME_MSVC_LIB}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/avutil.lib
+				-DMEMBER=avutilres.rc@cus_0_avutilres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/avcodec.lib
+				-DMEMBER=avcodecres.rc@cus_0_avcodecres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/avformat.lib
+				-DMEMBER=avformatres.rc@cus_0_avformatres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/avfilter.lib
+				-DMEMBER=avfilterres.rc@cus_0_avfilterres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/swscale.lib
+				-DMEMBER=swscaleres.rc@cus_0_swscaleres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMAND ${CMAKE_COMMAND}
+				-DLIB=${BUILDMASTER_INSTALL_LIBDIR}/swresample.lib
+				-DMEMBER=swresampleres.rc@cus_0_swresampleres.res
+				-P "${FFMPEG_STRIP_MSVC_RES}"
+			COMMENT "MSVC: FFmpeg .lib names (copy) + strip version .res"
 		)
 	endif()
 
 	# Post-install git reset is handled automatically by BuildMaster (component id: ffmpeg)
 
-	# Create library aliases and gather link libraries
+	# ---------------------------------------------------------------------------
+	# Imported targets + path list for final link
+	# ---------------------------------------------------------------------------
 	add_library(FFMpeg::plugins ALIAS ffmpeg-plugins)
 	set(FFMPEG_LINK_LIBS "")
 	foreach(_lib IN LISTS FFMPEG_LIBRARIES)
@@ -294,7 +322,6 @@ else()
 					endif()
 				endforeach()
 			else()
-				# Target may itself be an imported library
 				get_target_property(_reallib "${_lib}" IMPORTED_LOCATION)
 				if(_reallib AND NOT _reallib STREQUAL "_reallib-NOTFOUND")
 					list(APPEND FFMPEG_LINK_LIBS "${_reallib}")
@@ -303,38 +330,60 @@ else()
 		endforeach()
 	endif()
 
-	# According to FFmpeg documentation, when linking statically on GNU ld,
-	# -Wl,-Bsymbolic helps avoid symbol conflicts. Not valid on Apple ld64.
+	# ===========================================================================
+	# Linkage
+	#
+	# Static FFmpeg + plugins: pull full archives so codec/filter registration
+	# tables (ff_lib*, ff_vf_*, ff_af_*) and weakly referenced plugin objects
+	# survive the final shared link.
+	#
+	# Skip webpdecoder (duplicate objects with libwebp).
+	# Skip shared objects (.so/.dll/.dylib): link those normally if present.
+	#
+	# MSVC: /FORCE:MULTIPLE for known duplicate helpers (e.g. file_open across
+	# avcodec/avfilter). Does not fix LNK1241 (.res); handle resources separately.
+	#
+	# Apple: VideoToolbox / AudioToolbox need system frameworks when those
+	# meson options are enabled (see FFMPEG_MESON_OPTIONS above).
+	# ===========================================================================
+
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND NOT MSVC AND NOT APPLE)
 		target_link_options(StormByte-Multimedia PRIVATE -Wl,-Bsymbolic)
 	endif()
 
-	# Drop unreferenced sections from static FFmpeg/plugins when linking Multimedia
-	# (requires -ffunction-sections/-fdata-sections or /Gy on the object files above).
-	if(MSVC)
-		target_link_options(StormByte-Multimedia PRIVATE /OPT:REF /OPT:ICF)
-	elseif(APPLE)
-		target_link_options(StormByte-Multimedia PRIVATE -Wl,-dead_strip)
-	else()
-		target_link_options(StormByte-Multimedia PRIVATE -Wl,--gc-sections)
-	endif()
-
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
 		target_link_libraries(StormByte-Multimedia PRIVATE
-			ws2_32     # Windows Sockets API: socket, bind, connect, recv, send, shutdown, WSAStartup, etc.
-			secur32    # Security Support Provider Interface (SSPI): TLS handshake, credentials, EncryptMessage, etc.
-			bcrypt     # Windows CNG (Cryptography API: Next Generation): random generation, algorithm providers
-			ncrypt     # Windows CNG key storage: persisted keys, self-signed certs, key export/import
-			crypt32    # Windows CryptoAPI: certificate store, encoding, self-signing, PEM/DER conversion
+			ws2_32
+			secur32
+			bcrypt
+			ncrypt
+			crypt32
 		)
 	endif()
 
-	# Linking: static FFmpeg has circular deps between libs.
-	# - MSVC: normal imported targets + plugins
-	# - Linux (GNU ld): LINK_GROUP RESCAN (--start-group / --end-group)
-	# - Apple ld64: RESCAN unsupported — link archive list as-is
+	set(_FFMPEG_STATIC_LIBS "")
+	foreach(_path IN LISTS FFMPEG_LINK_LIBS)
+		if(_path MATCHES "webpdecoder")
+			continue()
+		endif()
+		# Shared loader / DLLs: not whole-archive material
+		if(_path MATCHES "\\.(so|dll|dylib)(\\.[0-9]+)*$")
+			continue()
+		endif()
+		list(APPEND _FFMPEG_STATIC_LIBS "${_path}")
+	endforeach()
+
 	if(MSVC)
+		set(_FFMPEG_LINK_CMDS "")
+		foreach(_path IN LISTS _FFMPEG_STATIC_LIBS)
+			list(APPEND _FFMPEG_LINK_CMDS "/WHOLEARCHIVE:${_path}")
+		endforeach()
+		target_link_options(StormByte-Multimedia PRIVATE
+			${_FFMPEG_LINK_CMDS}
+			"/FORCE:MULTIPLE"
+		)
 		target_link_libraries(StormByte-Multimedia PRIVATE
+			${_FFMPEG_STATIC_LIBS}
 			FFmpeg::avutil
 			FFmpeg::avcodec
 			FFmpeg::avformat
@@ -344,16 +393,36 @@ else()
 			FFMpeg::plugins
 		)
 	elseif(APPLE)
+		set(_FFMPEG_FORCE_LOAD "")
+		foreach(_path IN LISTS _FFMPEG_STATIC_LIBS)
+			list(APPEND _FFMPEG_FORCE_LOAD "-Wl,-force_load,${_path}")
+		endforeach()
 		target_link_libraries(StormByte-Multimedia PRIVATE
-			${FFMPEG_LINK_LIBS}
+			${_FFMPEG_FORCE_LOAD}
+			# FFmpeg VideoToolbox / AudioToolbox (enabled on APPLE above)
+			"-framework VideoToolbox"
+			"-framework AudioToolbox"
+			"-framework CoreMedia"
+			"-framework CoreVideo"
+			# libass / text stack + CF
+			"-framework CoreText"
+			"-framework CoreFoundation"
+			# system libiconv (FFmpeg -Diconv=disabled; still used by deps e.g. libass)
+			iconv
 		)
 	else()
+		# GNU ld / lld — same idea as MSVC WHOLEARCHIVE
 		target_link_libraries(StormByte-Multimedia PRIVATE
-			"$<LINK_GROUP:RESCAN,${FFMPEG_LINK_LIBS}>"
+			-Wl,--whole-archive
+			${_FFMPEG_STATIC_LIBS}
+			-Wl,--no-whole-archive
 		)
 	endif()
 
-	# Include directories and dependencies
+	# ===========================================================================
+	# End Linkage
+	# ===========================================================================
+
 	target_include_directories(StormByte-Multimedia SYSTEM PRIVATE "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	add_dependencies(StormByte-Multimedia ffmpeg_install)
 endif()

@@ -1,0 +1,15 @@
+message_indented("Video:" ${PLUGIN_LEVEL})
+
+math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
+add_subdirectory(aom)
+add_subdirectory(dav1d)
+add_subdirectory(kvazaar)
+add_subdirectory(openh264)
+add_subdirectory(svt-av1)
+add_subdirectory(vpx)
+add_subdirectory(webp)
+add_subdirectory(x264)
+add_subdirectory(x265)
+add_subdirectory(xvidcore)
+
+set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

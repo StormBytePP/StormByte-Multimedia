@@ -1050,7 +1050,7 @@ index 995e84ffcd..c171b07e72 100644
          for (int j = right_mod_8; j < right; ++j)
          {
 
-From c6e0fd051b3f19ef1c623a6cf0e606bdf5d37267 Mon Sep 17 00:00:00 2001
+From 2172bacc51531e9c5995e9501275336dad4e448c Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 13:17:15 +0200
 Subject: [PATCH 05/18] MSVC: Add Windows pthreads support (bundled + external)
@@ -1062,13 +1062,13 @@ Subject: [PATCH 05/18] MSVC: Add Windows pthreads support (bundled + external)
 Signed-off-by: David C. Manuelda <StormByte@gmail.com>
 ---
  .gitmodules                       |  3 ++
- libvmaf/meson.build               | 58 +++++++++++++++++++++++++++++++
+ libvmaf/meson.build               | 62 +++++++++++++++++++++++++++++++
  libvmaf/meson_options.txt         |  5 +++
- libvmaf/src/meson.build           | 20 +++++++++--
+ libvmaf/src/meson.build           |  7 ++--
  libvmaf/subprojects/pthread-win32 |  1 +
  libvmaf/test/meson.build          | 17 +++++----
  libvmaf/tools/meson.build         |  2 +-
- 7 files changed, 95 insertions(+), 11 deletions(-)
+ 7 files changed, 86 insertions(+), 11 deletions(-)
  create mode 100644 .gitmodules
  create mode 160000 libvmaf/subprojects/pthread-win32
 
@@ -1082,39 +1082,40 @@ index 0000000000..758af93407
 +	path = libvmaf/subprojects/pthread-win32
 +	url = https://github.com/GerHobbelt/pthread-win32
 diff --git a/libvmaf/meson.build b/libvmaf/meson.build
-index ede16ad80b..03399480b2 100644
+index ede16ad80b..ea0ed2c744 100644
 --- a/libvmaf/meson.build
 +++ b/libvmaf/meson.build
-@@ -63,6 +63,64 @@ else
+@@ -63,6 +63,68 @@ else
      )
  endif
  
 +pthreadwin32_inc = []
 +pthreadwin32_lib = []
++thread_lib = []
 +
 +if cc.get_id() == 'msvc'
 +    if get_option('bundled_winpthreads')
-+        # Use the bundled GerHobbelt/pthread-win32 via CMake subproject
 +        cmake = import('cmake')
-+
 +        pthreadwin32_opts = cmake.subproject_options()
 +        pthreadwin32_opts.add_cmake_defines({
 +            'BUILD_SHARED_LIBS': false,
 +        })
 +        pthreadwin32_proj = cmake.subproject('pthread-win32', options: pthreadwin32_opts)
-+        pthreadwin32_lib = pthreadwin32_proj.dependency('pthreadVC3')
++        # static_lib() → libpthreadVC3; shared → pthreadVC3
++        if pthreadwin32_proj.dependency('libpthreadVC3').found()
++            pthreadwin32_lib = pthreadwin32_proj.dependency('libpthreadVC3')
++        else
++            pthreadwin32_lib = pthreadwin32_proj.dependency('pthreadVC3')
++        endif
 +        pthreadwin32_inc = include_directories('./subprojects/pthread-win32')
 +    else
-+        # --- External pthreads detection ---
-+
-+        # 1. First try to find the library
 +        external_pthread = dependency('pthread', required: false)
-+
 +        if not external_pthread.found()
 +            foreach name : [
++                'libpthreadVC3', 'libpthreadVC2', 'libpthreadVC',
 +                'pthreadVC3', 'pthreadVC2', 'pthreadVC',
-+                'pthreadVCE3', 'pthreadVCE2', 'pthreadVCE',
-+                'pthreadVSE3', 'pthreadVSE2', 'pthreadVSE',
++                'libpthreadVCE3', 'pthreadVCE3',
++                'libpthreadVSE3', 'pthreadVSE3',
 +                'pthread', 'libpthread', 'pthreads'
 +            ]
 +                external_pthread = cc.find_library(name, required: false)
@@ -1123,28 +1124,31 @@ index ede16ad80b..03399480b2 100644
 +                endif
 +            endforeach
 +        endif
-+
 +        if not external_pthread.found()
 +            error('MSVC build requested with -Dbundled_winpthreads=false, ' +
 +                  'but no external pthreads library was found.\n' +
 +                  'Please install a Windows pthreads implementation and make sure ' +
 +                  'the library is discoverable, or use the bundled one (default).')
 +        endif
-+
-+        # 2. Try to find the header (pthread.h)
-+        # This helps when the library is found but headers are in a non-standard location
-+        pthread_header = cc.check_header('pthread.h', required: false)
-+
-+        if not pthread_header
-+            # Try common extra include locations (optional, can be extended)
-+            # Most of the time the user should have the include path already in the environment
++        if not cc.check_header('pthread.h', required: false)
 +            error('External pthreads library was found, but <pthread.h> could not be located.\n' +
 +                  'Please make sure the include directory is available (e.g. via INCLUDE ' +
 +                  'environment variable or -I flags).')
 +        endif
-+
 +        pthreadwin32_lib = external_pthread
 +    endif
++
++    # Match pthreads4w static VC build (__PTW32_CLEANUP_C + __PTW32_STATIC_LIB)
++    thread_lib = declare_dependency(
++        dependencies: [pthreadwin32_lib],
++        include_directories: pthreadwin32_inc,
++        compile_args: [
++            '-D__PTW32_CLEANUP_C',
++            '-D__PTW32_STATIC_LIB',
++        ],
++    )
++else
++    thread_lib = dependency('threads')
 +endif
 +
  subdir('include')
@@ -1165,27 +1169,10 @@ index 69dc53f8df..3e6fa3caa8 100644
 +    description: 'Use the bundled pthread-win32 implementation (MSVC only). Set to false to use an external pthreads library.')
 \ No newline at end of file
 diff --git a/libvmaf/src/meson.build b/libvmaf/src/meson.build
-index 6900c572d9..e4041a4a9b 100644
+index 6900c572d9..1c68c3449f 100644
 --- a/libvmaf/src/meson.build
 +++ b/libvmaf/src/meson.build
-@@ -260,10 +260,24 @@ libvmaf_include = include_directories(
-     is_nvtx_enabled ? '/usr/local/cuda/include' : '',
- )
- 
-+if cc.get_id() == 'msvc'
-+    thread_lib = declare_dependency(
-+        dependencies: [pthreadwin32_lib],
-+        include_directories: pthreadwin32_inc,
-+        compile_args: [
-+            '-DPTW32_CLEANUP_C',
-+            '-DPTW32_STATIC_LIB',
-+        ],
-+    )
-+else
-+    thread_lib = dependency('threads')
-+endif
-+
- libvmaf_cpu_static_lib = static_library(
+@@ -264,6 +264,7 @@ libvmaf_cpu_static_lib = static_library(
      'libvmaf_cpu',
      libvmaf_cpu_sources,
      include_directories : [libvmaf_include],
@@ -1193,7 +1180,7 @@ index 6900c572d9..e4041a4a9b 100644
  )
  
  platform_specific_cpu_objects = []
-@@ -473,7 +487,6 @@ if is_cuda_enabled
+@@ -473,7 +474,6 @@ if is_cuda_enabled
      common_cuda_objects += cuda_static_lib.extract_all_objects()
  endif
  
@@ -1201,7 +1188,7 @@ index 6900c572d9..e4041a4a9b 100644
  math_lib = cc.find_library('m', required : false)
  
  vmaf_include = include_directories(
-@@ -548,7 +561,7 @@ libvmaf_feature_static_lib = static_library(
+@@ -548,7 +548,7 @@ libvmaf_feature_static_lib = static_library(
      'libvmaf_feature',
      libvmaf_feature_sources,
      include_directories : [libvmaf_include, vmaf_include, cuda_dir],
@@ -1210,7 +1197,7 @@ index 6900c572d9..e4041a4a9b 100644
      objects: common_cuda_objects
  )
  
-@@ -627,5 +640,6 @@ pkg_mod.generate(libraries: libvmaf,
+@@ -627,5 +627,6 @@ pkg_mod.generate(libraries: libvmaf,
      name: 'libvmaf',
      filebase: 'libvmaf',
      description: 'VMAF, Video Multimethod Assessment Fusion',
@@ -1323,7 +1310,7 @@ index a92bbff970..3d9921d02d 100644
      c_args : [vmaf_cflags_common, compat_cflags],
      link_with : get_option('default_library') == 'both' ? libvmaf.get_static_lib() : libvmaf,
 
-From b8974da164c718e68ef17e602133668cb20a5079 Mon Sep 17 00:00:00 2001
+From d82ae3201293317f627a2e7bce9d390a736faa76 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 14:42:07 +0200
 Subject: [PATCH 06/18] MSVC: Set specific cflags for AVX*
@@ -1334,10 +1321,10 @@ Signed-off-by: David C. Manuelda <StormByte@gmail.com>
  1 file changed, 12 insertions(+), 3 deletions(-)
 
 diff --git a/libvmaf/src/meson.build b/libvmaf/src/meson.build
-index e4041a4a9b..83f3295af6 100644
+index 1c68c3449f..6156ec4996 100644
 --- a/libvmaf/src/meson.build
 +++ b/libvmaf/src/meson.build
-@@ -310,11 +310,16 @@ if is_asm_enabled
+@@ -297,11 +297,16 @@ if is_asm_enabled
            feature_src_dir + 'x86/speed_avx2.c',
        ]
  
@@ -1355,7 +1342,7 @@ index e4041a4a9b..83f3295af6 100644
        )
  
        platform_specific_cpu_objects += x86_avx2_static_lib.extract_all_objects(recursive: true)
-@@ -327,12 +332,16 @@ if is_asm_enabled
+@@ -314,12 +319,16 @@ if is_asm_enabled
              feature_src_dir + 'x86/speed_avx512.c',
          ]
  
@@ -1375,7 +1362,7 @@ index e4041a4a9b..83f3295af6 100644
  
          platform_specific_cpu_objects += x86_avx512_static_lib.extract_all_objects(recursive: true)
 
-From 66b250738d9ffd528ccfac806e252ac6d7eedcdc Mon Sep 17 00:00:00 2001
+From a9c7c9879709abfe4042b9c2c4f35e4398e43765 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 14:57:33 +0200
 Subject: [PATCH 07/18] MSVC: Make mkdir_p compatible
@@ -1448,7 +1435,7 @@ index 02371fb571..344b8a0b56 100644
  /*
   * Recursively `mkdir(path, mode)`
 
-From ca70daf8d6d9095edea89fef1f72206878e075c2 Mon Sep 17 00:00:00 2001
+From c7f37f0af9ba448fb8551e05a34bc19410080cfa Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 16:22:57 +0200
 Subject: [PATCH 08/18] MSVC: Guard <unistd.h> and use Windows equivalents
@@ -1527,7 +1514,7 @@ index 03e1cff34f..807a60a30c 100644
  #include "cli_parse.h"
  #include "spinner.h"
 
-From aab4f5f5d6462fa7fb5f25f3b1fc59c896fc488d Mon Sep 17 00:00:00 2001
+From 6f8e3f2a3cc9c5b29109dde39aaf2e3e3e263658 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 16:28:49 +0200
 Subject: [PATCH 09/18] MSVC: Remove unused include in imported
@@ -1552,7 +1539,7 @@ index 979ee2ba82..7540775fd7 100644
  typedef volatile ULONG __declspec(align(32)) atomic_uint;
  
 
-From 394ceca206c18b202a58a163d1f994ad4c51e5b7 Mon Sep 17 00:00:00 2001
+From eead323f9ae7d261685805ae4d094f1895ebd567 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 17:19:21 +0200
 Subject: [PATCH 10/18] MSVC: Provide custom __builtin_clz/__builtin_clzll
@@ -1569,7 +1556,7 @@ Signed-off-by: David C. Manuelda <StormByte@gmail.com>
  create mode 100644 libvmaf/src/compat/msvc/builtin_clz.h
 
 diff --git a/libvmaf/meson.build b/libvmaf/meson.build
-index 03399480b2..8e7f7846ec 100644
+index ea0ed2c744..24e12bf568 100644
 --- a/libvmaf/meson.build
 +++ b/libvmaf/meson.build
 @@ -53,6 +53,14 @@ if not cc.check_header('stdatomic.h')
@@ -1656,10 +1643,10 @@ index 42b4108b4b..759de4bf3c 100644
  {
      int k = __builtin_clz(temp);
 diff --git a/libvmaf/src/meson.build b/libvmaf/src/meson.build
-index 83f3295af6..2ec7fa399c 100644
+index 6156ec4996..21c4ab2e7b 100644
 --- a/libvmaf/src/meson.build
 +++ b/libvmaf/src/meson.build
-@@ -320,6 +320,7 @@ if is_asm_enabled
+@@ -307,6 +307,7 @@ if is_asm_enabled
            x86_avx2_sources,
            include_directories : vmaf_base_include,
            c_args : avx2_cflags + vmaf_cflags_common,
@@ -1667,7 +1654,7 @@ index 83f3295af6..2ec7fa399c 100644
        )
  
        platform_specific_cpu_objects += x86_avx2_static_lib.extract_all_objects(recursive: true)
-@@ -342,6 +343,7 @@ if is_asm_enabled
+@@ -329,6 +330,7 @@ if is_asm_enabled
              x86_avx512_sources,
              include_directories : vmaf_base_include,
              c_args : avx512_cflags + vmaf_cflags_common,
@@ -1675,7 +1662,7 @@ index 83f3295af6..2ec7fa399c 100644
          )
  
          platform_specific_cpu_objects += x86_avx512_static_lib.extract_all_objects(recursive: true)
-@@ -570,7 +572,7 @@ libvmaf_feature_static_lib = static_library(
+@@ -557,7 +559,7 @@ libvmaf_feature_static_lib = static_library(
      'libvmaf_feature',
      libvmaf_feature_sources,
      include_directories : [libvmaf_include, vmaf_include, cuda_dir],
@@ -1684,7 +1671,7 @@ index 83f3295af6..2ec7fa399c 100644
      objects: common_cuda_objects
  )
  
-@@ -630,6 +632,7 @@ libvmaf = library(
+@@ -617,6 +619,7 @@ libvmaf = library(
        math_lib,
        stdatomic_dependency,
        cuda_dependency,
@@ -1693,7 +1680,7 @@ index 83f3295af6..2ec7fa399c 100644
      ],
      objects : [
 
-From f642620eb5fc58f7a50c287bb738b3733d57b764 Mon Sep 17 00:00:00 2001
+From ac2d8b08651ee3e367b8633a84899d614cfe27c6 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 18:47:30 +0200
 Subject: [PATCH 11/18] Doc: Update Windows doc for MSVC build
@@ -1826,7 +1813,7 @@ index 8c3d9bace1..55839451df 100644
 +This produces a MinGW‑compiled version of `libvmaf` compatible with MSYS2 environments.
 \ No newline at end of file
 
-From 8968e9fcf042831f42bbf23c867e00e581d77339 Mon Sep 17 00:00:00 2001
+From 8f4dde0ac588d6dcd8c8e6697daf95ddb4080f30 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 19:02:24 +0200
 Subject: [PATCH 12/18] CI: Add MSVC build action
@@ -2008,7 +1995,7 @@ index b13b8e5bac..07cf6f9cb8 100644
 +          path: C:/vmaf-install-msvc-external/bin/vmaf.exe
 \ No newline at end of file
 
-From 30c99b5127a5cd89649763a06044d1c5e6a41234 Mon Sep 17 00:00:00 2001
+From b9a1e312aa8b27ba5ce875a58abb933a461ab1cf Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Mon, 30 Mar 2026 09:33:02 +0200
 Subject: [PATCH 13/18] CI: Add build and test FFmpeg-libvmaf on MSVC
@@ -2129,7 +2116,7 @@ index 995ac86d19..3a5a5df26c 100644
 +          }
 +        continue-on-error: true
 
-From d0d857d7a603545557268d1904596d574c0be77f Mon Sep 17 00:00:00 2001
+From 86b7323255f73ea780c51d226a77beaf5c6f003f Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 9 Aug 2026 06:18:19 +0200
 Subject: [PATCH 14/18] MSVC: Ensure math constants are defined
@@ -2321,7 +2308,7 @@ index f1075f185c..ea35eb9a71 100644
  
  static const float log2_poly_s[9] = { -0.012671635276421, 0.064841182402670, -0.157048836463065, 0.257167726303123, -0.353800560300520, 0.480131410397451, -0.721314327952201, 1.442694803896991, 0 };
 
-From f1efca6bf4fb302f5985ff693dc6c34afaae2186 Mon Sep 17 00:00:00 2001
+From fb2046d5171ca05015219ecba49d0bd7b0e1958d Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 9 Aug 2026 06:22:49 +0200
 Subject: [PATCH 15/18] MSVC: Fix pic preallocation test
@@ -2406,7 +2393,7 @@ index 910102b805..6e3e819c0f 100644
      thread_test_data thread_data[num_threads];
  
 
-From ecbf75f62ebdb6eb3602a292a00d9a46f61e5227 Mon Sep 17 00:00:00 2001
+From 6103e77dce106519a1993fb642631edf6b0eab05 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 9 Aug 2026 06:40:56 +0200
 Subject: [PATCH 16/18] MSVC: Fix motion blend test
@@ -2429,7 +2416,7 @@ index cb8f1ab133..50e573345d 100644
  
  if float_enabled
 
-From b9a5916f05f1e254e9b82559ad0c5cd18db15b32 Mon Sep 17 00:00:00 2001
+From fbc3b504c5cd0274f8503789120ecef5e5c484ff Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Sun, 29 Mar 2026 17:01:52 +0200
 Subject: [PATCH 17/18] Clean: Drop different M_PI definitions and rely to the
@@ -2450,7 +2437,7 @@ Signed-off-by: David C. Manuelda <StormByte@gmail.com>
  10 files changed, 7 insertions(+), 33 deletions(-)
 
 diff --git a/libvmaf/meson.build b/libvmaf/meson.build
-index 8e7f7846ec..985e609daf 100644
+index 24e12bf568..8dedcd64ad 100644
 --- a/libvmaf/meson.build
 +++ b/libvmaf/meson.build
 @@ -28,6 +28,11 @@ elif host_machine.system() == 'darwin'
@@ -2587,7 +2574,7 @@ index ea35eb9a71..012fee30ad 100644
  #include <stdbool.h>
  #include <stddef.h>
 diff --git a/libvmaf/src/meson.build b/libvmaf/src/meson.build
-index 2ec7fa399c..b891a72ac0 100644
+index 21c4ab2e7b..47d4119466 100644
 --- a/libvmaf/src/meson.build
 +++ b/libvmaf/src/meson.build
 @@ -17,7 +17,7 @@ else
@@ -2600,7 +2587,7 @@ index 2ec7fa399c..b891a72ac0 100644
  endif
  
 
-From b9a7d0396c9ccaebd170b9f5d833c6cb12fe14f4 Mon Sep 17 00:00:00 2001
+From 78fd7257bbed894f1651291e65c5effe62eb0f35 Mon Sep 17 00:00:00 2001
 From: "David C. Manuelda" <StormByte@gmail.com>
 Date: Mon, 10 Aug 2026 23:11:53 +0200
 Subject: [PATCH 18/18] MSVC: Fix CUDA build with bundled winpthreads
@@ -2645,10 +2632,10 @@ index 36385ad311..195d9a2318 100644
  /*
   * The following dwt basis function amplitudes, A(lambda,theta), are taken from
 diff --git a/libvmaf/src/meson.build b/libvmaf/src/meson.build
-index b891a72ac0..4d609fa902 100644
+index 47d4119466..dfee1784ed 100644
 --- a/libvmaf/src/meson.build
 +++ b/libvmaf/src/meson.build
-@@ -456,7 +456,12 @@ if is_cuda_enabled
+@@ -443,7 +443,12 @@ if is_cuda_enabled
                  '-I', '../src/feature',
                  '-I', '../src/' + cuda_dir,
                  '-DDEVICE_CODE',
@@ -2662,7 +2649,7 @@ index b891a72ac0..4d609fa902 100644
          )
          ptx_files += {name : [t]}
      endforeach
-@@ -491,6 +496,7 @@ if is_cuda_enabled
+@@ -478,6 +483,7 @@ if is_cuda_enabled
              include_directories('../src/cuda/'),
              cuda_inc,
          ],
@@ -2692,3 +2679,176 @@ index 50e573345d..014873f8d7 100644
      c_args: ['-DHAVE_CUDA=1']
  )
  
+commit b4342faa93f547060025d872cb7f77c526658567
+Author: David C. Manuelda <StormByte@gmail.com>
+Date:   Mon Aug 24 21:39:14 2026 +0200
+
+    Fix?
+
+diff --git a/libvmaf/meson.build b/libvmaf/meson.build
+index 8dedcd64..c9cef87a 100644
+--- a/libvmaf/meson.build
++++ b/libvmaf/meson.build
+@@ -82,22 +82,38 @@ thread_lib = []
+ 
+ if cc.get_id() == 'msvc'
+     if get_option('bundled_winpthreads')
++        # Bundled GerHobbelt/pthread-win32 via CMake subproject
+         cmake = import('cmake')
++
+         pthreadwin32_opts = cmake.subproject_options()
+         pthreadwin32_opts.add_cmake_defines({
+             'BUILD_SHARED_LIBS': false,
+         })
+         pthreadwin32_proj = cmake.subproject('pthread-win32', options: pthreadwin32_opts)
+-        # static_lib() → libpthreadVC3; shared → pthreadVC3
+-        if pthreadwin32_proj.dependency('libpthreadVC3').found()
++
++        # Meson only imports a subset of CMake targets. In practice the
++        # shared-style names (pthreadVC3) are exposed; libpthreadVC3 often is not.
++        _pw_targets = pthreadwin32_proj.target_list()
++        if 'libpthreadVC3' in _pw_targets
+             pthreadwin32_lib = pthreadwin32_proj.dependency('libpthreadVC3')
+-        else
++            _ptw32_static = true
++        elif 'pthreadVC3' in _pw_targets
+             pthreadwin32_lib = pthreadwin32_proj.dependency('pthreadVC3')
++            _ptw32_static = false
++        else
++            error('pthread-win32 subproject: neither libpthreadVC3 nor pthreadVC3 found.\n' +
++                  'Available targets: ' + ', '.join(_pw_targets))
+         endif
++
+         pthreadwin32_inc = include_directories('./subprojects/pthread-win32')
+     else
++        # --- External pthreads (e.g. BuildMaster / system install) ---
++
+         external_pthread = dependency('pthread', required: false)
++
+         if not external_pthread.found()
++            # Prefer static pthreads4w names first (libpthreadVC3). Shared
++            # stubs named pthreadVC3.lib can be empty 0-byte files on disk.
+             foreach name : [
+                 'libpthreadVC3', 'libpthreadVC2', 'libpthreadVC',
+                 'pthreadVC3', 'pthreadVC2', 'pthreadVC',
+@@ -111,28 +127,35 @@ if cc.get_id() == 'msvc'
+                 endif
+             endforeach
+         endif
++
+         if not external_pthread.found()
+             error('MSVC build requested with -Dbundled_winpthreads=false, ' +
+                   'but no external pthreads library was found.\n' +
+                   'Please install a Windows pthreads implementation and make sure ' +
+                   'the library is discoverable, or use the bundled one (default).')
+         endif
++
+         if not cc.check_header('pthread.h', required: false)
+             error('External pthreads library was found, but <pthread.h> could not be located.\n' +
+                   'Please make sure the include directory is available (e.g. via INCLUDE ' +
+                   'environment variable or -I flags).')
+         endif
++
+         pthreadwin32_lib = external_pthread
++        # External consumers of our stack use the static VC archive
++        _ptw32_static = true
++    endif
++
++    # __PTW32_* matches pthreads4w CMake (VC cleanup = C)
++    _ptw32_args = ['-D__PTW32_CLEANUP_C']
++    if _ptw32_static
++        _ptw32_args += ['-D__PTW32_STATIC_LIB']
+     endif
+ 
+-    # Match pthreads4w static VC build (__PTW32_CLEANUP_C + __PTW32_STATIC_LIB)
+     thread_lib = declare_dependency(
+         dependencies: [pthreadwin32_lib],
+         include_directories: pthreadwin32_inc,
+-        compile_args: [
+-            '-D__PTW32_CLEANUP_C',
+-            '-D__PTW32_STATIC_LIB',
+-        ],
++        compile_args: _ptw32_args,
+     )
+ else
+     thread_lib = dependency('threads')
+commit 9e18b7c37824cac5778fa81e55b00457b0e92654
+Author: David C. Manuelda <StormByte@gmail.com>
+Date:   Mon Aug 24 21:58:54 2026 +0200
+
+    Fix2
+
+diff --git a/libvmaf/meson.build b/libvmaf/meson.build
+index c9cef87a..13bf809c 100644
+--- a/libvmaf/meson.build
++++ b/libvmaf/meson.build
+@@ -91,8 +91,7 @@ if cc.get_id() == 'msvc'
+         })
+         pthreadwin32_proj = cmake.subproject('pthread-win32', options: pthreadwin32_opts)
+ 
+-        # Meson only imports a subset of CMake targets. In practice the
+-        # shared-style names (pthreadVC3) are exposed; libpthreadVC3 often is not.
++        # Meson usually exposes shared-style CMake targets (pthreadVC3), not libpthreadVC3.
+         _pw_targets = pthreadwin32_proj.target_list()
+         if 'libpthreadVC3' in _pw_targets
+             pthreadwin32_lib = pthreadwin32_proj.dependency('libpthreadVC3')
+@@ -107,22 +106,38 @@ if cc.get_id() == 'msvc'
+ 
+         pthreadwin32_inc = include_directories('./subprojects/pthread-win32')
+     else
+-        # --- External pthreads (e.g. BuildMaster / system install) ---
+-
++        # External pthreads (system / vcpkg / custom prefix)
+         external_pthread = dependency('pthread', required: false)
++        _ptw32_static = true
+ 
+         if not external_pthread.found()
+-            # Prefer static pthreads4w names first (libpthreadVC3). Shared
+-            # stubs named pthreadVC3.lib can be empty 0-byte files on disk.
+-            foreach name : [
+-                'libpthreadVC3', 'libpthreadVC2', 'libpthreadVC',
+-                'pthreadVC3', 'pthreadVC2', 'pthreadVC',
++            # MSVC DEBUG_POSTFIX "d": Debug installs libpthreadVC3d.lib / pthreadVC3d.lib
++            _pthread_names = []
++            if get_option('buildtype') == 'debug'
++                _pthread_names += [
++                    'libpthreadVC3d', 'pthreadVC3d',
++                    'libpthreadVCE3d', 'pthreadVCE3d',
++                    'libpthreadVSE3d', 'pthreadVSE3d',
++                ]
++            endif
++            _pthread_names += [
++                'libpthreadVC3', 'pthreadVC3',
++                'libpthreadVC2', 'pthreadVC2',
++                'libpthreadVC',  'pthreadVC',
+                 'libpthreadVCE3', 'pthreadVCE3',
+                 'libpthreadVSE3', 'pthreadVSE3',
+-                'pthread', 'libpthread', 'pthreads'
++                'pthread', 'libpthread', 'pthreads',
+             ]
++
++            foreach name : _pthread_names
+                 external_pthread = cc.find_library(name, required: false)
+                 if external_pthread.found()
++                    # Heuristic: names with 'libpthread' are static archives
++                    if name.startswith('libpthread')
++                        _ptw32_static = true
++                    else
++                        _ptw32_static = false
++                    endif
+                     break
+                 endif
+             endforeach
+@@ -142,11 +157,9 @@ if cc.get_id() == 'msvc'
+         endif
+ 
+         pthreadwin32_lib = external_pthread
+-        # External consumers of our stack use the static VC archive
+-        _ptw32_static = true
+     endif
+ 
+-    # __PTW32_* matches pthreads4w CMake (VC cleanup = C)
++    # Match pthreads4w VC cleanup; STATIC only when linking a static archive
+     _ptw32_args = ['-D__PTW32_CLEANUP_C']
+     if _ptw32_static
+         _ptw32_args += ['-D__PTW32_STATIC_LIB']

@@ -3,35 +3,32 @@
 	url = https://github.com/StormBytePP/StormByte.git
 	branch = master
 [submodule "Opus codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/opus/src
+	path = thirdparty/ffmpeg/plugins/codecs/audio/opus/src
 	url = https://gitlab.xiph.org/xiph/opus.git
 [submodule "FDK-AAC codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/fdk-aac/src
+	path = thirdparty/ffmpeg/plugins/codecs/audio/fdk-aac/src
 	url = https://github.com/mstorsjo/fdk-aac.git
 [submodule "Ogg container"]
-	path = thirdparty/ffmpeg/plugins/codecs/ogg/src
+	path = thirdparty/ffmpeg/plugins/containers/ogg/src
 	url = https://gitlab.xiph.org/xiph/ogg.git
 [submodule "Vorbis codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/vorbis/src
+	path = thirdparty/ffmpeg/plugins/codecs/audio/vorbis/src
 	url = https://gitlab.xiph.org/xiph/vorbis.git
 [submodule "FFmpeg"]
 	path = thirdparty/ffmpeg/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg.git
-	branch = meson-8.0.1
+	branch = meson-8.1
 [submodule "VPX codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/vpx/src
+	path = thirdparty/ffmpeg/plugins/codecs/video/vpx/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/libvpx.git
 [submodule "X264 codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/x264/src
+	path = thirdparty/ffmpeg/plugins/codecs/video/x264/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/x264.git
 [submodule "X265 codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/x265/src
+	path = thirdparty/ffmpeg/plugins/codecs/video/x265/src
 	url = https://bitbucket.org/multicoreware/x265_git.git
-[submodule "VVenc (H266) codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/vvenc/src
-	url = https://github.com/fraunhoferhhi/vvenc.git
 [submodule "MP3 LAME codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/mp3lame/src
+	path = thirdparty/ffmpeg/plugins/codecs/audio/mp3lame/src
 	url = https://github.com/lameproject/lame.git
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/filters/vmaf/src
@@ -41,11 +38,12 @@
 	path = thirdparty/ffmpeg/plugins/deps/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
 [submodule "XVID codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/xvidcore/cmake-port/src
+	path = thirdparty/ffmpeg/plugins/codecs/video/xvidcore/cmake-port/src
 	url = https://github.com/delthas/xvid.git
 [submodule "Build Master"]
 	path = thirdparty/buildmaster
 	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
+	branch = master
 [submodule "zlib"]
 	path = thirdparty/ffmpeg/plugins/compressors/zlib/src
 	url = https://github.com/madler/zlib.git
@@ -55,3 +53,75 @@
 [submodule "bzip2"]
 	path = thirdparty/ffmpeg/plugins/compressors/bzip2/cmake-port/src
 	url = https://fuchsia.googlesource.com/third_party/bzip2
+[submodule "zimg"]
+	path = thirdparty/ffmpeg/plugins/filters/zimg/cmake-port/src
+	url = https://github.com/sekrit-twc/zimg.git
+[submodule "vidstab"]
+	path = thirdparty/ffmpeg/plugins/filters/vidstab/src
+	url = https://github.com/georgmartius/vid.stab.git
+[submodule "dav1d"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/dav1d/src
+	url = https://code.videolan.org/videolan/dav1d.git
+[submodule "svt-av1"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/svt-av1/src
+	url = https://gitlab.com/AOMediaCodec/SVT-AV1.git
+[submodule "aom"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/aom/src
+	url = https://aomedia.googlesource.com/aom
+[submodule "openh264"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/openh264/src
+	url = https://github.com/cisco/openh264.git
+[submodule "webp"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/webp/src
+	url = https://chromium.googlesource.com/webm/libwebp
+[submodule "kvazaar"]
+	path = thirdparty/ffmpeg/plugins/codecs/video/kvazaar/src
+	url = https://github.com/ultravideo/kvazaar.git
+[submodule "rubberband"]
+	path = thirdparty/ffmpeg/plugins/codecs/audio/rubberband/src
+	url = https://github.com/breakfastquay/rubberband.git
+[submodule "speex"]
+	path = thirdparty/ffmpeg/plugins/codecs/audio/speex/cmake-port/src
+	url = https://gitlab.xiph.org/xiph/speex.git
+[submodule "gsm"]
+	path = thirdparty/ffmpeg/plugins/codecs/audio/gsm/cmake-port/src
+	url = https://github.com/timothytylee/libgsm.git
+[submodule "ass"]
+	path = thirdparty/ffmpeg/plugins/codecs/subtitles/ass/src
+	url = https://github.com/libass/libass.git
+[submodule "freetype"]
+	path = thirdparty/ffmpeg/plugins/deps/freetype/src
+	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "harfbuzz"]
+	path = thirdparty/ffmpeg/plugins/deps/harfbuzz/src
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "fribidi"]
+	path = thirdparty/ffmpeg/plugins/deps/fribidi/src
+	url = https://github.com/fribidi/fribidi.git
+[submodule "samplerate"]
+	path = thirdparty/ffmpeg/plugins/deps/samplerate/src
+	url = https://github.com/libsndfile/libsamplerate.git
+[submodule "expat"]
+	path = thirdparty/ffmpeg/plugins/deps/expat/src
+	url = https://github.com/libexpat/libexpat.git
+[submodule "fontconfig"]
+	path = thirdparty/ffmpeg/plugins/deps/fontconfig/src
+	url = https://gitlab.freedesktop.org/fontconfig/fontconfig.git
+[submodule "leptonica"]
+	path = thirdparty/ffmpeg/plugins/deps/leptonica/src
+	url = https://github.com/DanBloomberg/leptonica.git
+[submodule "tesseract"]
+	path = thirdparty/ffmpeg/plugins/deps/tesseract/src
+	url = https://github.com/tesseract-ocr/tesseract.git
+[submodule "tessdata"]
+	path = thirdparty/ffmpeg/plugins/deps/tessdata/cmake-port/src
+	url = https://github.com/tesseract-ocr/tessdata_fast.git
+[submodule "libpng"]
+	path = thirdparty/ffmpeg/plugins/deps/png/src
+	url = https://github.com/pnggroup/libpng.git
+[submodule "libjpeg-turbo"]
+	path = thirdparty/ffmpeg/plugins/deps/jpeg-turbo/src
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "libtiff"]
+	path = thirdparty/ffmpeg/plugins/deps/tiff/src
+	url = https://gitlab.com/libtiff/libtiff.git
