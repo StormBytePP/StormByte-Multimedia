@@ -58,16 +58,24 @@ else()
 endif()
 include("${VMAF_LIBRARY_CREATE_FILE}")
 
+#if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
+#	# We have to repack the VMAF static library to link pthread_win32 into it
+#	set(VMAF_LIBRARY "${VMAF_BUILD_DIR}/src/libvmaf.a")
+#	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3")
+#	create_bundle_static_libraries(VMAF_BUNDLE_FILE "vmaf" "${VMAF_LIBRARY};${PTHREAD_WIN32_LIBRARY}")
+#	add_custom_command(TARGET vmaf_install POST_BUILD
+#		# First remove the original static library (which is also badly named)
+#		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${BUILDMASTER_INSTALL_LIBDIR}/libvmaf.a"
+#		COMMAND ${ENV_RUNNER_SILENT} ${VMAF_BUNDLE_FILE}
+#		COMMENT "Bundling VMAF with PthreadWin32"
+#	)
+#endif()
 if(FFMPEG_BUNDLED_TYPE STREQUAL "static" AND MSVC)
-	# We have to repack the VMAF static library to link pthread_win32 into it
-	set(VMAF_LIBRARY "${VMAF_BUILD_DIR}/src/libvmaf.a")
-	library_import_static_hint(PTHREAD_WIN32_LIBRARY "pthreadVC3")
-	create_bundle_static_libraries(VMAF_BUNDLE_FILE "vmaf" "${VMAF_LIBRARY};${PTHREAD_WIN32_LIBRARY}")
+	# We have to rename libvmaf.a to vmaf.lib
 	add_custom_command(TARGET vmaf_install POST_BUILD
 		# First remove the original static library (which is also badly named)
-		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E remove "${BUILDMASTER_INSTALL_LIBDIR}/libvmaf.a"
-		COMMAND ${ENV_RUNNER_SILENT} ${VMAF_BUNDLE_FILE}
-		COMMENT "Bundling VMAF with PthreadWin32"
+		COMMAND ${ENV_CMAKE_SILENT_COMMAND} -E rename "${BUILDMASTER_INSTALL_LIBDIR}/libvmaf.a" "${BUILDMASTER_INSTALL_LIBDIR}/vmaf.lib"
+		COMMENT "Renaming VMAF library"
 	)
 endif()
 
