@@ -133,7 +133,7 @@ jobs:
       fail-fast: false
       matrix:
         extra: [ON, OFF]
-    name: windows-msvc-extra(${{ matrix.extra }})
+    name: windows-clang-cl-extra(${{ matrix.extra }})
 
     steps:
       - name: Checkout repository and submodules
@@ -156,8 +156,8 @@ jobs:
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
-          toolchain: msvc
-          ccache-key: v1-msvc-extra-${{ matrix.extra }}
+          toolchain: clang-cl
+          ccache-key: v1-clang-cl-extra-${{ matrix.extra }}
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
             -DENABLE_TEST=ON

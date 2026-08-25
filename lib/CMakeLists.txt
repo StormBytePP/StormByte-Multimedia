@@ -1,10 +1,9 @@
 include(GNUInstallDirs)
 
-# Sources
 file(GLOB_RECURSE STORMBYTE_MULTIMEDIA_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.cxx")
 
 # Generate implemented backends file
-set(IMPLEMENTED_BACKENDS "Implementation::FFmpeg") # Improve this when there is more than one backend available
+set(IMPLEMENTED_BACKENDS "Implementation::FFmpeg") # Improve when more backends exist
 set(SOURCE_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/implementation.cxx.in")
 set(GENERATED_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_BINARY_DIR}/implementation.cxx")
 configure_file(
@@ -14,49 +13,47 @@ configure_file(
 )
 list(APPEND STORMBYTE_MULTIMEDIA_SOURCES "${GENERATED_IMPLEMENTED_BACKENDS_FILE}")
 
-# ----------------------------------------------------------------------
 # Generate embedded tessdata
-# ----------------------------------------------------------------------
-set(TESSDATA_NAMESPACE      "StormByte::Multimedia::Engine::OCR")
-set(TESSDATA_FUNCTION_NAME  "TessData")
-set(TESSDATA_DIR            "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/OCR/tessdata")
+set(TESSDATA_NAMESPACE     "StormByte::Multimedia::Engine::OCR")
+set(TESSDATA_FUNCTION_NAME "TessData")
+set(TESSDATA_DIR           "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/OCR/tessdata")
 set(GENERATED_TESSDATA_FILE "${CMAKE_CURRENT_BINARY_DIR}/tessdata.cxx")
 
 include(${PROJECT_SOURCE_DIR}/cmake/tessdata.cmake)
 
 if(DEFINED STORMBYTE_TESSDATA_GENERATED_SOURCE)
-    list(APPEND STORMBYTE_MULTIMEDIA_SOURCES ${STORMBYTE_TESSDATA_GENERATED_SOURCE})
+	list(APPEND STORMBYTE_MULTIMEDIA_SOURCES ${STORMBYTE_TESSDATA_GENERATED_SOURCE})
 endif()
 
-# Library
 add_library(StormByte-Multimedia SHARED ${STORMBYTE_MULTIMEDIA_SOURCES})
 add_library(StormByte::Multimedia ALIAS StormByte-Multimedia)
+
 set_target_properties(StormByte-Multimedia PROPERTIES
 	LINKER_LANGUAGE CXX
-	SOVERSION		${CMAKE_PROJECT_VERSION}
-	VERSION 		${CMAKE_PROJECT_VERSION}
-)
-set_target_properties(StormByte-Multimedia PROPERTIES
-	POSITION_INDEPENDENT_CODE        ON
-	CXX_VISIBILITY_PRESET            hidden
-	VISIBILITY_INLINES_HIDDEN        ON
+	SOVERSION ${CMAKE_PROJECT_VERSION}
+	VERSION ${CMAKE_PROJECT_VERSION}
+	POSITION_INDEPENDENT_CODE ON
+	CXX_VISIBILITY_PRESET hidden
+	VISIBILITY_INLINES_HIDDEN ON
 )
 
-# Compile options
 if(MSVC)
-	target_compile_options(StormByte-Multimedia PRIVATE /EHsc)
-	target_compile_options(StormByte-Multimedia PRIVATE $<$<CONFIG:Release>:/O2>)
-	target_compile_options(StormByte-Multimedia PRIVATE $<$<CONFIG:Debug>:/Od>)
-	target_compile_definitions(StormByte-Multimedia PUBLIC UNICODE NOMINMAX) # Create problems if disabled
+	target_compile_options(StormByte-Multimedia PRIVATE
+		/EHsc
+		$<$<CONFIG:Release>:/O2>
+		$<$<CONFIG:Debug>:/Od>
+	)
+	target_compile_definitions(StormByte-Multimedia PUBLIC UNICODE NOMINMAX)
 else()
-	set(CMAKE_CXX_FLAGS_DEBUG "-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0")
-	target_compile_options(StormByte-Multimedia PRIVATE -fvisibility=hidden $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>)
+	target_compile_options(StormByte-Multimedia PRIVATE
+		-fvisibility=hidden
+		$<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
+		$<$<CONFIG:Debug>:-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0>
+	)
 endif()
 
-# Include directories
 target_include_directories(StormByte-Multimedia
 	SYSTEM BEFORE
-		PUBLIC "${CMAKE_CURRENT_LIST_DIR}/public"
+		PUBLIC  "${CMAKE_CURRENT_LIST_DIR}/public"
 		PRIVATE "${CMAKE_CURRENT_LIST_DIR}/private"
 )
-
