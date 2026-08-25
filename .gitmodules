@@ -114,7 +114,7 @@
 	path = thirdparty/ffmpeg/plugins/deps/tesseract/src
 	url = https://github.com/tesseract-ocr/tesseract.git
 [submodule "tessdata"]
-	path = thirdparty/ffmpeg/plugins/deps/tessdata/cmake-port/src
+	path = lib/private/StormByte/multimedia/engine/OCR/tessdata
 	url = https://github.com/tesseract-ocr/tessdata_fast.git
 [submodule "libpng"]
 	path = thirdparty/ffmpeg/plugins/deps/png/src

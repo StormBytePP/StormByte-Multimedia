@@ -1,7 +1,7 @@
 # StormByte
 ![Linux](https://img.shields.io/badge/Linux-Supported-1793D1?logo=linux&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
-![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B&logoColor=white)
+![C++26](https://img.shields.io/badge/C%2B%2B-26-00599C?logo=c%2B%2B&logoColor=white)
 ![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
 ![License: LGPL v3 / Commercial](https://img.shields.io/badge/License-LGPL_v3%20%2F%20Commercial-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success)
@@ -54,7 +54,7 @@ You can visit the code repository at [GitHub](https://github.com/StormBytePP/Sto
 
 Ensure you have the following installed:
 
-- C++23 compatible compiler
+- C++26 compatible compiler
 - CMake 3.12 or higher
 
 ### Building

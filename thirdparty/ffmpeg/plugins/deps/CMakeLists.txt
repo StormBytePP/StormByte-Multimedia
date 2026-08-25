@@ -17,7 +17,6 @@ add_subdirectory(tiff)         # → zlib_install + jpeg-turbo_install
 # OCR
 add_subdirectory(leptonica)    # → zlib, png, jpeg-turbo, tiff
 add_subdirectory(tesseract)
-add_subdirectory(tessdata)
 
 if(MSVC)
 	add_subdirectory(pthread-win32)
