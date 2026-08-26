@@ -81,6 +81,7 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: ${{ matrix.compiler }}
+          version: ${{ matrix.compiler == 'gcc' && '15' || '' }}
           ccache-key: v1-${{ matrix.compiler }}-extra-${{ matrix.extra }}
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
