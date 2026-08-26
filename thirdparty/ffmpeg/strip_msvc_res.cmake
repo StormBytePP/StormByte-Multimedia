@@ -6,37 +6,43 @@ if(NOT LIB OR NOT MEMBER)
 endif()
 
 if(NOT EXISTS "${LIB}")
-	message(STATUS "strip_msvc_res: skip (missing ${LIB})")
 	return()
 endif()
 
-# Is the member present?
+# Prefer CMAKE_AR, with compiler-based fallbacks
+if(CMAKE_AR)
+	set(_LIB_TOOL "${CMAKE_AR}")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+	find_program(_LIB_TOOL NAMES llvm-lib)
+else()
+	find_program(_LIB_TOOL NAMES lib)
+endif()
+
+if(NOT _LIB_TOOL)
+	message(FATAL_ERROR "strip_msvc_res: could not find lib/llvm-lib")
+endif()
+
+# LIST
 execute_process(
-	COMMAND lib /NOLOGO /LIST "${LIB}"
+	COMMAND "${_LIB_TOOL}" /NOLOGO /LIST "${LIB}"
 	OUTPUT_VARIABLE _list
 	ERROR_VARIABLE _err
 	RESULT_VARIABLE _rc
 	OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _rc EQUAL 0)
-	message(STATUS "strip_msvc_res: lib /LIST failed on ${LIB} (${_rc})")
 	return()
 endif()
 
 string(FIND "${_list}" "${MEMBER}" _pos)
 if(_pos EQUAL -1)
-	message(STATUS "strip_msvc_res: ${MEMBER} not in ${LIB} (ok)")
 	return()
 endif()
 
+# REMOVE
 execute_process(
-	COMMAND lib /NOLOGO "/REMOVE:${MEMBER}" "${LIB}"
+	COMMAND "${_LIB_TOOL}" /NOLOGO "/REMOVE:${MEMBER}" "${LIB}"
 	RESULT_VARIABLE _rc2
 	OUTPUT_VARIABLE _out2
 	ERROR_VARIABLE _err2
 )
-if(NOT _rc2 EQUAL 0)
-	message(WARNING "strip_msvc_res: /REMOVE failed (${_rc2}): ${_err2}")
-else()
-	message(STATUS "strip_msvc_res: removed ${MEMBER} from ${LIB}")
-endif()
