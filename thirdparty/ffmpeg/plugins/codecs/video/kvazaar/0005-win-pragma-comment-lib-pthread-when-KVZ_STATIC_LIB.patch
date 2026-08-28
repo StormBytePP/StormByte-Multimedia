@@ -1,0 +1,30 @@
+From 4667752d9dd9b5736a92656cfa84a17cfa848854 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 07:10:32 +0200
+Subject: [PATCH 5/5] win: pragma comment(lib, pthread) when KVZ_STATIC_LIB
+
+Meson 1.10 has_function links kvazaar.lib without -lpthread
+even when Libs: lists it. The static Windows probe then
+fails on pthread_create.
+---
+ src/kvazaar.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/kvazaar.h b/src/kvazaar.h
+index f3f1c6ad..43a82949 100644
+--- a/src/kvazaar.h
++++ b/src/kvazaar.h
+@@ -72,6 +72,10 @@ extern "C" {
+   #endif
+ #endif
+ 
++#if defined(_WIN32) && defined(KVZ_STATIC_LIB)
++#  pragma comment(lib, "pthread")
++#endif
++
+ /**
+  * Maximum length of a GoP structure.
+  */
+-- 
+2.55.0
+

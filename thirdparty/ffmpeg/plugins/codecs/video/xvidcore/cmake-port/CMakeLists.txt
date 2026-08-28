@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 project(xvidcore LANGUAGES C)
 
-# Solo activamos NASM si realmente vamos a usarlo (x86)
+# NASM only on x86. Apple Silicon stays pure C.
 set(XVID_IS_X86 FALSE)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-6]86|x86")
 	set(XVID_IS_X86 TRUE)
 endif()
 
-# En Apple también respetamos la arquitectura de destino (por si hay universal)
+# Honour CMAKE_OSX_ARCHITECTURES when the parent forces a slice.
 if(APPLE AND CMAKE_OSX_ARCHITECTURES)
 	list(FIND CMAKE_OSX_ARCHITECTURES "x86_64" _idx)
 	if(_idx GREATER -1)
@@ -24,7 +24,7 @@ endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ---------------------------------------------
-# Sources (C siempre)
+# Sources (C always)
 # ---------------------------------------------
 set(XVID_SRC
 	${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/decoder.c
@@ -82,7 +82,7 @@ set(XVID_SRC
 )
 
 # ---------------------------------------------
-# ASM (solo x86)
+# ASM (x86 only)
 # ---------------------------------------------
 set(XVID_ASM)
 if(XVID_IS_X86)
@@ -130,7 +130,6 @@ if(XVID_IS_X86)
 		${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm/plugin_ssim-a.asm
 	)
 
-	# NASM include paths
 	set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/bitstream/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/dct/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/image/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/motion/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/plugins/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/quant/x86_asm -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src/utils/x86_asm")
 endif()
 
@@ -161,29 +160,43 @@ if(MSVC)
 			set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DWINDOWS -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
 		endif()
 	else()
-		# ARM64 Windows (raro, pero por si acaso)
 		add_compile_definitions(ARCH_IS_64BIT)
 	endif()
 
 	set(MSVC_FLAGS /W3 /MP)
 
 else()
-	# Linux / macOS / Clang / GCC
 	add_compile_definitions(HAVE_PTHREAD)
 
 	if(XVID_IS_X86)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			add_compile_definitions(ARCH_IS_X86_64 ARCH_IS_64BIT)
-			set(NASM_FORMAT elf64)
 		else()
 			add_compile_definitions(ARCH_IS_IA32 ARCH_IS_32BIT)
-			set(NASM_FORMAT elf32)
+		endif()
+
+		# Darwin C uses Mach-O underscore prefix. elf64 leaves
+		# check_cpu_features without '_' and ld looks for _check_cpu_features.
+		if(APPLE)
+			if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+				set(NASM_FORMAT macho64)
+			else()
+				set(NASM_FORMAT macho32)
+			endif()
+		else()
+			if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+				set(NASM_FORMAT elf64)
+			else()
+				set(NASM_FORMAT elf32)
+			endif()
 		endif()
 
 		set(CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_FORMAT})
 		set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I${CMAKE_CURRENT_LIST_DIR}/src/xvidcore/src")
+		if(APPLE)
+			set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DPREFIX")
+		endif()
 	else()
-		# ARM64 / aarch64 / Apple Silicon / cualquier no-x86 → pure C
 		add_compile_definitions(ARCH_IS_GENERIC)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			add_compile_definitions(ARCH_IS_64BIT)

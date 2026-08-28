@@ -1,0 +1,21 @@
+--- a/cmake/templates/LeptonicaConfig.cmake.in
++++ b/cmake/templates/LeptonicaConfig.cmake.in
+@@ -21,6 +21,18 @@
+ # ===================================================================================
+ 
+ include(CMakeFindDependencyMacro)
++if (@ENABLE_ZLIB@)
++    find_dependency(ZLIB)
++endif()
++if (@ENABLE_PNG@)
++    find_dependency(PNG)
++endif()
++if (@ENABLE_JPEG@)
++    find_dependency(JPEG)
++endif()
++if (@ENABLE_TIFF@)
++    find_dependency(TIFF)
++endif()
+ if (@OPENJPEG_SUPPORT@)
+     find_dependency(OpenJPEG CONFIG)
+ endif()

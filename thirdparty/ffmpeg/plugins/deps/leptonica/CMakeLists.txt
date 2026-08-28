@@ -1,9 +1,10 @@
 set(LEPTONICA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-ensure_build_dir(LEPTONICA_BUILD_DIR)
 set(LEPTONICA_COMPONENT "leptonica")
 
-get_filename_component(_BM_PREFIX "${BUILDMASTER_INSTALL_LIBDIR}" DIRECTORY)
-
+# Upstream MSVC OUTPUT_NAME is leptonica-${VERSION}. BM produced is
+# "leptonica"; rename then moves the .lib and LeptonicaTargets.cmake
+# still points at leptonica-1.87.0.lib → tesseract find_package dies.
+# Patch forces OUTPUT_NAME=leptonica on every OS (no-op on Unix).
 set(LEPTONICA_OPTIONS
 	"-DSW_BUILD=OFF"
 	"-DBUILD_PROG=OFF"
@@ -15,59 +16,31 @@ set(LEPTONICA_OPTIONS
 	"-DENABLE_WEBP=OFF"
 	"-DENABLE_OPENJPEG=OFF"
 	"-DSTRICT_CONF=ON"
-	"-DCMAKE_PREFIX_PATH=${_BM_PREFIX}"
-	"-DZLIB_ROOT=${_BM_PREFIX}"
-	"-DPNG_ROOT=${_BM_PREFIX}"
-	"-DJPEG_ROOT=${_BM_PREFIX}"
-	"-DTIFF_ROOT=${_BM_PREFIX}"
-	"-DZLIB_INCLUDE_DIR=${BUILDMASTER_INSTALL_INCLUDEDIR}"
 )
-
-if(MSVC)
-	list(APPEND LEPTONICA_OPTIONS
-		"-DZLIB_LIBRARY=${BUILDMASTER_INSTALL_LIBDIR}/zlib.lib"
-		"-DPNG_LIBRARY=${BUILDMASTER_INSTALL_LIBDIR}/png.lib"
-		"-DJPEG_LIBRARY=${BUILDMASTER_INSTALL_LIBDIR}/jpeg.lib"
-		"-DTIFF_LIBRARY=${BUILDMASTER_INSTALL_LIBDIR}/tiff.lib"
-	)
-endif()
-
 if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
 	list(APPEND LEPTONICA_OPTIONS "-DBUILD_SHARED_LIBS=ON")
 else()
 	list(APPEND LEPTONICA_OPTIONS "-DBUILD_SHARED_LIBS=OFF")
 endif()
 
-create_cmake_dependant_component(
-	LEPTONICA_LIBRARY_CREATE_FILE
-	"leptonica"
+set(LEPTONICA_PATCHES
+	${CMAKE_CURRENT_LIST_DIR}/0001-msvc-unversioned-output-name.patch
+	${CMAKE_CURRENT_LIST_DIR}/0002-always-create-lept.pc.patch
+	${CMAKE_CURRENT_LIST_DIR}/0003-config-find-dependency-image-libs.patch
+)
+
+buildmaster_component(
+	leptonica
 	"${LEPTONICA_COMPONENT}"
 	"${LEPTONICA_SRC_DIR}"
-	"${LEPTONICA_BUILD_DIR}"
 	"${LEPTONICA_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"leptonica"
-	"zlib_install;png_install;jpeg-turbo_install;tiff_install"
-	${PLUGIN_LEVEL}
+	"GIT={RESET;PATCH={${LEPTONICA_PATCHES}};TITLE=Leptonica patches}"
 )
-include("${LEPTONICA_LIBRARY_CREATE_FILE}")
-
-if(MSVC)
-	add_custom_command(TARGET leptonica_install POST_BUILD
-		COMMAND ${CMAKE_COMMAND}
-			-DDIR=${BUILDMASTER_INSTALL_LIBDIR}
-			-DPATTERN=leptonica-*.lib
-			-DOUT=leptonica.lib
-			-DMODE=copy
-			-P "${FFMPEG_RENAME_MSVC_LIB}"
-		COMMAND ${CMAKE_COMMAND}
-			-DDIR=${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig
-			-DPATTERN=lept*.pc
-			-DOUT=lept.pc
-			-DMODE=copy
-			-P "${FFMPEG_RENAME_MSVC_LIB}"
-		COMMENT "Normalize leptonica.lib and lept.pc (MSVC)"
-	)
-endif()
-
+buildmaster_link(leptonica zlib)
+buildmaster_link(leptonica png)
+buildmaster_link(leptonica jpeg-turbo)
+buildmaster_link(leptonica tiff)
+buildmaster_group_add(ff-deps leptonica)
 register_dependency(leptonica)

@@ -1,8 +1,8 @@
-message_indented("Codecs:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-codecs "Codecs")
+buildmaster_group_add(ff-plugins ff-codecs)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(audio)
-add_subdirectory(video)
 add_subdirectory(subtitles)
+add_subdirectory(video)
 
 set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

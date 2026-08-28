@@ -1,7 +1,3 @@
-message_indented("Setting up atadenoise" ${PLUGIN_LEVEL})
-
-# Dummy targets required by register_plugin
-add_library(atadenoise INTERFACE)
-add_custom_target(atadenoise_install)
-
-register_plugin(atadenoise "-Datadenoise_filter=enabled")
+buildmaster_group(atadenoise "atadenoise")
+buildmaster_group_add(ff-filters atadenoise)
+register_builtin_plugin("atadenoise_filter=enabled")

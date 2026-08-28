@@ -1,0 +1,96 @@
+From b571ed225c4fed9028788c990ad0529d8bbbec4a Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 06:07:46 +0200
+Subject: [PATCH 2/3] cmake: unversioned png stem and no self-symlink
+
+OUTPUT_NAME png so pkg-config is -lpng (png.lib / libpng.a),
+not -lpng16. The old libpng.a -> libpng16.a link becomes a
+loop when both names are png; skip it. FFmpeg Meson and BM
+produced "png" see the same archive.
+---
+ CMakeLists.txt | 34 +++++++++++++++++++++-------------
+ libpng.pc.in   |  2 +-
+ 2 files changed, 22 insertions(+), 14 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 009074ebe..d7ae6a157 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -646,21 +646,24 @@ set(png_fix_itxt_sources
+ set(PNG_LIBRARY_TARGETS "")
+ 
+ # Initialize the libpng library file names.
++# Unversioned stem: pkg-config -lpng and BM produced "png"
++# (png.lib / libpng.a). Versioned png16 / libpng16_static
++# break FFmpeg Meson on MSVC.
+ if(UNIX
+    OR (WIN32 AND NOT CMAKE_SHARED_LIBRARY_PREFIX STREQUAL "")
+    OR (WIN32 AND NOT CMAKE_STATIC_LIBRARY_PREFIX STREQUAL ""))
+   # We are on a Unix or Unix-like toolchain like the GNU toolchain on Windows.
+   # Library file names are expected to have an implicit prefix such as "lib".
+   # Let CMake prepend and append its usual prefixes and suffixes by default.
+-  set(PNG_SHARED_OUTPUT_NAME "png${PNGLIB_ABI_VERSION}")
+-  set(PNG_STATIC_OUTPUT_NAME "png${PNGLIB_ABI_VERSION}")
++  set(PNG_SHARED_OUTPUT_NAME "png")
++  set(PNG_STATIC_OUTPUT_NAME "png")
+ else()
+   # We are, most likely, on a Windows toolchain like MSVC, Clang on Windows,
+   # Borland/Embarcadero, etc. We need to specify the "libpng" name explicitly.
+   # We also need to use a custom suffix, in order to distinguish between the
+   # shared import library name and the static library name.
+-  set(PNG_SHARED_OUTPUT_NAME "libpng${PNGLIB_ABI_VERSION}")
+-  set(PNG_STATIC_OUTPUT_NAME "libpng${PNGLIB_ABI_VERSION}_static")
++  set(PNG_SHARED_OUTPUT_NAME "png")
++  set(PNG_STATIC_OUTPUT_NAME "png")
+ endif()
+ 
+ if(PNG_SHARED)
+@@ -1112,19 +1115,24 @@ if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
+           FRAMEWORK DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+ 
+   if(PNG_SHARED)
+-    # Create a symlink for libpng.dll.a => libpng16.dll.a on Cygwin
+-    if(NOT WIN32 OR CYGWIN OR MINGW)
+-      create_symlink(libpng${CMAKE_SHARED_LIBRARY_SUFFIX} TARGET png_shared)
+-      install(FILES "$<TARGET_LINKER_FILE_DIR:png_shared>/libpng${CMAKE_SHARED_LIBRARY_SUFFIX}"
+-              DESTINATION "${CMAKE_INSTALL_LIBDIR}")
++    # Versioned OUTPUT_NAME used to be png16; unversioned symlink
++    # libpng.so -> libpng16.so. With OUTPUT_NAME png that link is a loop.
++    if(NOT PNG_SHARED_OUTPUT_NAME STREQUAL "png")
++      if(NOT WIN32 OR CYGWIN OR MINGW)
++        create_symlink(libpng${CMAKE_SHARED_LIBRARY_SUFFIX} TARGET png_shared)
++        install(FILES "$<TARGET_LINKER_FILE_DIR:png_shared>/libpng${CMAKE_SHARED_LIBRARY_SUFFIX}"
++                DESTINATION "${CMAKE_INSTALL_LIBDIR}")
++      endif()
+     endif()
+   endif()
+ 
+   if(PNG_STATIC)
+-    if(NOT WIN32 OR CYGWIN OR MINGW)
+-      create_symlink(libpng${CMAKE_STATIC_LIBRARY_SUFFIX} TARGET png_static)
+-      install(FILES "$<TARGET_LINKER_FILE_DIR:png_static>/libpng${CMAKE_STATIC_LIBRARY_SUFFIX}"
+-              DESTINATION "${CMAKE_INSTALL_LIBDIR}")
++    if(NOT PNG_STATIC_OUTPUT_NAME STREQUAL "png")
++      if(NOT WIN32 OR CYGWIN OR MINGW)
++        create_symlink(libpng${CMAKE_STATIC_LIBRARY_SUFFIX} TARGET png_static)
++        install(FILES "$<TARGET_LINKER_FILE_DIR:png_static>/libpng${CMAKE_STATIC_LIBRARY_SUFFIX}"
++                DESTINATION "${CMAKE_INSTALL_LIBDIR}")
++      endif()
+     endif()
+   endif()
+ endif()
+diff --git a/libpng.pc.in b/libpng.pc.in
+index de127d4f8..67bd43466 100644
+--- a/libpng.pc.in
++++ b/libpng.pc.in
+@@ -7,6 +7,6 @@ Name: libpng
+ Description: Loads and saves PNG files
+ Version: @PNGLIB_VERSION@
+ Requires.private: zlib
+-Libs: -L${libdir} -lpng@PNGLIB_MAJOR@@PNGLIB_MINOR@
++Libs: -L${libdir} -lpng
+ Libs.private: @LIBS@
+ Cflags: -I${includedir}
+-- 
+2.55.0
+

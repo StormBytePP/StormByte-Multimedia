@@ -135,4 +135,10 @@ file(WRITE "${GENERATED_TESSDATA_FILE}" "${generated_content}")
 # ----------------------------------------------------------------------
 set(STORMBYTE_TESSDATA_GENERATED_SOURCE "${GENERATED_TESSDATA_FILE}")
 
+# Clang 21 still tags C++ #embed as a C23 extension. -Werror/-pedantic-errors
+# on the parent target would fail this TU. GCC does not use that warning id.
+set_source_files_properties("${GENERATED_TESSDATA_FILE}" PROPERTIES
+	COMPILE_OPTIONS "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-c23-extensions>"
+)
+
 message(STATUS "[tessdata] Generated → ${GENERATED_TESSDATA_FILE}")

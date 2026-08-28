@@ -1,6 +1,6 @@
-message_indented("Compressors:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-compressors "Compressors")
+buildmaster_group_add(ff-plugins ff-compressors)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(bzip2)
 add_subdirectory(lzma)
 add_subdirectory(zlib)

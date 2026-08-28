@@ -1,0 +1,45 @@
+From b9669258355f897a64efcb5ea970ffb76d7fb487 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 05:34:42 +0200
+Subject: [PATCH 3/5] cmake: add -DKVZ_STATIC_LIB to pkg-config Cflags when
+ static
+
+kvazaar.h uses dllimport on Windows unless KVZ_STATIC_LIB is set.
+FFmpeg Meson then looks for __imp_kvz_api_get and drops the encoder.
+---
+ CMakeLists.txt         | 8 ++++++++
+ src/kvazaarCMake.pc.in | 2 +-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 138b5b7e..0561d035 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -128,6 +128,14 @@ if(WIN32)
+     set(LIBS "${LIBS} -lpthread")
+ endif()
+ 
++# Static consumers (FFmpeg Meson) must see KVZ_STATIC_LIB or
++# kvazaar.h uses dllimport on Windows (__imp_kvz_api_get).
++if(NOT BUILD_SHARED_LIBS)
++    set(KVAZAAR_PC_CFLAGS "-DKVZ_STATIC_LIB")
++else()
++    set(KVAZAAR_PC_CFLAGS "")
++endif()
++
+ # Apply dynamic info to the config files
+ configure_file("${PROJECT_SOURCE_DIR}/src/kvazaarCMake.pc.in" "${PROJECT_SOURCE_DIR}/src/kvazaar.pc.temp" @ONLY)
+ configure_file("${PROJECT_SOURCE_DIR}/src/version.h.in" "${PROJECT_SOURCE_DIR}/src/version.h" @ONLY)
+diff --git a/src/kvazaarCMake.pc.in b/src/kvazaarCMake.pc.in
+index 9eee3b1c..f5b54e29 100644
+--- a/src/kvazaarCMake.pc.in
++++ b/src/kvazaarCMake.pc.in
+@@ -9,4 +9,4 @@ URL: @CMAKE_PROJECT_HOMEPAGE_URL@
+ Version: @PROJECT_VERSION@
+ Libs: -L${libdir} -lkvazaar
+ Libs.private: @LIBS@
+-Cflags: -I${incdir}
++Cflags: -I${incdir} @KVAZAAR_PC_CFLAGS@
+-- 
+2.55.0
+

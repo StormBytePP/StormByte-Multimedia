@@ -1,7 +1,3 @@
-message_indented("Setting up yadif" ${PLUGIN_LEVEL})
-
-# Dummy targets required by register_plugin
-add_library(yadif INTERFACE)
-add_custom_target(yadif_install)
-
-register_plugin(yadif "-Dyadif_filter=enabled")
+buildmaster_group(yadif "yadif")
+buildmaster_group_add(ff-filters yadif)
+register_builtin_plugin("yadif_filter=enabled")

@@ -1,0 +1,27 @@
+From 919f1b25fee0d75b425429e1f1c2cfd7b10bb9a8 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 02:28:41 +0200
+Subject: [PATCH 2/3] meson: keep libwebp enabled when the option is allowed
+
+Same placeholder as libvpx. Without conf.set('libwebp', 1) the
+post-check loop leaves libwebp=0 and drops libwebp_encoder /
+libwebp_anim_encoder even after successful header/symbol probes.
+---
+ meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/meson.build b/meson.build
+index d85d4bbec4..73cc735874 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1075,6 +1075,7 @@ if get_option('libvpx').allowed()
+ endif
+ 
+ if get_option('libwebp').allowed()
++  conf.set('libwebp', 1)
+   check_pkg_config += [
+     ['libwebp_encoder', ['webp/encode.h'], ['WebPGetEncoderVersion'], {'pkg': 'libwebp', 'version': '>= 0.2.0'}],
+     ['libwebp_anim_encoder', ['webp/mux.h'], ['WebPAnimEncoderOptionsInit'], {'pkg': 'libwebpmux', 'version': '>= 0.4.0'}],
+-- 
+2.55.0
+

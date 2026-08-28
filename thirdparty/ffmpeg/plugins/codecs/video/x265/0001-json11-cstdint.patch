@@ -1,0 +1,12 @@
+diff --git a/source/dynamicHDR10/json11/json11.cpp b/source/dynamicHDR10/json11/json11.cpp
+index 762577735..7be070c4c 100644
+--- a/source/dynamicHDR10/json11/json11.cpp
++++ b/source/dynamicHDR10/json11/json11.cpp
+@@ -24,6 +24,7 @@
+ #include <cmath>
+ #include <cstdlib>
+ #include <cstdio>
++#include <cstdint>
+ #include <limits>
+ 
+ #if _MSC_VER

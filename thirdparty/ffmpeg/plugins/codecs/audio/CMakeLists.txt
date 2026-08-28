@@ -1,6 +1,6 @@
-message_indented("Audio:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-audio "Audio")
+buildmaster_group_add(ff-codecs ff-audio)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(fdk-aac)
 add_subdirectory(gsm)
 add_subdirectory(mp3lame)

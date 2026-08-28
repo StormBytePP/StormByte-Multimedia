@@ -1,7 +1,3 @@
-message_indented("Setting up webvtt" ${PLUGIN_LEVEL})
-
-# Dummy targets required by register_plugin (built-in FFmpeg, no external lib)
-add_library(webvtt INTERFACE)
-add_custom_target(webvtt_install)
-
-register_plugin(webvtt "-Dwebvtt_demuxer=enabled -Dwebvtt_muxer=enabled -Dwebvtt_decoder=enabled -Dwebvtt_encoder=enabled")
+buildmaster_group(webvtt "webvtt")
+buildmaster_group_add(ff-subtitles webvtt)
+register_builtin_plugin("webvtt_demuxer=enabled webvtt_muxer=enabled webvtt_decoder=enabled webvtt_encoder=enabled")

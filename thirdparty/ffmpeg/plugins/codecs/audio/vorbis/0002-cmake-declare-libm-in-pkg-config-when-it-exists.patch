@@ -1,0 +1,40 @@
+From 70729c6cf5bbf1075100128b5e163f5b84c6a9c4 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 02:44:44 +0200
+Subject: [PATCH] cmake: declare libm in pkg-config when it exists
+
+HAVE_LIBM was probed and unused. Static consumers need -lm on
+UNIX/MinGW. MSVC has no libm; leave Libs.private empty there.
+---
+ CMakeLists.txt | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f377c428..2a87dd48 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,7 +15,7 @@ if(APPLE)
+ endif()
+ 
+ if(BUILD_FRAMEWORK)
+-	set(BUILD_SHARED_LIBS TRUE)
++    set(BUILD_SHARED_LIBS TRUE)
+ endif()
+ 
+ option(INSTALL_CMAKE_PACKAGE_MODULE "Install CMake package configiguration module" ON)
+@@ -51,6 +51,12 @@ function(configure_pkg_config_file pkg_config_file_in)
+     set(libdir ${CMAKE_INSTALL_FULL_LIBDIR})
+     set(includedir ${CMAKE_INSTALL_FULL_INCLUDEDIR})
+     set(VERSION ${PROJECT_VERSION})
++    # HAVE_LIBM is UNIX/MinGW. MSVC has no libm; math is in the CRT.
++    if(HAVE_LIBM)
++        set(VORBIS_LIBS "-lm")
++    else()
++        set(VORBIS_LIBS "")
++    endif()
+     string(REPLACE ".in" "" pkg_config_file ${pkg_config_file_in})
+     configure_file(${pkg_config_file_in} ${pkg_config_file} @ONLY)
+ endfunction()
+-- 
+2.55.0
+

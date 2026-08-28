@@ -26,49 +26,51 @@ endif()
 
 # --- Sources -------------------------------------------------------------
 
+set(LAME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
 set(LAME_SRC
-    ../src/libmp3lame/bitstream.c
-	../src/libmp3lame/gain_analysis.c
-    ../src/libmp3lame/encoder.c
-    ../src/libmp3lame/fft.c
-    ../src/libmp3lame/id3tag.c
-    ../src/libmp3lame/lame.c
-    ../src/libmp3lame/newmdct.c
-    ../src/libmp3lame/presets.c
-    ../src/libmp3lame/psymodel.c
-    ../src/libmp3lame/quantize.c
-    ../src/libmp3lame/quantize_pvt.c
-    ../src/libmp3lame/reservoir.c
-    ../src/libmp3lame/set_get.c
-    ../src/libmp3lame/tables.c
-    ../src/libmp3lame/takehiro.c
-    ../src/libmp3lame/util.c
-    ../src/libmp3lame/vbrquantize.c
-    ../src/libmp3lame/VbrTag.c
-    ../src/libmp3lame/version.c
+    ${LAME_ROOT}/libmp3lame/bitstream.c
+    ${LAME_ROOT}/libmp3lame/gain_analysis.c
+    ${LAME_ROOT}/libmp3lame/encoder.c
+    ${LAME_ROOT}/libmp3lame/fft.c
+    ${LAME_ROOT}/libmp3lame/id3tag.c
+    ${LAME_ROOT}/libmp3lame/lame.c
+    ${LAME_ROOT}/libmp3lame/newmdct.c
+    ${LAME_ROOT}/libmp3lame/presets.c
+    ${LAME_ROOT}/libmp3lame/psymodel.c
+    ${LAME_ROOT}/libmp3lame/quantize.c
+    ${LAME_ROOT}/libmp3lame/quantize_pvt.c
+    ${LAME_ROOT}/libmp3lame/reservoir.c
+    ${LAME_ROOT}/libmp3lame/set_get.c
+    ${LAME_ROOT}/libmp3lame/tables.c
+    ${LAME_ROOT}/libmp3lame/takehiro.c
+    ${LAME_ROOT}/libmp3lame/util.c
+    ${LAME_ROOT}/libmp3lame/vbrquantize.c
+    ${LAME_ROOT}/libmp3lame/VbrTag.c
+    ${LAME_ROOT}/libmp3lame/version.c
 )
 
 # --- Library -------------------------------------------------------------
 
 if(BUILD_SHARED_LIBS)
-	add_library(mp3lame SHARED ${LAME_SRC})
+    add_library(mp3lame SHARED ${LAME_SRC})
 else()
-	add_library(mp3lame STATIC ${LAME_SRC})
+    add_library(mp3lame STATIC ${LAME_SRC})
 endif()
 set_target_properties(mp3lame PROPERTIES VERSION 3.100.1 SOVERSION 3 OUTPUT_NAME "mp3lame")
 if(WIN32)
-	if(MSVC)
-		set_target_properties(mp3lame PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-	else()
-		target_link_options(mp3lame PRIVATE "-Wl,--export-all-symbols")
-	endif()
+    if(MSVC)
+        set_target_properties(mp3lame PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    else()
+        target_link_options(mp3lame PRIVATE "-Wl,--export-all-symbols")
+    endif()
 endif()
 
 target_include_directories(mp3lame
     PUBLIC
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../src/libmp3lame>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${LAME_ROOT}/include>
+        $<BUILD_INTERFACE:${LAME_ROOT}/libmp3lame>
         $<INSTALL_INTERFACE:include>
 )
 
@@ -91,7 +93,7 @@ include(CheckIncludeFile)
 check_include_file("xmmintrin.h" HAVE_XMMINTRIN_H)
 
 if(HAVE_XMMINTRIN_H AND COMPILER_SUPPORTS_SSE2)
-    target_sources(mp3lame PRIVATE ../src/libmp3lame/vector/xmm_quantize_sub.c)
+    target_sources(mp3lame PRIVATE ${LAME_ROOT}/libmp3lame/vector/xmm_quantize_sub.c)
     target_compile_definitions(mp3lame PRIVATE HAVE_XMMINTRIN_H=1)
     message(STATUS "Adding xmm_quantize_sub.c (SSE intrinsics)")
 endif()
@@ -100,7 +102,7 @@ endif()
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     find_program(NASM_EXECUTABLE nasm)
     if(NASM_EXECUTABLE)
-        file(GLOB I386_NAS_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "../src/libmp3lame/i386/*.nas")
+        file(GLOB I386_NAS_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "src/libmp3lame/i386/*.nas")
         set(NASM_OBJECTS)
         foreach(NAS ${I386_NAS_SRC})
             get_filename_component(NAME_WE ${NAS} NAME_WE)
@@ -123,7 +125,7 @@ endif()
 
 # DirectShow front-end (Windows-only)
 if(WIN32)
-    file(GLOB DSHOW_SRCS ../src/dshow/*.c ../src/dshow/*.cpp)
+    file(GLOB DSHOW_SRCS ${LAME_ROOT}/dshow/*.c ${LAME_ROOT}/dshow/*.cpp)
     if(DSHOW_SRCS)
         target_sources(mp3lame PRIVATE ${DSHOW_SRCS})
         if(MSVC)
@@ -147,17 +149,24 @@ install(
 )
 
 install(
-    FILES ../src/include/lame.h
+    FILES ${LAME_ROOT}/include/lame.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/lame
 )
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/mp3lame.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libmp3lame.pc
+    @ONLY
+)
+# FFmpeg Meson looks up pkg-config module "mp3lame" and "libmp3lame".
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/mp3lame.pc.in
     ${CMAKE_CURRENT_BINARY_DIR}/mp3lame.pc
     @ONLY
 )
-
 install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/mp3lame.pc
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/libmp3lame.pc
+        ${CMAKE_CURRENT_BINARY_DIR}/mp3lame.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )

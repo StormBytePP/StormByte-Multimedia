@@ -1,0 +1,137 @@
+From 33dd1cc76c7df1e44cfe891dae80430bcabda39a Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 04:53:05 +0200
+Subject: [PATCH 2/5] cmake: declare libm and pthread in pkg-config
+ Libs.private
+
+UNIX/MinGW get -lm when libm exists. WIN32 gets -lpthread so
+static consumers (FFmpeg Meson) can resolve kvz_api_get.
+MSVC has no libm; the CRT already provides sin/cos.
+---
+ CMakeLists.txt | 41 +++++++++++++++++++++++++----------------
+ 1 file changed, 25 insertions(+), 16 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d71a44a5..138b5b7e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,6 +15,7 @@ option(USE_CRYPTO "Use crypto library" OFF)
+ option(BUILD_KVAZAAR_BINARY "Build kvazaar-bin" ON) # To build only the lib, useful for iOS-builds
+ 
+ include(GNUInstallDirs) #Helps to define correct distro specific install directories
++include(CheckLibraryExists)
+ set(DEFERRED "@")
+ 
+ set(KVAZAAR_INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}" CACHE PATH "kvazaar library install path")
+@@ -55,20 +56,20 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+                     RESULT_VARIABLE GIT_HEAD_OK
+                     OUTPUT_VARIABLE GIT_HEAD)
+     if(GIT_HEAD_OK EQUAL "0")
+-        string(SUBSTRING ${GIT_HEAD} 0 30 GIT_TAG_LONG)    
++        string(SUBSTRING ${GIT_HEAD} 0 30 GIT_TAG_LONG)
+         execute_process(COMMAND ${GIT_EXECUTABLE} name-rev --tags --name-only ${GIT_TAG_LONG}
+                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                         RESULT_VARIABLE GIT_TAG_OK
+                         OUTPUT_VARIABLE GIT_TAG)
+         string(SUBSTRING ${GIT_TAG} 0 9 GIT_TAG_STRIP)
+-      
++
+         # If tag is not defined, add part of the commit hash to the version
+         if(GIT_TAG_OK EQUAL "0" AND GIT_TAG_STRIP STREQUAL "undefined")
+           string(SUBSTRING ${GIT_HEAD} 0 7 GIT_TAG_SHORT)
+           set(PROJECT_VERSION ${PROJECT_VERSION}-${GIT_TAG_SHORT})
+           message(INFO " No tag detected, version changed to ${PROJECT_VERSION}")
+         endif()
+-    endif()    
++    endif()
+ endif()
+ 
+ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/greatest/greatest.h")
+@@ -115,6 +116,18 @@ else()
+   set(KVAZAAR_PC_INCDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+ endif()
+ 
++# libm exists on UNIX/MinGW, not on MSVC (math is in the CRT).
++# WIN32 needs -lpthread in Libs.private (stem pthread.lib / libpthread.a).
++# FFmpeg Meson only reads this .pc, not buildmaster_link().
++check_library_exists(m sin "" HAVE_LIB_M)
++set(LIBS "")
++if(HAVE_LIB_M)
++    set(LIBS "${LIBS} -lm")
++endif()
++if(WIN32)
++    set(LIBS "${LIBS} -lpthread")
++endif()
++
+ # Apply dynamic info to the config files
+ configure_file("${PROJECT_SOURCE_DIR}/src/kvazaarCMake.pc.in" "${PROJECT_SOURCE_DIR}/src/kvazaar.pc.temp" @ONLY)
+ configure_file("${PROJECT_SOURCE_DIR}/src/version.h.in" "${PROJECT_SOURCE_DIR}/src/version.h" @ONLY)
+@@ -198,7 +211,7 @@ else()
+   if(MSVC) # Fix a linking problem with visual studio when the library is the same name as the binary
+     set_target_properties(kvazaar PROPERTIES OUTPUT_NAME libkvazaar)
+   endif()
+-  
++
+ endif()
+ 
+ target_include_directories(kvazaar PUBLIC src)
+@@ -211,7 +224,7 @@ file(GLOB LIB_SOURCES_STRATEGIES_SSE41 RELATIVE ${PROJECT_SOURCE_DIR} "src/strat
+ set(CLI_SOURCES "src/encmain.c" "src/cli.c" "src/cli.h" "src/yuv_io.c" "src/yuv_io.h")
+ 
+ # Add getopt for visual studio (pthread via external winpthreads)
+-if(MSVC) 
++if(MSVC)
+   list(APPEND CLI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/extras/getopt.c)
+ endif()
+ 
+@@ -241,8 +254,8 @@ endif()
+ list(APPEND ALLOW_AVX2 "x86_64" "AMD64")
+ 
+ if(MSVC)
+-  if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST ALLOW_AVX2) 
+-    set_property( SOURCE ${LIB_SOURCES_STRATEGIES_AVX2} APPEND PROPERTY COMPILE_FLAGS "/arch:AVX2" )  
++  if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST ALLOW_AVX2)
++    set_property( SOURCE ${LIB_SOURCES_STRATEGIES_AVX2} APPEND PROPERTY COMPILE_FLAGS "/arch:AVX2" )
+   endif()
+   find_library(PTHREAD_WIN32_LIB
+     NAMES libpthreadVC3 pthreadVC3 pthread
+@@ -269,12 +282,12 @@ else()
+     set_target_properties(kvazaar-bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src)
+   endif()
+   set_target_properties(kvazaar PROPERTIES SOVERSION "7" VERSION "7.4.0")
+-  if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST ALLOW_AVX2) 
++  if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST ALLOW_AVX2)
+     set_property( SOURCE ${LIB_SOURCES_STRATEGIES_AVX2} APPEND PROPERTY COMPILE_FLAGS "-mavx2 -mbmi -mpopcnt -mlzcnt -mbmi2" )
+-    set_property( SOURCE ${LIB_SOURCES_STRATEGIES_SSE41} APPEND PROPERTY COMPILE_FLAGS "-msse4.1" )    
++    set_property( SOURCE ${LIB_SOURCES_STRATEGIES_SSE41} APPEND PROPERTY COMPILE_FLAGS "-msse4.1" )
+   endif()
+-  
+-  # CYGWIN, MSYS, and MINGW seem to be needing this but in some cases 
++
++  # CYGWIN, MSYS, and MINGW seem to be needing this but in some cases
+   # it might be that the toolset is not properly set, so also use this
+   # in cases where we are not sure that it is not needed
+   if((NOT MSVC AND NOT LINUX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN AND NOT BSD) OR (CYGWIN OR MSYS OR MINGW))
+@@ -287,10 +300,6 @@ else()
+     target_link_libraries(kvazaar PUBLIC Threads::Threads)
+   endif()
+ 
+-  include(CheckLibraryExists)
+-
+-  CHECK_LIBRARY_EXISTS(m sin "" HAVE_LIB_M)
+-
+   if (HAVE_LIB_M)
+       set(EXTRA_LIBS ${EXTRA_LIBS} m)
+   endif (HAVE_LIB_M)
+@@ -406,7 +415,7 @@ add_custom_target(distcheck
+                   && echo \"\\033[0;32mFile unpack ok\\033[m\"
+                   && cd ${PROJECT_NAME}-${PROJECT_VERSION}
+                   && mkdir -p build
+-                  && cd build                  
++                  && cd build
+                   && cmake -DCMAKE_INSTALL_PREFIX=./ -DBUILD_SHARED_LIBS=OFF -G "Unix Makefiles" .. >> ${PROJECT_SOURCE_DIR}/distcheck.log || { echo \"\\033[0;31mcmake failed to configure.\\033[m\"$<SEMICOLON> exit 1$<SEMICOLON> }
+                   && echo \"\\033[0;32mCMake configure ok\\033[m\"
+                   && make -j >> ${PROJECT_SOURCE_DIR}/distcheck.log || { echo \"\\033[0;31mmake failed.\\033[m\"$<SEMICOLON> exit 1$<SEMICOLON> }
+-- 
+2.55.0
+

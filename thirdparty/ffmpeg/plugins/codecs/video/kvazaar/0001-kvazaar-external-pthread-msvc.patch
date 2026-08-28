@@ -1,3 +1,17 @@
+From 69b42cc173dca2b2ac9afffbcf054f07a72baa40 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 07:09:46 +0200
+Subject: [PATCH 1/5] cmake: use external winpthreads on MSVC, drop
+ threadwrapper
+
+Embedded pthread.cpp/semaphore.cpp fight the system CRT.
+Link libpthreadVC3/pthread from CMAKE_PREFIX_PATH and define
+PTW32_STATIC_LIB so kvazaar matches FFmpeg's static Windows
+probe.
+---
+ CMakeLists.txt | 29 ++++++++++++++++++++++++-----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index 78b54dbe..d71a44a5 100644
 --- a/CMakeLists.txt
@@ -57,3 +71,6 @@ index 78b54dbe..d71a44a5 100644
  else()
    if(BUILD_KVAZAAR_BINARY)
      set_target_properties(kvazaar-bin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src)
+-- 
+2.55.0
+

@@ -1,6 +1,6 @@
-message_indented("Video:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-video "Video")
+buildmaster_group_add(ff-codecs ff-video)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(aom)
 add_subdirectory(dav1d)
 add_subdirectory(kvazaar)

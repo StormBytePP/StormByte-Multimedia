@@ -1,6 +1,6 @@
-message_indented("Subtitles:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-subtitles "Subtitles")
+buildmaster_group_add(ff-codecs ff-subtitles)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(ass)
 add_subdirectory(ass_text)
 add_subdirectory(dvbsub)

@@ -1,0 +1,29 @@
+From 2e157c32e8d93ba229d1657560cd2c1fefa98395 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 06:09:12 +0200
+Subject: [PATCH 3/3] cmake: put zlib/libm on public Libs for Meson 1.10
+
+has_function drops Requires.private and Libs.private.
+Static FFmpeg probes then miss -lz when linking png.
+---
+ libpng.pc.in | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/libpng.pc.in b/libpng.pc.in
+index 67bd43466..7654763a4 100644
+--- a/libpng.pc.in
++++ b/libpng.pc.in
+@@ -6,7 +6,7 @@ includedir=@includedir@/libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@
+ Name: libpng
+ Description: Loads and saves PNG files
+ Version: @PNGLIB_VERSION@
+-Requires.private: zlib
+-Libs: -L${libdir} -lpng
+-Libs.private: @LIBS@
++Requires.private:
++Libs: -L${libdir} -lpng @LIBS@
++Libs.private:
+ Cflags: -I${includedir}
+-- 
+2.55.0
+

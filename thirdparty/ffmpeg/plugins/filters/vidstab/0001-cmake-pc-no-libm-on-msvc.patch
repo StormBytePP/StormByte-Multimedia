@@ -1,0 +1,33 @@
+From fcbc9ddd6779c6f1ed4ae0901c0a42d755039842 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 05:40:41 +0200
+Subject: [PATCH 1/2] cmake: omit -lm from pkg-config on MSVC
+
+libm does not exist on MSVC; math is in the CRT. -lm made
+FFmpeg Meson probes fail to link vidstab.
+---
+ CMakeLists.txt | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4d2cdc2..ad78181 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -85,7 +85,13 @@ target_include_directories(vidstab PUBLIC
+ if (NOT MSVC)
+   target_link_libraries(vidstab m)
+ endif ()
+-set(PKG_EXTRA_LIBS -lm)
++# libm is UNIX/MinGW. MSVC CRT already has sin/cos; -lm breaks
++# FFmpeg Meson probes (no libm.lib).
++if(NOT MSVC)
++    set(PKG_EXTRA_LIBS "-lm")
++else()
++    set(PKG_EXTRA_LIBS "")
++endif()
+ if(USE_OMP AND OPENMP_FOUND)
+ if(TARGET OpenMP::OpenMP_C)
+ target_link_libraries(vidstab OpenMP::OpenMP_C)
+-- 
+2.55.0
+

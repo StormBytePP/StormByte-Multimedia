@@ -1,8 +1,4 @@
-plugin_require(WITH_GPL "-Dhqdn3d_filter=disabled")
-
-message_indented("Setting up hqdn3d" ${PLUGIN_LEVEL})
-
-add_library(hqdn3d INTERFACE)
-add_custom_target(hqdn3d_install)
-
-register_plugin(hqdn3d "-Dhqdn3d_filter=enabled")
+plugin_require(WITH_GPL "hqdn3d_filter=disabled")
+buildmaster_group(hqdn3d "hqdn3d")
+buildmaster_group_add(ff-filters hqdn3d)
+register_builtin_plugin("hqdn3d_filter=enabled")

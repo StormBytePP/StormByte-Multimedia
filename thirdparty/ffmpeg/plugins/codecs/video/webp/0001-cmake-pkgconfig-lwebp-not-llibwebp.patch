@@ -1,0 +1,38 @@
+From 152f9c745bf602ec9fd7b77f8af07e8c2b096f8f Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 03:53:12 +0200
+Subject: [PATCH] cmake: emit -lwebp in pkg-config on all platforms
+
+MSVC used to force a "lib" filename prefix so the .pc said
+-llibwebp while the archive is webp.lib. Empty prefix: -lwebp
+resolves to libwebp.a on ELF and webp.lib on MSVC.
+---
+ CMakeLists.txt | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 39d3d8f6..cfdf8afc 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -161,13 +161,11 @@ endif()
+ set(PTHREAD_LIBS ${CMAKE_THREAD_LIBS_INIT})
+ set(INSTALLED_LIBRARIES)
+ 
+-if(MSVC)
+-  # match the naming convention used by nmake
+-  set(webp_libname_prefix "lib")
+-  set(CMAKE_SHARED_LIBRARY_PREFIX "${webp_libname_prefix}")
+-  set(CMAKE_IMPORT_LIBRARY_PREFIX "${webp_libname_prefix}")
+-  set(CMAKE_STATIC_LIBRARY_PREFIX "${webp_libname_prefix}")
+-endif()
++# pkg-config Libs: -l@webp_libname_prefix@webp
++# Empty prefix is portable: -lwebp → libwebp.a (ELF/MinGW) and
++# webp.lib (MSVC). A "lib" prefix made -llibwebp, which looks for
++# libwebp.lib / liblibwebp.a and does not match the installed name.
++set(webp_libname_prefix "")
+ 
+ if(NOT WIN32)
+   set(CMAKE_C_VISIBILITY_PRESET hidden)
+-- 
+2.55.0
+

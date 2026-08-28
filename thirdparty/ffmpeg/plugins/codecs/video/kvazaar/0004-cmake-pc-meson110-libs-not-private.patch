@@ -1,0 +1,27 @@
+From 2912b1db927165bf9da8c73dfd013986f99bcb2c Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 05:55:26 +0200
+Subject: [PATCH 4/5] cmake: put extra Libs on the public line for Meson 1.10
+
+Meson 1.10 has_function drops Requires.private/Libs.private.
+FFmpeg then links kvazaar.lib without -lpthread.
+---
+ src/kvazaarCMake.pc.in | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/kvazaarCMake.pc.in b/src/kvazaarCMake.pc.in
+index f5b54e29..3f73ba15 100644
+--- a/src/kvazaarCMake.pc.in
++++ b/src/kvazaarCMake.pc.in
+@@ -7,6 +7,6 @@ Name: libkvazaar
+ Description: @CMAKE_PROJECT_DESCRIPTION@
+ URL: @CMAKE_PROJECT_HOMEPAGE_URL@
+ Version: @PROJECT_VERSION@
+-Libs: -L${libdir} -lkvazaar
+-Libs.private: @LIBS@
++Libs: -L${libdir} -lkvazaar @LIBS@
++Libs.private: 
+ Cflags: -I${incdir} @KVAZAAR_PC_CFLAGS@
+-- 
+2.55.0
+

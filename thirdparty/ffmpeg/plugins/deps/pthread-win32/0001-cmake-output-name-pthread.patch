@@ -1,0 +1,29 @@
+From 077787626cecbe07e2ad0efe87cebfc28f08ea08 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 05:08:42 +0200
+Subject: [PATCH] cmake: install the C static lib as pthread
+
+FFmpeg/kvazaar pkg-config uses -lpthread. Stop emitting
+libpthreadVC3.lib so the stem matches Unix and MSVC.
+---
+ CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 654122f8..9e820bcd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -221,6 +221,10 @@ if (MSVC)
+   static_lib ( VCE __PTW32_CLEANUP_CXX )
+   static_lib ( VSE __PTW32_CLEANUP_SEH )
+   static_lib ( VC  __PTW32_CLEANUP_C )
++  # Portable stem: pthread.lib (MSVC) matches -lpthread in kvazaar.pc.
++  if(TARGET libpthreadVC${PTW32_VER})
++    set_target_properties(libpthreadVC${PTW32_VER} PROPERTIES OUTPUT_NAME pthread)
++  endif()
+ elseif (${CMAKE_C_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_C_COMPILER_ID} STREQUAL "Clang")
+   ## NOTE: MinGW64 does support SEH exception handling, BUT it does not yet
+   ## have the MSVC keywords "__try", "__except" and "__finally".
+-- 
+2.55.0
+

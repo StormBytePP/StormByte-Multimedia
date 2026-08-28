@@ -1,22 +1,32 @@
 include(helpers.cmake)
 
-# For BuildMaster messages
-set(PLUGIN_LEVEL 1)
+buildmaster_group(ff-plugins "FFmpeg plugins")
 
-message_indented("Setting up FFmpeg plugins" ${PLUGIN_LEVEL})
+if(WIN32)
+	set(_FFMPEG_PLUGINS_OPTS "TOOLCHAIN=msvc;WHOLE;REQUIRE_TOOL=pkgconfig")
+else()
+	set(_FFMPEG_PLUGINS_OPTS "WHOLE;REQUIRE_TOOL=pkgconfig")
+endif()
 
-add_library(ffmpeg-plugins INTERFACE)
+if(CMAKE_INTERPROCEDURAL_OPTIMIZATION
+		OR (CMAKE_BUILD_TYPE STREQUAL "Release"
+			AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE))
+	string(APPEND _FFMPEG_PLUGINS_OPTS ";IPO=fat")
+endif()
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
+buildmaster_meta(
+	ffmpeg-plugins
+	"FFmpeg plugins"
+	"${_FFMPEG_PLUGINS_OPTS}"
+)
+buildmaster_group_add(ff-plugins ffmpeg-plugins)
 
 set(FFMPEG_PLUGIN_OPTIONS "")
 
-# Compressors first: zlib (and friends) are required by deps (png, tiff, leptonica)
-add_subdirectory(compressors)
-add_subdirectory(deps)
-add_subdirectory(containers) # Containers before codecs (e.g. vorbis → ogg)
 add_subdirectory(codecs)
+add_subdirectory(compressors)
+add_subdirectory(containers)
+add_subdirectory(deps)
 add_subdirectory(filters)
 
-# Options collected by plugin_require / register_plugin
 set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

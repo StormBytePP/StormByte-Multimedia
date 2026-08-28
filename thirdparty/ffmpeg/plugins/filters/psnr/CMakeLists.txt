@@ -1,7 +1,3 @@
-message_indented("Setting up psnr" ${PLUGIN_LEVEL})
-
-# Dummy targets required by register_plugin
-add_library(psnr INTERFACE)
-add_custom_target(psnr_install)
-
-register_plugin(psnr "-Dpsnr_filter=enabled")
+buildmaster_group(psnr "psnr")
+buildmaster_group_add(ff-filters psnr)
+register_builtin_plugin("psnr_filter=enabled")

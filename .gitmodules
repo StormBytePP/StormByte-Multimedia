@@ -29,7 +29,7 @@
 	path = thirdparty/ffmpeg/plugins/codecs/video/x265/src
 	url = https://bitbucket.org/multicoreware/x265_git.git
 [submodule "MP3 LAME codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/audio/mp3lame/src
+	path = thirdparty/ffmpeg/plugins/codecs/audio/mp3lame/cmake-port/src
 	url = https://github.com/lameproject/lame.git
 [submodule "VMAF library"]
 	path = thirdparty/ffmpeg/plugins/filters/vmaf/src
@@ -41,10 +41,9 @@
 [submodule "XVID codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/video/xvidcore/cmake-port/src
 	url = https://github.com/delthas/xvid.git
-[submodule "Build Master"]
+[submodule "StormByte BuildMaster"]
 	path = thirdparty/buildmaster
 	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
-	branch = master
 [submodule "zlib"]
 	path = thirdparty/ffmpeg/plugins/compressors/zlib/src
 	url = https://github.com/madler/zlib.git

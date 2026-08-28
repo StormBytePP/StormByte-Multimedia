@@ -1,0 +1,72 @@
+From e4c6e2ed96f162ad10f9d6a694967dc9acd64a27 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 05:51:13 +0200
+Subject: [PATCH 2/2] api: VIDSTAB_STATIC for headers and pkg-config Cflags
+
+Windows used dllimport unless VIDSTAB_EXPORTS, so static
+FFmpeg Meson probes looked for __imp_vsMotionDetectInit.
+Define VS_API empty when VIDSTAB_STATIC, mark the CMake
+target PUBLIC, and emit -DVIDSTAB_STATIC in the .pc.
+---
+ CMakeLists.txt                           | 11 +++++++++++
+ CMakeModules/create_pkgconfig_file.cmake |  2 +-
+ src/vidstab_api.h                        |  2 ++
+ 3 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ad78181..da8086b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -79,6 +79,11 @@ set_target_properties(vidstab PROPERTIES SOVERSION ${MAJOR_VERSION}.${MINOR_VERS
+ if(MSVC)
+   target_compile_definitions(vidstab PRIVATE VIDSTAB_EXPORTS)
+ endif()
++# Static consumers (FFmpeg Meson) must see VIDSTAB_STATIC or
++# vidstab_api.h uses dllimport (__imp_vsMotionDetectInit).
++if(NOT BUILD_SHARED_LIBS)
++  target_compile_definitions(vidstab PUBLIC VIDSTAB_STATIC)
++endif()
+ target_include_directories(vidstab PUBLIC
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+ )
+@@ -111,5 +116,11 @@ INSTALL(TARGETS vidstab
+   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+ )
+ 
++if(NOT BUILD_SHARED_LIBS)
++    set(PKG_EXTRA_CFLAGS "-DVIDSTAB_STATIC")
++else()
++    set(PKG_EXTRA_CFLAGS "")
++endif()
++
+ include(create_pkgconfig_file)
+ create_pkgconfig_file(vidstab "Vid.Stab, a library for stabilizing video clips")
+diff --git a/CMakeModules/create_pkgconfig_file.cmake b/CMakeModules/create_pkgconfig_file.cmake
+index 08f43a3..973f975 100644
+--- a/CMakeModules/create_pkgconfig_file.cmake
++++ b/CMakeModules/create_pkgconfig_file.cmake
+@@ -17,7 +17,7 @@ Name: ${name}
+ Description: ${desc}
+ Version: ${VIDSTAB_VERSION}
+ Libs: -L\${libdir} -l${name} ${PKG_EXTRA_LIBS}
+-Cflags: -I\${includedir}
++Cflags: -I\${includedir} ${PKG_EXTRA_CFLAGS}
+ 
+ ")
+ 
+diff --git a/src/vidstab_api.h b/src/vidstab_api.h
+index 3657649..d99e42e 100644
+--- a/src/vidstab_api.h
++++ b/src/vidstab_api.h
+@@ -4,6 +4,8 @@
+ #if defined(_WIN32) && defined(_MSC_VER)
+   #ifdef VIDSTAB_EXPORTS
+     #define VS_API __declspec(dllexport)
++  #elif defined(VIDSTAB_STATIC)
++    #define VS_API
+   #else
+     #define VS_API __declspec(dllimport)
+   #endif
+-- 
+2.55.0
+

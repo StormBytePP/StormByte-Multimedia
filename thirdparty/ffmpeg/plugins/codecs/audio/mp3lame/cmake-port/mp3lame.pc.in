@@ -3,7 +3,7 @@ exec_prefix=${prefix}
 libdir=@CMAKE_INSTALL_FULL_LIBDIR@
 includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
 
-Name: mp3lame
+Name: libmp3lame
 Description: LAME MP3 encoder library (minimal CMake port)
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} -lmp3lame

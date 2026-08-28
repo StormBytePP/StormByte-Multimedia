@@ -1,0 +1,36 @@
+From 378aa4759dfc0ce5b6e94ec5382e0f7d4ec81662 Mon Sep 17 00:00:00 2001
+From: "David C. Manuelda" <StormByte@gmail.com>
+Date: Thu, 3 Sep 2026 04:23:43 +0200
+Subject: [PATCH] cmake: use unversioned tesseract output name on all platforms
+
+Windows appended major.minor (tesseract55.lib / -ltesseract55).
+FFmpeg Meson then looks for tesseract55.lib and drops the OCR
+filter. Stem is tesseract everywhere.
+---
+ CMakeLists.txt | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 17cf7f64..8416e669 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -827,12 +827,10 @@ set_target_properties(
+   libtesseract PROPERTIES SOVERSION
+                           ${VERSION_MAJOR}.${VERSION_MINOR})
+ 
+-set_target_properties(
+-  libtesseract
+-  PROPERTIES
+-    OUTPUT_NAME
+-    tesseract$<$<BOOL:${WIN32}>:${VERSION_MAJOR}${VERSION_MINOR}$<$<CONFIG:DEBUG>:d>>
+-)
++# Same stem on every platform so pkg-config emits -ltesseract
++# (ELF: libtesseract.a, MSVC: tesseract.lib). Do not append
++# major/minor on WIN32; Meson/ffmpeg look for tesseract.lib.
++set_target_properties(libtesseract PROPERTIES OUTPUT_NAME tesseract)
+ 
+ target_link_libraries(libtesseract PUBLIC ${Leptonica_LIBRARIES})
+   export(
+-- 
+2.55.0
+

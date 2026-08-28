@@ -1,7 +1,3 @@
-message_indented("Setting up bwdif" ${PLUGIN_LEVEL})
-
-# Dummy targets required by register_plugin
-add_library(bwdif INTERFACE)
-add_custom_target(bwdif_install)
-
-register_plugin(bwdif "-Dbwdif_filter=enabled")
+buildmaster_group(bwdif "bwdif")
+buildmaster_group_add(ff-filters bwdif)
+register_builtin_plugin("bwdif_filter=enabled")

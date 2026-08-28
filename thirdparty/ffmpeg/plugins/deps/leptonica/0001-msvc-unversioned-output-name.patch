@@ -1,0 +1,13 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 9cd693a2..612d512d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -20,7 +20,7 @@ set_target_properties(
+     VERSION 6.0.0
+     SOVERSION 6
+     OUTPUT_NAME
+-    "leptonica$<$<BOOL:${MSVC}>:-${PROJECT_VERSION}$<$<CONFIG:DEBUG>:d>>")
++    "leptonica")
+ 
+ if(MINGW)
+   set_target_properties(

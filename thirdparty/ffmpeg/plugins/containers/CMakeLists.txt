@@ -1,6 +1,6 @@
-message_indented("Containers:" ${PLUGIN_LEVEL})
+buildmaster_group(ff-containers "Containers")
+buildmaster_group_add(ff-plugins ff-containers)
 
-math(EXPR PLUGIN_LEVEL "${PLUGIN_LEVEL} + 1")
 add_subdirectory(matroska)
 add_subdirectory(ogg)
 

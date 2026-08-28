@@ -1,5 +1,4 @@
 set(SVTAV1_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-ensure_build_dir(SVTAV1_BUILD_DIR)
 set(SVTAV1_COMPONENT "SVT-AV1")
 
 set(SVTAV1_OPTIONS
@@ -8,22 +7,18 @@ set(SVTAV1_OPTIONS
 	"-DBUILD_TESTING=OFF"
 	"-DBUILD_SHARED_LIBS=OFF"
 )
-
 if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
 	list(APPEND SVTAV1_OPTIONS "-DBUILD_SHARED_LIBS=ON")
 endif()
 
-create_cmake_component(
-	SVTAV1_LIBRARY_CREATE_FILE
-	"svt-av1"
+buildmaster_component(
+	svt-av1
 	"${SVTAV1_COMPONENT}"
 	"${SVTAV1_SRC_DIR}"
-	"${SVTAV1_BUILD_DIR}"
 	"${SVTAV1_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"SvtAv1Enc"
-	${PLUGIN_LEVEL}
+	""
 )
-include("${SVTAV1_LIBRARY_CREATE_FILE}")
-
-register_plugin(svt-av1 "-Dlibsvtav1=enabled")
+buildmaster_group_add(ff-video svt-av1)
+register_plugin(svt-av1 "libsvtav1=enabled")

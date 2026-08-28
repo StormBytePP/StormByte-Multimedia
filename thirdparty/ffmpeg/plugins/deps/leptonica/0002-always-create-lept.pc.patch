@@ -1,0 +1,14 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 42a77467..cc50ee7d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -327,9 +327,6 @@ get_target_property(leptonica_OUTPUT_NAME leptonica OUTPUT_NAME)
+ configure_file(lept.pc.cmake ${CMAKE_CURRENT_BINARY_DIR}/lept.pc.in @ONLY)
+ # to resolve generator expression in OUTPUT_NAME
+ set(pkg_conf_name lept.pc)
+-if(WIN32)
+-  set(pkg_conf_name lept_$<CONFIG>.pc)
+-endif(WIN32)
+ 
+ file(
+   GENERATE

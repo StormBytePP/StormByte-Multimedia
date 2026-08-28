@@ -1,5 +1,4 @@
 set(EXPAT_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/expat")
-ensure_build_dir(EXPAT_BUILD_DIR)
 set(EXPAT_COMPONENT "expat")
 
 set(EXPAT_OPTIONS
@@ -9,22 +8,18 @@ set(EXPAT_OPTIONS
 	"-DEXPAT_BUILD_TESTS=OFF"
 	"-DEXPAT_BUILD_DOCS=OFF"
 )
-
 if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
 	list(APPEND EXPAT_OPTIONS "-DEXPAT_SHARED_LIBS=ON")
 endif()
 
-create_cmake_component(
-	EXPAT_LIBRARY_CREATE_FILE
-	"expat"
+buildmaster_component(
+	expat
 	"${EXPAT_COMPONENT}"
 	"${EXPAT_SRC_DIR}"
-	"${EXPAT_BUILD_DIR}"
 	"${EXPAT_OPTIONS}"
 	"${FFMPEG_BUNDLED_TYPE}"
 	"expat"
-	${PLUGIN_LEVEL}
+	""
 )
-include("${EXPAT_LIBRARY_CREATE_FILE}")
-
+buildmaster_group_add(ff-deps expat)
 register_dependency(expat)
