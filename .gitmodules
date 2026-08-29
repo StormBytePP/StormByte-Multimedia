@@ -21,6 +21,7 @@
 [submodule "VPX codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/video/vpx/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/libvpx.git
+	branch = meson
 [submodule "X264 codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/video/x264/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/x264.git
