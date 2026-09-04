@@ -13,18 +13,6 @@ configure_file(
 )
 list(APPEND STORMBYTE_MULTIMEDIA_SOURCES "${GENERATED_IMPLEMENTED_BACKENDS_FILE}")
 
-# Generate embedded tessdata
-set(TESSDATA_NAMESPACE     "StormByte::Multimedia::Engine::OCR")
-set(TESSDATA_FUNCTION_NAME "TessData")
-set(TESSDATA_DIR           "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/OCR/tessdata")
-set(GENERATED_TESSDATA_FILE "${CMAKE_CURRENT_BINARY_DIR}/tessdata.cxx")
-
-include(${PROJECT_SOURCE_DIR}/cmake/tessdata.cmake)
-
-if(DEFINED STORMBYTE_TESSDATA_GENERATED_SOURCE)
-	list(APPEND STORMBYTE_MULTIMEDIA_SOURCES ${STORMBYTE_TESSDATA_GENERATED_SOURCE})
-endif()
-
 add_library(StormByte-Multimedia SHARED ${STORMBYTE_MULTIMEDIA_SOURCES})
 add_library(StormByte::Multimedia ALIAS StormByte-Multimedia)
 
