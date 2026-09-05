@@ -65,6 +65,10 @@ FFmpeg::AVCodecParameters& FFmpeg::AVCodecParameters::operator=(const AVCodecPar
 	return *this;
 }
 
+int FFmpeg::AVCodecParameters::CodecId() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->codec_id) : static_cast<int>(AV_CODEC_ID_NONE);
+}
+
 void FFmpeg::AVCodecParameters::Free() noexcept {
 	if (m_ptr) {
 		avcodec_parameters_free(&m_ptr);
@@ -72,5 +76,4 @@ void FFmpeg::AVCodecParameters::Free() noexcept {
 	}
 }
 
-// Explicit template instantiation
 template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVCodecParameters>;

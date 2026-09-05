@@ -93,6 +93,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			AVCodecParameters& operator=(AVCodecParameters&& other) noexcept = default;
 
+			/**
+			 * @brief FFmpeg codec id.
+			 * @return `AVCodecID` as int, or `AV_CODEC_ID_NONE`.
+			 */
+			int CodecId() const noexcept;
+
 		private:
 			/**
 			 * @brief Frees parameters (avcodec_parameters_free).

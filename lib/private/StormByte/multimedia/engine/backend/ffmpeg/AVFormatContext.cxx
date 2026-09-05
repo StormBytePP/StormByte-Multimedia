@@ -42,6 +42,8 @@
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
 
+#include <string>
+
 using namespace StormByte::Multimedia::Engine::Backend;
 
 FFmpeg::AVFormatContext::AVFormatContext(::AVFormatContext* ctx) noexcept:
@@ -55,16 +57,13 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesys
 	::AVFormatContext* raw_ctx = nullptr;
 	int ret;
 
-	// Set less verbose logging
 	av_log_set_level(AV_LOG_ERROR);
 
-	// Open input file
 	if ((ret = avformat_open_input(&raw_ctx, path.string().c_str(), nullptr, nullptr)) < 0)
 		return Unexpected<DecoderError>("Could not open file {}: {}", path.string(), ErrorToString(ret));
 
 	::AVFormatContext* fmt_ctx = raw_ctx;
 
-	// Retrieve stream information (some demuxers require this to be called)
 	if ((ret = avformat_find_stream_info(fmt_ctx, nullptr)) < 0) {
 		avformat_close_input(&fmt_ctx);
 		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
@@ -73,18 +72,11 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesys
 	return AVFormatContext(fmt_ctx);
 }
 
-// StormByte::Multimedia::Metadata FFmpeg::AVFormatContext::Metadata() const noexcept {
-// 	StormByte::Multimedia::Metadata metadata;
-
-// 	if (m_ptr->metadata) {
-// 		AVDictionaryEntry* tag = nullptr;
-// 		while ((tag = av_dict_get(m_ptr->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
-// 			metadata[tag->key] = tag->value;
-// 		}
-// 	}
-
-// 	return metadata;
-// }
+const char* FFmpeg::AVFormatContext::FormatName() const noexcept {
+	if (!m_ptr || !m_ptr->iformat)
+		return nullptr;
+	return m_ptr->iformat->name;
+}
 
 FFmpeg::OperationResult FFmpeg::AVFormatContext::ReadPacket(AVPacket& packet) noexcept {
 	packet.Unref();
@@ -136,7 +128,6 @@ std::optional<FFmpeg::AVBSF> FFmpeg::AVFormatContext::Mp4ToAnnexB(int codec_id, 
 		default:               return std::nullopt;
 	}
 
-	// Construct the AVBSF
 	auto expected_bsf = FFmpeg::AVBSF::Create(
 		bsf_name,
 		params,
@@ -156,5 +147,4 @@ void FFmpeg::AVFormatContext::Free() noexcept {
 	}
 }
 
-// Explicitly instantiate AVPointer for AVFormatContext*
 template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVFormatContext>;

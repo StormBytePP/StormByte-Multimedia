@@ -111,6 +111,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			// StormByte::Multimedia::Metadata Metadata() const noexcept;
 
 			/**
+			 * @brief Demuxer format name (`iformat->name`).
+			 * @return Name (may be comma-separated ids), or nullptr.
+			 */
+			const char* FormatName() const noexcept;
+
+			/**
 			 * @brief Reads the next packet.
 			 * @param packet Destination packet.
 			 * @return Operation result.
