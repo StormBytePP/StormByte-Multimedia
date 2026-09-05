@@ -38,18 +38,20 @@
 
 #pragma once
 
+#include <StormByte/multimedia/media/type.hxx>
+
 #include <array>
 #include <cstddef>
 #include <span>
 
 /**
  * @namespace StormByte::Multimedia::Media::Tables::Codec
- * @brief Private static codec tables (StormByte name + FFmpeg ids).
+ * @brief Private static codec identity tables.
  */
 namespace StormByte::Multimedia::Media::Tables::Codec {
 	/**
 	 * @struct CodecDef
-	 * @brief One catalog row.
+	 * @brief One identity row.
 	 */
 	struct CodecDef {
 		const char* name;				///< StormByte name
@@ -83,26 +85,33 @@ namespace StormByte::Multimedia::Media::Tables::Codec {
 	};
 
 	/**
-	 * @brief Video codec rows.
+	 * @brief Video identity rows.
 	 * @return Span over the video table.
 	 */
 	std::span<const CodecDef> Video() noexcept;
 
 	/**
-	 * @brief Audio codec rows.
+	 * @brief Audio identity rows.
 	 * @return Span over the audio table.
 	 */
 	std::span<const CodecDef> Audio() noexcept;
 
 	/**
-	 * @brief Subtitle codec rows.
+	 * @brief Subtitle identity rows.
 	 * @return Span over the subtitle table.
 	 */
 	std::span<const CodecDef> Subtitle() noexcept;
 
 	/**
-	 * @brief Attachment codec rows.
+	 * @brief Attachment identity rows.
 	 * @return Span over the attachment table.
 	 */
 	std::span<const CodecDef> Attachment() noexcept;
+
+	/**
+	 * @brief Identity rows of one media kind.
+	 * @param type Video, Audio, Subtitle or Attachment.
+	 * @return Span over that table; empty if @p type has none.
+	 */
+	std::span<const CodecDef> Identity(Type type) noexcept;
 }

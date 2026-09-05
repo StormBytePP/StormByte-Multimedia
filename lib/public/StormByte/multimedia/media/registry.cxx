@@ -37,7 +37,7 @@
  */
 
 #include <StormByte/multimedia/media/registry.hxx>
-#include <StormByte/multimedia/media/tables/codec/table.hxx>
+#include <StormByte/multimedia/media/tables/codec/catalog.hxx>
 #include <StormByte/multimedia/media/tables/container/catalog.hxx>
 #include <StormByte/multimedia/media/tables/container/table.hxx>
 
@@ -187,10 +187,11 @@ void Registry::LoadContainers() noexcept {
 }
 
 void Registry::Initialize() noexcept {
-	const auto video		= Tables::Codec::Video();
-	const auto audio		= Tables::Codec::Audio();
-	const auto subtitle		= Tables::Codec::Subtitle();
-	const auto attachment	= Tables::Codec::Attachment();
+	const auto& codecs = Tables::Codec::Catalog::Instance();
+	const auto video		= codecs.All(Type::Video);
+	const auto audio		= codecs.All(Type::Audio);
+	const auto subtitle		= codecs.All(Type::Subtitle);
+	const auto attachment	= codecs.All(Type::Attachment);
 
 	m_codecs.reserve(video.size() + audio.size() + subtitle.size() + attachment.size());
 	m_by_name.reserve((video.size() + audio.size() + subtitle.size() + attachment.size()) * 2);
