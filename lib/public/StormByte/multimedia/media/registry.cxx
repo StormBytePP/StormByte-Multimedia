@@ -122,9 +122,26 @@ void Registry::Add(Type type, const Tables::Codec::CodecDef& def) noexcept {
 	m_by_type[type].push_back(i);
 }
 
-void Registry::Load(Type type, std::span<const Tables::Codec::CodecDef> table) noexcept {
+void Registry::LoadCodecs(Type type, std::span<const Tables::Codec::CodecDef> table) noexcept {
 	for (const Tables::Codec::CodecDef& def : table)
 		Add(type, def);
+}
+
+void Registry::LoadCodecs() noexcept {
+	const auto& codecs = Tables::Codec::Catalog::Instance();
+	const auto video		= codecs.All(Type::Video);
+	const auto audio		= codecs.All(Type::Audio);
+	const auto subtitle		= codecs.All(Type::Subtitle);
+	const auto attachment	= codecs.All(Type::Attachment);
+
+	m_codecs.reserve(video.size() + audio.size() + subtitle.size() + attachment.size());
+	m_by_name.reserve((video.size() + audio.size() + subtitle.size() + attachment.size()) * 2);
+	m_by_type.reserve(4);
+
+	LoadCodecs(Type::Video, video);
+	LoadCodecs(Type::Audio, audio);
+	LoadCodecs(Type::Subtitle, subtitle);
+	LoadCodecs(Type::Attachment, attachment);
 }
 
 Access Registry::ProbeContainer(const Tables::Container::ContainerDef& def) const noexcept {
@@ -186,20 +203,11 @@ void Registry::LoadContainers() noexcept {
 		Add(def);
 }
 
-void Registry::Initialize() noexcept {
-	const auto& codecs = Tables::Codec::Catalog::Instance();
-	const auto video		= codecs.All(Type::Video);
-	const auto audio		= codecs.All(Type::Audio);
-	const auto subtitle		= codecs.All(Type::Subtitle);
-	const auto attachment	= codecs.All(Type::Attachment);
-
-	m_codecs.reserve(video.size() + audio.size() + subtitle.size() + attachment.size());
-	m_by_name.reserve((video.size() + audio.size() + subtitle.size() + attachment.size()) * 2);
-	m_by_type.reserve(4);
-
-	Load(Type::Video, video);
-	Load(Type::Audio, audio);
-	Load(Type::Subtitle, subtitle);
-	Load(Type::Attachment, attachment);
+void Registry::Load() noexcept {
+	LoadCodecs();
 	LoadContainers();
+}
+
+void Registry::Initialize() noexcept {
+	Load();
 }

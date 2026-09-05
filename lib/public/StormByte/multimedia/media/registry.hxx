@@ -159,11 +159,21 @@ namespace StormByte::Multimedia::Media {
 			void Initialize() noexcept;
 
 			/**
+			 * @brief Loads codecs and containers.
+			 */
+			void Load() noexcept;
+
+			/**
+			 * @brief Loads every codec identity table.
+			 */
+			void LoadCodecs() noexcept;
+
+			/**
 			 * @brief Inserts every row of @p table as @p type.
 			 * @param type Media kind of the table.
 			 * @param table Rows to load.
 			 */
-			void Load(Type type, std::span<const Tables::Codec::CodecDef> table) noexcept;
+			void LoadCodecs(Type type, std::span<const Tables::Codec::CodecDef> table) noexcept;
 
 			/**
 			 * @brief Inserts one codec and its FFmpeg ids.
