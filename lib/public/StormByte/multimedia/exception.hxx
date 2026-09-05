@@ -41,6 +41,8 @@
 #include <StormByte/exception.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <filesystem>
+
 /**
  * @namespace StormByte::Multimedia
  * @brief Public Multimedia module.
@@ -99,5 +101,20 @@ namespace StormByte::Multimedia {
 			template <typename... Args>
 			ContainerNotFoundException(const std::string& container):
 			Exception("Container", "Container {} not found", container) {}
+	};
+
+	/**
+	 * @class FileOpenErrorException
+	 * @brief Thrown when StormByte::Multimedia::Registry::OpenFile fails.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC FileOpenErrorException: public Exception {
+		public:
+			/**
+			 * @brief Constructs the exception for @p file.
+			 * @param file StormByte name or FFmpeg format id that could not be opened.
+			 */
+			template <typename... Args>
+			FileOpenErrorException(const std::string& file, const std::string& reason):
+			Exception("File", "Failed to open file {} because {}", file, reason) {}
 	};
 }
