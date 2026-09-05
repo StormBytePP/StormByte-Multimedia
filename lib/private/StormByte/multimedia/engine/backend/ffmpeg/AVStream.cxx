@@ -26,19 +26,6 @@ AVRational FFmpeg::AVStream::TimeBase() const noexcept {
 	return m_stream ? m_stream->time_base : AVRational{0, 1};
 }
 
-StormByte::Multimedia::Metadata FFmpeg::AVStream::Metadata() const noexcept {
-	StormByte::Multimedia::Metadata metadata;
-
-	if (m_stream && m_stream->metadata) {
-		AVDictionaryEntry* tag = nullptr;
-		while ((tag = av_dict_get(m_stream->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
-			metadata[tag->key] = tag->value;
-		}
-	}
-
-	return metadata;
-}
-
 double FFmpeg::AVStream::FrameRate() const noexcept {
 	if (!m_stream)
 		return 0.0;
@@ -48,3 +35,17 @@ double FFmpeg::AVStream::FrameRate() const noexcept {
 		return av_q2d(m_stream->r_frame_rate);
 	return 0.0;
 }
+
+// oldcode — Metadata
+// StormByte::Multimedia::Metadata FFmpeg::AVStream::Metadata() const noexcept {
+// 	StormByte::Multimedia::Metadata metadata;
+//
+// 	if (m_stream && m_stream->metadata) {
+// 		AVDictionaryEntry* tag = nullptr;
+// 		while ((tag = av_dict_get(m_stream->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+// 			metadata[tag->key] = tag->value;
+// 		}
+// 	}
+//
+// 	return metadata;
+// }

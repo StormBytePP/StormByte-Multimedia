@@ -40,12 +40,12 @@ namespace StormByte::Multimedia {
 	 * @brief Media stream / content type.
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Type {
-		Audio,		///< Audio media type
-		Video,		///< Video media type
-		Subtitle,	///< Subtitle media type
-		Attachment,	///< Attachment media type
-		Copy,		///< Stream copy (passthrough)
-		Unknown		///< Unknown media type
+		Audio,						///< Audio media type
+		Video,						///< Video media type
+		Subtitle,					///< Subtitle media type
+		Attachment,					///< Attachment media type
+		Copy,						///< Stream copy (passthrough)
+		Unknown						///< Unknown media type
 	};
 
 	/**

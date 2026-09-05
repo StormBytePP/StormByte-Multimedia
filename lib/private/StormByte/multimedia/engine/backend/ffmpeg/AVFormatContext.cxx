@@ -35,18 +35,18 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesys
 	return AVFormatContext(fmt_ctx);
 }
 
-StormByte::Multimedia::Metadata FFmpeg::AVFormatContext::Metadata() const noexcept {
-	StormByte::Multimedia::Metadata metadata;
+// StormByte::Multimedia::Metadata FFmpeg::AVFormatContext::Metadata() const noexcept {
+// 	StormByte::Multimedia::Metadata metadata;
 
-	if (m_ptr->metadata) {
-		AVDictionaryEntry* tag = nullptr;
-		while ((tag = av_dict_get(m_ptr->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
-			metadata[tag->key] = tag->value;
-		}
-	}
+// 	if (m_ptr->metadata) {
+// 		AVDictionaryEntry* tag = nullptr;
+// 		while ((tag = av_dict_get(m_ptr->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+// 			metadata[tag->key] = tag->value;
+// 		}
+// 	}
 
-	return metadata;
-}
+// 	return metadata;
+// }
 
 FFmpeg::OperationResult FFmpeg::AVFormatContext::ReadPacket(AVPacket& packet) noexcept {
 	packet.Unref();

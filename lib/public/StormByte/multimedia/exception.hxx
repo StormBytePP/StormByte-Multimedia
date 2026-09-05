@@ -29,7 +29,6 @@
 #pragma once
 
 #include <StormByte/exception.hxx>
-#include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 /**
@@ -59,31 +58,5 @@ namespace StormByte::Multimedia {
 			 * Destructor.
 			 */
 			virtual ~Exception() noexcept = default;
-	};
-
-	/**
-	 * @class CodecNotFound
-	 * @brief Thrown when a codec cannot be resolved.
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFound: public Exception {
-		public:
-			/**
-			 * @param codec Codec name or identifier string.
-			 */
-			CodecNotFound(const std::string& codec):
-			Exception("Codec: ", "Codec '{}' not found.", codec) {}
-
-			/**
-			 * @param type Requested media type.
-			 */
-			CodecNotFound(Type type):
-			Exception("Codec: ", "Codec of type '{}' not found.", ToString(type)) {}
-
-			/**
-			 * @param type Requested media type.
-			 * @param features Required feature set.
-			 */
-			CodecNotFound(Type type, const Features& features):
-			Exception("Codec: ", "Codec of type '{}' with features '{}' not found.", ToString(type), std::string(features)) {}
 	};
 }

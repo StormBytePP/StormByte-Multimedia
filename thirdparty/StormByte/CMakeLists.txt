@@ -5,9 +5,9 @@ else()
 endif()
 
 if(WITH_STORMBYTE STREQUAL "SYSTEM")
-	find_package(StormByte REQUIRED)
+	find_package(StormByte REQUIRED Buffer Logger)
 else()
-	add_subdirectory(base)
+	add_subdirectory(buffer)
 endif()
 
-buildmaster_link(StormByte-Multimedia StormByte)
+buildmaster_link(StormByte-Multimedia StormByte-Buffer)
