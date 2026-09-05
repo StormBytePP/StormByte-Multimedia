@@ -38,6 +38,8 @@
 
 #pragma once
 
+#include <StormByte/multimedia/visibility.h>
+
 #include <array>
 #include <cstddef>
 #include <span>
@@ -53,7 +55,7 @@ namespace StormByte::Multimedia::Tables::Container {
 	 *
 	 * extensions[0] is the primary extension (no dot). Later slots are aliases.
 	 */
-	struct ContainerDef {
+	struct STORMBYTE_MULTIMEDIA_PRIVATE ContainerDef {
 		const char* name;						///< StormByte name
 		const char* description;				///< Description
 		std::array<const char*, 4> ffmpegIds;	///< FFmpeg format ids; unused slots nullptr
@@ -124,9 +126,9 @@ namespace StormByte::Multimedia::Tables::Container {
 	 *
 	 * extension == nullptr applies to the primary / unspecified extension.
 	 */
-	struct CompatDef {
+	struct STORMBYTE_MULTIMEDIA_PRIVATE CompatDef {
 		const char* extension;	///< Extension without dot; nullptr = default
-		const char* codec;	///< StormByte codec name
+		const char* codec;		///< StormByte codec name
 	};
 
 	/**

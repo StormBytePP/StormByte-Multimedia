@@ -53,7 +53,7 @@ namespace StormByte::Multimedia::Tables::Codec {
 	 * @class Catalog
 	 * @brief Indexed view over codec identity rows.
 	 */
-	class Catalog {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Catalog {
 		public:
 			Catalog(const Catalog&) = delete;
 			Catalog(Catalog&&) = delete;

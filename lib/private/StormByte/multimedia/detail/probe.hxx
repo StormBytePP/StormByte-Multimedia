@@ -52,7 +52,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @class Probe
 	 * @brief Fills Metadata snapshots from FFmpeg RAII.
 	 */
-	class Probe {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Probe {
 		public:
 			/**
 			 * @brief Container tags from an open demuxer.

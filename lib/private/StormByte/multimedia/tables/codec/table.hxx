@@ -53,9 +53,9 @@ namespace StormByte::Multimedia::Tables::Codec {
 	 * @struct CodecDef
 	 * @brief One identity row.
 	 */
-	struct CodecDef {
-		const char* name;				///< StormByte name
-		const char* description;			///< Description
+	struct STORMBYTE_MULTIMEDIA_PRIVATE CodecDef {
+		const char* name;						///< StormByte name
+		const char* description;				///< Description
 		std::array<const char*, 4> ffmpegIds;	///< FFmpeg ids; unused slots nullptr
 
 		/**

@@ -52,7 +52,7 @@ namespace StormByte::Multimedia::Tables::Container {
 	 * @class Catalog
 	 * @brief Indexed view over container identity and compatibility rows.
 	 */
-	class Catalog {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Catalog {
 		public:
 			Catalog(const Catalog&) = delete;
 			Catalog(Catalog&&) = delete;
