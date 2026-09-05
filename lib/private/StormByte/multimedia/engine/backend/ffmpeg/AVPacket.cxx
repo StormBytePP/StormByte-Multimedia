@@ -48,18 +48,27 @@ FFmpeg::AVPacket::~AVPacket() noexcept {
 }
 
 FFmpeg::AVPacket FFmpeg::AVPacket::Ref() const noexcept {
-	AVPacket copy; // crea un AVPacket con av_packet_alloc()
+	AVPacket copy;
 	if (m_ptr && copy.m_ptr)
 		av_packet_ref(copy.m_ptr, m_ptr);
 	return copy;
 }
 
 void FFmpeg::AVPacket::Unref() noexcept {
-	if (m_ptr) av_packet_unref(m_ptr);
+	if (m_ptr)
+		av_packet_unref(m_ptr);
 }
 
 int FFmpeg::AVPacket::StreamIndex() const noexcept {
 	return m_ptr ? m_ptr->stream_index : -1;
+}
+
+std::int64_t FFmpeg::AVPacket::Pts() const noexcept {
+	return m_ptr ? m_ptr->pts : AV_NOPTS_VALUE;
+}
+
+std::int64_t FFmpeg::AVPacket::Duration() const noexcept {
+	return m_ptr ? m_ptr->duration : 0;
 }
 
 void FFmpeg::AVPacket::Free() noexcept {
@@ -69,5 +78,4 @@ void FFmpeg::AVPacket::Free() noexcept {
 	}
 }
 
-// Explicit template instantiation
 template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVPacket>;

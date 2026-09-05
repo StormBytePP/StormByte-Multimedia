@@ -113,8 +113,11 @@ namespace StormByte::Multimedia {
 			const Metadata::Stream& Metadata() const noexcept { return m_metadata; }
 
 			/**
-			 * @brief Stream duration, if known.
-			 * @return Duration in nanoseconds, or empty.
+			 * @brief Stream duration.
+			 * @return Duration in nanoseconds, or empty if unknown.
+			 *
+			 * Filled from the container header at Open, or when File::Duration()
+			 * scans this instance. Empty if it cannot be determined.
 			 */
 			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
 
@@ -139,7 +142,7 @@ namespace StormByte::Multimedia {
 
 			const class Codec& m_codec;							///< Registry codec
 			Metadata::Stream m_metadata;						///< Stream tags
-			std::optional<std::chrono::nanoseconds> m_duration;	///< Stream duration
+			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Stream duration
 			Properties m_properties;							///< Video, audio, or none
 
 			/**

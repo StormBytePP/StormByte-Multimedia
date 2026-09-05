@@ -113,24 +113,48 @@ namespace StormByte::Multimedia {
 			const Metadata::File& Metadata() const noexcept { return m_metadata; }
 
 			/**
-			 * @brief Container duration, if known.
-			 * @return Duration in nanoseconds, or empty.
+			 * @brief Container duration.
+			 * @return Duration in nanoseconds, or empty if it cannot be determined.
+			 *
+			 * Returns the header value, the duration passed to Open, or a value
+			 * cached after the first scan. The first call may read the whole file
+			 * when Open(path) was used and the container did not signal duration.
+			 * After a successful scan the result is reused on this instance.
+			 * If Open(path, duration) was used, this is that value and there is
+			 * no I/O.
 			 */
-			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
+			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept;
 
 			/**
 			 * @brief Opens and probes @p path.
 			 * @param path Media file.
 			 * @return Snapshot or FileOpenErrorException.
+			 *
+			 * Duration() may later scan the file if the container header has no duration.
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
 
+			/**
+			 * @brief Opens and probes @p path with an already known duration.
+			 * @param path Media file.
+			 * @param duration Authoritative container duration in nanoseconds.
+			 * @return Snapshot or FileOpenErrorException.
+			 *
+			 * Duration() will not scan. @p duration is stored as-is.
+			 * Pass this only when the value is known to be correct (index, previous
+			 * probe, database). Do not use it to skip work: if you do not need
+			 * duration, call Open(path) and do not call Duration().
+			 */
+			static ExpectedFile Open(const std::filesystem::path& path,
+				std::chrono::nanoseconds duration) noexcept;
+
 		private:
-			std::filesystem::path m_path;					///< Source path
-			const class Container& m_container;				///< Registry container
-			Multimedia::Streams m_streams;					///< Probed streams
-			Metadata::File m_metadata;					///< Container tags
-			std::optional<std::chrono::nanoseconds> m_duration;	///< Container duration
+			std::filesystem::path m_path;							///< Source path
+			const class Container& m_container;						///< Registry container
+			mutable Multimedia::Streams m_streams;					///< Probed streams
+			Metadata::File m_metadata;							///< Container tags
+			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Container duration
+			mutable bool m_durationResolved;						///< Header, caller, or scan done
 
 			/**
 			 * @brief Snapshot constructor.
@@ -139,11 +163,26 @@ namespace StormByte::Multimedia {
 			 * @param streams Probed streams.
 			 * @param metadata Container tags.
 			 * @param duration Container duration.
+			 * @param durationResolved true if Duration() must not scan.
 			 */
 			File(const std::filesystem::path& path, const class Container& container,
 				Multimedia::Streams streams, Metadata::File metadata,
-				std::optional<std::chrono::nanoseconds> duration) noexcept
+				std::optional<std::chrono::nanoseconds> duration, bool durationResolved) noexcept
 			: m_path(path), m_container(container), m_streams(std::move(streams)),
-			m_metadata(std::move(metadata)), m_duration(duration) {}
+			m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
+
+			/**
+			 * @brief Shared Open implementation.
+			 * @param path Media file.
+			 * @param duration Caller-supplied duration, if any.
+			 * @return Snapshot or FileOpenErrorException.
+			 */
+			static ExpectedFile Open(const std::filesystem::path& path,
+				std::optional<std::chrono::nanoseconds> duration) noexcept;
+
+			/**
+			 * @brief Packet scan when the header has no duration.
+			 */
+			void ResolveDuration() const noexcept;
 	};
 }

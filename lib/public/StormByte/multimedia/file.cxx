@@ -39,17 +39,23 @@
 #include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/registry.hxx>
 
+#include <cstdint>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavutil/avutil.h>
 }
 
 using namespace StormByte::Multimedia;
@@ -99,9 +105,27 @@ namespace {
 		}
 		return true;
 	}
+
+	std::optional<std::chrono::nanoseconds> TicksToNs(std::int64_t ticks, AVRational timeBase) noexcept {
+		if (ticks < 0 || timeBase.den <= 0)
+			return std::nullopt;
+		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		if (ns < 0)
+			return std::nullopt;
+		return std::chrono::nanoseconds{ns};
+	}
 }
 
 ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
+	return Open(path, std::nullopt);
+}
+
+ExpectedFile File::Open(const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept {
+	return Open(path, std::optional<std::chrono::nanoseconds>{duration});
+}
+
+ExpectedFile File::Open(const std::filesystem::path& path,
+	std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
 	std::string reason;
 	if (!IsReadableFile(path, reason))
 		return Unexpected(FileOpenErrorException(path.string(), reason));
@@ -132,5 +156,75 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 		));
 	}
 
-	return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx), ctx.Duration());
+	if (knownDuration.has_value())
+		return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx),
+			knownDuration, true);
+
+	auto header = ctx.Duration();
+	return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx),
+		header, header.has_value());
+}
+
+const std::optional<std::chrono::nanoseconds>& File::Duration() const noexcept {
+	if (!m_durationResolved)
+		ResolveDuration();
+	return m_duration;
+}
+
+void File::ResolveDuration() const noexcept {
+	m_durationResolved = true;
+
+	auto opened = FFmpeg::AVFormatContext::Open(m_path);
+	if (!opened.has_value())
+		return;
+
+	FFmpeg::AVFormatContext& ctx = opened.value();
+	std::unordered_map<int, std::size_t> byIndex;
+	std::vector<AVRational> timeBase;
+	std::vector<std::int64_t> endTick;
+	std::size_t i = 0;
+	for (const auto& stream : ctx.Streams()) {
+		byIndex.emplace(stream.Index(), i);
+		timeBase.push_back(stream.TimeBase());
+		endTick.push_back(AV_NOPTS_VALUE);
+		++i;
+	}
+
+	FFmpeg::AVPacket packet;
+	for (;;) {
+		const auto result = ctx.ReadPacket(packet);
+		if (result == FFmpeg::OperationResult::EndOfFile)
+			break;
+		if (result == FFmpeg::OperationResult::TryAgain)
+			continue;
+		if (result != FFmpeg::OperationResult::Success)
+			break;
+
+		const auto found = byIndex.find(packet.StreamIndex());
+		if (found == byIndex.end())
+			continue;
+		std::int64_t pts = packet.Pts();
+		if (pts == AV_NOPTS_VALUE)
+			continue;
+		const std::int64_t dur = packet.Duration();
+		if (dur > 0)
+			pts += dur;
+		std::int64_t& end = endTick[found->second];
+		if (end == AV_NOPTS_VALUE || pts > end)
+			end = pts;
+	}
+
+	std::optional<std::chrono::nanoseconds> longest;
+	for (std::size_t n = 0; n < endTick.size(); ++n) {
+		auto ns = TicksToNs(endTick[n], timeBase[n]);
+		if (!ns.has_value())
+			continue;
+		if (n < m_streams.size() && !m_streams[n].m_duration.has_value())
+			m_streams[n].m_duration = ns;
+		if (!longest.has_value() || *ns > *longest)
+			longest = ns;
+	}
+
+	if (!m_duration.has_value())
+		m_duration = longest;
 }

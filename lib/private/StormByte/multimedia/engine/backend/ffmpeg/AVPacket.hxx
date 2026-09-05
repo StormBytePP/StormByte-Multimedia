@@ -40,6 +40,8 @@
 
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
 
+#include <cstdint>
+
 extern "C" {
 	#include <libavcodec/packet.h>
 }
@@ -58,64 +60,76 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 		friend class AVDecoder;
 		friend class AVEncoder;
 		friend class AVFormatContext;
-	public:
-		/**
-		 * @brief Allocates an empty packet.
-		 */
-		AVPacket() noexcept;
+		public:
+			/**
+			 * @brief Allocates an empty packet.
+			 */
+			AVPacket() noexcept;
 
-		/**
-		 * @brief Copy constructor (deleted).
-		 * @param other Unused.
-		 */
-		AVPacket(const AVPacket& other) = delete;
+			/**
+			 * @brief Copy constructor (deleted).
+			 * @param other Unused.
+			 */
+			AVPacket(const AVPacket& other) = delete;
 
-		/**
-		 * @brief Move constructor.
-		 * @param other Source packet.
-		 */
-		AVPacket(AVPacket&& other) noexcept = default;
+			/**
+			 * @brief Move constructor.
+			 * @param other Source packet.
+			 */
+			AVPacket(AVPacket&& other) noexcept = default;
 
-		/**
-		 * @brief Destructor.
-		 */
-		~AVPacket() noexcept override;
+			/**
+			 * @brief Destructor.
+			 */
+			~AVPacket() noexcept override;
 
-		/**
-		 * @brief Copy assignment (deleted).
-		 * @param other Unused.
-		 * @return *this.
-		 */
-		AVPacket& operator=(const AVPacket& other) = delete;
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @param other Unused.
+			 * @return *this.
+			 */
+			AVPacket& operator=(const AVPacket& other) = delete;
 
-		/**
-		 * @brief Move assignment.
-		 * @param other Source packet.
-		 * @return *this.
-		 */
-		AVPacket& operator=(AVPacket&& other) noexcept = default;
+			/**
+			 * @brief Move assignment.
+			 * @param other Source packet.
+			 * @return *this.
+			 */
+			AVPacket& operator=(AVPacket&& other) noexcept = default;
 
-		/**
-		 * @brief New packet referencing the same data (av_packet_ref).
-		 * @return Referenced packet.
-		 */
-		FFmpeg::AVPacket Ref() const noexcept;
+			/**
+			 * @brief New packet referencing the same data (av_packet_ref).
+			 * @return Referenced packet.
+			 */
+			FFmpeg::AVPacket Ref() const noexcept;
 
-		/**
-		 * @brief Unreferences packet data (av_packet_unref).
-		 */
-		void Unref() noexcept;
+			/**
+			 * @brief Unreferences packet data (av_packet_unref).
+			 */
+			void Unref() noexcept;
 
-		/**
-		 * @brief Packet stream index.
-		 * @return stream_index, or -1 if empty.
-		 */
-		int StreamIndex() const noexcept;
+			/**
+			 * @brief Packet stream index.
+			 * @return stream_index, or -1 if empty.
+			 */
+			int StreamIndex() const noexcept;
 
-	private:
-		/**
-		 * @brief Frees the packet (av_packet_free).
-		 */
-		void Free() noexcept override;
+			/**
+			 * @brief Presentation timestamp in stream time base.
+			 * @return PTS, or `AV_NOPTS_VALUE`.
+			 */
+			std::int64_t Pts() const noexcept;
+
+			/**
+			 * @brief Packet duration in stream time base.
+			 * @return Duration ticks, or 0.
+			 */
+			std::int64_t Duration() const noexcept;
+
+		private:
+			/**
+			 * @brief Frees the packet (av_packet_free).
+			 */
+			void Free() noexcept override;
 	};
 }
