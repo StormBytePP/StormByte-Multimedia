@@ -38,24 +38,72 @@
 
 #pragma once
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/exception.hxx>
-
-#include <functional>
-#include <vector>
+#include <StormByte/multimedia/codec.hxx>
 
 /**
  * @namespace StormByte::Multimedia
- * @brief Public media types: codecs, containers, registry and stream kinds.
+ * @brief Public multimedia types: codecs, containers, streams and files.
  */
 namespace StormByte::Multimedia {
-	class Codec;
-	class Container;
-	class Stream;
+	class File;
 
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;				///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;	///< Result of FindContainer
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;								///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;						///< List of container references
-	using Streams = std::vector<Stream>;															///< Ordered streams
+	/**
+	 * @class Stream
+	 * @brief One media stream: a registry Codec plus later per-file state.
+	 *
+	 * Copies share the same Codec instance. The Codec outlives every Stream.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
+		public:
+			/**
+			 * @brief Copy constructor.
+			 */
+			Stream(const Stream&) = default;
+
+			/**
+			 * @brief Move constructor.
+			 */
+			Stream(Stream&&) = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Stream() = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @return *this.
+			 */
+			Stream& operator=(const Stream&) = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @return *this.
+			 */
+			Stream& operator=(Stream&&) = default;
+
+			/**
+			 * @brief Codec of this stream.
+			 * @return Registry codec.
+			 */
+			const class Codec& Codec() const noexcept { return m_codec; }
+
+			/**
+			 * @brief Media kind of the codec.
+			 * @return Audio, Video, Subtitle, Attachment or Unknown.
+			 */
+			Type Type() const noexcept { return m_codec.Type(); }
+
+		private:
+			friend class File;
+
+			const class Codec& m_codec;	///< Registry codec
+
+			/**
+			 * @brief File-only constructor.
+			 * @param codec Registry codec for this stream.
+			 */
+			Stream(const class Codec& codec) noexcept
+			: m_codec(codec) {}
+	};
 }
