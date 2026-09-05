@@ -38,21 +38,21 @@
 
 #pragma once
 
-#include <StormByte/multimedia/media/typedefs.hxx>
-#include <StormByte/multimedia/media/type.hxx>
+#include <StormByte/multimedia/typedefs.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <string_view>
 
 /**
- * @namespace StormByte::Multimedia::Media
+ * @namespace StormByte::Multimedia
  * @brief Public media types: codecs, containers, registry and stream kinds.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia {
 	class Registry;
 
 	/**
 	 * @class Container
-	 * @brief Immutable container identity owned by StormByte::Multimedia::Media::Registry.
+	 * @brief Immutable container identity owned by StormByte::Multimedia::Registry.
 	 *
 	 * Name() is the StormByte key. FFmpeg format ids live only in the registry map.
 	 */

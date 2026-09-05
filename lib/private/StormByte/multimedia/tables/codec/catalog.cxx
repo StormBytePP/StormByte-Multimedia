@@ -48,7 +48,7 @@ namespace StormByte::Multimedia::Tables::Codec {
 		Initialize();
 	}
 
-	void Catalog::Index(Media::Type type, std::span<const CodecDef> table) noexcept {
+	void Catalog::Index(Type type, std::span<const CodecDef> table) noexcept {
 		for (const auto& row : table) {
 			m_byName.emplace(row.name, &row);
 			m_kind.emplace(row.name, type);
@@ -58,19 +58,19 @@ namespace StormByte::Multimedia::Tables::Codec {
 	}
 
 	void Catalog::Initialize() noexcept {
-		const auto video		= Identity(Media::Type::Video);
-		const auto audio		= Identity(Media::Type::Audio);
-		const auto subtitle		= Identity(Media::Type::Subtitle);
-		const auto attachment	= Identity(Media::Type::Attachment);
+		const auto video		= Identity(Type::Video);
+		const auto audio		= Identity(Type::Audio);
+		const auto subtitle		= Identity(Type::Subtitle);
+		const auto attachment	= Identity(Type::Attachment);
 		m_byName.reserve((video.size() + audio.size() + subtitle.size() + attachment.size()) * 2);
 		m_kind.reserve(video.size() + audio.size() + subtitle.size() + attachment.size());
-		Index(Media::Type::Video, video);
-		Index(Media::Type::Audio, audio);
-		Index(Media::Type::Subtitle, subtitle);
-		Index(Media::Type::Attachment, attachment);
+		Index(Type::Video, video);
+		Index(Type::Audio, audio);
+		Index(Type::Subtitle, subtitle);
+		Index(Type::Attachment, attachment);
 	}
 
-	std::span<const CodecDef> Catalog::All(Media::Type type) const noexcept {
+	std::span<const CodecDef> Catalog::All(Type type) const noexcept {
 		return Identity(type);
 	}
 
@@ -79,8 +79,8 @@ namespace StormByte::Multimedia::Tables::Codec {
 		return it == m_byName.end() ? nullptr : it->second;
 	}
 
-	Media::Type Catalog::Kind(std::string_view name) const noexcept {
+	Type Catalog::Kind(std::string_view name) const noexcept {
 		const auto it = m_kind.find(name);
-		return it == m_kind.end() ? Media::Type::Unknown : it->second;
+		return it == m_kind.end() ? Type::Unknown : it->second;
 	}
 }

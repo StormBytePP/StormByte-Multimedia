@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/media/registry.hxx>
+#include <StormByte/multimedia/registry.hxx>
 #include <StormByte/multimedia/tables/codec/catalog.hxx>
 #include <StormByte/multimedia/tables/container/catalog.hxx>
 #include <StormByte/multimedia/tables/container/table.hxx>
@@ -48,7 +48,7 @@ extern "C" {
 	#include <libavformat/avformat.h>
 }
 
-using namespace StormByte::Multimedia::Media;
+using namespace StormByte::Multimedia;
 
 namespace {
 	Access ProbeAccess(const StormByte::Multimedia::Tables::Codec::CodecDef& def) noexcept {

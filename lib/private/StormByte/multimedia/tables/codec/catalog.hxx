@@ -39,7 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/tables/codec/table.hxx>
-#include <StormByte/multimedia/media/type.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <string_view>
 #include <unordered_map>
@@ -72,7 +72,7 @@ namespace StormByte::Multimedia::Tables::Codec {
 			 * @param type Video, Audio, Subtitle or Attachment.
 			 * @return Span from Identity(@p type).
 			 */
-			std::span<const CodecDef> All(Media::Type type) const noexcept;
+			std::span<const CodecDef> All(Type type) const noexcept;
 
 			/**
 			 * @brief Lookup by StormByte name or FFmpeg id.
@@ -84,9 +84,9 @@ namespace StormByte::Multimedia::Tables::Codec {
 			/**
 			 * @brief Media kind of a name or FFmpeg id.
 			 * @param name Catalog key.
-			 * @return Media::Type, or Media::Type::Unknown.
+			 * @return Type, or Type::Unknown.
 			 */
-			Media::Type Kind(std::string_view name) const noexcept;
+			Type Kind(std::string_view name) const noexcept;
 
 		private:
 			/**
@@ -121,9 +121,9 @@ namespace StormByte::Multimedia::Tables::Codec {
 			 * @param type Media kind.
 			 * @param table Rows.
 			 */
-			void Index(Media::Type type, std::span<const CodecDef> table) noexcept;
+			void Index(Type type, std::span<const CodecDef> table) noexcept;
 
 			std::unordered_map<std::string_view, const CodecDef*, NameHash, std::equal_to<>> m_byName;	///< Name / FFmpeg id → row
-			std::unordered_map<std::string_view, Media::Type, NameHash, std::equal_to<>> m_kind;			///< StormByte name → kind
+			std::unordered_map<std::string_view, Type, NameHash, std::equal_to<>> m_kind;			///< StormByte name → kind
 	};
 }

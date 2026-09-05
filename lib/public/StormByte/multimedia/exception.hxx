@@ -70,4 +70,34 @@ namespace StormByte::Multimedia {
 			 */
 			virtual ~Exception() noexcept = default;
 	};
+
+	/**
+	 * @class CodecNotFoundException
+	 * @brief Thrown when StormByte::Multimedia::Registry::FindCodec does not resolve a key.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFoundException: public Exception {
+		public:
+			/**
+			 * @brief Constructs the exception for @p codec.
+			 * @param codec StormByte name or FFmpeg id that was not found.
+			 */
+			template <typename... Args>
+			CodecNotFoundException(const std::string& codec):
+			Exception("Codec", "Codec {} not found", codec) {}
+	};
+
+	/**
+	 * @class ContainerNotFoundException
+	 * @brief Thrown when StormByte::Multimedia::Registry::FindContainer does not resolve a key.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFoundException: public Exception {
+		public:
+			/**
+			 * @brief Constructs the exception for @p container.
+			 * @param container StormByte name or FFmpeg format id that was not found.
+			 */
+			template <typename... Args>
+			ContainerNotFoundException(const std::string& container):
+			Exception("Container", "Container {} not found", container) {}
+	};
 }

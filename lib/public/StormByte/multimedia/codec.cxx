@@ -36,24 +36,18 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/codec.hxx>
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/media/exception.hxx>
+using namespace StormByte::Multimedia;
 
-#include <functional>
-#include <vector>
+bool Codec::operator==(const Codec& other) const noexcept {
+	return this == &other;
+}
 
-/**
- * @namespace StormByte::Multimedia::Media
- * @brief Public media types: codecs, containers, registry and stream kinds.
- */
-namespace StormByte::Multimedia::Media {
-	class Codec;
-	class Container;
+bool Codec::operator!=(const Codec& other) const noexcept {
+	return !(*this == other);
+}
 
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;				///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;	///< Result of FindContainer
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;								///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;						///< List of container references
+bool Codec::HasAccess(Access access) const noexcept {
+	return m_access.Has(access);
 }

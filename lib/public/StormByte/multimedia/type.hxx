@@ -44,10 +44,10 @@
 #include <cstdint>
 
 /**
- * @namespace StormByte::Multimedia::Media
+ * @namespace StormByte::Multimedia
  * @brief Public media types: codecs, registry and stream kinds.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia {
 	/**
 	 * @enum Type
 	 * @brief Kind of media stream or codec.

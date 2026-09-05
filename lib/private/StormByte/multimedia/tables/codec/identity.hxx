@@ -39,12 +39,12 @@
 #include <StormByte/multimedia/tables/codec/table.hxx>
 
 std::span<const StormByte::Multimedia::Tables::Codec::CodecDef>
-StormByte::Multimedia::Tables::Codec::Identity(Media::Type type) noexcept {
+StormByte::Multimedia::Tables::Codec::Identity(Type type) noexcept {
 	switch (type) {
-		case Media::Type::Video:		return Video();
-		case Media::Type::Audio:		return Audio();
-		case Media::Type::Subtitle:	return Subtitle();
-		case Media::Type::Attachment:	return Attachment();
+		case Type::Video:		return Video();
+		case Type::Audio:		return Audio();
+		case Type::Subtitle:	return Subtitle();
+		case Type::Attachment:	return Attachment();
 		default:				return {};
 	}
 }

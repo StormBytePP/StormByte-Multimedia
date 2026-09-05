@@ -38,9 +38,9 @@
 
 #pragma once
 
-#include <StormByte/multimedia/media/codec.hxx>
-#include <StormByte/multimedia/media/container.hxx>
-#include <StormByte/multimedia/media/typedefs.hxx>
+#include <StormByte/multimedia/codec.hxx>
+#include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/typedefs.hxx>
 
 #include <functional>
 #include <span>
@@ -58,10 +58,10 @@ namespace StormByte::Multimedia::Tables {
 }
 
 /**
- * @namespace StormByte::Multimedia::Media
+ * @namespace StormByte::Multimedia
  * @brief Public media types: codecs, containers, registry and stream kinds.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia {
 	/**
 	 * @class Registry
 	 * @brief Process-wide catalog of codecs and containers.

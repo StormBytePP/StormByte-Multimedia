@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/media/type.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <array>
 #include <cstddef>
@@ -113,5 +113,5 @@ namespace StormByte::Multimedia::Tables::Codec {
 	 * @param type Video, Audio, Subtitle or Attachment.
 	 * @return Span over that table; empty if @p type has none.
 	 */
-	std::span<const CodecDef> Identity(Media::Type type) noexcept;
+	std::span<const CodecDef> Identity(Type type) noexcept;
 }

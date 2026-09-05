@@ -38,15 +38,15 @@
 
 #pragma once
 
-#include <StormByte/multimedia/media/type.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <string_view>
 
 /**
- * @namespace StormByte::Multimedia::Media
+ * @namespace StormByte::Multimedia
  * @brief Public media types: codecs, registry and stream kinds.
  */
-namespace StormByte::Multimedia::Media {
+namespace StormByte::Multimedia {
 	class Registry;
 
 	/**
@@ -102,7 +102,7 @@ namespace StormByte::Multimedia::Media {
 			 * @brief Media kind of this codec.
 			 * @return Type value.
 			 */
-			constexpr Media::Type Type() const noexcept { return m_type; }
+			constexpr enum Type Type() const noexcept { return m_type; }
 
 			/**
 			 * @brief StormByte codec name.
@@ -126,7 +126,7 @@ namespace StormByte::Multimedia::Media {
 		private:
 			friend class Registry;
 
-			Media::Type m_type;					///< Stream / codec kind
+			enum Type m_type;					///< Stream / codec kind
 			std::string_view m_name;			///< StormByte name
 			std::string_view m_description;		///< Description
 			Access m_access;					///< Read and optional Write
@@ -138,7 +138,7 @@ namespace StormByte::Multimedia::Media {
 			 * @param description Description (table literal).
 			 * @param access Capability mask.
 			 */
-			constexpr Codec(Media::Type type, std::string_view name, std::string_view description, Access access) noexcept
+			constexpr Codec(enum Type type, std::string_view name, std::string_view description, Access access) noexcept
 			: m_type(type), m_name(name), m_description(description), m_access(access) {}
 	};
 }
