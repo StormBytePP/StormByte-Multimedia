@@ -36,13 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/media/tables/codec/table.hxx>
 #include <StormByte/multimedia/media/registry.hxx>
+#include <StormByte/multimedia/media/tables/codec/table.hxx>
+#include <StormByte/multimedia/media/tables/container/catalog.hxx>
+#include <StormByte/multimedia/media/tables/container/table.hxx>
 
 #include <string>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
 }
 
 using namespace StormByte::Multimedia::Media;
@@ -84,12 +87,28 @@ CodecRefs Registry::CodecList(Type type) const noexcept {
 	return out;
 }
 
+ContainerRefs Registry::ContainerList() const noexcept {
+	ContainerRefs out;
+	out.reserve(m_containers.size());
+	for (const Container& container : m_containers)
+		out.emplace_back(container);
+	return out;
+}
+
 ExpectedCodec Registry::FindCodec(std::string_view name) const noexcept {
 	const auto it = m_by_name.find(name);
 	if (it == m_by_name.end())
 		return Unexpected<CodecNotFoundException>(std::string(name));
 
 	return m_codecs[it->second];
+}
+
+ExpectedContainer Registry::FindContainer(std::string_view name) const noexcept {
+	const auto it = m_container_by_name.find(name);
+	if (it == m_container_by_name.end())
+		return Unexpected<ContainerNotFoundException>(std::string(name));
+
+	return m_containers[it->second];
 }
 
 void Registry::Add(Type type, const Tables::Codec::CodecDef& def) noexcept {
@@ -108,11 +127,70 @@ void Registry::Load(Type type, std::span<const Tables::Codec::CodecDef> table) n
 		Add(type, def);
 }
 
+Access Registry::ProbeContainer(const Tables::Container::ContainerDef& def) const noexcept {
+	Access access;
+	for (std::size_t i = 0; i < def.FfmpegIdCount(); ++i) {
+		const char* id = def.FfmpegId(i);
+		if (!id)
+			break;
+		if (av_find_input_format(id) != nullptr)
+			access |= Access(Operation::Read);
+		if (av_guess_format(id, nullptr, nullptr) != nullptr)
+			access |= Access(Operation::Write);
+	}
+	return access;
+}
+
+void Registry::Add(const Tables::Container::ContainerDef& def) noexcept {
+	const char* ext = def.PrimaryExtension();
+	const std::size_t i = m_containers.size();
+	m_containers.push_back(Container(
+		def.name,
+		def.description,
+		ext ? std::string_view{ext} : std::string_view{},
+		ProbeContainer(def)
+	));
+	Container& stored = m_containers[i];
+
+	m_container_by_name.emplace(stored.Name(), i);
+	for (std::size_t n = 0; n < def.FfmpegIdCount(); ++n)
+		m_container_by_name.emplace(def.FfmpegId(n), i);
+
+	const auto rows = Tables::Container::Catalog::Instance().Compat(def);
+	stored.m_allowed.reserve(rows.size());
+	for (const auto& row : rows) {
+		if (!row.codec)
+			continue;
+		auto found = FindCodec(row.codec);
+		if (!found.has_value())
+			continue;
+		const Codec& codec = found.value();
+		bool dup = false;
+		for (const Codec& existing : stored.m_allowed) {
+			if (existing == codec) {
+				dup = true;
+				break;
+			}
+		}
+		if (!dup)
+			stored.m_allowed.emplace_back(codec);
+	}
+}
+
+void Registry::LoadContainers() noexcept {
+	const auto& catalog = Tables::Container::Catalog::Instance();
+	const auto all = catalog.All();
+	m_containers.reserve(all.size());
+	m_container_by_name.reserve(all.size() * 2);
+	for (const auto& def : all)
+		Add(def);
+}
+
 void Registry::Initialize() noexcept {
-	const auto video 		= Tables::Codec::Video();
-	const auto audio 		= Tables::Codec::Audio();
-	const auto subtitle 	= Tables::Codec::Subtitle();
-	const auto attachment 	= Tables::Codec::Attachment();
+	const auto video		= Tables::Codec::Video();
+	const auto audio		= Tables::Codec::Audio();
+	const auto subtitle		= Tables::Codec::Subtitle();
+	const auto attachment	= Tables::Codec::Attachment();
 
 	m_codecs.reserve(video.size() + audio.size() + subtitle.size() + attachment.size());
 	m_by_name.reserve((video.size() + audio.size() + subtitle.size() + attachment.size()) * 2);
@@ -122,4 +200,5 @@ void Registry::Initialize() noexcept {
 	Load(Type::Audio, audio);
 	Load(Type::Subtitle, subtitle);
 	Load(Type::Attachment, attachment);
+	LoadContainers();
 }

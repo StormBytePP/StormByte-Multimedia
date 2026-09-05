@@ -46,11 +46,14 @@
 
 /**
  * @namespace StormByte::Multimedia::Media
- * @brief Public media types: codecs, registry and stream kinds.
+ * @brief Public media types: codecs, containers, registry and stream kinds.
  */
 namespace StormByte::Multimedia::Media {
 	class Codec;
+	class Container;
 
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;	///< Lookup result
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;			///< List of codec refs
+	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;				///< Result of FindCodec
+	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;	///< Result of FindContainer
+	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;								///< List of codec references
+	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;						///< List of container references
 }

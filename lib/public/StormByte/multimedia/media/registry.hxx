@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/media/codec.hxx>
+#include <StormByte/multimedia/media/container.hxx>
 #include <StormByte/multimedia/media/typedefs.hxx>
 
 #include <functional>
@@ -49,18 +50,21 @@
 
 /**
  * @namespace StormByte::Multimedia::Media
- * @brief Public media types: codecs, registry and stream kinds.
+ * @brief Public media types: codecs, containers, registry and stream kinds.
  */
 namespace StormByte::Multimedia::Media {
 	namespace Tables::Codec {
 		struct CodecDef;
 	}
+	namespace Tables::Container {
+		struct ContainerDef;
+	}
 
 	/**
 	 * @class Registry
-	 * @brief Process-wide catalog of codecs.
+	 * @brief Process-wide catalog of codecs and containers.
 	 *
-	 * First Instance() loads the private tables and probes FFmpeg encoders.
+	 * First Instance() loads the private tables and probes FFmpeg.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Registry {
 		public:
@@ -105,11 +109,24 @@ namespace StormByte::Multimedia::Media {
 			CodecRefs CodecList(Type type) const noexcept;
 
 			/**
-			 * @brief Looks up by StormByte name or FFmpeg id.
+			 * @brief All loaded containers.
+			 * @return References into the registry storage.
+			 */
+			ContainerRefs ContainerList() const noexcept;
+
+			/**
+			 * @brief Looks up by StormByte name or FFmpeg codec id.
 			 * @param name Key (`H.265` or `hevc`).
 			 * @return Codec or CodecNotFoundException.
 			 */
 			ExpectedCodec FindCodec(std::string_view name) const noexcept;
+
+			/**
+			 * @brief Looks up by StormByte name or FFmpeg format id.
+			 * @param name Key (`Matroska` or `matroska`).
+			 * @return Container or ContainerNotFoundException.
+			 */
+			ExpectedContainer FindContainer(std::string_view name) const noexcept;
 
 		private:
 			/**
@@ -130,7 +147,7 @@ namespace StormByte::Multimedia::Media {
 			};
 
 			/**
-			 * @brief Loads tables and probes encoders.
+			 * @brief Loads tables and probes FFmpeg.
 			 */
 			Registry() noexcept;
 
@@ -153,8 +170,28 @@ namespace StormByte::Multimedia::Media {
 			 */
 			void Add(Type type, const Tables::Codec::CodecDef& def) noexcept;
 
+			/**
+			 * @brief Loads every container identity row and its compatibility set.
+			 */
+			void LoadContainers() noexcept;
+
+			/**
+			 * @brief Inserts one container, its FFmpeg ids and allowed codecs.
+			 * @param def Identity row.
+			 */
+			void Add(const Tables::Container::ContainerDef& def) noexcept;
+
+			/**
+			 * @brief Probes demuxer and muxer for @p def.
+			 * @param def Identity row.
+			 * @return Read and optional Write.
+			 */
+			Access ProbeContainer(const Tables::Container::ContainerDef& def) const noexcept;
+
 			std::vector<Codec> m_codecs;	///< Owned codec instances
-			std::unordered_map<std::string_view, std::size_t, NameHash, std::equal_to<>> m_by_name;	///< Name / FFmpeg id → index
-			std::unordered_map<Type, std::vector<std::size_t>> m_by_type;	///< Type → indices
+			std::unordered_map<std::string_view, std::size_t, NameHash, std::equal_to<>> m_by_name;	///< Codec name / FFmpeg id → index
+			std::unordered_map<Type, std::vector<std::size_t>> m_by_type;	///< Type → codec indices
+			std::vector<Container> m_containers;	///< Owned container instances
+			std::unordered_map<std::string_view, std::size_t, NameHash, std::equal_to<>> m_container_by_name;	///< Container name / FFmpeg id → index
 	};
 }

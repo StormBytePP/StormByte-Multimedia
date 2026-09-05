@@ -42,12 +42,12 @@
 
 /**
  * @namespace StormByte::Multimedia::Media
- * @brief Public media types: codecs, registry and stream kinds.
+ * @brief Public media types: codecs, containers, registry and stream kinds.
  */
 namespace StormByte::Multimedia::Media {
 	/**
 	 * @class Exception
-	 * @brief Base exception for Media.
+	 * @brief Base exception for StormByte::Multimedia::Media.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Exception: public Multimedia::Exception {
 		public:
@@ -72,17 +72,31 @@ namespace StormByte::Multimedia::Media {
 
 	/**
 	 * @class CodecNotFoundException
-	 * @brief Thrown when FindCodec does not resolve a name or FFmpeg id.
+	 * @brief Thrown when StormByte::Multimedia::Media::Registry::FindCodec does not resolve a key.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFoundException: public Exception {
 		public:
 			/**
 			 * @brief Constructs the exception for @p codec.
-			 * @tparam Args Unused; kept for symmetry with Exception.
-			 * @param codec Name or FFmpeg id that was not found.
+			 * @param codec StormByte name or FFmpeg id that was not found.
 			 */
 			template <typename... Args>
 			CodecNotFoundException(const std::string& codec):
 			Exception("Codec", "Codec {} not found", codec) {}
+	};
+
+	/**
+	 * @class ContainerNotFoundException
+	 * @brief Thrown when StormByte::Multimedia::Media::Registry::FindContainer does not resolve a key.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFoundException: public Exception {
+		public:
+			/**
+			 * @brief Constructs the exception for @p container.
+			 * @param container StormByte name or FFmpeg format id that was not found.
+			 */
+			template <typename... Args>
+			ContainerNotFoundException(const std::string& container):
+			Exception("Container", "Container {} not found", container) {}
 	};
 }
