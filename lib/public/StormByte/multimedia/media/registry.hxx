@@ -48,18 +48,20 @@
 #include <unordered_map>
 #include <vector>
 
+namespace StormByte::Multimedia::Tables {
+	namespace Codec {
+		struct CodecDef;
+	}
+	namespace Container {
+		struct ContainerDef;
+	}
+}
+
 /**
  * @namespace StormByte::Multimedia::Media
  * @brief Public media types: codecs, containers, registry and stream kinds.
  */
 namespace StormByte::Multimedia::Media {
-	namespace Tables::Codec {
-		struct CodecDef;
-	}
-	namespace Tables::Container {
-		struct ContainerDef;
-	}
-
 	/**
 	 * @class Registry
 	 * @brief Process-wide catalog of codecs and containers.

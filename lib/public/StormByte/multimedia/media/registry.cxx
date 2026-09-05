@@ -37,9 +37,9 @@
  */
 
 #include <StormByte/multimedia/media/registry.hxx>
-#include <StormByte/multimedia/media/tables/codec/catalog.hxx>
-#include <StormByte/multimedia/media/tables/container/catalog.hxx>
-#include <StormByte/multimedia/media/tables/container/table.hxx>
+#include <StormByte/multimedia/tables/codec/catalog.hxx>
+#include <StormByte/multimedia/tables/container/catalog.hxx>
+#include <StormByte/multimedia/tables/container/table.hxx>
 
 #include <string>
 
@@ -51,7 +51,7 @@ extern "C" {
 using namespace StormByte::Multimedia::Media;
 
 namespace {
-	Access ProbeAccess(const Tables::Codec::CodecDef& def) noexcept {
+	Access ProbeAccess(const StormByte::Multimedia::Tables::Codec::CodecDef& def) noexcept {
 		Access access(Operation::Read);
 		for (std::size_t i = 0; i < def.FfmpegIdCount(); ++i) {
 			const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(def.FfmpegId(i));
