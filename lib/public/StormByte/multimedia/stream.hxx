@@ -40,6 +40,12 @@
 
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/metadata/stream.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/video.hxx>
+
+#include <chrono>
+#include <optional>
+#include <variant>
 
 /**
  * @namespace StormByte::Multimedia
@@ -50,12 +56,17 @@ namespace StormByte::Multimedia {
 
 	/**
 	 * @class Stream
-	 * @brief One media stream: registry Codec plus per-file metadata.
+	 * @brief One media stream: registry Codec, tags and optional property bag.
 	 *
 	 * Copies share the same Codec instance. The Codec outlives every Stream.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
 		public:
+			/**
+			 * @brief Per-stream property bag.
+			 */
+			using Properties = std::variant<std::monostate, Property::Video, Property::Audio>;
+
 			/**
 			 * @brief Copy constructor.
 			 */
@@ -101,18 +112,47 @@ namespace StormByte::Multimedia {
 			 */
 			const Metadata::Stream& Metadata() const noexcept { return m_metadata; }
 
+			/**
+			 * @brief Stream duration, if known.
+			 * @return Duration in nanoseconds, or empty.
+			 */
+			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
+
+			/**
+			 * @brief Video property bag, if this stream has one.
+			 * @return Video properties, or nullptr.
+			 */
+			const Property::Video* Video() const noexcept {
+				return std::get_if<Property::Video>(&m_properties);
+			}
+
+			/**
+			 * @brief Audio property bag, if this stream has one.
+			 * @return Audio properties, or nullptr.
+			 */
+			const Property::Audio* Audio() const noexcept {
+				return std::get_if<Property::Audio>(&m_properties);
+			}
+
 		private:
 			friend class File;
 
-			const class Codec& m_codec;		///< Registry codec
-			Metadata::Stream m_metadata;		///< Stream tags
+			const class Codec& m_codec;							///< Registry codec
+			Metadata::Stream m_metadata;						///< Stream tags
+			std::optional<std::chrono::nanoseconds> m_duration;	///< Stream duration
+			Properties m_properties;							///< Video, audio, or none
 
 			/**
 			 * @brief File-only constructor.
 			 * @param codec Registry codec.
 			 * @param metadata Stream tags.
+			 * @param duration Stream duration, if known.
+			 * @param properties Video or audio bag, or monostate.
 			 */
-			Stream(const class Codec& codec, Metadata::Stream metadata) noexcept
-			: m_codec(codec), m_metadata(std::move(metadata)) {}
+			Stream(const class Codec& codec, Metadata::Stream metadata,
+				std::optional<std::chrono::nanoseconds> duration = std::nullopt,
+				Properties properties = std::monostate {}) noexcept
+			: m_codec(codec), m_metadata(std::move(metadata)),
+			m_duration(duration), m_properties(std::move(properties)) {}
 	};
 }
