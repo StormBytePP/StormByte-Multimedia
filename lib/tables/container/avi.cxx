@@ -1,0 +1,89 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Multimedia.
+ *
+ * StormByte-Multimedia original source is dual-licensed:
+ *
+ * 1. GNU Lesser General Public License v3.0 (or later)
+ *    You may redistribute and/or modify this file under the terms of the
+ *    GNU Lesser General Public License as published by the Free Software
+ *    Foundation, either version 3 of the License, or (at your option)
+ *    any later version.
+ *
+ * 2. Commercial license
+ *    Alternatively, this file may be used under the terms of a commercial
+ *    license agreement with the copyright holder
+ *    (David C. Manuelda <StormByte@gmail.com>).
+ *
+ * Both licenses apply only to original StormByte-Multimedia source in this
+ * file. Third-party components — including FFmpeg and embedded trained data —
+ * remain under their own licenses and are not covered by the commercial grant.
+ *
+ * Neither license grants any patent rights. Any patent licenses required
+ * to use this software or third-party components must be obtained separately
+ * from the patent holders.
+ *
+ * StormByte-Multimedia is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 3 along with StormByte-Multimedia. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+ */
+
+#include <tables/container/table.hxx>
+
+using namespace StormByte::Multimedia::Tables::Container;
+
+namespace {
+	constexpr CompatDef table[] = {
+		{ nullptr,	"Cinepak" },
+		{ nullptr,	"DV Video" },
+		{ nullptr,	"FFV1" },
+		{ nullptr,	"FFVHuff" },
+		{ nullptr,	"H.261" },
+		{ nullptr,	"H.263" },
+		{ nullptr,	"H.263+" },
+		{ nullptr,	"H.264" },
+		{ nullptr,	"H.265" },
+		{ nullptr,	"HuffYUV" },
+		{ nullptr,	"Indeo 2" },
+		{ nullptr,	"Indeo 3" },
+		{ nullptr,	"Indeo 4" },
+		{ nullptr,	"Indeo 5" },
+		{ nullptr,	"MJPEG" },
+		{ nullptr,	"MPEG-4 Part 2" },
+		{ nullptr,	"MS MPEG-4 v1" },
+		{ nullptr,	"MS MPEG-4 v2" },
+		{ nullptr,	"MS MPEG-4 v3" },
+		{ nullptr,	"Microsoft RLE" },
+		{ nullptr,	"Microsoft Video 1" },
+		{ nullptr,	"Ut Video" },
+		{ nullptr,	"VP8" },
+		{ nullptr,	"VP9" },
+
+		{ nullptr,	"AC-3" },
+		{ nullptr,	"ADPCM IMA WAV" },
+		{ nullptr,	"ADPCM Microsoft" },
+		{ nullptr,	"MP2" },
+		{ nullptr,	"MP3" },
+		{ nullptr,	"PCM A-law" },
+		{ nullptr,	"PCM S16 LE" },
+		{ nullptr,	"PCM S24 LE" },
+		{ nullptr,	"PCM S32 LE" },
+		{ nullptr,	"PCM S8" },
+		{ nullptr,	"PCM U8" },
+		{ nullptr,	"PCM μ-law" },
+
+		{ nullptr,	"XSUB" },
+	};
+}
+
+std::span<const CompatDef> StormByte::Multimedia::Tables::Container::AVI() noexcept {
+	return table;
+}

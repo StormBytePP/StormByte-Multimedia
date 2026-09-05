@@ -37,9 +37,9 @@
  */
 
 #include <StormByte/multimedia/registry.hxx>
-#include <StormByte/multimedia/tables/codec/catalog.hxx>
-#include <StormByte/multimedia/tables/container/catalog.hxx>
-#include <StormByte/multimedia/tables/container/table.hxx>
+#include <tables/codec/catalog.hxx>
+#include <tables/container/catalog.hxx>
+#include <tables/container/table.hxx>
 
 #include <string>
 

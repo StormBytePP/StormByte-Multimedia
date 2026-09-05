@@ -48,3 +48,5 @@ target_include_directories(StormByte-Multimedia
 		PUBLIC  "${CMAKE_CURRENT_LIST_DIR}/public"
 		PRIVATE "${CMAKE_CURRENT_LIST_DIR}/private"
 )
+
+add_subdirectory(tables)
