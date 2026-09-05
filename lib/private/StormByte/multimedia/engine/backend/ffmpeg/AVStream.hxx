@@ -38,8 +38,7 @@
 
 #pragma once
 
-// oldcode — Metadata se rehace; no incluir lib/old
-// #include <StormByte/multimedia/metadata.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 extern "C" {
 	#include <libavformat/avformat.h>
@@ -130,11 +129,18 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			double FrameRate() const noexcept;
 
-			// oldcode — API pública Metadata
-			// /**
-			//  * @return Stream-level metadata tags.
-			//  */
-			// StormByte::Multimedia::Metadata Metadata() const noexcept;
+			/**
+			 * @brief Looks up a stream metadata tag.
+			 * @param key Dictionary key (e.g. `"language"`).
+			 * @return Value, or nullptr if missing.
+			 */
+			const char* Tag(const char* key) const noexcept;
+
+			/**
+			 * @brief Raw FFmpeg disposition bits.
+			 * @return `AV_DISPOSITION_*` mask, or 0.
+			 */
+			int Disposition() const noexcept;
 
 		private:
 			::AVStream* m_stream = nullptr;	///< Non-owning

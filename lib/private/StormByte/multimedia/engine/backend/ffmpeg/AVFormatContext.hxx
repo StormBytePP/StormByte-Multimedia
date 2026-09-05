@@ -104,17 +104,18 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			static ExpectedAVFormatContext Open(const std::filesystem::path& path);
 
-			// oldcode — API pública Metadata
-			// /**
-			//  * @return Container metadata dictionary as Metadata.
-			//  */
-			// StormByte::Multimedia::Metadata Metadata() const noexcept;
-
 			/**
 			 * @brief Demuxer format name (`iformat->name`).
 			 * @return Name (may be comma-separated ids), or nullptr.
 			 */
 			const char* FormatName() const noexcept;
+
+			/**
+			 * @brief Looks up a container metadata tag.
+			 * @param key Dictionary key (e.g. `"title"`).
+			 * @return Value, or nullptr if missing.
+			 */
+			const char* Tag(const char* key) const noexcept;
 
 			/**
 			 * @brief Reads the next packet.

@@ -69,6 +69,10 @@ int FFmpeg::AVCodecParameters::CodecId() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->codec_id) : static_cast<int>(AV_CODEC_ID_NONE);
 }
 
+std::int64_t FFmpeg::AVCodecParameters::BitRate() const noexcept {
+	return m_ptr ? m_ptr->bit_rate : 0;
+}
+
 void FFmpeg::AVCodecParameters::Free() noexcept {
 	if (m_ptr) {
 		avcodec_parameters_free(&m_ptr);

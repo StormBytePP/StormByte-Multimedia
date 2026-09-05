@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/metadata/file.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 
@@ -51,7 +52,7 @@
 namespace StormByte::Multimedia {
 	/**
 	 * @class File
-	 * @brief Snapshot of an existing media file: path, container and streams.
+	 * @brief Snapshot of an existing media file: path, container, streams and tags.
 	 *
 	 * Open() probes with private FFmpeg RAII and drops it before return.
 	 * File stores no backend state. Copies share registry Codec/Container refs.
@@ -104,6 +105,12 @@ namespace StormByte::Multimedia {
 			const Multimedia::Streams& Streams() const noexcept { return m_streams; }
 
 			/**
+			 * @brief Container-level tags captured at Open.
+			 * @return Metadata snapshot.
+			 */
+			const Metadata::File& Metadata() const noexcept { return m_metadata; }
+
+			/**
 			 * @brief Opens and probes @p path.
 			 * @param path Media file.
 			 * @return Snapshot or FileOpenErrorException.
@@ -114,14 +121,17 @@ namespace StormByte::Multimedia {
 			std::filesystem::path m_path;		///< Source path
 			const class Container& m_container;	///< Registry container
 			Multimedia::Streams m_streams;		///< Probed streams
+			Metadata::File m_metadata;		///< Container tags
 
 			/**
 			 * @brief Snapshot constructor.
 			 * @param path Source path.
 			 * @param container Registry container.
 			 * @param streams Probed streams.
+			 * @param metadata Container tags.
 			 */
-			File(const std::filesystem::path& path, const class Container& container, Multimedia::Streams streams) noexcept
-			: m_path(path), m_container(container), m_streams(std::move(streams)) {}
+			File(const std::filesystem::path& path, const class Container& container,
+				Multimedia::Streams streams, Metadata::File metadata) noexcept
+			: m_path(path), m_container(container), m_streams(std::move(streams)), m_metadata(std::move(metadata)) {}
 	};
 }

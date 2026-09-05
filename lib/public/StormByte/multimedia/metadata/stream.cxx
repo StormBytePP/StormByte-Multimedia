@@ -36,51 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/metadata/stream.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using StormByte::Multimedia::Metadata::Stream;
 
-FFmpeg::AVStream::AVStream(::AVStream* stream) noexcept
-:m_stream(stream) {}
+const std::optional<std::string>& Stream::Title() const noexcept { return m_title; }
+const std::optional<std::string>& Stream::Language() const noexcept { return m_language; }
+std::optional<std::uint64_t> Stream::BitRate() const noexcept { return m_bitRate; }
+StormByte::Multimedia::Metadata::Disposition Stream::Disposition() const noexcept { return m_disposition; }
 
-bool FFmpeg::AVStream::operator<(const AVStream& other) const noexcept {
-	return Index() < other.Index();
-}
-
-int FFmpeg::AVStream::Index() const noexcept {
-	return m_stream ? m_stream->index : -1;
-}
-
-int FFmpeg::AVStream::Type() const noexcept {
-	return m_stream ? m_stream->codecpar->codec_type : AVMEDIA_TYPE_UNKNOWN;
-}
-
-FFmpeg::AVCodecParameters FFmpeg::AVStream::CodecParameters() const noexcept {
-	return m_stream ? AVCodecParameters(m_stream->codecpar) : AVCodecParameters(nullptr);
-}
-
-AVRational FFmpeg::AVStream::TimeBase() const noexcept {
-	return m_stream ? m_stream->time_base : AVRational{0, 1};
-}
-
-double FFmpeg::AVStream::FrameRate() const noexcept {
-	if (!m_stream)
-		return 0.0;
-	if (m_stream->avg_frame_rate.num && m_stream->avg_frame_rate.den)
-		return av_q2d(m_stream->avg_frame_rate);
-	if (m_stream->r_frame_rate.num && m_stream->r_frame_rate.den)
-		return av_q2d(m_stream->r_frame_rate);
-	return 0.0;
-}
-
-const char* FFmpeg::AVStream::Tag(const char* key) const noexcept {
-	if (!m_stream || !m_stream->metadata || !key)
-		return nullptr;
-	const AVDictionaryEntry* entry = av_dict_get(m_stream->metadata, key, nullptr, 0);
-	return entry ? entry->value : nullptr;
-}
-
-int FFmpeg::AVStream::Disposition() const noexcept {
-	return m_stream ? m_stream->disposition : 0;
-}
+void Stream::Title(std::string title) noexcept { m_title = std::move(title); }
+void Stream::Language(std::string language) noexcept { m_language = std::move(language); }
+void Stream::BitRate(std::uint64_t bitRate) noexcept { m_bitRate = bitRate; }
+void Stream::Disposition(class Disposition disposition) noexcept { m_disposition = disposition; }

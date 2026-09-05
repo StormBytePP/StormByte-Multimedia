@@ -41,6 +41,8 @@
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
+
 extern "C" {
 	#include <libavcodec/avcodec.h>
 }
@@ -98,6 +100,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @return `AVCodecID` as int, or `AV_CODEC_ID_NONE`.
 			 */
 			int CodecId() const noexcept;
+
+			/**
+			 * @brief Stream bitrate in bits per second.
+			 * @return Bitrate, or 0 if unknown.
+			 */
+			std::int64_t BitRate() const noexcept;
 
 		private:
 			/**

@@ -78,6 +78,13 @@ const char* FFmpeg::AVFormatContext::FormatName() const noexcept {
 	return m_ptr->iformat->name;
 }
 
+const char* FFmpeg::AVFormatContext::Tag(const char* key) const noexcept {
+	if (!m_ptr || !m_ptr->metadata || !key)
+		return nullptr;
+	const AVDictionaryEntry* entry = av_dict_get(m_ptr->metadata, key, nullptr, 0);
+	return entry ? entry->value : nullptr;
+}
+
 FFmpeg::OperationResult FFmpeg::AVFormatContext::ReadPacket(AVPacket& packet) noexcept {
 	packet.Unref();
 	int ret = av_read_frame(m_ptr, packet.Get());

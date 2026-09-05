@@ -38,81 +38,42 @@
 
 #pragma once
 
-#include <StormByte/multimedia/codec.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/metadata/file.hxx>
 #include <StormByte/multimedia/metadata/stream.hxx>
 
 /**
- * @namespace StormByte::Multimedia
- * @brief Public multimedia types: codecs, containers, streams and files.
+ * @namespace StormByte::Multimedia::Detail
+ * @brief Private File probe helpers. Not installed.
  */
-namespace StormByte::Multimedia {
-	class File;
-
+namespace StormByte::Multimedia::Detail {
 	/**
-	 * @class Stream
-	 * @brief One media stream: registry Codec plus per-file metadata.
-	 *
-	 * Copies share the same Codec instance. The Codec outlives every Stream.
+	 * @class Probe
+	 * @brief Fills Metadata snapshots from FFmpeg RAII.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
+	class Probe {
 		public:
 			/**
-			 * @brief Copy constructor.
+			 * @brief Container tags from an open demuxer.
+			 * @param context Format context.
+			 * @return Snapshot.
 			 */
-			Stream(const Stream&) = default;
+			static Metadata::File File(const Engine::Backend::FFmpeg::AVFormatContext& context) noexcept;
 
 			/**
-			 * @brief Move constructor.
+			 * @brief Stream tags from an open stream view.
+			 * @param stream Stream view.
+			 * @return Snapshot.
 			 */
-			Stream(Stream&&) = default;
-
-			/**
-			 * @brief Destructor.
-			 */
-			~Stream() = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @return *this.
-			 */
-			Stream& operator=(const Stream&) = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @return *this.
-			 */
-			Stream& operator=(Stream&&) = default;
-
-			/**
-			 * @brief Codec of this stream.
-			 * @return Registry codec.
-			 */
-			const class Codec& Codec() const noexcept { return m_codec; }
-
-			/**
-			 * @brief Media kind of the codec.
-			 * @return Audio, Video, Subtitle, Attachment or Unknown.
-			 */
-			Type Type() const noexcept { return m_codec.Type(); }
-
-			/**
-			 * @brief Per-stream tags captured at Open.
-			 * @return Metadata snapshot.
-			 */
-			const Metadata::Stream& Metadata() const noexcept { return m_metadata; }
+			static Metadata::Stream Stream(const Engine::Backend::FFmpeg::AVStream& stream) noexcept;
 
 		private:
-			friend class File;
-
-			const class Codec& m_codec;		///< Registry codec
-			Metadata::Stream m_metadata;		///< Stream tags
-
 			/**
-			 * @brief File-only constructor.
-			 * @param codec Registry codec.
-			 * @param metadata Stream tags.
+			 * @brief Maps raw AV_DISPOSITION_* bits.
+			 * @param flags FFmpeg disposition mask.
+			 * @return High-level mask.
 			 */
-			Stream(const class Codec& codec, Metadata::Stream metadata) noexcept
-			: m_codec(codec), m_metadata(std::move(metadata)) {}
+			static Metadata::Disposition Disposition(int flags) noexcept;
 	};
 }
