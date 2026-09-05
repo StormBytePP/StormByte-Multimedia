@@ -36,11 +36,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/registry.hxx>
 
 #include <fstream>
@@ -123,8 +124,13 @@ ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
 			return Unexpected(FileOpenErrorException(path.string(), codec.error()->what()));
-		streams.emplace_back(Stream(codec.value(), Detail::Probe::Stream(stream)));
+		streams.emplace_back(Stream(
+			codec.value(),
+			Detail::Probe::Stream(stream),
+			stream.Duration(),
+			FFmpeg::MapProperties(stream)
+		));
 	}
 
-	return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx));
+	return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx), ctx.Duration());
 }

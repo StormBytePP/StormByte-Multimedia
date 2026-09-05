@@ -43,7 +43,9 @@
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 
+#include <chrono>
 #include <filesystem>
+#include <optional>
 
 /**
  * @namespace StormByte::Multimedia
@@ -111,6 +113,12 @@ namespace StormByte::Multimedia {
 			const Metadata::File& Metadata() const noexcept { return m_metadata; }
 
 			/**
+			 * @brief Container duration, if known.
+			 * @return Duration in nanoseconds, or empty.
+			 */
+			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
+
+			/**
 			 * @brief Opens and probes @p path.
 			 * @param path Media file.
 			 * @return Snapshot or FileOpenErrorException.
@@ -118,10 +126,11 @@ namespace StormByte::Multimedia {
 			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
 
 		private:
-			std::filesystem::path m_path;		///< Source path
-			const class Container& m_container;	///< Registry container
-			Multimedia::Streams m_streams;		///< Probed streams
-			Metadata::File m_metadata;		///< Container tags
+			std::filesystem::path m_path;					///< Source path
+			const class Container& m_container;				///< Registry container
+			Multimedia::Streams m_streams;					///< Probed streams
+			Metadata::File m_metadata;					///< Container tags
+			std::optional<std::chrono::nanoseconds> m_duration;	///< Container duration
 
 			/**
 			 * @brief Snapshot constructor.
@@ -129,9 +138,12 @@ namespace StormByte::Multimedia {
 			 * @param container Registry container.
 			 * @param streams Probed streams.
 			 * @param metadata Container tags.
+			 * @param duration Container duration.
 			 */
 			File(const std::filesystem::path& path, const class Container& container,
-				Multimedia::Streams streams, Metadata::File metadata) noexcept
-			: m_path(path), m_container(container), m_streams(std::move(streams)), m_metadata(std::move(metadata)) {}
+				Multimedia::Streams streams, Metadata::File metadata,
+				std::optional<std::chrono::nanoseconds> duration) noexcept
+			: m_path(path), m_container(container), m_streams(std::move(streams)),
+			m_metadata(std::move(metadata)), m_duration(duration) {}
 	};
 }

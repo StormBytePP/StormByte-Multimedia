@@ -40,6 +40,9 @@
 
 #include <StormByte/multimedia/visibility.h>
 
+#include <chrono>
+#include <optional>
+
 extern "C" {
 	#include <libavformat/avformat.h>
 }
@@ -128,6 +131,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @return FPS, or 0.
 			 */
 			double FrameRate() const noexcept;
+
+			/**
+			 * @brief Stream duration in nanoseconds.
+			 * @return Duration, or empty if unknown.
+			 */
+			std::optional<std::chrono::nanoseconds> Duration() const noexcept;
 
 			/**
 			 * @brief Looks up a stream metadata tag.

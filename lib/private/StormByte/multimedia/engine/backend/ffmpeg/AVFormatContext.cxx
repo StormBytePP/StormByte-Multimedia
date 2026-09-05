@@ -85,6 +85,15 @@ const char* FFmpeg::AVFormatContext::Tag(const char* key) const noexcept {
 	return entry ? entry->value : nullptr;
 }
 
+std::optional<std::chrono::nanoseconds> FFmpeg::AVFormatContext::Duration() const noexcept {
+	if (!m_ptr || m_ptr->duration == AV_NOPTS_VALUE)
+		return std::nullopt;
+	const std::int64_t ns = av_rescale_q(m_ptr->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, 1000000000});
+	if (ns < 0)
+		return std::nullopt;
+	return std::chrono::nanoseconds{ns};
+}
+
 FFmpeg::OperationResult FFmpeg::AVFormatContext::ReadPacket(AVPacket& packet) noexcept {
 	packet.Unref();
 	int ret = av_read_frame(m_ptr, packet.Get());

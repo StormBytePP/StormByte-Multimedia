@@ -74,6 +74,15 @@ double FFmpeg::AVStream::FrameRate() const noexcept {
 	return 0.0;
 }
 
+std::optional<std::chrono::nanoseconds> FFmpeg::AVStream::Duration() const noexcept {
+	if (!m_stream || m_stream->duration == AV_NOPTS_VALUE || m_stream->time_base.den <= 0)
+		return std::nullopt;
+	const std::int64_t ns = av_rescale_q(m_stream->duration, m_stream->time_base, AVRational{1, 1000000000});
+	if (ns < 0)
+		return std::nullopt;
+	return std::chrono::nanoseconds{ns};
+}
+
 const char* FFmpeg::AVStream::Tag(const char* key) const noexcept {
 	if (!m_stream || !m_stream->metadata || !key)
 		return nullptr;

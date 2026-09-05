@@ -107,6 +107,72 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			std::int64_t BitRate() const noexcept;
 
+			/**
+			 * @brief Frame width in pixels.
+			 * @return Width, or 0.
+			 */
+			int Width() const noexcept;
+
+			/**
+			 * @brief Frame height in pixels.
+			 * @return Height, or 0.
+			 */
+			int Height() const noexcept;
+
+			/**
+			 * @brief Pixel format.
+			 * @return `AVPixelFormat` as int, or `AV_PIX_FMT_NONE`.
+			 */
+			int Format() const noexcept;
+
+			/**
+			 * @brief Color range.
+			 * @return `AVColorRange` as int.
+			 */
+			int ColorRange() const noexcept;
+
+			/**
+			 * @brief Matrix coefficients.
+			 * @return `AVColorSpace` as int.
+			 */
+			int ColorSpace() const noexcept;
+
+			/**
+			 * @brief Color primaries.
+			 * @return `AVColorPrimaries` as int.
+			 */
+			int ColorPrimaries() const noexcept;
+
+			/**
+			 * @brief Transfer characteristics.
+			 * @return `AVColorTransferCharacteristic` as int.
+			 */
+			int ColorTransfer() const noexcept;
+
+			/**
+			 * @brief Audio sample rate in Hz.
+			 * @return Sample rate, or 0.
+			 */
+			int SampleRate() const noexcept;
+
+			/**
+			 * @brief Audio channel count.
+			 * @return Channel count, or 0.
+			 */
+			int Channels() const noexcept;
+
+			/**
+			 * @brief Codec profile id.
+			 * @return Profile, or `AV_PROFILE_UNKNOWN`.
+			 */
+			int Profile() const noexcept;
+
+			/**
+			 * @brief Channel layout owned by this wrapper.
+			 * @return Layout, or nullptr.
+			 */
+			const AVChannelLayout* ChannelLayout() const noexcept;
+
 		private:
 			/**
 			 * @brief Frees parameters (avcodec_parameters_free).

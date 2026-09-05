@@ -1,0 +1,323 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Multimedia.
+ *
+ * StormByte-Multimedia original source is dual-licensed:
+ *
+ * 1. GNU Lesser General Public License v3.0 (or later)
+ *    You may redistribute and/or modify this file under the terms of the
+ *    GNU Lesser General Public License as published by the Free Software
+ *    Foundation, either version 3 of the License, or (at your option)
+ *    any later version.
+ *
+ * 2. Commercial license
+ *    Alternatively, this file may be used under the terms of a commercial
+ *    license agreement with the copyright holder
+ *    (David C. Manuelda <StormByte@gmail.com>).
+ *
+ * Both licenses apply only to original StormByte-Multimedia source in this
+ * file. Third-party components — including FFmpeg and embedded trained data —
+ * remain under their own licenses and are not covered by the commercial grant.
+ *
+ * Neither license grants any patent rights. Any patent licenses required
+ * to use this software or third-party components must be obtained separately
+ * from the patent holders.
+ *
+ * StormByte-Multimedia is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 3 along with StormByte-Multimedia. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+ */
+
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/property.hxx>
+
+#include <cstdint>
+#include <optional>
+#include <string>
+
+extern "C" {
+	#include <libavcodec/avcodec.h>
+	#include <libavutil/channel_layout.h>
+	#include <libavutil/pixfmt.h>
+}
+
+namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
+using StormByte::Multimedia::Property::Audio;
+using StormByte::Multimedia::Property::ChannelLayout;
+using StormByte::Multimedia::Property::Color;
+using StormByte::Multimedia::Property::PixelFormat;
+using StormByte::Multimedia::Property::Primaries;
+using StormByte::Multimedia::Property::Range;
+using StormByte::Multimedia::Property::Resolution;
+using StormByte::Multimedia::Property::Space;
+using StormByte::Multimedia::Property::Transfer;
+using StormByte::Multimedia::Property::Video;
+
+namespace {
+	PixelFormat MapPixelFormat(int format) noexcept {
+		switch (format) {
+			case AV_PIX_FMT_YUV420P:
+			case AV_PIX_FMT_YUVJ420P:
+				return PixelFormat::YUV420P;
+			case AV_PIX_FMT_YUV422P:
+			case AV_PIX_FMT_YUVJ422P:
+				return PixelFormat::YUV422P;
+			case AV_PIX_FMT_YUV444P:
+			case AV_PIX_FMT_YUVJ444P:
+				return PixelFormat::YUV444P;
+			case AV_PIX_FMT_YUV420P10LE:
+			case AV_PIX_FMT_YUV420P10BE:
+				return PixelFormat::YUV420P10;
+			case AV_PIX_FMT_YUV422P10LE:
+			case AV_PIX_FMT_YUV422P10BE:
+				return PixelFormat::YUV422P10;
+			case AV_PIX_FMT_YUV444P10LE:
+			case AV_PIX_FMT_YUV444P10BE:
+				return PixelFormat::YUV444P10;
+			case AV_PIX_FMT_YUV420P12LE:
+			case AV_PIX_FMT_YUV420P12BE:
+				return PixelFormat::YUV420P12;
+			case AV_PIX_FMT_YUV422P12LE:
+			case AV_PIX_FMT_YUV422P12BE:
+				return PixelFormat::YUV422P12;
+			case AV_PIX_FMT_YUV444P12LE:
+			case AV_PIX_FMT_YUV444P12BE:
+				return PixelFormat::YUV444P12;
+			case AV_PIX_FMT_NV12:
+				return PixelFormat::NV12;
+			case AV_PIX_FMT_NV21:
+				return PixelFormat::NV21;
+			case AV_PIX_FMT_P010LE:
+			case AV_PIX_FMT_P010BE:
+				return PixelFormat::P010;
+			case AV_PIX_FMT_RGB24:
+				return PixelFormat::RGB24;
+			case AV_PIX_FMT_BGR24:
+				return PixelFormat::BGR24;
+			case AV_PIX_FMT_RGBA:
+				return PixelFormat::RGBA;
+			case AV_PIX_FMT_BGRA:
+				return PixelFormat::BGRA;
+			case AV_PIX_FMT_GRAY8:
+				return PixelFormat::GRAY8;
+			case AV_PIX_FMT_GRAY10LE:
+			case AV_PIX_FMT_GRAY10BE:
+				return PixelFormat::GRAY10;
+			case AV_PIX_FMT_GRAY16LE:
+			case AV_PIX_FMT_GRAY16BE:
+				return PixelFormat::GRAY16;
+			default:
+				return PixelFormat::Unknown;
+		}
+	}
+
+	Range MapRange(int range) noexcept {
+		switch (range) {
+			case AVCOL_RANGE_MPEG:
+				return Range::TV;
+			case AVCOL_RANGE_JPEG:
+				return Range::Full;
+			case AVCOL_RANGE_UNSPECIFIED:
+				return Range::Unspecified;
+			default:
+				return Range::Unknown;
+		}
+	}
+
+	Space MapSpace(int space) noexcept {
+		switch (space) {
+			case AVCOL_SPC_RGB:
+				return Space::RGB;
+			case AVCOL_SPC_BT709:
+				return Space::BT709;
+			case AVCOL_SPC_FCC:
+				return Space::FCC;
+			case AVCOL_SPC_BT470BG:
+				return Space::BT470BG;
+			case AVCOL_SPC_SMPTE170M:
+				return Space::SMPTE170M;
+			case AVCOL_SPC_SMPTE240M:
+				return Space::SMPTE240M;
+			case AVCOL_SPC_YCGCO:
+				return Space::YCgCo;
+			case AVCOL_SPC_BT2020_NCL:
+				return Space::BT2020NCL;
+			case AVCOL_SPC_BT2020_CL:
+				return Space::BT2020CL;
+			case AVCOL_SPC_SMPTE2085:
+				return Space::SMPTE2085;
+			case AVCOL_SPC_CHROMA_DERIVED_NCL:
+				return Space::ChromaDerivedNCL;
+			case AVCOL_SPC_CHROMA_DERIVED_CL:
+				return Space::ChromaDerivedCL;
+			case AVCOL_SPC_ICTCP:
+				return Space::ICtCp;
+			case AVCOL_SPC_UNSPECIFIED:
+				return Space::Unspecified;
+			default:
+				return Space::Unknown;
+		}
+	}
+
+	Primaries MapPrimaries(int primaries) noexcept {
+		switch (primaries) {
+			case AVCOL_PRI_BT709:
+				return Primaries::BT709;
+			case AVCOL_PRI_BT470M:
+				return Primaries::BT470M;
+			case AVCOL_PRI_BT470BG:
+				return Primaries::BT470BG;
+			case AVCOL_PRI_SMPTE170M:
+				return Primaries::SMPTE170M;
+			case AVCOL_PRI_SMPTE240M:
+				return Primaries::SMPTE240M;
+			case AVCOL_PRI_FILM:
+				return Primaries::Film;
+			case AVCOL_PRI_BT2020:
+				return Primaries::BT2020;
+			case AVCOL_PRI_SMPTE428:
+				return Primaries::SMPTE428;
+			case AVCOL_PRI_SMPTE431:
+				return Primaries::SMPTE431;
+			case AVCOL_PRI_SMPTE432:
+				return Primaries::SMPTE432;
+			case AVCOL_PRI_EBU3213:
+				return Primaries::EBU3213;
+			case AVCOL_PRI_UNSPECIFIED:
+				return Primaries::Unspecified;
+			default:
+				return Primaries::Unknown;
+		}
+	}
+
+	Transfer MapTransfer(int transfer) noexcept {
+		switch (transfer) {
+			case AVCOL_TRC_BT709:
+				return Transfer::BT709;
+			case AVCOL_TRC_GAMMA22:
+				return Transfer::Gamma22;
+			case AVCOL_TRC_GAMMA28:
+				return Transfer::Gamma28;
+			case AVCOL_TRC_SMPTE170M:
+				return Transfer::SMPTE170M;
+			case AVCOL_TRC_SMPTE240M:
+				return Transfer::SMPTE240M;
+			case AVCOL_TRC_LINEAR:
+				return Transfer::Linear;
+			case AVCOL_TRC_LOG:
+				return Transfer::Log;
+			case AVCOL_TRC_LOG_SQRT:
+				return Transfer::LogSqrt;
+			case AVCOL_TRC_IEC61966_2_4:
+				return Transfer::IEC61966_2_4;
+			case AVCOL_TRC_BT1361_ECG:
+				return Transfer::BT1361;
+			case AVCOL_TRC_IEC61966_2_1:
+				return Transfer::IEC61966_2_1;
+			case AVCOL_TRC_BT2020_10:
+				return Transfer::BT2020_10;
+			case AVCOL_TRC_BT2020_12:
+				return Transfer::BT2020_12;
+			case AVCOL_TRC_SMPTE2084:
+				return Transfer::SMPTE2084;
+			case AVCOL_TRC_SMPTE428:
+				return Transfer::SMPTE428;
+			case AVCOL_TRC_ARIB_STD_B67:
+				return Transfer::ARIB_B67;
+			case AVCOL_TRC_UNSPECIFIED:
+				return Transfer::Unspecified;
+			default:
+				return Transfer::Unknown;
+		}
+	}
+
+	ChannelLayout MapChannelLayout(const AVChannelLayout* layout) noexcept {
+		if (!layout || layout->order != AV_CHANNEL_ORDER_NATIVE)
+			return ChannelLayout::Unknown;
+		switch (layout->u.mask) {
+			case AV_CH_LAYOUT_MONO:
+				return ChannelLayout::Mono;
+			case AV_CH_LAYOUT_STEREO:
+				return ChannelLayout::Stereo;
+			case AV_CH_LAYOUT_2POINT1:
+				return ChannelLayout::TwoPointOne;
+			case AV_CH_LAYOUT_SURROUND:
+				return ChannelLayout::ThreePointZero;
+			case AV_CH_LAYOUT_4POINT0:
+				return ChannelLayout::FourPointZero;
+			case AV_CH_LAYOUT_QUAD:
+				return ChannelLayout::Quad;
+			case AV_CH_LAYOUT_5POINT0:
+			case AV_CH_LAYOUT_5POINT0_BACK:
+				return ChannelLayout::FivePointZero;
+			case AV_CH_LAYOUT_5POINT1:
+			case AV_CH_LAYOUT_5POINT1_BACK:
+				return ChannelLayout::FivePointOne;
+			case AV_CH_LAYOUT_6POINT1:
+				return ChannelLayout::SixPointOne;
+			case AV_CH_LAYOUT_7POINT1:
+				return ChannelLayout::SevenPointOne;
+			case AV_CH_LAYOUT_7POINT1_WIDE:
+			case AV_CH_LAYOUT_7POINT1_WIDE_BACK:
+				return ChannelLayout::SevenPointOneW;
+			case AV_CH_LAYOUT_OCTAGONAL:
+				return ChannelLayout::Octagonal;
+			case AV_CH_LAYOUT_22POINT2:
+				return ChannelLayout::TwentyTwoPointTwo;
+			default:
+				return ChannelLayout::Unknown;
+		}
+	}
+}
+
+StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& stream) noexcept {
+	const auto params = stream.CodecParameters();
+	switch (stream.Type()) {
+		case AVMEDIA_TYPE_VIDEO: {
+			if (params.Width() <= 0 || params.Height() <= 0)
+				return std::monostate{};
+			return Video{
+				Color{
+					MapPixelFormat(params.Format()),
+					MapRange(params.ColorRange()),
+					MapSpace(params.ColorSpace()),
+					MapPrimaries(params.ColorPrimaries()),
+					MapTransfer(params.ColorTransfer())
+				},
+				Resolution{
+					static_cast<std::uint32_t>(params.Width()),
+					static_cast<std::uint32_t>(params.Height())
+				}
+			};
+		}
+		case AVMEDIA_TYPE_AUDIO: {
+			const int sampleRate = params.SampleRate();
+			const int channels = params.Channels();
+			if (sampleRate <= 0 && channels <= 0)
+				return std::monostate{};
+			std::optional<std::string> profile;
+			const char* name = avcodec_profile_name(static_cast<AVCodecID>(params.CodecId()), params.Profile());
+			if (name && name[0] != '\0')
+				profile = name;
+			const auto bitRate = params.BitRate();
+			return Audio{
+				MapChannelLayout(params.ChannelLayout()),
+				static_cast<std::uint32_t>(sampleRate > 0 ? sampleRate : 0),
+				static_cast<std::uint8_t>(channels > 0 ? channels : 0),
+				bitRate > 0 ? static_cast<std::uint64_t>(bitRate) : 0,
+				std::move(profile)
+			};
+		}
+		default:
+			return std::monostate{};
+	}
+}

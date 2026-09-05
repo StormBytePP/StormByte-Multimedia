@@ -40,9 +40,8 @@
 
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/typedefs.hxx>
-// oldcode — Metadata se rehace
-// #include <StormByte/multimedia/metadata.hxx>
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 
@@ -116,6 +115,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @return Value, or nullptr if missing.
 			 */
 			const char* Tag(const char* key) const noexcept;
+
+			/**
+			 * @brief Container duration in nanoseconds.
+			 * @return Duration, or empty if unknown.
+			 */
+			std::optional<std::chrono::nanoseconds> Duration() const noexcept;
 
 			/**
 			 * @brief Reads the next packet.
