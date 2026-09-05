@@ -1,7 +1,3 @@
-[submodule "StormByte base"]
-	path = thirdparty/StormByte/base/src
-	url = https://github.com/StormBytePP/StormByte.git
-	branch = master
 [submodule "Opus codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/audio/opus/src
 	url = https://gitlab.xiph.org/xiph/opus.git
@@ -125,3 +121,6 @@
 [submodule "libtiff"]
 	path = thirdparty/ffmpeg/plugins/deps/tiff/src
 	url = https://gitlab.com/libtiff/libtiff.git
+[submodule "StormByte Buffer"]
+	path = thirdparty/StormByte/buffer/src
+	url = https://github.com/StormBytePP/StormByte-Buffer.git
