@@ -137,6 +137,7 @@ namespace StormByte::Multimedia::Metadata {
 			friend class Stream;
 			friend class StormByte::Multimedia::File;
 			friend class StormByte::Multimedia::Detail::Probe;
+			friend class StormByte::Bitmask<Disposition, DispositionFlag>;
 
 			/**
 			 * @brief Empty mask.
