@@ -36,49 +36,36 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/context/property/color.hxx>
+#include <StormByte/multimedia/property/resolution.hxx>
 
-using namespace StormByte::Multimedia::Context::Property;
+using namespace StormByte::Multimedia::Property;
 
-Color::Color(const std::string& pix_fmt, const std::string& range, const std::string& space,
-			const std::string& primaries, const std::string& transfer) noexcept:
-m_pix_fmt(pix_fmt), m_range(range), m_space(space), m_primaries(primaries), m_transfer(transfer) {}
+Resolution::Resolution(std::uint32_t width, std::uint32_t height) noexcept:
+m_width(width), m_height(height) {}
 
-Color::Color(std::string&& pix_fmt, std::string&& range, std::string&& space) noexcept:
-m_pix_fmt(std::move(pix_fmt)), m_range(std::move(range)), m_space(std::move(space)) {}
-
-const std::string& Color::PixelFormat() const noexcept {
-	return m_pix_fmt;
+std::uint32_t Resolution::Width() const noexcept {
+	return m_width;
 }
 
-const std::string& Color::Range() const noexcept {
-	return m_range;
+std::uint32_t Resolution::Height() const noexcept {
+	return m_height;
 }
 
-const std::string& Color::Space() const noexcept {
-	return m_space;
+std::string Resolution::Name() const noexcept {
+	return std::to_string(m_width) + "x" + std::to_string(m_height);
 }
 
-const std::string& Color::Transfer() const noexcept {
-	return m_transfer;
-}
-
-const std::string& Color::Primaries() const noexcept {
-	return m_primaries;
-}
-
-bool Color::IsHDR10Possible() const noexcept {
-	return (m_pix_fmt == "yuv420p10le" || m_pix_fmt == "yuv422p10le" || m_pix_fmt == "yuv444p10le") &&
-		   (m_range == "tv" || m_range == "full") &&
-		   (m_space == "bt2020nc" || m_space == "bt2020c") &&
-		   (m_primaries == "bt2020") &&
-		   (m_transfer == "smpte2084");
-}
-
-bool Color::IsHLGPossible() const noexcept {
-	return (m_pix_fmt == "yuv420p10le" || m_pix_fmt == "yuv422p10le" || m_pix_fmt == "yuv444p10le") &&
-		   (m_range == "tv" || m_range == "full") &&
-		   (m_space == "bt2020nc" || m_space == "bt2020c") &&
-		   (m_primaries == "bt2020") &&
-		   (m_transfer == "arib-std-b67");
+std::string Resolution::StandardName() const noexcept {
+	if (m_height > 2160)
+		return "4K+";
+	else if (m_height > 1080)
+		return "4K";
+	else if (m_height > 720)
+		return "1080p";
+	else if (m_height > 480)
+		return "720p";
+	else if (m_height > 240)
+		return "480p";
+	else
+		return "240p";
 }

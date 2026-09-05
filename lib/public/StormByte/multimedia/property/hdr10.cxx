@@ -36,42 +36,54 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/context/property/resolution.hxx>
+#include <StormByte/multimedia/property/hdr10.hxx>
 
-using namespace StormByte::Multimedia::Context::Property;
+using namespace StormByte::Multimedia::Property;
 
-Resolution::Resolution(unsigned short width, unsigned short height):
-m_width(width), m_height(height) {}
+const HDR10 HDR10::DEFAULT = { {34000, 16000}, {13250, 34500}, {7500, 3000}, {15635, 16450}, {1, 10000000} };
 
-unsigned short Resolution::Width() const noexcept {
-	return m_width;
+HDR10::HDR10() noexcept:
+HDR10(DEFAULT.Red(), DEFAULT.Green(), DEFAULT.Blue(), DEFAULT.White(), DEFAULT.Luminance()) {}
+
+HDR10::HDR10(const Point& red, const Point& green, const Point& blue, const Point& white,
+	const Point& luminance, const std::optional<Point>& light_level) noexcept:
+m_red(red), m_green(green), m_blue(blue), m_white(white),
+m_luminance(luminance), m_light_level(light_level), m_hdr10plus(false) {}
+
+HDR10::HDR10(Point&& red, Point&& green, Point&& blue, Point&& white,
+	Point&& luminance, std::optional<Point>&& light_level) noexcept:
+m_red(std::move(red)), m_green(std::move(green)), m_blue(std::move(blue)),
+m_white(std::move(white)), m_luminance(std::move(luminance)), m_light_level(std::move(light_level)),
+m_hdr10plus(false) {}
+
+const Point& HDR10::Red() const noexcept {
+	return m_red;
 }
 
-unsigned short Resolution::Height() const noexcept {
-	return m_height;
+const Point& HDR10::Green() const noexcept {
+	return m_green;
 }
 
-std::string Resolution::Name() const noexcept {
-	return std::to_string(m_width) + "x" + std::to_string(m_height);
+const Point& HDR10::Blue() const noexcept {
+	return m_blue;
 }
 
-std::string Resolution::StandardName() const noexcept {
-	if (m_height > 2160) {
-		return "4K+";
-	}
-	else if (m_height > 1080) {
-		return "4K";
-	}
-	else if (m_height > 720) {
-		return "1080p";
-	}
-	else if (m_height > 480) {
-		return "720p";
-	}
-	else if (m_height > 240) {
-		return "480p";
-	}
-	else {
-		return "240p";
-	}
+const Point& HDR10::White() const noexcept {
+	return m_white;
+}
+
+const Point& HDR10::Luminance() const noexcept {
+	return m_luminance;
+}
+
+const std::optional<Point>& HDR10::LightLevel() const noexcept {
+	return m_light_level;
+}
+
+bool HDR10::IsHDR10Plus() const noexcept {
+	return m_hdr10plus;
+}
+
+void HDR10::HDR10Plus(bool hdrplus) noexcept {
+	m_hdr10plus = hdrplus;
 }

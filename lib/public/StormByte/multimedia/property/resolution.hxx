@@ -38,85 +38,82 @@
 
 #pragma once
 
-#include <StormByte/multimedia/context/generic.hxx>
-#include <StormByte/multimedia/context/property/color.hxx>
-#include <StormByte/multimedia/context/property/hdr10.hxx>
-#include <StormByte/multimedia/context/property/resolution.hxx>
+#include <StormByte/multimedia/visibility.h>
 
-#include <optional>
+#include <cstdint>
+#include <string>
 
 /**
- * @namespace Context
- * @brief Media stream context types (audio, video, …).
+ * @namespace StormByte::Multimedia::Property
+ * @brief Media property value types.
  */
-namespace StormByte::Multimedia::Context {
+namespace StormByte::Multimedia::Property {
 	/**
-	 * @class Video
-	 * @brief Video stream context (color, resolution, optional HDR10).
+	 * @class Resolution
+	 * @brief Frame width and height.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Video final: public Generic {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Resolution final {
 		public:
 			/**
-			 * @param color Color properties.
-			 * @param resolution Frame size.
-			 * @param hdr10 Optional HDR10 metadata (filled with DEFAULT if color allows HDR10 and none given).
+			 * @brief Constructs a resolution.
+			 * @param width Width in pixels.
+			 * @param height Height in pixels.
 			 */
-			Video(Property::Color&& color, Property::Resolution&& resolution,
-				std::optional<Property::HDR10>&& hdr10) noexcept;
+			Resolution(std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
-			 * Copy constructor.
+			 * @brief Copy constructor.
 			 */
-			Video(const Video& other) = default;
+			Resolution(const Resolution&) = default;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
-			Video(Video&& other) noexcept = default;
+			Resolution(Resolution&&) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
-			~Video() noexcept = default;
+			~Resolution() noexcept = default;
 
 			/**
-			 * Copy assignment.
+			 * @brief Copy assignment.
+			 * @return *this.
 			 */
-			Video& operator=(const Video& other) = default;
+			Resolution& operator=(const Resolution&) = default;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
+			 * @return *this.
 			 */
-			Video& operator=(Video&& other) = default;
+			Resolution& operator=(Resolution&&) noexcept = default;
 
 			/**
-			 * @return Color properties.
+			 * @brief Width in pixels.
+			 * @return Width.
 			 */
-			const Property::Color& Color() const noexcept;
+			std::uint32_t Width() const noexcept;
 
 			/**
-			 * @return Resolution.
+			 * @brief Height in pixels.
+			 * @return Height.
 			 */
-			const Property::Resolution& Resolution() const noexcept;
+			std::uint32_t Height() const noexcept;
 
 			/**
-			 * @return Optional HDR10 data.
+			 * @brief "WIDTHxHEIGHT" string.
+			 * @return Size string.
 			 */
-			const std::optional<Property::HDR10>& HDR10() const noexcept;
+			std::string Name() const noexcept;
 
 			/**
-			 * @return Cloned context.
+			 * @brief Coarse label (e.g. "1080p", "4K").
+			 * @return Standard name.
 			 */
-			PointerType Clone() const override;
-
-			/**
-			 * @return Moved context as new pointer.
-			 */
-			PointerType Move() override;
+			std::string StandardName() const noexcept;
 
 		private:
-			Property::Color m_color;						///< Color properties
-			Property::Resolution m_resolution;				///< Frame size
-			std::optional<Property::HDR10> m_hdr10;			///< Optional HDR10
+			std::uint32_t m_width;		///< Width
+			std::uint32_t m_height;		///< Height
 	};
 }

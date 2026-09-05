@@ -36,38 +36,44 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/context/video.hxx>
+#include <StormByte/multimedia/property/color.hxx>
 
-using namespace StormByte::Multimedia::Context;
+using namespace StormByte::Multimedia::Property;
 
-Video::Video(Property::Color&& color, Property::Resolution&& resolution, std::optional<Property::HDR10>&& hdr10) noexcept:
-m_color(std::move(color)), m_resolution(std::move(resolution)) {
-	if (m_color.IsHDR10Possible()) {
-		if (hdr10.has_value()) {
-			m_hdr10 = std::move(hdr10);
-		}
-		else {
-			m_hdr10 = Property::HDR10::DEFAULT;
-		}
-	}
+Color::Color(enum PixelFormat format, enum Range range, enum Space space,
+	enum Primaries primaries, enum Transfer transfer) noexcept:
+m_format(format), m_range(range), m_space(space), m_primaries(primaries), m_transfer(transfer) {}
+
+PixelFormat Color::PixelFormat() const noexcept {
+	return m_format;
 }
 
-const Property::Color& Video::Color() const noexcept {
-	return m_color;
+Range Color::Range() const noexcept {
+	return m_range;
 }
 
-const Property::Resolution& Video::Resolution() const noexcept {
-	return m_resolution;
+Space Color::Space() const noexcept {
+	return m_space;
 }
 
-const std::optional<Property::HDR10>& Video::HDR10() const noexcept {
-	return m_hdr10;
+Primaries Color::Primaries() const noexcept {
+	return m_primaries;
 }
 
-Video::PointerType Video::Clone() const {
-	return MakePointer<Video>(*this);
+Transfer Color::Transfer() const noexcept {
+	return m_transfer;
 }
 
-Video::PointerType Video::Move() {
-	return MakePointer<Video>(std::move(*this));
+bool Color::IsHDR10() const noexcept {
+	return BitDepth(m_format) >= 10 &&
+		m_primaries == Primaries::BT2020 &&
+		m_transfer == Transfer::SMPTE2084 &&
+		(m_space == Space::BT2020NCL || m_space == Space::BT2020CL);
+}
+
+bool Color::IsHLG() const noexcept {
+	return BitDepth(m_format) >= 10 &&
+		m_primaries == Primaries::BT2020 &&
+		m_transfer == Transfer::ARIB_B67 &&
+		(m_space == Space::BT2020NCL || m_space == Space::BT2020CL);
 }

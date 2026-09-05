@@ -38,15 +38,16 @@
 
 #pragma once
 
-#include <StormByte/multimedia/context/property/point.hxx>
+#include <StormByte/multimedia/property/point.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 #include <optional>
 
 /**
- * @namespace Property
- * @brief Video/audio property value types.
+ * @namespace StormByte::Multimedia::Property
+ * @brief Media property value types.
  */
-namespace StormByte::Multimedia::Context::Property {
+namespace StormByte::Multimedia::Property {
 	/**
 	 * @class HDR10
 	 * @brief Mastering display and content light level metadata.
@@ -54,11 +55,12 @@ namespace StormByte::Multimedia::Context::Property {
 	class STORMBYTE_MULTIMEDIA_PUBLIC HDR10 final {
 		public:
 			/**
-			 * Uses DEFAULT primaries / luminance.
+			 * @brief Uses DEFAULT primaries / luminance.
 			 */
 			HDR10() noexcept;
 
 			/**
+			 * @brief Full mastering-display description.
 			 * @param red Red primary.
 			 * @param green Green primary.
 			 * @param blue Blue primary.
@@ -70,81 +72,93 @@ namespace StormByte::Multimedia::Context::Property {
 				const Point& luminance, const std::optional<Point>& light_level = std::nullopt) noexcept;
 
 			/**
-			 * Move overload of the full constructor.
+			 * @brief Move overload of the full constructor.
+			 * @param red Red primary.
+			 * @param green Green primary.
+			 * @param blue Blue primary.
+			 * @param white White point.
+			 * @param luminance Min/max luminance pair.
+			 * @param light_level Optional MaxCLL/MaxFALL.
 			 */
 			HDR10(Point&& red, Point&& green, Point&& blue, Point&& white,
 				Point&& luminance, std::optional<Point>&& light_level = std::nullopt) noexcept;
 
 			/**
-			 * Copy constructor.
+			 * @brief Copy constructor.
 			 */
-			HDR10(const HDR10& hdr10) = default;
+			HDR10(const HDR10&) = default;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
-			HDR10(HDR10&& hdr10) noexcept = default;
+			HDR10(HDR10&&) noexcept = default;
 
 			/**
-			 * Copy assignment.
-			 */
-			HDR10& operator=(const HDR10& hdr10) = default;
-
-			/**
-			 * Move assignment.
-			 */
-			HDR10& operator=(HDR10&& hdr10) noexcept = default;
-
-			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~HDR10() noexcept = default;
 
 			/**
-			 * @return Red primary.
+			 * @brief Copy assignment.
+			 * @return *this.
+			 */
+			HDR10& operator=(const HDR10&) = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @return *this.
+			 */
+			HDR10& operator=(HDR10&&) noexcept = default;
+
+			/**
+			 * @brief Red primary.
+			 * @return Red.
 			 */
 			const Point& Red() const noexcept;
 
 			/**
-			 * @return Green primary.
+			 * @brief Green primary.
+			 * @return Green.
 			 */
 			const Point& Green() const noexcept;
 
 			/**
-			 * @return Blue primary.
+			 * @brief Blue primary.
+			 * @return Blue.
 			 */
 			const Point& Blue() const noexcept;
 
 			/**
-			 * @return White point.
+			 * @brief White point.
+			 * @return White.
 			 */
 			const Point& White() const noexcept;
 
 			/**
-			 * @return Luminance (min, max).
+			 * @brief Luminance (min, max).
+			 * @return Luminance.
 			 */
 			const Point& Luminance() const noexcept;
 
 			/**
-			 * @return Optional content light level (MaxCLL, MaxFALL).
+			 * @brief Optional content light level (MaxCLL, MaxFALL).
+			 * @return Light level, or empty.
 			 */
 			const std::optional<Point>& LightLevel() const noexcept;
 
 			/**
-			 * @return true if HDR10+ dynamic metadata was detected.
+			 * @brief HDR10+ dynamic metadata flag.
+			 * @return true if HDR10+ was detected.
 			 */
 			bool IsHDR10Plus() const noexcept;
 
 			/**
-			 * Sets HDR10+ flag.
+			 * @brief Sets the HDR10+ flag.
 			 * @param hdrplus New value.
 			 */
 			void HDR10Plus(bool hdrplus) noexcept;
 
-			/**
-			 * Default mastering display constants when source metadata is missing.
-			 */
-			static const HDR10 DEFAULT;
+			static const HDR10 DEFAULT;		///< Fallback mastering display
 
 		private:
 			Point m_red;							///< Red primary

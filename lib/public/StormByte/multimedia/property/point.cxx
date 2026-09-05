@@ -36,33 +36,26 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/context/audio.hxx>
+#include <StormByte/multimedia/property/point.hxx>
 
-using namespace StormByte::Multimedia::Context;
+using namespace StormByte::Multimedia::Property;
 
-Audio::Audio(unsigned int sample_rate, unsigned short channels, unsigned int bitrate, const std::optional<std::string>& profile) noexcept:
-m_sample_rate(sample_rate), m_channels(channels), m_bitrate(bitrate), m_profile(profile) {}
+Point::Point(int x, int y) noexcept:
+m_x(x), m_y(y) {}
 
-unsigned int Audio::SampleRate() const noexcept {
-	return m_sample_rate;
+int Point::X() const noexcept {
+	return m_x;
 }
 
-unsigned short Audio::Channels() const noexcept {
-	return m_channels;
+int Point::Y() const noexcept {
+	return m_y;
 }
 
-unsigned int Audio::Bitrate() const noexcept {
-	return m_bitrate;
-}
-
-const std::optional<std::string>& Audio::Profile() const noexcept {
-	return m_profile;
-}
-
-Audio::PointerType Audio::Clone() const {
-	return MakePointer<Audio>(*this);
-}
-
-Audio::PointerType Audio::Move() {
-	return MakePointer<Audio>(std::move(*this));
+Point Point::Normalized(int numerator_x, int denominator_x, int numerator_y, int denominator_y, int denominator) noexcept {
+	double rate_x = denominator > 0 ? static_cast<double>(denominator) / static_cast<double>(denominator_x) : 1;
+	double rate_y = denominator > 0 ? static_cast<double>(denominator) / static_cast<double>(denominator_y) : 1;
+	return {
+		static_cast<int>(static_cast<double>(numerator_x) * rate_x),
+		static_cast<int>(static_cast<double>(numerator_y) * rate_y)
+	};
 }

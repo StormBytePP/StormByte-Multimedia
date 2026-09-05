@@ -38,90 +38,78 @@
 
 #pragma once
 
-#include <StormByte/multimedia/context/generic.hxx>
-
-#include <string>
-#include <optional>
+#include <StormByte/multimedia/visibility.h>
 
 /**
- * @namespace Context
- * @brief Media stream context types (audio, video, …).
+ * @namespace StormByte::Multimedia::Property
+ * @brief Media property value types.
  */
-namespace StormByte::Multimedia::Context {
+namespace StormByte::Multimedia::Property {
 	/**
-	 * @class Audio
-	 * @brief Audio stream context (sample rate, channels, bitrate, profile).
+	 * @class Point
+	 * @brief Integer 2D point (chromaticity / luminance pair).
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Audio final: public Generic {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Point final {
 		public:
 			/**
-			 * @param sample_rate Sample rate in Hz.
-			 * @param channels Channel count.
-			 * @param bitrate Bitrate in bits/s (0 if unknown).
-			 * @param profile Optional codec profile name.
+			 * @brief Constructs a point.
+			 * @param x X coordinate.
+			 * @param y Y coordinate.
 			 */
-			Audio(unsigned int sample_rate, unsigned short channels, unsigned int bitrate,
-				const std::optional<std::string>& profile = std::nullopt) noexcept;
+			Point(int x, int y) noexcept;
 
 			/**
-			 * Copy constructor.
+			 * @brief Copy constructor.
 			 */
-			Audio(const Audio& other) = default;
+			Point(const Point&) = default;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
-			Audio(Audio&& other) noexcept = default;
+			Point(Point&&) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
-			~Audio() noexcept = default;
+			~Point() noexcept = default;
 
 			/**
-			 * Copy assignment.
+			 * @brief Copy assignment.
+			 * @return *this.
 			 */
-			Audio& operator=(const Audio& other) = default;
+			Point& operator=(const Point&) = default;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
+			 * @return *this.
 			 */
-			Audio& operator=(Audio&& other) = default;
+			Point& operator=(Point&&) noexcept = default;
 
 			/**
-			 * @return Sample rate in Hz.
+			 * @brief X coordinate.
+			 * @return X.
 			 */
-			unsigned int SampleRate() const noexcept;
+			int X() const noexcept;
 
 			/**
-			 * @return Number of channels.
+			 * @brief Y coordinate.
+			 * @return Y.
 			 */
-			unsigned short Channels() const noexcept;
+			int Y() const noexcept;
 
 			/**
-			 * @return Bitrate in bits/s.
+			 * @brief Builds a point scaled to a common denominator.
+			 * @param numerator_x X numerator.
+			 * @param denominator_x X denominator.
+			 * @param numerator_y Y numerator.
+			 * @param denominator_y Y denominator.
+			 * @param denominator Target scale denominator.
+			 * @return Normalized point.
 			 */
-			unsigned int Bitrate() const noexcept;
-
-			/**
-			 * @return Optional profile name.
-			 */
-			const std::optional<std::string>& Profile() const noexcept;
-
-			/**
-			 * @return Cloned context.
-			 */
-			PointerType Clone() const override;
-
-			/**
-			 * @return Moved context as new pointer.
-			 */
-			PointerType Move() override;
+			static Point Normalized(int numerator_x, int denominator_x, int numerator_y, int denominator_y, int denominator) noexcept;
 
 		private:
-			unsigned int m_sample_rate;					///< Sample rate (Hz)
-			unsigned short m_channels;					///< Channel count
-			unsigned int m_bitrate;						///< Bitrate (bits/s)
-			std::optional<std::string> m_profile;		///< Optional profile
+			int m_x;	///< X
+			int m_y;	///< Y
 	};
 }
