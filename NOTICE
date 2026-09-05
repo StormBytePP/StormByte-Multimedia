@@ -1,0 +1,42 @@
+StormByte-Multimedia
+Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+
+This product includes original StormByte-Multimedia source (see LICENSE)
+and third-party components that keep their own licenses. The commercial
+option in LICENSE does not relicense those components.
+
+FFmpeg
+------
+This product may link against FFmpeg (libavcodec, libavformat, libavutil,
+libavfilter, libswscale, libswresample, and related libraries).
+
+FFmpeg is licensed under the GNU LGPL v2.1 or later, or the GNU GPL v2
+or later, depending on how it was configured and which optional parts
+are enabled. StormByte-Multimedia does not grant a commercial substitute
+for FFmpeg.
+
+Upstream: https://ffmpeg.org/
+License text: shipped with the FFmpeg build in use, and typically under
+thirdparty/ when FFmpeg is bundled.
+
+Embedded trained data
+---------------------
+This product may embed OCR trained data (tessdata / equivalent).
+Those files are not original StormByte-Multimedia source. They remain
+under the license of their upstream publishers (often Apache-2.0 for
+official Tesseract traineddata; confirm each file).
+
+They are not covered by the StormByte-Multimedia commercial grant.
+
+Other third-party code
+----------------------
+Additional dependencies live under thirdparty/ (including StormByte
+suite modules pulled as subprojects). Each keeps its own LICENSE,
+COPYING or NOTICE. Do not assume LGPL-3.0-or-later or the commercial
+grant applies to those trees.
+
+Patents
+-------
+This NOTICE does not grant patent rights. Codecs and other algorithms
+used via FFmpeg or elsewhere may be encumbered. Obtain patent licenses
+from the patent holders if required.
