@@ -28,8 +28,8 @@
 
 #pragma once
 
+#include <StormByte/multimedia/visibility.h>
 #include <StormByte/exception.hxx>
-#include <StormByte/multimedia/type.hxx>
 
 /**
  * @namespace Multimedia
