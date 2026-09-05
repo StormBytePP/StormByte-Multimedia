@@ -28,21 +28,22 @@
 
 #pragma once
 
-#include <StormByte/multimedia/visibility.h>
 #include <StormByte/exception.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 /**
- * @namespace Multimedia
- * @brief The namespace for all multimedia classes.
+ * @namespace StormByte::Multimedia
+ * @brief Public Multimedia module.
  */
 namespace StormByte::Multimedia {
 	/**
 	 * @class Exception
-	 * @brief Base exception for the multimedia module.
+	 * @brief Base exception for the Multimedia module.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Exception: public StormByte::Exception {
 		public:
 			/**
+			 * @brief Constructs a formatted Multimedia exception.
 			 * @tparam Args Format argument types.
 			 * @param component Subsystem name.
 			 * @param fmt Format string.
@@ -55,7 +56,7 @@ namespace StormByte::Multimedia {
 			using StormByte::Exception::Exception;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			virtual ~Exception() noexcept = default;
 	};

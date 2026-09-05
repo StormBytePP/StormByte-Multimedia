@@ -13,8 +13,8 @@ extern "C" {
 }
 
 /**
- * @namespace FFmpeg
- * @brief Internal FFmpeg wrappers.
+ * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @brief Private RAII wrappers over libav*.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVBSF;
@@ -29,32 +29,38 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVFormatContext: public AVPointer<::AVFormatContext> {
 		public:
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
+			 * @param other Unused.
 			 */
 			AVFormatContext(const AVFormatContext& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
+			 * @param other Source context.
 			 */
 			AVFormatContext(AVFormatContext&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~AVFormatContext() noexcept override;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
+			 * @param other Unused.
+			 * @return *this.
 			 */
 			AVFormatContext& operator=(const AVFormatContext& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
+			 * @param other Source context.
+			 * @return *this.
 			 */
 			AVFormatContext& operator=(AVFormatContext&& other) noexcept = default;
 
 			/**
-			 * Opens a file and finds stream info.
+			 * @brief Opens a file and finds stream info.
 			 * @param path Media path.
 			 * @return Context or DecoderError.
 			 */
@@ -67,19 +73,20 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			// StormByte::Multimedia::Metadata Metadata() const noexcept;
 
 			/**
-			 * Reads the next packet.
+			 * @brief Reads the next packet.
 			 * @param packet Destination packet.
 			 * @return Operation result.
 			 */
 			OperationResult ReadPacket(AVPacket& packet) noexcept;
 
 			/**
-			 * @return Set of non-owning stream views.
+			 * @brief Non-owning stream views.
+			 * @return Set of streams.
 			 */
 			Streams Streams() const noexcept;
 
 			/**
-			 * Returns an mp4→Annex-B BSF when the container and codec require it.
+			 * @brief Returns an mp4→Annex-B BSF when the container and codec require it.
 			 * @param codec_id Codec id.
 			 * @param stream_id Stream index (time base).
 			 * @param params Codec parameters.
@@ -89,12 +96,13 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 		private:
 			/**
+			 * @brief Adopts a raw format context.
 			 * @param ctx Raw format context (owned).
 			 */
 			explicit AVFormatContext(::AVFormatContext* ctx) noexcept;
 
 			/**
-			 * Closes input (avformat_close_input).
+			 * @brief Closes input (avformat_close_input).
 			 */
 			void Free() noexcept override;
 	};

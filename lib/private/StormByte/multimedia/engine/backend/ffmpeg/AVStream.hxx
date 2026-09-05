@@ -8,8 +8,8 @@ extern "C" {
 }
 
 /**
- * @namespace FFmpeg
- * @brief Internal FFmpeg wrappers.
+ * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @brief Private RAII wrappers over libav*.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class AVCodecParameters;
@@ -21,64 +21,74 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVStream {
 		public:
 			/**
-			 * @param stream Raw stream pointer (not owned).
+			 * @brief Binds a raw stream pointer (not owned).
+			 * @param stream Raw stream pointer.
 			 */
 			explicit AVStream(::AVStream* stream) noexcept;
 
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			AVStream(const AVStream&) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
+			 * @param other Source view.
 			 */
 			AVStream(AVStream&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~AVStream() noexcept = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
+			 * @return *this.
 			 */
 			AVStream& operator=(const AVStream&) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
+			 * @param other Source view.
+			 * @return *this.
 			 */
 			AVStream& operator=(AVStream&& other) noexcept = default;
 
 			/**
-			 * Orders by stream index (for std::set).
+			 * @brief Orders by stream index (for std::set).
 			 * @param other Other stream.
 			 * @return true if this index is less.
 			 */
 			bool operator<(const AVStream& other) const noexcept;
 
 			/**
-			 * @return Stream index, or -1.
+			 * @brief Stream index.
+			 * @return Index, or -1.
 			 */
 			int Index() const noexcept;
 
 			/**
+			 * @brief Stream media type.
 			 * @return AVMediaType as int.
 			 */
 			int Type() const noexcept;
 
 			/**
-			 * @return Copy of codec parameters.
+			 * @brief Copy of codec parameters.
+			 * @return Parameters wrapper.
 			 */
 			AVCodecParameters CodecParameters() const noexcept;
 
 			/**
-			 * @return Stream time base.
+			 * @brief Stream time base.
+			 * @return Time base.
 			 */
 			AVRational TimeBase() const noexcept;
 
 			/**
-			 * @return Estimated FPS (avg or r_frame_rate), or 0.
+			 * @brief Estimated FPS (avg or r_frame_rate).
+			 * @return FPS, or 0.
 			 */
 			double FrameRate() const noexcept;
 

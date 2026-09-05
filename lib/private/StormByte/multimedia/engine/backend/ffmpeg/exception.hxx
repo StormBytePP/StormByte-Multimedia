@@ -1,47 +1,48 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Multimedia.
- *
- * StormByte-Multimedia is dual-licensed under the following terms:
- *
- * 1. GNU Lesser General Public License v3.0 (or later)
- *    You can redistribute it and/or modify it under the terms of the
- *    GNU Lesser General Public License as published by the Free Software
- *    Foundation, either version 3 of the License, or (at your option)
- *    any later version.
- *
- * 2. Commercial license
- *    Alternatively, this software may be used under the terms of a
- *    commercial license agreement with the sole copyright holder
- *    (David C. Manuelda <StormByte@gmail.com>).
- *    Contact the copyright holder for more information.
- *
- * StormByte-Multimedia is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this StormByte-Multimedia. If not, see <https://www.gnu.org/licenses/>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Multimedia.
+*
+* StormByte-Multimedia is dual-licensed under the following terms:
+*
+* 1. GNU Lesser General Public License v3.0 (or later)
+*    You can redistribute it and/or modify it under the terms of the
+*    GNU Lesser General Public License as published by the Free Software
+*    Foundation, either version 3 of the License, or (at your option)
+*    any later version.
+*
+* 2. Commercial license
+*    Alternatively, this software may be used under the terms of a
+*    commercial license agreement with the sole copyright holder
+*    (David C. Manuelda <StormByte@gmail.com>).
+*    Contact the copyright holder for more information.
+*
+* StormByte-Multimedia is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this StormByte-Multimedia. If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #pragma once
 
 #include <StormByte/multimedia/exception.hxx>
 
 /**
- * @namespace FFmpeg
- * @brief Internal FFmpeg wrappers.
+ * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @brief Private RAII wrappers over libav*.
  */
 namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	/**
 	 * @class Exception
-	 * @brief Base for FFmpeg backend errors (AV::…).
+	 * @brief Base for FFmpeg backend errors.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Exception: public Multimedia::Exception {
 		public:
 			/**
+			 * @brief Constructs a formatted AV exception.
 			 * @tparam Args Format argument types.
 			 * @param component Subsystem label.
 			 * @param fmt Format string.
@@ -54,7 +55,7 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			using Multimedia::Exception::Exception;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			virtual ~Exception() noexcept = default;
 	};
@@ -66,6 +67,7 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE BSFError: public Exception {
 		public:
 			/**
+			 * @brief Constructs a BSF error.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
@@ -79,11 +81,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class DecoderError
-	 * @brief Decoder open/process failure.
+	 * @brief Decoder open or process failure.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE DecoderError: public Exception {
 		public:
 			/**
+			 * @brief Constructs a decoder error.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
@@ -97,11 +100,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 
 	/**
 	 * @class EncoderError
-	 * @brief Encoder open/process failure.
+	 * @brief Encoder open or process failure.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE EncoderError: public Exception {
 		public:
 			/**
+			 * @brief Constructs an encoder error.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
