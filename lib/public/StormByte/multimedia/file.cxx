@@ -55,6 +55,7 @@
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
 	#include <libavutil/avutil.h>
 }
 
@@ -149,13 +150,33 @@ namespace {
 			return FFmpeg::AVFormatContext::Open(held);
 		});
 	}
+
+	bool IsAttachedPicture(const FFmpeg::AVStream& stream) noexcept {
+		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
+	}
+
+	Attachment MakeAttachment(const FFmpeg::AVStream& stream) noexcept {
+		std::optional<std::string> name;
+		std::optional<std::string> mime;
+		if (const char* filename = stream.Tag("filename"))
+			name = filename;
+		if (const char* mimeType = stream.Tag("mimetype"))
+			mime = mimeType;
+		StormByte::Buffer::DataType bytes;
+		if (const ::AVStream* raw = stream.Raw(); raw && raw->attached_pic.size > 0 && raw->attached_pic.data) {
+			const auto* p = reinterpret_cast<const std::byte*>(raw->attached_pic.data);
+			bytes.assign(p, p + raw->attached_pic.size);
+		}
+		return Attachment(std::move(name), std::move(mime), StormByte::Buffer::FIFO{std::move(bytes)});
+	}
 }
 
 File::File(std::unique_ptr<Origin> origin, const class Container& container,
-	Multimedia::Streams streams, Metadata::File metadata,
+	Multimedia::Streams streams, Multimedia::Attachments attachments, Metadata::File metadata,
 	std::optional<Property::Duration> duration, bool durationResolved) noexcept
 : m_origin(std::move(origin)), m_container(container), m_streams(std::move(streams)),
-m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
+m_attachments(std::move(attachments)), m_metadata(std::move(metadata)),
+m_duration(duration), m_durationResolved(durationResolved) {}
 
 File::File(File&&) noexcept = default;
 File::~File() noexcept = default;
@@ -201,7 +222,12 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 		return FailOpen(*origin, container.error()->what());
 
 	Multimedia::Streams streams;
+	Multimedia::Attachments attachments;
 	for (const auto& stream : ctx.Streams()) {
+		if (IsAttachedPicture(stream)) {
+			attachments.push_back(MakeAttachment(stream));
+			continue;
+		}
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
 			return FailOpen(*origin, codec.error()->what());
@@ -214,17 +240,21 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 	}
 
 	if (knownDuration.has_value())
-		return File(std::move(origin), container.value(), std::move(streams), Detail::Probe::File(ctx),
-			Property::Duration{*knownDuration}, true);
+		return File(std::move(origin), container.value(), std::move(streams), std::move(attachments),
+			Detail::Probe::File(ctx), Property::Duration{*knownDuration}, true);
 
-	return File(std::move(origin), container.value(), std::move(streams), Detail::Probe::File(ctx),
-		WrapDuration(ctx.Duration()), false);
+	return File(std::move(origin), container.value(), std::move(streams), std::move(attachments),
+		Detail::Probe::File(ctx), WrapDuration(ctx.Duration()), false);
 }
 
 const std::filesystem::path& File::Path() const noexcept {
 	if (const auto* path = m_origin->Path())
 		return *path;
 	return EmptyPath();
+}
+
+const Multimedia::Attachments& File::Attachments() const noexcept {
+	return m_attachments;
 }
 
 const std::optional<Property::Duration>& File::Duration() const noexcept {
@@ -246,6 +276,8 @@ void File::ResolveDuration() const noexcept {
 	std::vector<std::int64_t> endTick;
 	std::size_t i = 0;
 	for (const auto& stream : ctx.Streams()) {
+		if (IsAttachedPicture(stream))
+			continue;
 		byIndex.emplace(stream.Index(), i);
 		timeBase.push_back(stream.TimeBase());
 		endTick.push_back(AV_NOPTS_VALUE);

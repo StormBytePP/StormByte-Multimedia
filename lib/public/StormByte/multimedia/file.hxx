@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/consumer.hxx>
+#include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/metadata/file.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -68,7 +69,8 @@ namespace StormByte::Multimedia {
 	 *
 	 * File is move-only. Open() probes with private FFmpeg RAII and drops the
 	 * demuxer before return. A Consumer origin is kept; its Ring is exclusive
-	 * to this File for its lifetime.
+	 * to this File for its lifetime. avformat attached pictures
+	 * (`AV_DISPOSITION_ATTACHED_PIC`) are stored in Attachments(), not Streams().
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC File {
 		public:
@@ -112,10 +114,16 @@ namespace StormByte::Multimedia {
 			const class Container& Container() const noexcept { return m_container; }
 
 			/**
-			 * @brief Streams in container order.
+			 * @brief Real streams in container order. Attached pictures are omitted.
 			 * @return Immutable list.
 			 */
 			const Multimedia::Streams& Streams() const noexcept { return m_streams; }
+
+			/**
+			 * @brief Container attachments (covers, fonts). Not listed in Streams().
+			 * @return Attachments captured at Open.
+			 */
+			const Multimedia::Attachments& Attachments() const noexcept;
 
 			/**
 			 * @brief Container-level tags captured at Open.
@@ -172,24 +180,26 @@ namespace StormByte::Multimedia {
 		private:
 			friend Pipeline::Demux& Pipeline::operator>>(const File&, Pipeline::Demux&) noexcept;
 
-			std::unique_ptr<Origin> m_origin;						///< Path or Consumer
-			const class Container& m_container;						///< Registry container
-			mutable Multimedia::Streams m_streams;					///< Probed streams
-			Metadata::File m_metadata;							///< Container tags
+			std::unique_ptr<Origin> m_origin;					///< Path or Consumer
+			const class Container& m_container;					///< Registry container
+			mutable Multimedia::Streams m_streams;				///< Probed streams
+			Multimedia::Attachments m_attachments;				///< Covers / attached files
+			Metadata::File m_metadata;						///< Container tags
 			mutable std::optional<Property::Duration> m_duration;			///< Container duration
-			mutable bool m_durationResolved;						///< Caller-supplied or scan done
+			mutable bool m_durationResolved;					///< Caller-supplied or scan done
 
 			/**
 			 * @brief Snapshot constructor.
 			 * @param origin Path or Consumer.
 			 * @param container Registry container.
 			 * @param streams Probed streams.
+			 * @param attachments Probed attachments.
 			 * @param metadata Container tags.
 			 * @param duration Container duration.
 			 * @param durationResolved true if Duration() must not scan.
 			 */
 			File(std::unique_ptr<Origin> origin, const class Container& container,
-				Multimedia::Streams streams, Metadata::File metadata,
+				Multimedia::Streams streams, Multimedia::Attachments attachments, Metadata::File metadata,
 				std::optional<Property::Duration> duration, bool durationResolved) noexcept;
 
 			/**
