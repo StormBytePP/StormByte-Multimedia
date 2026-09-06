@@ -36,21 +36,86 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVBSF.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <string>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+extern "C" {
+	#include <libavformat/avio.h>
+}
 
-FFmpeg::AVFormatContext::AVFormatContext(::AVFormatContext* ctx) noexcept:
-AVPointer(ctx) {}
+using namespace StormByte::Multimedia::Engine::Backend;
+using StormByte::Buffer::Consumer;
+using StormByte::Buffer::DataType;
+using StormByte::Buffer::Position;
+
+struct FFmpeg::AVFormatContext::ConsumerIO {
+	Consumer consumer;
+	std::int64_t position = 0;
+
+	static int Read(void* opaque, std::uint8_t* buf, int bufSize) noexcept {
+		auto* io = static_cast<ConsumerIO*>(opaque);
+		if (!io->consumer.IsReadable() || io->consumer.EoF())
+			return AVERROR_EOF;
+		const std::size_t avail = io->consumer.AvailableBytes();
+		if (avail == 0)
+			return AVERROR_EOF;
+		const std::size_t want = std::min(avail, static_cast<std::size_t>(bufSize));
+		DataType chunk;
+		if (!io->consumer.Read(want, chunk) || chunk.empty())
+			return AVERROR_EOF;
+		std::memcpy(buf, chunk.data(), chunk.size());
+		io->position += static_cast<std::int64_t>(chunk.size());
+		return static_cast<int>(chunk.size());
+	}
+
+	static std::int64_t Seek(void* opaque, std::int64_t offset, int whence) noexcept {
+		auto* io = static_cast<ConsumerIO*>(opaque);
+		if (whence == AVSEEK_SIZE)
+			return static_cast<std::int64_t>(io->consumer.Size());
+
+		std::int64_t target = io->position;
+		if (whence == SEEK_SET)
+			target = offset;
+		else if (whence == SEEK_CUR)
+			target = io->position + offset;
+		else if (whence == SEEK_END)
+			target = static_cast<std::int64_t>(io->consumer.Size()) + offset;
+		else
+			return AVERROR(EINVAL);
+
+		if (target < 0)
+			return AVERROR(EINVAL);
+		io->consumer.Seek(static_cast<std::ptrdiff_t>(target), Position::Absolute);
+		io->position = target;
+		return target;
+	}
+};
+
+FFmpeg::AVFormatContext::AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io) noexcept:
+AVPointer(ctx), m_io(std::move(io)) {}
+
+FFmpeg::AVFormatContext::AVFormatContext(AVFormatContext&& other) noexcept:
+AVPointer(std::move(other)), m_io(std::move(other.m_io)) {}
 
 FFmpeg::AVFormatContext::~AVFormatContext() noexcept {
 	Free();
+}
+
+FFmpeg::AVFormatContext& FFmpeg::AVFormatContext::operator=(AVFormatContext&& other) noexcept {
+	if (this != &other) {
+		AVPointer::operator=(std::move(other));
+		m_io = std::move(other.m_io);
+	}
+	return *this;
 }
 
 FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesystem::path& path) {
@@ -69,7 +134,59 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesys
 		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
 	}
 
-	return AVFormatContext(fmt_ctx);
+	return AVFormatContext(fmt_ctx, nullptr);
+}
+
+FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer) {
+	av_log_set_level(AV_LOG_ERROR);
+
+	auto io = std::make_unique<ConsumerIO>(ConsumerIO{std::move(consumer), 0});
+	io->consumer.Seek(0, Position::Absolute);
+	io->position = 0;
+
+	constexpr int ioSize = 4096;
+	auto* ioBuf = static_cast<unsigned char*>(av_malloc(ioSize));
+	if (!ioBuf)
+		return Unexpected<DecoderError>("Could not allocate AVIO buffer");
+
+	AVIOContext* avio = avio_alloc_context(ioBuf, ioSize, 0, io.get(),
+		&ConsumerIO::Read, nullptr, &ConsumerIO::Seek);
+	if (!avio) {
+		av_free(ioBuf);
+		return Unexpected<DecoderError>("Could not allocate AVIO context");
+	}
+
+	::AVFormatContext* fmt_ctx = avformat_alloc_context();
+	if (!fmt_ctx) {
+		av_free(avio->buffer);
+		avio_context_free(&avio);
+		return Unexpected<DecoderError>("Could not allocate format context");
+	}
+	fmt_ctx->pb = avio;
+	fmt_ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+	int ret = avformat_open_input(&fmt_ctx, nullptr, nullptr, nullptr);
+	if (ret < 0) {
+		av_free(fmt_ctx->pb->buffer);
+		avio_context_free(&fmt_ctx->pb);
+		avformat_free_context(fmt_ctx);
+		return Unexpected<DecoderError>("Could not open buffer: {}", ErrorToString(ret));
+	}
+
+	if ((ret = avformat_find_stream_info(fmt_ctx, nullptr)) < 0) {
+		AVIOContext* pb = fmt_ctx->pb;
+		fmt_ctx->pb = nullptr;
+		avformat_close_input(&fmt_ctx);
+		if (pb) {
+			av_free(pb->buffer);
+			avio_context_free(&pb);
+		}
+		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
+	}
+
+	io->consumer.Seek(0, Position::Absolute);
+	io->position = 0;
+	return AVFormatContext(fmt_ctx, std::move(io));
 }
 
 const char* FFmpeg::AVFormatContext::FormatName() const noexcept {
@@ -157,10 +274,19 @@ std::optional<FFmpeg::AVBSF> FFmpeg::AVFormatContext::Mp4ToAnnexB(int codec_id, 
 }
 
 void FFmpeg::AVFormatContext::Free() noexcept {
-	if (m_ptr) {
-		avformat_close_input(&m_ptr);
-		m_ptr = nullptr;
+	if (!m_ptr)
+		return;
+
+	AVIOContext* pb = m_io ? m_ptr->pb : nullptr;
+	if (m_io)
+		m_ptr->pb = nullptr;
+	avformat_close_input(&m_ptr);
+	if (pb) {
+		av_free(pb->buffer);
+		avio_context_free(&pb);
 	}
+	m_io.reset();
+	m_ptr = nullptr;
 }
 
 template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVFormatContext>;

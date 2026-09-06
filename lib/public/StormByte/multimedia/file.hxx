@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/metadata/file.hxx>
 #include <StormByte/multimedia/stream.hxx>
@@ -46,6 +47,7 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <variant>
 
 /**
  * @namespace StormByte::Multimedia
@@ -54,17 +56,23 @@
 namespace StormByte::Multimedia {
 	/**
 	 * @class File
-	 * @brief Snapshot of an existing media file: path, container, streams and tags.
+	 * @brief Snapshot of a media source: path or Consumer, container, streams and tags.
 	 *
-	 * Open() probes with private FFmpeg RAII and drops it before return.
-	 * File stores no backend state. Copies share registry Codec/Container refs.
+	 * File is move-only. Open() probes with private FFmpeg RAII and drops the
+	 * demuxer before return. A Consumer source is copied and kept; its Ring is
+	 * exclusive to this File for its lifetime.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC File {
 		public:
 			/**
-			 * @brief Copy constructor.
+			 * @brief Media source held by File.
 			 */
-			File(const File&) = default;
+			using Source = std::variant<std::filesystem::path, StormByte::Buffer::Consumer>;
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 */
+			File(const File&) = delete;
 
 			/**
 			 * @brief Move constructor.
@@ -77,10 +85,10 @@ namespace StormByte::Multimedia {
 			~File() = default;
 
 			/**
-			 * @brief Copy assignment.
+			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			File& operator=(const File&) = default;
+			File& operator=(const File&) = delete;
 
 			/**
 			 * @brief Move assignment.
@@ -89,10 +97,10 @@ namespace StormByte::Multimedia {
 			File& operator=(File&&) = default;
 
 			/**
-			 * @brief Filesystem path passed to Open.
+			 * @brief Filesystem path passed to Open, or empty if the source is a Consumer.
 			 * @return Path.
 			 */
-			const std::filesystem::path& Path() const noexcept { return m_path; }
+			const std::filesystem::path& Path() const noexcept;
 
 			/**
 			 * @brief Detected container.
@@ -117,11 +125,11 @@ namespace StormByte::Multimedia {
 			 * @return Duration in nanoseconds, or empty if it cannot be determined.
 			 *
 			 * Returns the header value, the duration passed to Open, or a value
-			 * cached after the first scan. The first call may read the whole file
-			 * when Open(path) was used and the container did not signal duration.
-			 * After a successful scan the result is reused on this instance.
-			 * If Open(path, duration) was used, this is that value and there is
-			 * no I/O.
+			 * cached after the first scan. The first call may read the whole source
+			 * when Open was used without a duration and the container did not
+			 * signal one. After a successful scan the result is reused on this
+			 * instance. If Open(..., duration) was used, this is that value and
+			 * there is no I/O.
 			 */
 			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept;
 
@@ -148,8 +156,34 @@ namespace StormByte::Multimedia {
 			static ExpectedFile Open(const std::filesystem::path& path,
 				std::chrono::nanoseconds duration) noexcept;
 
+			/**
+			 * @brief Opens and probes a Consumer.
+			 * @param consumer Shared ring handle (copied and kept).
+			 * @return Snapshot or FileOpenErrorException.
+			 *
+			 * The Consumer is copied and kept by File. The underlying Ring is
+			 * exclusive to this File for its lifetime: do not Read, Extract, Seek
+			 * or Open another File on any Consumer that shares the same Ring.
+			 * Duration() may later scan the Ring if the header has no duration.
+			 */
+			static ExpectedFile Open(StormByte::Buffer::Consumer consumer) noexcept;
+
+			/**
+			 * @brief Opens and probes a Consumer with an already known duration.
+			 * @param consumer Shared ring handle (copied and kept).
+			 * @param duration Authoritative container duration in nanoseconds.
+			 * @return Snapshot or FileOpenErrorException.
+			 *
+			 * Duration() will not scan. @p duration is stored as-is.
+			 * Pass this only when the value is known to be correct. Do not use it
+			 * to skip work: if you do not need duration, call Open(consumer) and
+			 * do not call Duration(). The Ring remains exclusive to this File.
+			 */
+			static ExpectedFile Open(StormByte::Buffer::Consumer consumer,
+				std::chrono::nanoseconds duration) noexcept;
+
 		private:
-			std::filesystem::path m_path;							///< Source path
+			mutable Source m_source;								///< Path or Consumer
 			const class Container& m_container;						///< Registry container
 			mutable Multimedia::Streams m_streams;					///< Probed streams
 			Metadata::File m_metadata;							///< Container tags
@@ -158,26 +192,26 @@ namespace StormByte::Multimedia {
 
 			/**
 			 * @brief Snapshot constructor.
-			 * @param path Source path.
+			 * @param source Path or Consumer.
 			 * @param container Registry container.
 			 * @param streams Probed streams.
 			 * @param metadata Container tags.
 			 * @param duration Container duration.
 			 * @param durationResolved true if Duration() must not scan.
 			 */
-			File(const std::filesystem::path& path, const class Container& container,
+			File(Source source, const class Container& container,
 				Multimedia::Streams streams, Metadata::File metadata,
 				std::optional<std::chrono::nanoseconds> duration, bool durationResolved) noexcept
-			: m_path(path), m_container(container), m_streams(std::move(streams)),
+			: m_source(std::move(source)), m_container(container), m_streams(std::move(streams)),
 			m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
 
 			/**
 			 * @brief Shared Open implementation.
-			 * @param path Media file.
+			 * @param source Path or Consumer.
 			 * @param duration Caller-supplied duration, if any.
 			 * @return Snapshot or FileOpenErrorException.
 			 */
-			static ExpectedFile Open(const std::filesystem::path& path,
+			static ExpectedFile Open(Source source,
 				std::optional<std::chrono::nanoseconds> duration) noexcept;
 
 			/**

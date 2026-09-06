@@ -47,7 +47,6 @@
 
 #include <cstdint>
 #include <fstream>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -62,6 +61,11 @@ using namespace StormByte::Multimedia;
 namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
 
 namespace {
+	const std::filesystem::path& EmptyPath() noexcept {
+		static const std::filesystem::path empty;
+		return empty;
+	}
+
 	ExpectedContainer ResolveContainer(std::string_view formatName) noexcept {
 		auto& registry = Registry::Instance();
 		std::string_view rest = formatName;
@@ -114,40 +118,61 @@ namespace {
 			return std::nullopt;
 		return std::chrono::nanoseconds{ns};
 	}
+
+	FFmpeg::ExpectedAVFormatContext OpenSource(File::Source& source) {
+		if (auto* path = std::get_if<std::filesystem::path>(&source))
+			return FFmpeg::AVFormatContext::Open(*path);
+		return FFmpeg::AVFormatContext::Open(std::get<StormByte::Buffer::Consumer>(source));
+	}
+
+	std::string SourceName(const File::Source& source) {
+		if (const auto* path = std::get_if<std::filesystem::path>(&source))
+			return path->string();
+		return "buffer";
+	}
 }
 
 ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
-	return Open(path, std::nullopt);
+	return Open(Source{path}, std::nullopt);
 }
 
 ExpectedFile File::Open(const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept {
-	return Open(path, std::optional<std::chrono::nanoseconds>{duration});
+	return Open(Source{path}, std::optional<std::chrono::nanoseconds>{duration});
 }
 
-ExpectedFile File::Open(const std::filesystem::path& path,
-	std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
-	std::string reason;
-	if (!IsReadableFile(path, reason))
-		return Unexpected(FileOpenErrorException(path.string(), reason));
+ExpectedFile File::Open(StormByte::Buffer::Consumer consumer) noexcept {
+	return Open(Source{std::move(consumer)}, std::nullopt);
+}
 
-	auto opened = FFmpeg::AVFormatContext::Open(path);
+ExpectedFile File::Open(StormByte::Buffer::Consumer consumer, std::chrono::nanoseconds duration) noexcept {
+	return Open(Source{std::move(consumer)}, std::optional<std::chrono::nanoseconds>{duration});
+}
+
+ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
+	if (auto* path = std::get_if<std::filesystem::path>(&source)) {
+		std::string reason;
+		if (!IsReadableFile(*path, reason))
+			return Unexpected(FileOpenErrorException(path->string(), reason));
+	}
+
+	auto opened = OpenSource(source);
 	if (!opened.has_value())
-		return Unexpected(FileOpenErrorException(path.string(), opened.error()->what()));
+		return Unexpected(FileOpenErrorException(SourceName(source), opened.error()->what()));
 
 	const FFmpeg::AVFormatContext& ctx = opened.value();
 	const char* formatName = ctx.FormatName();
 	if (!formatName)
-		return Unexpected(FileOpenErrorException(path.string(), "unknown container format"));
+		return Unexpected(FileOpenErrorException(SourceName(source), "unknown container format"));
 
 	auto container = ResolveContainer(formatName);
 	if (!container.has_value())
-		return Unexpected(FileOpenErrorException(path.string(), container.error()->what()));
+		return Unexpected(FileOpenErrorException(SourceName(source), container.error()->what()));
 
 	Multimedia::Streams streams;
 	for (const auto& stream : ctx.Streams()) {
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
-			return Unexpected(FileOpenErrorException(path.string(), codec.error()->what()));
+			return Unexpected(FileOpenErrorException(SourceName(source), codec.error()->what()));
 		streams.emplace_back(Stream(
 			codec.value(),
 			Detail::Probe::Stream(stream),
@@ -157,12 +182,18 @@ ExpectedFile File::Open(const std::filesystem::path& path,
 	}
 
 	if (knownDuration.has_value())
-		return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx),
+		return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
 			knownDuration, true);
 
 	auto header = ctx.Duration();
-	return File(path, container.value(), std::move(streams), Detail::Probe::File(ctx),
+	return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
 		header, header.has_value());
+}
+
+const std::filesystem::path& File::Path() const noexcept {
+	if (const auto* path = std::get_if<std::filesystem::path>(&m_source))
+		return *path;
+	return EmptyPath();
 }
 
 const std::optional<std::chrono::nanoseconds>& File::Duration() const noexcept {
@@ -174,7 +205,7 @@ const std::optional<std::chrono::nanoseconds>& File::Duration() const noexcept {
 void File::ResolveDuration() const noexcept {
 	m_durationResolved = true;
 
-	auto opened = FFmpeg::AVFormatContext::Open(m_path);
+	auto opened = OpenSource(m_source);
 	if (!opened.has_value())
 		return;
 

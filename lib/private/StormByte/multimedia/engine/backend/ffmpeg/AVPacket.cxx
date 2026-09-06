@@ -38,6 +38,10 @@
 
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
 
+extern "C" {
+	#include <libavutil/avutil.h>
+}
+
 using namespace StormByte::Multimedia::Engine::Backend;
 
 FFmpeg::AVPacket::AVPacket() noexcept:

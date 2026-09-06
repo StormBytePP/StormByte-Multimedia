@@ -38,11 +38,13 @@
 
 #pragma once
 
+#include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/typedefs.hxx>
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 extern "C" {
@@ -75,7 +77,7 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @brief Move constructor.
 			 * @param other Source context.
 			 */
-			AVFormatContext(AVFormatContext&& other) noexcept = default;
+			AVFormatContext(AVFormatContext&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
@@ -94,7 +96,7 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @param other Source context.
 			 * @return *this.
 			 */
-			AVFormatContext& operator=(AVFormatContext&& other) noexcept = default;
+			AVFormatContext& operator=(AVFormatContext&& other) noexcept;
 
 			/**
 			 * @brief Opens a file and finds stream info.
@@ -102,6 +104,16 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @return Context or DecoderError.
 			 */
 			static ExpectedAVFormatContext Open(const std::filesystem::path& path);
+
+			/**
+			 * @brief Opens a Consumer and finds stream info.
+			 * @param consumer Shared ring handle (copied into the I/O adapter).
+			 * @return Context or DecoderError.
+			 *
+			 * The Ring is exclusive to this context while it lives. Seek(0) after
+			 * a successful open.
+			 */
+			static ExpectedAVFormatContext Open(StormByte::Buffer::Consumer consumer);
 
 			/**
 			 * @brief Demuxer format name (`iformat->name`).
@@ -145,14 +157,19 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			std::optional<AVBSF> Mp4ToAnnexB(int codec_id, int stream_id, const AVCodecParameters& params) const noexcept;
 
 		private:
+			struct ConsumerIO;
+
+			std::unique_ptr<ConsumerIO> m_io;	///< Custom AVIO state (buffer opens)
+
 			/**
 			 * @brief Adopts a raw format context.
 			 * @param ctx Raw format context (owned).
+			 * @param io Optional Consumer AVIO state.
 			 */
-			explicit AVFormatContext(::AVFormatContext* ctx) noexcept;
+			explicit AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io) noexcept;
 
 			/**
-			 * @brief Closes input (avformat_close_input).
+			 * @brief Closes input and custom AVIO.
 			 */
 			void Free() noexcept override;
 	};
