@@ -56,7 +56,7 @@ namespace StormByte::Multimedia {
 
 	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;				///< Result of FindCodec
 	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;	///< Result of FindContainer
-	using ExpectedFile = StormByte::Expected<File, FileOpenErrorException>;							///< Result of OpenFile
+	using ExpectedFile = StormByte::Expected<File, FileOpenException>;								///< Result of OpenFile
 	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;								///< List of codec references
 	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;						///< List of container references
 	using Streams = std::vector<Stream>;															///< Ordered streams

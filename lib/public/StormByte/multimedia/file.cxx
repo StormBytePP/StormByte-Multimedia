@@ -67,6 +67,12 @@ namespace {
 		return empty;
 	}
 
+	ExpectedFile FailOpen(const Origin& origin, const std::string& reason) noexcept {
+		if (const auto* path = origin.Path())
+			return Unexpected(FilePathOpenException(path->string(), reason));
+		return Unexpected(FileBufferOpenException(reason));
+	}
+
 	ExpectedContainer ResolveContainer(std::string_view formatName) noexcept {
 		auto& registry = Registry::Instance();
 		std::string_view rest = formatName;
@@ -93,7 +99,7 @@ namespace {
 		return Registry::Instance().FindCodec(name);
 	}
 
-	bool IsReadableFile(const std::filesystem::path& path, std::string& reason) noexcept {
+	bool IsReadablePath(const std::filesystem::path& path, std::string& reason) noexcept {
 		std::error_code ec;
 		if (!std::filesystem::exists(path, ec) || ec) {
 			reason = "file does not exist";
@@ -106,6 +112,18 @@ namespace {
 		std::ifstream in(path, std::ios::binary);
 		if (!in) {
 			reason = "file is not readable";
+			return false;
+		}
+		return true;
+	}
+
+	bool IsUsableConsumer(const StormByte::Buffer::Consumer& consumer, std::string& reason) noexcept {
+		if (consumer.HasError() || !consumer.IsReadable()) {
+			reason = "buffer is not readable";
+			return false;
+		}
+		if (consumer.EoF() && consumer.AvailableBytes() == 0) {
+			reason = "buffer is empty";
 			return false;
 		}
 		return true;
@@ -124,12 +142,6 @@ namespace {
 		if (!ns.has_value())
 			return std::nullopt;
 		return Property::Duration{*ns};
-	}
-
-	std::string OriginName(const Origin& origin) {
-		if (const auto* path = origin.Path())
-			return path->string();
-		return "buffer";
 	}
 
 	FFmpeg::ExpectedAVFormatContext OpenOrigin(Origin& origin) {
@@ -167,28 +179,32 @@ ExpectedFile File::Open(StormByte::Buffer::Consumer consumer, std::chrono::nanos
 ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
 	if (const auto* path = origin->Path()) {
 		std::string reason;
-		if (!IsReadableFile(*path, reason))
-			return Unexpected(FileOpenErrorException(path->string(), reason));
+		if (!IsReadablePath(*path, reason))
+			return FailOpen(*origin, reason);
+	} else if (const auto* consumer = origin->Consumer()) {
+		std::string reason;
+		if (!IsUsableConsumer(*consumer, reason))
+			return FailOpen(*origin, reason);
 	}
 
 	auto opened = OpenOrigin(*origin);
 	if (!opened.has_value())
-		return Unexpected(FileOpenErrorException(OriginName(*origin), opened.error()->what()));
+		return FailOpen(*origin, opened.error()->what());
 
 	const FFmpeg::AVFormatContext& ctx = opened.value();
 	const char* formatName = ctx.FormatName();
 	if (!formatName)
-		return Unexpected(FileOpenErrorException(OriginName(*origin), "unknown container format"));
+		return FailOpen(*origin, "unknown container format");
 
 	auto container = ResolveContainer(formatName);
 	if (!container.has_value())
-		return Unexpected(FileOpenErrorException(OriginName(*origin), container.error()->what()));
+		return FailOpen(*origin, container.error()->what());
 
 	Multimedia::Streams streams;
 	for (const auto& stream : ctx.Streams()) {
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
-			return Unexpected(FileOpenErrorException(OriginName(*origin), codec.error()->what()));
+			return FailOpen(*origin, codec.error()->what());
 		streams.emplace_back(Stream(
 			codec.value(),
 			Detail::Probe::Stream(stream),

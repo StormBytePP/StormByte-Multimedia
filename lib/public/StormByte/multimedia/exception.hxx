@@ -41,6 +41,7 @@
 #include <StormByte/exception.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <format>
 #include <string>
 
 /**
@@ -122,17 +123,45 @@ namespace StormByte::Multimedia {
 	};
 
 	/**
-	 * @class FileOpenErrorException
-	 * @brief Thrown when File::Open fails.
+	 * @class FileOpenException
+	 * @brief Thrown when File::Open fails (path or buffer).
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC FileOpenErrorException: public Exception {
+	class STORMBYTE_MULTIMEDIA_PUBLIC FileOpenException: public Exception {
 		public:
 			/**
-			 * @brief Constructs the exception for @p file.
-			 * @param file Path or `"buffer"`.
-			 * @param reason Why Open failed (no path).
+			 * @brief Constructs the exception with a finished message.
+			 * @param message Already formatted reason text.
 			 */
-			explicit FileOpenErrorException(const std::string& file, const std::string& reason):
-			Exception("File", "failed to open '{}': {}", file, reason) {}
+			explicit FileOpenException(const std::string& message):
+			Exception("File", "{}", message) {}
+	};
+
+	/**
+	 * @class FilePathOpenException
+	 * @brief Thrown when File::Open fails on a filesystem path.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC FilePathOpenException: public FileOpenException {
+		public:
+			/**
+			 * @brief Constructs the exception for @p path.
+			 * @param path Filesystem path.
+			 * @param reason Why Open failed.
+			 */
+			FilePathOpenException(const std::string& path, const std::string& reason):
+			FileOpenException(std::format("failed to open '{}': {}", path, reason)) {}
+	};
+
+	/**
+	 * @class FileBufferOpenException
+	 * @brief Thrown when File::Open fails on a Consumer.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC FileBufferOpenException: public FileOpenException {
+		public:
+			/**
+			 * @brief Constructs the exception.
+			 * @param reason Why Open failed (empty, corrupt, I/O).
+			 */
+			explicit FileBufferOpenException(const std::string& reason):
+			FileOpenException(std::format("failed to open buffer: {}", reason)) {}
 	};
 }
