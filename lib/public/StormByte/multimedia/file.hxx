@@ -126,10 +126,11 @@ namespace StormByte::Multimedia {
 			 *
 			 * Returns the header value, the duration passed to Open, or a value
 			 * cached after the first scan. The first call may read the whole source
-			 * when Open was used without a duration and the container did not
-			 * signal one. After a successful scan the result is reused on this
-			 * instance. If Open(..., duration) was used, this is that value and
-			 * there is no I/O.
+			 * when Open was used without a duration: even if the container header
+			 * has a duration, streams that lack one are filled from packet
+			 * timestamps. After a successful scan the result is reused on this
+			 * instance. If Open(..., duration) was used, this is that value, there
+			 * is no I/O, and stream durations stay as probed.
 			 */
 			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept;
 
@@ -138,7 +139,8 @@ namespace StormByte::Multimedia {
 			 * @param path Media file.
 			 * @return Snapshot or FileOpenErrorException.
 			 *
-			 * Duration() may later scan the file if the container header has no duration.
+			 * Duration() may later scan the file to resolve missing stream
+			 * durations even when the container header has a duration.
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
 
@@ -164,7 +166,8 @@ namespace StormByte::Multimedia {
 			 * The Consumer is copied and kept by File. The underlying Ring is
 			 * exclusive to this File for its lifetime: do not Read, Extract, Seek
 			 * or Open another File on any Consumer that shares the same Ring.
-			 * Duration() may later scan the Ring if the header has no duration.
+			 * Duration() may later scan the Ring to resolve missing stream
+			 * durations even when the header has a duration.
 			 */
 			static ExpectedFile Open(StormByte::Buffer::Consumer consumer) noexcept;
 
@@ -188,7 +191,7 @@ namespace StormByte::Multimedia {
 			mutable Multimedia::Streams m_streams;					///< Probed streams
 			Metadata::File m_metadata;							///< Container tags
 			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Container duration
-			mutable bool m_durationResolved;						///< Header, caller, or scan done
+			mutable bool m_durationResolved;						///< Caller-supplied or scan done
 
 			/**
 			 * @brief Snapshot constructor.
@@ -215,7 +218,7 @@ namespace StormByte::Multimedia {
 				std::optional<std::chrono::nanoseconds> duration) noexcept;
 
 			/**
-			 * @brief Packet scan when the header has no duration.
+			 * @brief Packet scan for container and missing stream durations.
 			 */
 			void ResolveDuration() const noexcept;
 	};
