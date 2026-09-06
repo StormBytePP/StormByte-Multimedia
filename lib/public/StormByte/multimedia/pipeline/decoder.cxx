@@ -93,21 +93,21 @@ namespace {
 	SideDataKind MapKind(AVFrameSideDataType type) noexcept {
 		switch (type) {
 			case AV_FRAME_DATA_MASTERING_DISPLAY_METADATA:	return SideDataKind::MasteringDisplay;
-			case AV_FRAME_DATA_CONTENT_LIGHT_LEVEL:		return SideDataKind::ContentLight;
-			case AV_FRAME_DATA_DYNAMIC_HDR_PLUS:		return SideDataKind::HdrPlus;
-			case AV_FRAME_DATA_DYNAMIC_HDR_VIVID:		return SideDataKind::HdrVivid;
-			case AV_FRAME_DATA_A53_CC:			return SideDataKind::A53CC;
-			case AV_FRAME_DATA_STEREO3D:			return SideDataKind::Stereo3D;
-			case AV_FRAME_DATA_DISPLAYMATRIX:		return SideDataKind::DisplayMatrix;
-			case AV_FRAME_DATA_ICC_PROFILE:			return SideDataKind::IccProfile;
-			case AV_FRAME_DATA_S12M_TIMECODE:		return SideDataKind::S12MTimecode;
-			case AV_FRAME_DATA_SPHERICAL:			return SideDataKind::Spherical;
-			case AV_FRAME_DATA_SEI_UNREGISTERED:		return SideDataKind::SeiUnregistered;
-			case AV_FRAME_DATA_FILM_GRAIN_PARAMS:		return SideDataKind::FilmGrain;
-			case AV_FRAME_DATA_DOVI_RPU_BUFFER:		return SideDataKind::DolbyVisionRpu;
-			case AV_FRAME_DATA_DOVI_METADATA:		return SideDataKind::DolbyVision;
+			case AV_FRAME_DATA_CONTENT_LIGHT_LEVEL:			return SideDataKind::ContentLight;
+			case AV_FRAME_DATA_DYNAMIC_HDR_PLUS:			return SideDataKind::HdrPlus;
+			case AV_FRAME_DATA_DYNAMIC_HDR_VIVID:			return SideDataKind::HdrVivid;
+			case AV_FRAME_DATA_A53_CC:						return SideDataKind::A53CC;
+			case AV_FRAME_DATA_STEREO3D:					return SideDataKind::Stereo3D;
+			case AV_FRAME_DATA_DISPLAYMATRIX:				return SideDataKind::DisplayMatrix;
+			case AV_FRAME_DATA_ICC_PROFILE:					return SideDataKind::IccProfile;
+			case AV_FRAME_DATA_S12M_TIMECODE:				return SideDataKind::S12MTimecode;
+			case AV_FRAME_DATA_SPHERICAL:					return SideDataKind::Spherical;
+			case AV_FRAME_DATA_SEI_UNREGISTERED:			return SideDataKind::SeiUnregistered;
+			case AV_FRAME_DATA_FILM_GRAIN_PARAMS:			return SideDataKind::FilmGrain;
+			case AV_FRAME_DATA_DOVI_RPU_BUFFER:				return SideDataKind::DolbyVisionRpu;
+			case AV_FRAME_DATA_DOVI_METADATA:				return SideDataKind::DolbyVision;
 			case AV_FRAME_DATA_AMBIENT_VIEWING_ENVIRONMENT:	return SideDataKind::AmbientViewing;
-			default:					return SideDataKind::Other;
+			default:										return SideDataKind::Other;
 		}
 	}
 
@@ -206,6 +206,14 @@ void Decoder::Flags(DecoderFlags flags) noexcept {
 	m_flags = flags;
 }
 
+Filter::FramePipe& Decoder::Pipe() noexcept {
+	return m_pipe;
+}
+
+const Filter::FramePipe& Decoder::Pipe() const noexcept {
+	return m_pipe;
+}
+
 bool Decoder::Failed() const noexcept {
 	return m_failed;
 }
@@ -288,6 +296,20 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 	if (decoder.m_failed || !decoder.m_impl)
 		return decoder;
 
+	auto runPipe = [&]() {
+		auto filtered = decoder.m_pipe.Push(std::move(frame));
+		if (decoder.m_pipe.Failed()) {
+			decoder.Fail(decoder.m_pipe.Error().value_or("frame filter failed"));
+			frame = Frame{};
+			return;
+		}
+		if (!filtered.has_value()) {
+			frame = Frame{};
+			return;
+		}
+		frame = std::move(*filtered);
+	};
+
 	if (decoder.m_impl->m_decoder.IsSubtitle()) {
 		if (!decoder.m_impl->m_pendingSub.has_value())
 			return decoder;
@@ -314,6 +336,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 			std::nullopt,
 			{}
 		);
+		runPipe();
 		return decoder;
 	}
 
@@ -344,5 +367,6 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		std::move(attachments)
 	);
 	frame.Bind(std::move(holder));
+	runPipe();
 	return decoder;
 }

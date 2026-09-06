@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/bitmask.hxx>
+#include <StormByte/multimedia/pipeline/filters/frame_pipe.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -97,7 +98,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
 
 	/**
-	 * @brief Receives one decoded frame. Never throws.
+	 * @brief Receives one decoded frame after the frame pipe. Never throws.
 	 * @param decoder Source.
 	 * @param frame Replaced on success.
 	 * @return @p decoder.
@@ -113,6 +114,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits
 	 * EOF, Flush() then drain with decoder >> frame until StreamIndex()
 	 * is -1. Failbit on open/decode errors. Copy is not a Decoder mode.
+	 *
+	 * Frame steps (bundled or user) go in Pipe(). They run inside
+	 * decoder >> frame. An empty pipe is identity.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder {
 		public:
@@ -174,6 +178,18 @@ namespace StormByte::Multimedia::Pipeline {
 			void Flags(DecoderFlags flags) noexcept;
 
 			/**
+			 * @brief Frame filter pipe. Add bundled or custom steps before reading frames.
+			 * @return Pipe.
+			 */
+			Filter::FramePipe& Pipe() noexcept;
+
+			/**
+			 * @brief Frame filter pipe.
+			 * @return Pipe.
+			 */
+			const Filter::FramePipe& Pipe() const noexcept;
+
+			/**
 			 * @brief Whether a hard error occurred.
 			 * @return true on open/decode error.
 			 */
@@ -201,15 +217,18 @@ namespace StormByte::Multimedia::Pipeline {
 			class Impl;
 
 			/* bind */
-			int m_index;						///< Stream index
-			std::unique_ptr<Impl> m_impl;				///< Opened backend
+			int m_index;							///< Stream index
+			std::unique_ptr<Impl> m_impl;			///< Opened backend
 
 			/* flags */
 			DecoderFlags m_flags;					///< Heuristics / future bits
 
+			/* filters */
+			Filter::FramePipe m_pipe;				///< Frame steps
+
 			/* fail */
-			bool m_failed;						///< Hard error
-			std::optional<std::string> m_error;			///< Failure text
+			bool m_failed;							///< Hard error
+			std::optional<std::string> m_error;		///< Failure text
 
 			/**
 			 * @brief Marks a hard error.
