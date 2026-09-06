@@ -64,6 +64,15 @@ AVRational FFmpeg::AVStream::TimeBase() const noexcept {
 	return m_stream ? m_stream->time_base : AVRational{0, 1};
 }
 
+std::optional<std::chrono::nanoseconds> FFmpeg::AVStream::Duration() const noexcept {
+	if (!m_stream || m_stream->duration == AV_NOPTS_VALUE || m_stream->time_base.den <= 0)
+		return std::nullopt;
+	const std::int64_t ns = av_rescale_q(m_stream->duration, m_stream->time_base, AVRational{1, 1000000000});
+	if (ns < 0)
+		return std::nullopt;
+	return std::chrono::nanoseconds{ns};
+}
+
 double FFmpeg::AVStream::FrameRate() const noexcept {
 	if (!m_stream)
 		return 0.0;
@@ -72,15 +81,6 @@ double FFmpeg::AVStream::FrameRate() const noexcept {
 	if (m_stream->r_frame_rate.num && m_stream->r_frame_rate.den)
 		return av_q2d(m_stream->r_frame_rate);
 	return 0.0;
-}
-
-std::optional<std::chrono::nanoseconds> FFmpeg::AVStream::Duration() const noexcept {
-	if (!m_stream || m_stream->duration == AV_NOPTS_VALUE || m_stream->time_base.den <= 0)
-		return std::nullopt;
-	const std::int64_t ns = av_rescale_q(m_stream->duration, m_stream->time_base, AVRational{1, 1000000000});
-	if (ns < 0)
-		return std::nullopt;
-	return std::chrono::nanoseconds{ns};
 }
 
 const char* FFmpeg::AVStream::Tag(const char* key) const noexcept {
@@ -92,4 +92,8 @@ const char* FFmpeg::AVStream::Tag(const char* key) const noexcept {
 
 int FFmpeg::AVStream::Disposition() const noexcept {
 	return m_stream ? m_stream->disposition : 0;
+}
+
+::AVStream* FFmpeg::AVStream::Raw() const noexcept {
+	return m_stream;
 }

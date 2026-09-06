@@ -40,21 +40,24 @@
 
 using namespace StormByte::Multimedia::Property;
 
-const HDR10 HDR10::DEFAULT = { {34000, 16000}, {13250, 34500}, {7500, 3000}, {15635, 16450}, {1, 10000000} };
+const HDR10 HDR10::DEFAULT = {
+	{34000, 16000}, {13250, 34500}, {7500, 3000}, {15635, 16450}, {1, 10000000},
+	std::nullopt, HDR10::Source::Heuristics
+};
 
 HDR10::HDR10() noexcept:
-HDR10(DEFAULT.Red(), DEFAULT.Green(), DEFAULT.Blue(), DEFAULT.White(), DEFAULT.Luminance()) {}
+HDR10(DEFAULT) {}
 
 HDR10::HDR10(const Point& red, const Point& green, const Point& blue, const Point& white,
-	const Point& luminance, const std::optional<Point>& light_level) noexcept:
+	const Point& luminance, const std::optional<Point>& light_level, Source source) noexcept:
 m_red(red), m_green(green), m_blue(blue), m_white(white),
-m_luminance(luminance), m_light_level(light_level), m_hdr10plus(false) {}
+m_luminance(luminance), m_light_level(light_level), m_source(source), m_hdr10plus(false) {}
 
 HDR10::HDR10(Point&& red, Point&& green, Point&& blue, Point&& white,
-	Point&& luminance, std::optional<Point>&& light_level) noexcept:
+	Point&& luminance, std::optional<Point>&& light_level, Source source) noexcept:
 m_red(std::move(red)), m_green(std::move(green)), m_blue(std::move(blue)),
 m_white(std::move(white)), m_luminance(std::move(luminance)), m_light_level(std::move(light_level)),
-m_hdr10plus(false) {}
+m_source(source), m_hdr10plus(false) {}
 
 const Point& HDR10::Red() const noexcept {
 	return m_red;
@@ -78,6 +81,10 @@ const Point& HDR10::Luminance() const noexcept {
 
 const std::optional<Point>& HDR10::LightLevel() const noexcept {
 	return m_light_level;
+}
+
+HDR10::Source HDR10::Origin() const noexcept {
+	return m_source;
 }
 
 bool HDR10::IsHDR10Plus() const noexcept {

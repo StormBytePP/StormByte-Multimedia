@@ -55,7 +55,16 @@ namespace StormByte::Multimedia::Property {
 	class STORMBYTE_MULTIMEDIA_PUBLIC HDR10 final {
 		public:
 			/**
-			 * @brief Uses DEFAULT primaries / luminance.
+			 * @enum Source
+			 * @brief Origin of the mastering-display numbers.
+			 */
+			enum class Source {
+				Metadata,	///< Side data from the container / bitstream
+				Heuristics	///< DEFAULT values; file signalled HDR10 without MDM
+			};
+
+			/**
+			 * @brief DEFAULT primaries / luminance, Source::Heuristics.
 			 */
 			HDR10() noexcept;
 
@@ -67,9 +76,11 @@ namespace StormByte::Multimedia::Property {
 			 * @param white White point.
 			 * @param luminance Min/max luminance pair.
 			 * @param light_level Optional MaxCLL/MaxFALL.
+			 * @param source Metadata or Heuristics.
 			 */
 			HDR10(const Point& red, const Point& green, const Point& blue, const Point& white,
-				const Point& luminance, const std::optional<Point>& light_level = std::nullopt) noexcept;
+				const Point& luminance, const std::optional<Point>& light_level = std::nullopt,
+				Source source = Source::Metadata) noexcept;
 
 			/**
 			 * @brief Move overload of the full constructor.
@@ -79,9 +90,11 @@ namespace StormByte::Multimedia::Property {
 			 * @param white White point.
 			 * @param luminance Min/max luminance pair.
 			 * @param light_level Optional MaxCLL/MaxFALL.
+			 * @param source Metadata or Heuristics.
 			 */
 			HDR10(Point&& red, Point&& green, Point&& blue, Point&& white,
-				Point&& luminance, std::optional<Point>&& light_level = std::nullopt) noexcept;
+				Point&& luminance, std::optional<Point>&& light_level = std::nullopt,
+				Source source = Source::Metadata) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -147,6 +160,12 @@ namespace StormByte::Multimedia::Property {
 			const std::optional<Point>& LightLevel() const noexcept;
 
 			/**
+			 * @brief Origin of the numbers.
+			 * @return Metadata or Heuristics.
+			 */
+			Source Origin() const noexcept;
+
+			/**
 			 * @brief HDR10+ dynamic metadata flag.
 			 * @return true if HDR10+ was detected.
 			 */
@@ -158,7 +177,7 @@ namespace StormByte::Multimedia::Property {
 			 */
 			void HDR10Plus(bool hdrplus) noexcept;
 
-			static const HDR10 DEFAULT;		///< Fallback mastering display
+			static const HDR10 DEFAULT;		///< Fallback mastering display (Heuristics)
 
 		private:
 			Point m_red;							///< Red primary
@@ -167,6 +186,7 @@ namespace StormByte::Multimedia::Property {
 			Point m_white;							///< White point
 			Point m_luminance;						///< Min/max luminance
 			std::optional<Point> m_light_level;		///< MaxCLL / MaxFALL
+			Source m_source;						///< Metadata or Heuristics
 			bool m_hdr10plus;						///< HDR10+ present
 	};
 }

@@ -109,9 +109,6 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @brief Opens a Consumer and finds stream info.
 			 * @param consumer Shared ring handle (copied into the I/O adapter).
 			 * @return Context or DecoderError.
-			 *
-			 * The Ring is exclusive to this context while it lives. Seek(0) after
-			 * a successful open.
 			 */
 			static ExpectedAVFormatContext Open(StormByte::Buffer::Consumer consumer);
 
@@ -167,6 +164,11 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @param io Optional Consumer AVIO state.
 			 */
 			explicit AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io) noexcept;
+
+			/**
+			 * @brief Copies HDR side data from early decoded frames onto codecpar.
+			 */
+			void HarvestSideData() noexcept;
 
 			/**
 			 * @brief Closes input and custom AVIO.

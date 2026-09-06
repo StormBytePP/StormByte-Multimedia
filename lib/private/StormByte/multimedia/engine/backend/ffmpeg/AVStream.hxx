@@ -127,16 +127,16 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			AVRational TimeBase() const noexcept;
 
 			/**
-			 * @brief Estimated FPS (avg or r_frame_rate).
-			 * @return FPS, or 0.
-			 */
-			double FrameRate() const noexcept;
-
-			/**
 			 * @brief Stream duration in nanoseconds.
 			 * @return Duration, or empty if unknown.
 			 */
 			std::optional<std::chrono::nanoseconds> Duration() const noexcept;
+
+			/**
+			 * @brief Estimated FPS (avg or r_frame_rate).
+			 * @return FPS, or 0.
+			 */
+			double FrameRate() const noexcept;
 
 			/**
 			 * @brief Looks up a stream metadata tag.
@@ -150,6 +150,12 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 * @return `AV_DISPOSITION_*` mask, or 0.
 			 */
 			int Disposition() const noexcept;
+
+			/**
+			 * @brief Raw FFmpeg stream (non-owning).
+			 * @return Pointer, or nullptr.
+			 */
+			::AVStream* Raw() const noexcept;
 
 		private:
 			::AVStream* m_stream = nullptr;	///< Non-owning

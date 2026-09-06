@@ -39,23 +39,70 @@
 #include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVBSF.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/engine/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
+#include <vector>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavformat/avio.h>
+	#include <libavutil/mastering_display_metadata.h>
+	#include <libavutil/mem.h>
 }
 
 using namespace StormByte::Multimedia::Engine::Backend;
 using StormByte::Buffer::Consumer;
 using StormByte::Buffer::DataType;
 using StormByte::Buffer::Position;
+
+namespace {
+	void AddParSideData(::AVCodecParameters* par, enum AVPacketSideDataType type,
+		const uint8_t* data, size_t size) noexcept {
+		if (!par || !data || size == 0)
+			return;
+		if (av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, type))
+			return;
+		AVPacketSideData* sd = av_packet_side_data_new(
+			&par->coded_side_data, &par->nb_coded_side_data, type, size, 0);
+		if (sd && sd->data)
+			std::memcpy(sd->data, data, size);
+	}
+
+	void PromotePacket(const FFmpeg::AVPacket& pkt, ::AVCodecParameters* par) noexcept {
+		size_t size = 0;
+		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &size))
+			AddParSideData(par, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, data, size);
+		size = 0;
+		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &size))
+			AddParSideData(par, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, data, size);
+		size = 0;
+		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_DYNAMIC_HDR10_PLUS, &size))
+			AddParSideData(par, AV_PKT_DATA_DYNAMIC_HDR10_PLUS, data, size);
+	}
+
+	void PromoteFrame(const FFmpeg::AVFrame& frame, ::AVCodecParameters* par) noexcept {
+		if (const AVFrameSideData* sd = frame.SideData(AV_FRAME_DATA_MASTERING_DISPLAY_METADATA))
+			AddParSideData(par, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sd->data, sd->size);
+		if (const AVFrameSideData* sd = frame.SideData(AV_FRAME_DATA_CONTENT_LIGHT_LEVEL))
+			AddParSideData(par, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, sd->data, sd->size);
+		if (const AVFrameSideData* sd = frame.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS))
+			AddParSideData(par, AV_PKT_DATA_DYNAMIC_HDR10_PLUS, sd->data, sd->size);
+	}
+
+	bool VideoHasMastering(::AVCodecParameters* par) noexcept {
+		return par && av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data,
+			AV_PKT_DATA_MASTERING_DISPLAY_METADATA);
+	}
+}
 
 struct FFmpeg::AVFormatContext::ConsumerIO {
 	Consumer consumer;
@@ -134,7 +181,9 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(const std::filesys
 		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
 	}
 
-	return AVFormatContext(fmt_ctx, nullptr);
+	AVFormatContext ctx(fmt_ctx, nullptr);
+	ctx.HarvestSideData();
+	return ctx;
 }
 
 FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer) {
@@ -186,7 +235,72 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer)
 
 	io->consumer.Seek(0, Position::Absolute);
 	io->position = 0;
-	return AVFormatContext(fmt_ctx, std::move(io));
+	AVFormatContext ctx(fmt_ctx, std::move(io));
+	ctx.HarvestSideData();
+	return ctx;
+}
+
+void FFmpeg::AVFormatContext::HarvestSideData() noexcept {
+	if (!m_ptr)
+		return;
+
+	constexpr int kMaxPackets = 128;
+	AVPacket packet;
+	AVFrame frame;
+	std::vector<std::unique_ptr<AVDecoder>> decoders(m_ptr->nb_streams);
+
+	for (unsigned i = 0; i < m_ptr->nb_streams; ++i) {
+		::AVCodecParameters* par = m_ptr->streams[i]->codecpar;
+		if (!par || par->codec_type != AVMEDIA_TYPE_VIDEO)
+			continue;
+		const AVCodec* codec = avcodec_find_decoder(par->codec_id);
+		if (!codec)
+			continue;
+		auto opened = AVDecoder::Open(const_cast<AVCodec*>(codec),
+			AVCodecParameters(par), *this, static_cast<int>(i));
+		if (opened.has_value())
+			decoders[i] = std::make_unique<AVDecoder>(std::move(opened.value()));
+	}
+
+	for (int n = 0; n < kMaxPackets; ++n) {
+		if (ReadPacket(packet) != OperationResult::Success)
+			break;
+
+		const int idx = packet.StreamIndex();
+		if (idx < 0 || static_cast<unsigned>(idx) >= m_ptr->nb_streams) {
+			packet.Unref();
+			continue;
+		}
+
+		::AVCodecParameters* par = m_ptr->streams[static_cast<unsigned>(idx)]->codecpar;
+		PromotePacket(packet, par);
+
+		if (decoders[static_cast<unsigned>(idx)]) {
+			if (decoders[static_cast<unsigned>(idx)]->SendPacket(packet) == OperationResult::Success) {
+				while (decoders[static_cast<unsigned>(idx)]->ReceiveFrame(frame) == OperationResult::Success) {
+					PromoteFrame(frame, par);
+					frame.Unref();
+				}
+			}
+		}
+		packet.Unref();
+
+		bool done = true;
+		for (unsigned i = 0; i < m_ptr->nb_streams; ++i) {
+			if (decoders[i] && !VideoHasMastering(m_ptr->streams[i]->codecpar)) {
+				done = false;
+				break;
+			}
+		}
+		if (done)
+			break;
+	}
+
+	av_seek_frame(m_ptr, -1, 0, AVSEEK_FLAG_BACKWARD);
+	if (m_io) {
+		m_io->consumer.Seek(0, Position::Absolute);
+		m_io->position = 0;
+	}
 }
 
 const char* FFmpeg::AVFormatContext::FormatName() const noexcept {
@@ -232,9 +346,8 @@ FFmpeg::Streams FFmpeg::AVFormatContext::Streams() const noexcept {
 	if (!m_ptr || m_ptr->nb_streams == 0)
 		return out;
 
-	for (unsigned i = 0; i < m_ptr->nb_streams; ++i) {
+	for (unsigned i = 0; i < m_ptr->nb_streams; ++i)
 		out.emplace(AVStream(m_ptr->streams[i]));
-	}
 
 	return out;
 }
@@ -269,8 +382,7 @@ std::optional<FFmpeg::AVBSF> FFmpeg::AVFormatContext::Mp4ToAnnexB(int codec_id, 
 
 	if (expected_bsf)
 		return std::move(expected_bsf.value());
-	else
-		return std::nullopt;
+	return std::nullopt;
 }
 
 void FFmpeg::AVFormatContext::Free() noexcept {

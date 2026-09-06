@@ -47,6 +47,7 @@
 extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavutil/channel_layout.h>
+	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/pixfmt.h>
 }
 
@@ -54,7 +55,9 @@ namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
 using StormByte::Multimedia::Property::Audio;
 using StormByte::Multimedia::Property::ChannelLayout;
 using StormByte::Multimedia::Property::Color;
+using StormByte::Multimedia::Property::HDR10;
 using StormByte::Multimedia::Property::PixelFormat;
+using StormByte::Multimedia::Property::Point;
 using StormByte::Multimedia::Property::Primaries;
 using StormByte::Multimedia::Property::Range;
 using StormByte::Multimedia::Property::Resolution;
@@ -63,6 +66,80 @@ using StormByte::Multimedia::Property::Transfer;
 using StormByte::Multimedia::Property::Video;
 
 namespace {
+	constexpr int kChromaDen = 50000;
+
+	Point FromRationalPair(const AVRational& x, const AVRational& y) noexcept {
+		return Point::Normalized(x.num, x.den, y.num, y.den, kChromaDen);
+	}
+
+	const uint8_t* CodecSideData(const ::AVStream* raw, enum AVPacketSideDataType type, size_t& size) noexcept {
+		size = 0;
+		if (!raw || !raw->codecpar)
+			return nullptr;
+		const AVPacketSideData* sd = av_packet_side_data_get(
+			raw->codecpar->coded_side_data, raw->codecpar->nb_coded_side_data, type);
+		if (!sd)
+			return nullptr;
+		size = sd->size;
+		return sd->data;
+	}
+
+	bool LooksLikeHDR10(Transfer transfer, Primaries primaries) noexcept {
+		return transfer == Transfer::SMPTE2084 && primaries == Primaries::BT2020;
+	}
+
+	std::optional<HDR10> MapHDR10(const ::AVStream* raw, Transfer transfer, Primaries primaries) noexcept {
+		if (!LooksLikeHDR10(transfer, primaries))
+			return std::nullopt;
+
+		size_t mdmSize = 0;
+		const uint8_t* mdmData = CodecSideData(raw, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, mdmSize);
+		const auto* mdm = (mdmData && mdmSize >= sizeof(AVMasteringDisplayMetadata))
+			? reinterpret_cast<const AVMasteringDisplayMetadata*>(mdmData)
+			: nullptr;
+
+		size_t cllSize = 0;
+		const uint8_t* cllData = CodecSideData(raw, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, cllSize);
+		const auto* cll = (cllData && cllSize >= sizeof(AVContentLightMetadata))
+			? reinterpret_cast<const AVContentLightMetadata*>(cllData)
+			: nullptr;
+
+		size_t plusSize = 0;
+		const bool hdr10plus = CodecSideData(raw, AV_PKT_DATA_DYNAMIC_HDR10_PLUS, plusSize) != nullptr;
+
+		std::optional<Point> light;
+		if (cll && (cll->MaxCLL || cll->MaxFALL))
+			light = Point{static_cast<int>(cll->MaxCLL), static_cast<int>(cll->MaxFALL)};
+
+		if (mdm && mdm->has_primaries && mdm->has_luminance) {
+			HDR10 out{
+				FromRationalPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
+				FromRationalPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
+				FromRationalPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
+				FromRationalPair(mdm->white_point[0], mdm->white_point[1]),
+				FromRationalPair(mdm->min_luminance, mdm->max_luminance),
+				light,
+				HDR10::Source::Metadata
+			};
+			out.HDR10Plus(hdr10plus);
+			return out;
+		}
+
+		if (light.has_value()) {
+			HDR10 out{
+				HDR10::DEFAULT.Red(), HDR10::DEFAULT.Green(), HDR10::DEFAULT.Blue(),
+				HDR10::DEFAULT.White(), HDR10::DEFAULT.Luminance(),
+				light, HDR10::Source::Heuristics
+			};
+			out.HDR10Plus(hdr10plus);
+			return out;
+		}
+
+		HDR10 out = HDR10::DEFAULT;
+		out.HDR10Plus(hdr10plus);
+		return out;
+	}
+
 	PixelFormat MapPixelFormat(int format) noexcept {
 		switch (format) {
 			case AV_PIX_FMT_YUV420P:
@@ -285,18 +362,18 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 		case AVMEDIA_TYPE_VIDEO: {
 			if (params.Width() <= 0 || params.Height() <= 0)
 				return std::monostate{};
+			const auto pix = MapPixelFormat(params.Format());
+			const auto range = MapRange(params.ColorRange());
+			const auto space = MapSpace(params.ColorSpace());
+			const auto primaries = MapPrimaries(params.ColorPrimaries());
+			const auto transfer = MapTransfer(params.ColorTransfer());
 			return Video{
-				Color{
-					MapPixelFormat(params.Format()),
-					MapRange(params.ColorRange()),
-					MapSpace(params.ColorSpace()),
-					MapPrimaries(params.ColorPrimaries()),
-					MapTransfer(params.ColorTransfer())
-				},
+				Color{pix, range, space, primaries, transfer},
 				Resolution{
 					static_cast<std::uint32_t>(params.Width()),
 					static_cast<std::uint32_t>(params.Height())
-				}
+				},
+				MapHDR10(stream.Raw(), transfer, primaries)
 			};
 		}
 		case AVMEDIA_TYPE_AUDIO: {
