@@ -95,7 +95,7 @@ namespace {
 	ExpectedCodec ResolveCodec(const FFmpeg::AVStream& stream) noexcept {
 		const auto params = stream.CodecParameters();
 		const char* name = avcodec_get_name(static_cast<AVCodecID>(params.CodecId()));
-		if (!name || name[0] == '\0')
+		if (!name || name[0] == '\0' || std::string_view(name) == "none")
 			return Unexpected<CodecNotFoundException>(std::string("unknown"));
 		return Registry::Instance().FindCodec(name);
 	}
@@ -175,11 +175,17 @@ namespace {
 		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
 	}
 
+	bool IsContainerAttachment(const FFmpeg::AVStream& stream) noexcept {
+		if (stream.Type() == AVMEDIA_TYPE_ATTACHMENT)
+			return true;
+		return stream.CodecParameters().CodecId() == AV_CODEC_ID_NONE;
+	}
+
 	bool HasPrimaryVideo(const FFmpeg::AVFormatContext& ctx) noexcept {
 		for (const auto& stream : ctx.Streams()) {
 			if (stream.Type() != AVMEDIA_TYPE_VIDEO)
 				continue;
-			if (IsAttachedPicture(stream))
+			if (IsAttachedPicture(stream) || IsContainerAttachment(stream))
 				continue;
 			if (IsStillImageCodec(stream.CodecParameters().CodecId()))
 				continue;
@@ -203,6 +209,21 @@ namespace {
 		return false;
 	}
 
+	StormByte::Buffer::DataType AttachmentBytes(const FFmpeg::AVStream& stream) noexcept {
+		StormByte::Buffer::DataType bytes;
+		const ::AVStream* raw = stream.Raw();
+		if (raw && raw->attached_pic.size > 0 && raw->attached_pic.data) {
+			const auto* p = reinterpret_cast<const std::byte*>(raw->attached_pic.data);
+			bytes.assign(p, p + raw->attached_pic.size);
+			return bytes;
+		}
+		if (raw && raw->codecpar && raw->codecpar->extradata_size > 0 && raw->codecpar->extradata) {
+			const auto* p = reinterpret_cast<const std::byte*>(raw->codecpar->extradata);
+			bytes.assign(p, p + raw->codecpar->extradata_size);
+		}
+		return bytes;
+	}
+
 	Attachment MakeAttachment(const FFmpeg::AVStream& stream) noexcept {
 		std::optional<std::string> name;
 		std::optional<std::string> mime;
@@ -210,12 +231,8 @@ namespace {
 			name = filename;
 		if (const char* mimeType = stream.Tag("mimetype"))
 			mime = mimeType;
-		StormByte::Buffer::DataType bytes;
-		if (const ::AVStream* raw = stream.Raw(); raw && raw->attached_pic.size > 0 && raw->attached_pic.data) {
-			const auto* p = reinterpret_cast<const std::byte*>(raw->attached_pic.data);
-			bytes.assign(p, p + raw->attached_pic.size);
-		}
-		return Attachment(std::move(name), std::move(mime), StormByte::Buffer::FIFO{std::move(bytes)});
+		return Attachment(std::move(name), std::move(mime),
+			StormByte::Buffer::FIFO{AttachmentBytes(stream)});
 	}
 
 	void FillEmptyAttachmentPayloads(FFmpeg::AVFormatContext& ctx,
@@ -321,7 +338,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 	Multimedia::Attachments attachments;
 	std::vector<int> coverIndex;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsCoverStream(stream, hasPrimaryVideo)) {
+		if (IsContainerAttachment(stream) || IsCoverStream(stream, hasPrimaryVideo)) {
 			attachments.push_back(MakeAttachment(stream));
 			coverIndex.push_back(stream.Index());
 			continue;
@@ -376,7 +393,7 @@ void File::ResolveDuration() const noexcept {
 	std::vector<std::int64_t> endTick;
 	std::size_t i = 0;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsCoverStream(stream, hasPrimaryVideo))
+		if (IsContainerAttachment(stream) || IsCoverStream(stream, hasPrimaryVideo))
 			continue;
 		byIndex.emplace(stream.Index(), i);
 		timeBase.push_back(stream.TimeBase());
