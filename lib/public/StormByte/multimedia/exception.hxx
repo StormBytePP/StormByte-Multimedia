@@ -41,7 +41,7 @@
 #include <StormByte/exception.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <filesystem>
+#include <string>
 
 /**
  * @namespace StormByte::Multimedia
@@ -57,7 +57,7 @@ namespace StormByte::Multimedia {
 			/**
 			 * @brief Constructs a formatted Multimedia exception.
 			 * @tparam Args Format argument types.
-			 * @param component Subsystem name.
+			 * @param component Subsystem name (`File`, `Codec`, `Container`).
 			 * @param fmt Format string.
 			 * @param args Format arguments.
 			 */
@@ -65,17 +65,37 @@ namespace StormByte::Multimedia {
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
 			StormByte::Exception("Multimedia::" + component, fmt, std::forward<Args>(args)...) {}
 
-			using StormByte::Exception::Exception;
+			/**
+			 * @brief Copy constructor.
+			 */
+			Exception(const Exception&) = default;
+
+			/**
+			 * @brief Move constructor.
+			 */
+			Exception(Exception&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Exception() noexcept = default;
+			~Exception() noexcept override = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @return *this.
+			 */
+			Exception& operator=(const Exception&) = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @return *this.
+			 */
+			Exception& operator=(Exception&&) noexcept = default;
 	};
 
 	/**
 	 * @class CodecNotFoundException
-	 * @brief Thrown when StormByte::Multimedia::Registry::FindCodec does not resolve a key.
+	 * @brief Thrown when Registry::FindCodec does not resolve a key.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC CodecNotFoundException: public Exception {
 		public:
@@ -83,14 +103,13 @@ namespace StormByte::Multimedia {
 			 * @brief Constructs the exception for @p codec.
 			 * @param codec StormByte name or FFmpeg id that was not found.
 			 */
-			template <typename... Args>
-			CodecNotFoundException(const std::string& codec):
-			Exception("Codec", "Codec {} not found", codec) {}
+			explicit CodecNotFoundException(const std::string& codec):
+			Exception("Codec", "codec '{}' not found", codec) {}
 	};
 
 	/**
 	 * @class ContainerNotFoundException
-	 * @brief Thrown when StormByte::Multimedia::Registry::FindContainer does not resolve a key.
+	 * @brief Thrown when Registry::FindContainer does not resolve a key.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC ContainerNotFoundException: public Exception {
 		public:
@@ -98,23 +117,22 @@ namespace StormByte::Multimedia {
 			 * @brief Constructs the exception for @p container.
 			 * @param container StormByte name or FFmpeg format id that was not found.
 			 */
-			template <typename... Args>
-			ContainerNotFoundException(const std::string& container):
-			Exception("Container", "Container {} not found", container) {}
+			explicit ContainerNotFoundException(const std::string& container):
+			Exception("Container", "container '{}' not found", container) {}
 	};
 
 	/**
 	 * @class FileOpenErrorException
-	 * @brief Thrown when StormByte::Multimedia::Registry::OpenFile fails.
+	 * @brief Thrown when File::Open fails.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC FileOpenErrorException: public Exception {
 		public:
 			/**
 			 * @brief Constructs the exception for @p file.
-			 * @param file StormByte name or FFmpeg format id that could not be opened.
+			 * @param file Path or `"buffer"`.
+			 * @param reason Why Open failed (no path).
 			 */
-			template <typename... Args>
-			FileOpenErrorException(const std::string& file, const std::string& reason):
-			Exception("File", "Failed to open file {} because {}", file, reason) {}
+			explicit FileOpenErrorException(const std::string& file, const std::string& reason):
+			Exception("File", "failed to open '{}': {}", file, reason) {}
 	};
 }

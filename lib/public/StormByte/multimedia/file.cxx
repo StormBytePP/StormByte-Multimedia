@@ -149,6 +149,16 @@ namespace {
 		return true;
 	}
 
+	std::string NestedReason(const char* what) noexcept {
+		if (!what || what[0] == '\0')
+			return "unknown error";
+		const std::string_view view{what};
+		const auto pos = view.rfind(": ");
+		if (pos == std::string_view::npos)
+			return std::string(view);
+		return std::string(view.substr(pos + 2));
+	}
+
 	std::optional<std::chrono::nanoseconds> TicksToNs(std::int64_t ticks, AVRational timeBase) noexcept {
 		if (ticks < 0 || timeBase.den <= 0)
 			return std::nullopt;
@@ -196,7 +206,7 @@ ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> k
 
 	auto opened = OpenSource(source);
 	if (!opened.has_value())
-		return Unexpected(FileOpenErrorException(SourceName(source), opened.error()->what()));
+		return Unexpected(FileOpenErrorException(SourceName(source), NestedReason(opened.error()->what())));
 
 	const FFmpeg::AVFormatContext& ctx = opened.value();
 	const char* formatName = ctx.FormatName();
@@ -206,13 +216,13 @@ ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> k
 	const auto* path = std::get_if<std::filesystem::path>(&source);
 	auto container = ResolveContainer(formatName, path);
 	if (!container.has_value())
-		return Unexpected(FileOpenErrorException(SourceName(source), container.error()->what()));
+		return Unexpected(FileOpenErrorException(SourceName(source), NestedReason(container.error()->what())));
 
 	Multimedia::Streams streams;
 	for (const auto& stream : ctx.Streams()) {
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
-			return Unexpected(FileOpenErrorException(SourceName(source), codec.error()->what()));
+			return Unexpected(FileOpenErrorException(SourceName(source), NestedReason(codec.error()->what())));
 		streams.emplace_back(Stream(
 			codec.value(),
 			Detail::Probe::Stream(stream),

@@ -54,20 +54,47 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			/**
 			 * @brief Constructs a formatted AV exception.
 			 * @tparam Args Format argument types.
-			 * @param component Subsystem label.
+			 * @param component Subsystem label (`BSF`, `Decoder`, `Encoder`).
 			 * @param fmt Format string.
 			 * @param args Format arguments.
 			 */
 			template <typename... Args>
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
-			StormByte::Exception("AV::" + component, fmt, std::forward<Args>(args)...) {}
+			Multimedia::Exception("AV::" + component, fmt, std::forward<Args>(args)...) {}
 
-			using Multimedia::Exception::Exception;
+			/**
+			 * @brief Constructs from a preformatted message (`Unexpected<E>(fmt, …)`).
+			 * @param message Already formatted text.
+			 */
+			explicit Exception(const std::string& message):
+			Multimedia::Exception("AV", "{}", message) {}
+
+			/**
+			 * @brief Copy constructor.
+			 */
+			Exception(const Exception&) = default;
+
+			/**
+			 * @brief Move constructor.
+			 */
+			Exception(Exception&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Exception() noexcept = default;
+			~Exception() noexcept override = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @return *this.
+			 */
+			Exception& operator=(const Exception&) = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @return *this.
+			 */
+			Exception& operator=(Exception&&) noexcept = default;
 	};
 
 	/**
@@ -84,9 +111,9 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			template <typename... Args>
 			BSFError(std::format_string<Args...> fmt, Args&&... args):
-			Exception("BSF: ", fmt, std::forward<Args>(args)...) {}
+			Exception("BSF", fmt, std::forward<Args>(args)...) {}
 
-			using FFmpeg::Exception::Exception;
+			using Exception::Exception;
 	};
 
 	/**
@@ -103,9 +130,9 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			template <typename... Args>
 			DecoderError(std::format_string<Args...> fmt, Args&&... args):
-			Exception("Decoder: ", fmt, std::forward<Args>(args)...) {}
+			Exception("Decoder", fmt, std::forward<Args>(args)...) {}
 
-			using FFmpeg::Exception::Exception;
+			using Exception::Exception;
 	};
 
 	/**
@@ -122,8 +149,8 @@ namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
 			 */
 			template <typename... Args>
 			EncoderError(std::format_string<Args...> fmt, Args&&... args):
-			Exception("Encoder: ", fmt, std::forward<Args>(args)...) {}
+			Exception("Encoder", fmt, std::forward<Args>(args)...) {}
 
-			using FFmpeg::Exception::Exception;
+			using Exception::Exception;
 	};
 }
