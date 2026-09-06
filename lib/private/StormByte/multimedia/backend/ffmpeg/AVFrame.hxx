@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/buffer/typedefs.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 
 extern "C" {
@@ -56,59 +57,65 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVFrame: public AVPointer<::AVFrame> {
 		friend class AVDecoder;
 		friend class AVEncoder;
-	public:
-		/**
-		 * @brief Allocates an empty frame.
-		 */
-		AVFrame() noexcept;
+		public:
+			/**
+			 * @brief Allocates an empty frame.
+			 */
+			AVFrame() noexcept;
 
-		/**
-		 * @brief Copy constructor (deleted).
-		 * @param other Unused.
-		 */
-		AVFrame(const AVFrame& other) = delete;
+			/**
+			 * @brief Copy constructor (deleted).
+			 * @param other Unused.
+			 */
+			AVFrame(const AVFrame& other) = delete;
 
-		/**
-		 * @brief Move constructor.
-		 * @param other Source frame.
-		 */
-		AVFrame(AVFrame&& other) noexcept = default;
+			/**
+			 * @brief Move constructor.
+			 * @param other Source frame.
+			 */
+			AVFrame(AVFrame&& other) noexcept = default;
 
-		/**
-		 * @brief Destructor.
-		 */
-		~AVFrame() noexcept override;
+			/**
+			 * @brief Destructor.
+			 */
+			~AVFrame() noexcept override;
 
-		/**
-		 * @brief Copy assignment (deleted).
-		 * @param other Unused.
-		 * @return *this.
-		 */
-		AVFrame& operator=(const AVFrame& other) = delete;
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @param other Unused.
+			 * @return *this.
+			 */
+			AVFrame& operator=(const AVFrame& other) = delete;
 
-		/**
-		 * @brief Move assignment.
-		 * @param other Source frame.
-		 * @return *this.
-		 */
-		AVFrame& operator=(AVFrame&& other) noexcept = default;
+			/**
+			 * @brief Move assignment.
+			 * @param other Source frame.
+			 * @return *this.
+			 */
+			AVFrame& operator=(AVFrame&& other) noexcept = default;
 
-		/**
-		 * @brief Unreferences frame buffers (av_frame_unref).
-		 */
-		void Unref() noexcept;
+			/**
+			 * @brief Unreferences frame buffers (av_frame_unref).
+			 */
+			void Unref() noexcept;
 
-		/**
-		 * @brief Looks up side data.
-		 * @param type AVFrameSideDataType value.
-		 * @return Side data pointer, or nullptr.
-		 */
-		const AVFrameSideData* SideData(int type) const noexcept;
+			/**
+			 * @brief Looks up side data.
+			 * @param type AVFrameSideDataType value.
+			 * @return Side data pointer, or nullptr.
+			 */
+			const AVFrameSideData* SideData(int type) const noexcept;
 
-	private:
-		/**
-		 * @brief Frees the frame (av_frame_free).
-		 */
-		void Free() noexcept override;
+			/**
+			 * @brief Copies `buf[0]` into @p out.
+			 * @param out Destination (cleared first).
+			 */
+			void CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept;
+
+		private:
+			/**
+			 * @brief Frees the frame (av_frame_free).
+			 */
+			void Free() noexcept override;
 	};
 }

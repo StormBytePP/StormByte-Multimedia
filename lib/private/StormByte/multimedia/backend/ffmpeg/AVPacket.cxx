@@ -38,6 +38,8 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
+#include <cstring>
+
 extern "C" {
 	#include <libavutil/avutil.h>
 }
@@ -61,6 +63,21 @@ FFmpeg::AVPacket FFmpeg::AVPacket::Ref() const noexcept {
 void FFmpeg::AVPacket::Unref() noexcept {
 	if (m_ptr)
 		av_packet_unref(m_ptr);
+}
+
+bool FFmpeg::AVPacket::Load(const std::uint8_t* data, int size, int stream_index, bool key_frame) noexcept {
+	Unref();
+	if (!m_ptr)
+		return false;
+	if (size > 0) {
+		if (av_new_packet(m_ptr, size) < 0)
+			return false;
+		if (data)
+			std::memcpy(m_ptr->data, data, static_cast<std::size_t>(size));
+	}
+	m_ptr->stream_index = stream_index;
+	m_ptr->flags = key_frame ? AV_PKT_FLAG_KEY : 0;
+	return true;
 }
 
 int FFmpeg::AVPacket::StreamIndex() const noexcept {

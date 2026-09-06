@@ -36,40 +36,28 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#pragma once
 
-using namespace StormByte::Multimedia::Backend;
+#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/pipeline/demux.hxx>
 
-FFmpeg::AVFrame::AVFrame() noexcept:
-AVPointer(av_frame_alloc()) {}
+#include <unordered_map>
 
-FFmpeg::AVFrame::~AVFrame() noexcept {
-	Free();
+extern "C" {
+	#include <libavutil/rational.h>
 }
 
-void FFmpeg::AVFrame::Unref() noexcept {
-	av_frame_unref(m_ptr);
-}
+class StormByte::Multimedia::Pipeline::Demux::Impl {
+	public:
+		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVFormatContext ctx) noexcept
+		: m_ctx(std::move(ctx)) {
+			for (const auto& stream : m_ctx.Streams())
+				m_timeBase[stream.Index()] = stream.TimeBase();
+		}
 
-const AVFrameSideData* FFmpeg::AVFrame::SideData(int type) const noexcept {
-	if (!m_ptr)
-		return nullptr;
-	return av_frame_get_side_data(m_ptr, static_cast<AVFrameSideDataType>(type));
-}
-
-void FFmpeg::AVFrame::CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept {
-	out.clear();
-	if (!m_ptr || !m_ptr->buf[0] || m_ptr->buf[0]->size <= 0)
-		return;
-	const auto* p = reinterpret_cast<const std::byte*>(m_ptr->buf[0]->data);
-	out.assign(p, p + m_ptr->buf[0]->size);
-}
-
-void FFmpeg::AVFrame::Free() noexcept {
-	if (m_ptr) {
-		av_frame_free(&m_ptr);
-		m_ptr = nullptr;
-	}
-}
-
-template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVFrame>;
+		StormByte::Multimedia::Backend::FFmpeg::AVFormatContext m_ctx;
+		std::unordered_map<int, AVRational> m_timeBase;
+		StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;
+};

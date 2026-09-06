@@ -175,8 +175,8 @@ namespace StormByte::Multimedia {
 			std::unique_ptr<Origin> m_origin;						///< Path or Consumer
 			const class Container& m_container;						///< Registry container
 			mutable Multimedia::Streams m_streams;					///< Probed streams
-			Metadata::File m_metadata;								///< Container tags
-			mutable std::optional<Property::Duration> m_duration;	///< Container duration
+			Metadata::File m_metadata;							///< Container tags
+			mutable std::optional<Property::Duration> m_duration;			///< Container duration
 			mutable bool m_durationResolved;						///< Caller-supplied or scan done
 
 			/**

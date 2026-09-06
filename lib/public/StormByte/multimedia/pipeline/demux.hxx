@@ -55,6 +55,7 @@ namespace StormByte::Multimedia {
  * @brief Demux / decode / filter / encode / mux types.
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Decoder;
 	class Demux;
 
 	/**
@@ -74,18 +75,20 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(Demux& demux, Packet& packet) noexcept;
 
 	/**
+	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
+	 * @param demux Open demuxer.
+	 * @param decoder Destination.
+	 * @return @p decoder.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+
+	/**
 	 * @class Demux
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
 	 * Open and read go through operator>>. Hard errors set Failed(); EOF
-	 * sets Eof(). Neither throws. operator>> on a failed or ended Demux
-	 * is a no-op. Packets pass through Pipe() before they are returned.
-	 * An empty pipe is identity. A step that absorbs a packet makes Demux
-	 * read the next one. operator bool() is false on fail or EOF so
-	 * `while (demux >> packet)` stops. Check Failed() when the run finishes.
-	 *
-	 * One Demux per File if the origin is a Consumer. File::Duration() on a
-	 * Consumer drains the ring; do not scan duration before demuxing a buffer.
+	 * sets Eof(). Neither throws. Packets pass through Pipe() before they
+	 * are returned. operator bool() is false on fail or EOF.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
 		public:
@@ -158,14 +161,21 @@ namespace StormByte::Multimedia::Pipeline {
 
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
 			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
+			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 
 		private:
 			class Impl;
-			std::unique_ptr<Impl> m_impl;			///< FFmpeg context
-			Filter::Pipe m_pipe;				///< Packet steps
-			bool m_failed;					///< Hard error
-			bool m_eof;					///< End of source
-			std::optional<std::string> m_error;		///< Failure text
+
+			/* backend */
+			std::unique_ptr<Impl> m_impl;				///< Format context
+
+			/* filters */
+			Filter::Pipe m_pipe;						///< Packet steps
+
+			/* fail */
+			bool m_failed;								///< Hard error
+			bool m_eof;									///< End of source
+			std::optional<std::string> m_error;			///< Failure text
 
 			/**
 			 * @brief Marks a hard error.

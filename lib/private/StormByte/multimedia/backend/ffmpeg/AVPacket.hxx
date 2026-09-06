@@ -109,6 +109,16 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void Unref() noexcept;
 
 			/**
+			 * @brief Replaces payload for avcodec_send_packet.
+			 * @param data Compressed bytes.
+			 * @param size Byte count.
+			 * @param stream_index Stream index.
+			 * @param key_frame Sets `AV_PKT_FLAG_KEY` when true.
+			 * @return false if allocation failed.
+			 */
+			bool Load(const std::uint8_t* data, int size, int stream_index, bool key_frame) noexcept;
+
+			/**
 			 * @brief Packet stream index.
 			 * @return stream_index, or -1 if empty.
 			 */

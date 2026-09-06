@@ -36,17 +36,25 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
+#include <StormByte/multimedia/pipeline/decoder.hxx>
+#include <StormByte/multimedia/pipeline/decoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demux_impl.hxx>
+#include <StormByte/multimedia/property/video.hxx>
 
 #include <cstdint>
-#include <unordered_map>
+#include <variant>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavutil/avutil.h>
 	#include <libavutil/mathematics.h>
@@ -66,19 +74,6 @@ namespace {
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 }
-
-class Demux::Impl {
-	public:
-		explicit Impl(FFmpeg::AVFormatContext ctx) noexcept
-		: m_ctx(std::move(ctx)) {
-			for (const auto& stream : m_ctx.Streams())
-				m_timeBase[stream.Index()] = stream.TimeBase();
-		}
-
-		FFmpeg::AVFormatContext m_ctx;
-		std::unordered_map<int, AVRational> m_timeBase;
-		FFmpeg::AVPacket m_scratch;
-};
 
 Demux::Demux() noexcept
 : m_failed(false), m_eof(false) {}
@@ -190,4 +185,43 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet)
 		packet = std::move(*filtered);
 		return demux;
 	}
+}
+
+Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {
+	if (decoder.Failed())
+		return decoder;
+	if (demux.m_failed || !demux.m_impl) {
+		decoder.Fail(demux.m_error.value_or("demuxer is not open"));
+		return decoder;
+	}
+
+	std::optional<FFmpeg::AVCodecParameters> params;
+	std::optional<StormByte::Multimedia::Stream::Properties> mapped;
+	bool found = false;
+	for (const auto& stream : demux.m_impl->m_ctx.Streams()) {
+		if (stream.Index() != decoder.Index())
+			continue;
+		params = stream.CodecParameters();
+		mapped = FFmpeg::MapProperties(stream);
+		found = true;
+		break;
+	}
+	if (!found || !params.has_value()) {
+		decoder.Fail("stream index out of range");
+		return decoder;
+	}
+
+	const ::AVCodec* codec = avcodec_find_decoder(static_cast<::AVCodecID>(params->CodecId()));
+	auto backend = FFmpeg::AVDecoder::Open(
+		const_cast<::AVCodec*>(codec), *params, demux.m_impl->m_ctx, decoder.Index());
+	if (!backend.has_value()) {
+		decoder.Fail(backend.error()->what());
+		return decoder;
+	}
+
+	auto impl = std::make_unique<Decoder::Impl>(std::move(backend.value()));
+	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
+		impl->m_video = std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped));
+	decoder.Bind(std::move(impl));
+	return decoder;
 }
