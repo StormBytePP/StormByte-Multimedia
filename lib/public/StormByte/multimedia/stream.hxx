@@ -96,6 +96,12 @@ namespace StormByte::Multimedia {
 			Stream& operator=(Stream&&) = delete;
 
 			/**
+			 * @brief Container stream index (avformat). Not the position in File::Streams().
+			 * @return Index used by packets and Decoder.
+			 */
+			int Index() const noexcept { return m_index; }
+
+			/**
 			 * @brief Codec of this stream.
 			 * @return Registry codec.
 			 */
@@ -141,21 +147,23 @@ namespace StormByte::Multimedia {
 		private:
 			friend class File;
 
-			const class Codec& m_codec;									///< Registry codec
-			Metadata::Stream m_metadata;								///< Stream tags
-			mutable std::optional<Property::Duration> m_duration;				///< Stream duration
-			Properties m_properties;									///< Video, audio, or none
+			int m_index;											///< avformat stream index
+			const class Codec& m_codec;								///< Registry codec
+			Metadata::Stream m_metadata;							///< Stream tags
+			mutable std::optional<Property::Duration> m_duration;	///< Stream duration
+			Properties m_properties;								///< Video, audio, or none
 
 			/**
 			 * @brief File-only constructor.
+			 * @param index avformat stream index.
 			 * @param codec Registry codec.
 			 * @param metadata Stream tags.
 			 * @param duration Stream duration from the header, if any.
 			 * @param properties Typed property bag.
 			 */
-			Stream(const class Codec& codec, Metadata::Stream metadata,
+			Stream(int index, const class Codec& codec, Metadata::Stream metadata,
 				std::optional<Property::Duration> duration, Properties properties) noexcept
-			: m_codec(codec), m_metadata(std::move(metadata)),
-			m_duration(duration), m_properties(std::move(properties)) {}
+			: m_index(index), m_codec(codec), m_metadata(std::move(metadata)),
+			m_duration(std::move(duration)), m_properties(std::move(properties)) {}
 	};
 }

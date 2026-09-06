@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/detail/cover.hxx>
 #include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
@@ -149,64 +150,6 @@ namespace {
 		return origin.Visit([](auto&& held) {
 			return FFmpeg::AVFormatContext::Open(held);
 		});
-	}
-
-	bool IsStillImageCodec(int codecId) noexcept {
-		switch (static_cast<AVCodecID>(codecId)) {
-			case AV_CODEC_ID_MJPEG:
-			case AV_CODEC_ID_MJPEGB:
-			case AV_CODEC_ID_PNG:
-			case AV_CODEC_ID_APNG:
-			case AV_CODEC_ID_BMP:
-			case AV_CODEC_ID_GIF:
-			case AV_CODEC_ID_WEBP:
-			case AV_CODEC_ID_TIFF:
-			case AV_CODEC_ID_JPEG2000:
-			case AV_CODEC_ID_PAM:
-			case AV_CODEC_ID_PPM:
-			case AV_CODEC_ID_JPEGLS:
-				return true;
-			default:
-				return false;
-		}
-	}
-
-	bool IsAttachedPicture(const FFmpeg::AVStream& stream) noexcept {
-		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
-	}
-
-	bool IsContainerAttachment(const FFmpeg::AVStream& stream) noexcept {
-		if (stream.Type() == AVMEDIA_TYPE_ATTACHMENT)
-			return true;
-		return stream.CodecParameters().CodecId() == AV_CODEC_ID_NONE;
-	}
-
-	bool HasPrimaryVideo(const FFmpeg::AVFormatContext& ctx) noexcept {
-		for (const auto& stream : ctx.Streams()) {
-			if (stream.Type() != AVMEDIA_TYPE_VIDEO)
-				continue;
-			if (IsAttachedPicture(stream) || IsContainerAttachment(stream))
-				continue;
-			if (IsStillImageCodec(stream.CodecParameters().CodecId()))
-				continue;
-			return true;
-		}
-		return false;
-	}
-
-	bool IsCoverStream(const FFmpeg::AVStream& stream, bool hasPrimaryVideo) noexcept {
-		if (IsAttachedPicture(stream))
-			return true;
-		if (!hasPrimaryVideo)
-			return false;
-		if (stream.Type() != AVMEDIA_TYPE_VIDEO)
-			return false;
-		if (!IsStillImageCodec(stream.CodecParameters().CodecId()))
-			return false;
-		const auto duration = stream.Duration();
-		if (!duration.has_value() || *duration <= std::chrono::milliseconds{50})
-			return true;
-		return false;
 	}
 
 	StormByte::Buffer::DataType AttachmentBytes(const FFmpeg::AVStream& stream) noexcept {
@@ -333,12 +276,12 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 	if (!container.has_value())
 		return FailOpen(*origin, container.error()->what());
 
-	const bool hasPrimaryVideo = HasPrimaryVideo(ctx);
+	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(ctx);
 	Multimedia::Streams streams;
 	Multimedia::Attachments attachments;
 	std::vector<int> coverIndex;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsContainerAttachment(stream) || IsCoverStream(stream, hasPrimaryVideo)) {
+		if (Detail::IsContainerAttachment(stream) || Detail::IsCoverStream(stream, hasPrimaryVideo)) {
 			attachments.push_back(MakeAttachment(stream));
 			coverIndex.push_back(stream.Index());
 			continue;
@@ -347,6 +290,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 		if (!codec.has_value())
 			return FailOpen(*origin, codec.error()->what());
 		streams.emplace_back(Stream(
+			stream.Index(),
 			codec.value(),
 			Detail::Probe::Stream(stream),
 			WrapDuration(stream.Duration()),
@@ -387,13 +331,13 @@ void File::ResolveDuration() const noexcept {
 		return;
 
 	FFmpeg::AVFormatContext& ctx = opened.value();
-	const bool hasPrimaryVideo = HasPrimaryVideo(ctx);
+	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(ctx);
 	std::unordered_map<int, std::size_t> byIndex;
 	std::vector<AVRational> timeBase;
 	std::vector<std::int64_t> endTick;
 	std::size_t i = 0;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsContainerAttachment(stream) || IsCoverStream(stream, hasPrimaryVideo))
+		if (Detail::IsContainerAttachment(stream) || Detail::IsCoverStream(stream, hasPrimaryVideo))
 			continue;
 		byIndex.emplace(stream.Index(), i);
 		timeBase.push_back(stream.TimeBase());

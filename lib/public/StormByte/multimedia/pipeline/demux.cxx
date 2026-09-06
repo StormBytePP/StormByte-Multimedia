@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/detail/cover.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -82,18 +83,6 @@ namespace {
 		if (ns <= 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
-	}
-
-	bool IsAttachedPicture(const FFmpeg::AVStream& stream) noexcept {
-		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
-	}
-
-	bool IsAttachedPictureIndex(FFmpeg::AVFormatContext& ctx, int index) noexcept {
-		for (const auto& stream : ctx.Streams()) {
-			if (stream.Index() == index)
-				return IsAttachedPicture(stream);
-		}
-		return false;
 	}
 }
 
@@ -175,7 +164,7 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet)
 		}
 
 		const int index = demux.m_impl->m_scratch.StreamIndex();
-		if (IsAttachedPictureIndex(demux.m_impl->m_ctx, index)) {
+		if (StormByte::Multimedia::Detail::IsAttachmentIndex(demux.m_impl->m_ctx, index)) {
 			demux.m_impl->m_scratch.Unref();
 			continue;
 		}
@@ -222,27 +211,23 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 		return decoder;
 	}
 
+	if (StormByte::Multimedia::Detail::IsAttachmentIndex(demux.m_impl->m_ctx, decoder.Index())) {
+		decoder.Fail("stream is a container attachment");
+		return decoder;
+	}
+
 	std::optional<FFmpeg::AVCodecParameters> params;
 	std::optional<StormByte::Multimedia::Stream::Properties> mapped;
 	AVRational timeBase{0, 1};
 	bool found = false;
-	bool attached = false;
 	for (const auto& stream : demux.m_impl->m_ctx.Streams()) {
 		if (stream.Index() != decoder.Index())
 			continue;
-		if (IsAttachedPicture(stream)) {
-			attached = true;
-			break;
-		}
 		params = stream.CodecParameters();
 		mapped = FFmpeg::MapProperties(stream);
 		timeBase = stream.TimeBase();
 		found = true;
 		break;
-	}
-	if (attached) {
-		decoder.Fail("stream is a container attachment");
-		return decoder;
 	}
 	if (!found || !params.has_value()) {
 		decoder.Fail("stream index out of range");
