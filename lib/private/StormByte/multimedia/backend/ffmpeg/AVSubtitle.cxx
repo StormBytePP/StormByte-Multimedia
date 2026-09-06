@@ -36,29 +36,70 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
-
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/property/video.hxx>
-
-#include <optional>
 
 extern "C" {
-	#include <libavutil/rational.h>
+	#include <libavutil/avutil.h>
 }
 
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
+using namespace StormByte::Multimedia::Backend;
 
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};
+FFmpeg::AVSubtitle::AVSubtitle() noexcept
+: m_sub{} {}
+
+FFmpeg::AVSubtitle::AVSubtitle(AVSubtitle&& other) noexcept
+: m_sub(other.m_sub) {
+	other.m_sub = {};
+}
+
+FFmpeg::AVSubtitle::~AVSubtitle() noexcept {
+	Free();
+}
+
+FFmpeg::AVSubtitle& FFmpeg::AVSubtitle::operator=(AVSubtitle&& other) noexcept {
+	if (this != &other) {
+		Free();
+		m_sub = other.m_sub;
+		other.m_sub = {};
+	}
+	return *this;
+}
+
+::AVSubtitle* FFmpeg::AVSubtitle::Get() noexcept {
+	return &m_sub;
+}
+
+const ::AVSubtitle* FFmpeg::AVSubtitle::Get() const noexcept {
+	return &m_sub;
+}
+
+std::int64_t FFmpeg::AVSubtitle::Pts() const noexcept {
+	return m_sub.pts;
+}
+
+std::uint32_t FFmpeg::AVSubtitle::DisplayDurationMs() const noexcept {
+	if (m_sub.end_display_time < m_sub.start_display_time)
+		return 0;
+	return m_sub.end_display_time - m_sub.start_display_time;
+}
+
+std::string FFmpeg::AVSubtitle::Text() const noexcept {
+	std::string out;
+	for (unsigned i = 0; i < m_sub.num_rects; ++i) {
+		const AVSubtitleRect* rect = m_sub.rects[i];
+		if (!rect)
+			continue;
+		const char* text = rect->text ? rect->text : rect->ass;
+		if (!text)
+			continue;
+		if (!out.empty())
+			out.push_back('\n');
+		out.append(text);
+	}
+	return out;
+}
+
+void FFmpeg::AVSubtitle::Free() noexcept {
+	avsubtitle_free(&m_sub);
+	m_sub = {};
+}

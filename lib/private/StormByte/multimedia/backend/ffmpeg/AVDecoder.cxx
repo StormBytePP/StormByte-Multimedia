@@ -141,6 +141,22 @@ void FFmpeg::AVDecoder::SetEof() noexcept {
 	m_bsf_pipeline.SetEof();
 }
 
+bool FFmpeg::AVDecoder::IsSubtitle() const noexcept {
+	return m_ptr && m_ptr->codec_type == AVMEDIA_TYPE_SUBTITLE;
+}
+
+FFmpeg::OperationResult FFmpeg::AVDecoder::DecodeSubtitle(AVPacket& pkt, FFmpeg::AVSubtitle& out) noexcept {
+	if (!m_ptr)
+		return OperationResult::Error;
+	int got = 0;
+	const int ret = avcodec_decode_subtitle2(m_ptr, out.Get(), &got, pkt.Get());
+	if (ret < 0)
+		return OperationResult::Error;
+	if (!got)
+		return OperationResult::TryAgain;
+	return OperationResult::Success;
+}
+
 void FFmpeg::AVDecoder::Free() noexcept {
 	if (m_ptr) {
 		avcodec_free_context(&m_ptr);

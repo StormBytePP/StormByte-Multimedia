@@ -40,6 +40,7 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVBSFPipeline.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
 extern "C" {
@@ -137,6 +138,20 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Signals EOF to decoder and BSF.
 			 */
 			void SetEof() noexcept;
+
+			/**
+			 * @brief true if the opened codec is a subtitle decoder.
+			 * @return true for subtitle codecs.
+			 */
+			bool IsSubtitle() const noexcept;
+
+			/**
+			 * @brief Decodes one subtitle packet (`avcodec_decode_subtitle2`).
+			 * @param pkt Compressed packet.
+			 * @param out Filled when a subtitle is produced.
+			 * @return Success, TryAgain (no subtitle this packet), EndOfFile or Error.
+			 */
+			OperationResult DecodeSubtitle(AVPacket& pkt, FFmpeg::AVSubtitle& out) noexcept;
 
 		private:
 			int m_stream_index = -1;		///< Bound stream index

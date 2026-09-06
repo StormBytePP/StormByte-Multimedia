@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/decoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/frame_impl.hxx>
@@ -45,6 +46,7 @@
 #include <StormByte/multimedia/property/point.hxx>
 
 #include <cstdint>
+#include <string>
 
 extern "C" {
 	#include <libavutil/avutil.h>
@@ -58,7 +60,7 @@ using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
-	constexpr int kChromaDen = 50000;
+	constexpr int ChromaDenominator = 50000;
 
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
@@ -85,27 +87,27 @@ namespace {
 	}
 
 	StormByte::Multimedia::Property::Point FromRationalPair(const AVRational& x, const AVRational& y) noexcept {
-		return StormByte::Multimedia::Property::Point::Normalized(x.num, x.den, y.num, y.den, kChromaDen);
+		return StormByte::Multimedia::Property::Point::Normalized(x.num, x.den, y.num, y.den, ChromaDenominator);
 	}
 
 	SideDataKind MapKind(AVFrameSideDataType type) noexcept {
 		switch (type) {
 			case AV_FRAME_DATA_MASTERING_DISPLAY_METADATA:	return SideDataKind::MasteringDisplay;
-			case AV_FRAME_DATA_CONTENT_LIGHT_LEVEL:			return SideDataKind::ContentLight;
-			case AV_FRAME_DATA_DYNAMIC_HDR_PLUS:			return SideDataKind::HdrPlus;
-			case AV_FRAME_DATA_DYNAMIC_HDR_VIVID:			return SideDataKind::HdrVivid;
-			case AV_FRAME_DATA_A53_CC:						return SideDataKind::A53CC;
-			case AV_FRAME_DATA_STEREO3D:					return SideDataKind::Stereo3D;
-			case AV_FRAME_DATA_DISPLAYMATRIX:				return SideDataKind::DisplayMatrix;
-			case AV_FRAME_DATA_ICC_PROFILE:					return SideDataKind::IccProfile;
-			case AV_FRAME_DATA_S12M_TIMECODE:				return SideDataKind::S12MTimecode;
-			case AV_FRAME_DATA_SPHERICAL:					return SideDataKind::Spherical;
-			case AV_FRAME_DATA_SEI_UNREGISTERED:			return SideDataKind::SeiUnregistered;
-			case AV_FRAME_DATA_FILM_GRAIN_PARAMS:			return SideDataKind::FilmGrain;
-			case AV_FRAME_DATA_DOVI_RPU_BUFFER:				return SideDataKind::DolbyVisionRpu;
-			case AV_FRAME_DATA_DOVI_METADATA:				return SideDataKind::DolbyVision;
+			case AV_FRAME_DATA_CONTENT_LIGHT_LEVEL:		return SideDataKind::ContentLight;
+			case AV_FRAME_DATA_DYNAMIC_HDR_PLUS:		return SideDataKind::HdrPlus;
+			case AV_FRAME_DATA_DYNAMIC_HDR_VIVID:		return SideDataKind::HdrVivid;
+			case AV_FRAME_DATA_A53_CC:			return SideDataKind::A53CC;
+			case AV_FRAME_DATA_STEREO3D:			return SideDataKind::Stereo3D;
+			case AV_FRAME_DATA_DISPLAYMATRIX:		return SideDataKind::DisplayMatrix;
+			case AV_FRAME_DATA_ICC_PROFILE:			return SideDataKind::IccProfile;
+			case AV_FRAME_DATA_S12M_TIMECODE:		return SideDataKind::S12MTimecode;
+			case AV_FRAME_DATA_SPHERICAL:			return SideDataKind::Spherical;
+			case AV_FRAME_DATA_SEI_UNREGISTERED:		return SideDataKind::SeiUnregistered;
+			case AV_FRAME_DATA_FILM_GRAIN_PARAMS:		return SideDataKind::FilmGrain;
+			case AV_FRAME_DATA_DOVI_RPU_BUFFER:		return SideDataKind::DolbyVisionRpu;
+			case AV_FRAME_DATA_DOVI_METADATA:		return SideDataKind::DolbyVision;
 			case AV_FRAME_DATA_AMBIENT_VIEWING_ENVIRONMENT:	return SideDataKind::AmbientViewing;
-			default:										return SideDataKind::Other;
+			default:					return SideDataKind::Other;
 		}
 	}
 
@@ -227,7 +229,8 @@ void Decoder::Bind(std::unique_ptr<Impl> impl) noexcept {
 void Decoder::Flush() noexcept {
 	if (m_failed || !m_impl)
 		return;
-	m_impl->m_decoder.SetEof();
+	if (!m_impl->m_decoder.IsSubtitle())
+		m_impl->m_decoder.SetEof();
 }
 
 Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& decoder) noexcept {
@@ -258,6 +261,16 @@ Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& dec
 		: 0;
 	raw.Timestamps(NsToTicks(packet.Pts(), tb), NsToTicks(packet.Dts(), tb), duration);
 
+	if (decoder.m_impl->m_decoder.IsSubtitle()) {
+		FFmpeg::AVSubtitle sub;
+		const auto result = decoder.m_impl->m_decoder.DecodeSubtitle(raw, sub);
+		if (result == FFmpeg::OperationResult::Error)
+			decoder.Fail("failed to decode subtitle");
+		else if (result == FFmpeg::OperationResult::Success)
+			decoder.m_impl->m_pendingSub = std::move(sub);
+		return packet;
+	}
+
 	auto result = decoder.m_impl->m_decoder.SendPacket(raw);
 	while (result == FFmpeg::OperationResult::TryAgain) {
 		StormByte::Multimedia::Pipeline::Frame ignored;
@@ -274,6 +287,35 @@ Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& dec
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& frame) noexcept {
 	if (decoder.m_failed || !decoder.m_impl)
 		return decoder;
+
+	if (decoder.m_impl->m_decoder.IsSubtitle()) {
+		if (!decoder.m_impl->m_pendingSub.has_value())
+			return decoder;
+
+		auto sub = std::move(*decoder.m_impl->m_pendingSub);
+		decoder.m_impl->m_pendingSub.reset();
+
+		const auto text = sub.Text();
+		StormByte::Buffer::DataType bytes(
+			reinterpret_cast<const std::byte*>(text.data()),
+			reinterpret_cast<const std::byte*>(text.data()) + text.size());
+
+		auto pts = TicksToPts(sub.Pts(), AVRational{1, AV_TIME_BASE});
+		std::optional<StormByte::Multimedia::Property::Duration> duration;
+		if (sub.DisplayDurationMs() > 0)
+			duration = StormByte::Multimedia::Property::Duration{
+				std::chrono::milliseconds{sub.DisplayDurationMs()}};
+
+		frame = Frame(
+			decoder.m_index,
+			StormByte::Buffer::FIFO{std::move(bytes)},
+			std::move(pts),
+			std::move(duration),
+			std::nullopt,
+			{}
+		);
+		return decoder;
+	}
 
 	auto holder = std::make_unique<Frame::Impl>();
 	const auto result = decoder.m_impl->m_decoder.ReceiveFrame(holder->m_backend);
