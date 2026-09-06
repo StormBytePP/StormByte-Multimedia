@@ -38,8 +38,13 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 
+#include <cstdint>
+
 extern "C" {
 	#include <libavutil/avutil.h>
+	#include <libavutil/frame.h>
+	#include <libavutil/imgutils.h>
+	#include <libavutil/samplefmt.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
@@ -61,22 +66,45 @@ const AVFrameSideData* FFmpeg::AVFrame::SideData(int type) const noexcept {
 	return av_frame_get_side_data(m_ptr, static_cast<AVFrameSideDataType>(type));
 }
 
-void FFmpeg::AVFrame::CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept {
-	out.clear();
-	if (!m_ptr || !m_ptr->buf[0] || m_ptr->buf[0]->size <= 0)
-		return;
-	const auto* p = reinterpret_cast<const std::byte*>(m_ptr->buf[0]->data);
-	out.assign(p, p + m_ptr->buf[0]->size);
-}
-
 std::int64_t FFmpeg::AVFrame::Pts() const noexcept {
-	if (!m_ptr)
-		return AV_NOPTS_VALUE;
-	return m_ptr->pts != AV_NOPTS_VALUE ? m_ptr->pts : m_ptr->best_effort_timestamp;
+	return m_ptr ? m_ptr->pts : AV_NOPTS_VALUE;
 }
 
 std::int64_t FFmpeg::AVFrame::DurationTicks() const noexcept {
 	return m_ptr ? m_ptr->duration : 0;
+}
+
+void FFmpeg::AVFrame::CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept {
+	out.clear();
+	if (!m_ptr)
+		return;
+
+	if (m_ptr->width > 0 && m_ptr->height > 0 && m_ptr->data[0]) {
+		const auto format = static_cast<AVPixelFormat>(m_ptr->format);
+		const int size = av_image_get_buffer_size(format, m_ptr->width, m_ptr->height, 1);
+		if (size <= 0)
+			return;
+		out.resize(static_cast<std::size_t>(size));
+		if (av_image_copy_to_buffer(
+			reinterpret_cast<std::uint8_t*>(out.data()), size,
+			m_ptr->data, m_ptr->linesize,
+			format, m_ptr->width, m_ptr->height, 1) < 0)
+			out.clear();
+		return;
+	}
+
+	if (m_ptr->nb_samples > 0 && m_ptr->data[0]) {
+		const auto format = static_cast<AVSampleFormat>(m_ptr->format);
+		const int bytes = av_samples_get_buffer_size(nullptr, m_ptr->ch_layout.nb_channels,
+			m_ptr->nb_samples, format, 1);
+		if (bytes <= 0)
+			return;
+		out.resize(static_cast<std::size_t>(bytes));
+		auto* dst = reinterpret_cast<std::uint8_t*>(out.data());
+		if (av_samples_copy(&dst, m_ptr->extended_data, 0, 0,
+			m_ptr->nb_samples, m_ptr->ch_layout.nb_channels, format) < 0)
+			out.clear();
+	}
 }
 
 void FFmpeg::AVFrame::Free() noexcept {
