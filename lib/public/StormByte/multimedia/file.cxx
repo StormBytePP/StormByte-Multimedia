@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/registry.hxx>
 
+#include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <string>
@@ -66,8 +67,46 @@ namespace {
 		return empty;
 	}
 
-	ExpectedContainer ResolveContainer(std::string_view formatName) noexcept {
+	std::string LowerExt(const std::filesystem::path& path) noexcept {
+		std::string ext = path.extension().string();
+		if (!ext.empty() && ext.front() == '.')
+			ext.erase(ext.begin());
+		for (char& c : ext)
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		return ext;
+	}
+
+	bool TokenListContains(std::string_view formatName, std::string_view token) noexcept {
+		std::string_view rest = formatName;
+		while (!rest.empty()) {
+			const auto comma = rest.find(',');
+			const auto part = rest.substr(0, comma);
+			if (part == token)
+				return true;
+			if (comma == std::string_view::npos)
+				break;
+			rest = rest.substr(comma + 1);
+		}
+		return false;
+	}
+
+	ExpectedContainer ResolveContainer(std::string_view formatName,
+		const std::filesystem::path* path) noexcept {
 		auto& registry = Registry::Instance();
+
+		if (path && path->has_extension()) {
+			const std::string ext = LowerExt(*path);
+			if (!ext.empty()) {
+				auto byExt = registry.FindContainer(ext);
+				if (byExt.has_value()) {
+					const bool listed = TokenListContains(formatName, ext)
+						|| TokenListContains(formatName, byExt.value().get().Name());
+					if (listed || ext == "opus" || ext == "spx")
+						return byExt;
+				}
+			}
+		}
+
 		std::string_view rest = formatName;
 		while (!rest.empty()) {
 			const auto comma = rest.find(',');
@@ -164,7 +203,8 @@ ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> k
 	if (!formatName)
 		return Unexpected(FileOpenErrorException(SourceName(source), "unknown container format"));
 
-	auto container = ResolveContainer(formatName);
+	const auto* path = std::get_if<std::filesystem::path>(&source);
+	auto container = ResolveContainer(formatName, path);
 	if (!container.has_value())
 		return Unexpected(FileOpenErrorException(SourceName(source), container.error()->what()));
 
