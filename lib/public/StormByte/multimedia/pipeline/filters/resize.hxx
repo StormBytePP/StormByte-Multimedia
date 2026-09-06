@@ -38,11 +38,11 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/filters/frame.hxx>
+#include <StormByte/multimedia/property/resolution.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <optional>
-#include <string>
+#include <cstdint>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter
@@ -50,83 +50,64 @@
  */
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
-	 * @class Step
-	 * @brief One frame-to-frame step. Inherit and implement Push.
+	 * @class Resize
+	 * @brief Scales a video frame. Audio and subtitles pass through.
 	 *
-	 * Return the same or a new Pipeline::Frame. Return empty optional
-	 * to absorb it. On a hard error call Fail() and return empty.
-	 * Push must not throw. Audio and subtitle frames should pass through
-	 * unless the step knows how to handle them.
+	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
+	 * on the first video frame. Destination is applied with swscale
+	 * on the backend frame; Payload() is invalidated.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Step {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * @brief Exact destination size.
+			 * @param resolution Target resolution.
 			 */
-			Step() noexcept = default;
+			explicit Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
+
+			/**
+			 * @brief Destination size. 0 on one axis keeps aspect ratio.
+			 * @param width Target width, or 0.
+			 * @param height Target height, or 0.
+			 */
+			Resize(std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
-			Step(const Step&) = delete;
+			Resize(const Resize&) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 */
-			Step(Step&&) noexcept = default;
+			Resize(Resize&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Step() noexcept = default;
+			~Resize() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			Step& operator=(const Step&) = delete;
+			Resize& operator=(const Resize&) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Step& operator=(Step&&) noexcept = default;
+			Resize& operator=(Resize&&) noexcept = default;
 
 			/**
-			 * @brief Runs this step on @p frame.
-			 * @param frame Incoming frame (moved in).
-			 * @return Outgoing frame, or empty if absorbed or failed.
+			 * @brief Scales a video frame, or returns @p frame unchanged.
+			 * @param frame Incoming frame.
+			 * @return Scaled frame, or empty on failure.
 			 */
-			virtual std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept = 0;
-
-			/**
-			 * @brief Whether Push set a hard error.
-			 * @return true after Fail().
-			 */
-			bool Failed() const noexcept {
-				return m_failed;
-			}
-
-			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept {
-				return m_error;
-			}
-
-		protected:
-			/**
-			 * @brief Marks a hard error. Further Push calls should no-op.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept {
-				m_failed = true;
-				m_error = std::move(reason);
-			}
+			std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept override;
 
 		private:
-			bool m_failed = false;				///< Hard error
-			std::optional<std::string> m_error;		///< Failure text
+			std::uint32_t m_width;		///< Requested width, 0 = auto
+			std::uint32_t m_height;		///< Requested height, 0 = auto
 	};
 }

@@ -40,7 +40,7 @@
 
 using namespace StormByte::Multimedia::Pipeline::Filter;
 
-void FramePipe::Add(std::unique_ptr<Frame> step) noexcept {
+void FramePipe::Add(std::unique_ptr<Step> step) noexcept {
 	if (Failed() || !step)
 		return;
 	m_steps.push_back(std::move(step));

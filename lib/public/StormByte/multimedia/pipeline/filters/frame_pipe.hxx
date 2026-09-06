@@ -53,18 +53,13 @@
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
 	 * @class FramePipe
-	 * @brief Ordered list of Filter::Frame steps.
+	 * @brief Ordered list of Filter::Step steps.
 	 *
 	 * Zero steps: Push returns the frame unchanged. An empty optional
 	 * from a step stops the chain. A step that Failed() fails the pipe.
 	 * Add steps before the first Push.
-	 *
-	 * @code
-	 * decoder.Pipe().Add<MyFilter>(args);
-	 * decoder.Pipe().Add(std::make_unique<MyFilter>(args));
-	 * @endcode
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC FramePipe: public Frame {
+	class STORMBYTE_MULTIMEDIA_PUBLIC FramePipe: public Step {
 		public:
 			/**
 			 * @brief Empty pipe (identity).
@@ -102,18 +97,18 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Appends a step. No-op if the pipe already failed.
 			 * @param step Owned step (must not be null).
 			 */
-			void Add(std::unique_ptr<Frame> step) noexcept;
+			void Add(std::unique_ptr<Step> step) noexcept;
 
 			/**
 			 * @brief Constructs and appends a step.
-			 * @tparam Step Type derived from Filter::Frame.
+			 * @tparam FilterType Type derived from Filter::Step.
 			 * @param args Constructor arguments.
 			 * @return *this.
 			 */
-			template<typename Step, typename... Args>
-			requires std::derived_from<Step, Frame>
+			template<typename FilterType, typename... Args>
+			requires std::derived_from<FilterType, Step>
 			FramePipe& Add(Args&&... args) noexcept {
-				Add(std::make_unique<Step>(std::forward<Args>(args)...));
+				Add(std::make_unique<FilterType>(std::forward<Args>(args)...));
 				return *this;
 			}
 
@@ -131,6 +126,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept override;
 
 		private:
-			std::vector<std::unique_ptr<Frame>> m_steps;	///< Steps in order
+			std::vector<std::unique_ptr<Step>> m_steps;	///< Steps in order
 	};
 }

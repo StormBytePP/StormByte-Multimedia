@@ -54,6 +54,10 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
+	namespace Filter {
+		class Resize;
+		class Watermark;
+	}
 
 	/**
 	 * @class Frame
@@ -156,17 +160,19 @@ namespace StormByte::Multimedia::Pipeline {
 
 			friend class Decoder;
 			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+			friend class Filter::Resize;
+			friend class Filter::Watermark;
 
 		private:
 			class Impl;
 
-			int m_streamIndex;						///< Stream index
-			StormByte::Buffer::FIFO m_payload;				///< Samples / planes
-			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
-			std::optional<Property::Duration> m_duration;			///< Frame duration
-			std::optional<Property::Video> m_video;				///< Video properties
-			std::vector<class SideData> m_attachments;			///< Raw side data
-			std::unique_ptr<Impl> m_impl;					///< Optional backend frame
+			int m_streamIndex;
+			StormByte::Buffer::FIFO m_payload;
+			std::optional<Property::Duration> m_pts;
+			std::optional<Property::Duration> m_duration;
+			std::optional<Property::Video> m_video;
+			std::vector<class SideData> m_attachments;
+			std::unique_ptr<Impl> m_impl;
 
 			/**
 			 * @brief Adopts a backend frame for lazy Payload().
