@@ -119,6 +119,14 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			bool Load(const std::uint8_t* data, int size, int stream_index, bool key_frame) noexcept;
 
 			/**
+			 * @brief Sets timestamps in stream time base.
+			 * @param pts Presentation timestamp, or `AV_NOPTS_VALUE`.
+			 * @param dts Decode timestamp, or `AV_NOPTS_VALUE`.
+			 * @param duration Duration ticks, or 0.
+			 */
+			void Timestamps(std::int64_t pts, std::int64_t dts, std::int64_t duration) noexcept;
+
+			/**
 			 * @brief Packet stream index.
 			 * @return stream_index, or -1 if empty.
 			 */

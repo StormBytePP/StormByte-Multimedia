@@ -45,6 +45,7 @@
 extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavformat/avformat.h>
+	#include <libavutil/rational.h>
 }
 
 /**
@@ -120,6 +121,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @return Stream index.
 			 */
 			int StreamIndex() const noexcept;
+
+			/**
+			 * @brief Time base used for decoded frame timestamps.
+			 * @return `pkt_timebase` if set, otherwise `time_base`.
+			 */
+			AVRational TimeBase() const noexcept;
 
 			/**
 			 * @brief Flushes decoder and BSF buffers.

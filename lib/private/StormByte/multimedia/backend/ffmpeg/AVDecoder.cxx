@@ -123,6 +123,14 @@ int FFmpeg::AVDecoder::StreamIndex() const noexcept {
 	return m_stream_index;
 }
 
+AVRational FFmpeg::AVDecoder::TimeBase() const noexcept {
+	if (!m_ptr)
+		return AVRational{0, 1};
+	if (m_ptr->pkt_timebase.num && m_ptr->pkt_timebase.den)
+		return m_ptr->pkt_timebase;
+	return m_ptr->time_base;
+}
+
 void FFmpeg::AVDecoder::Flush() noexcept {
 	avcodec_flush_buffers(m_ptr);
 	m_bsf_pipeline.Flush();

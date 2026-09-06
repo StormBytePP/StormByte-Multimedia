@@ -65,11 +65,20 @@ using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.den <= 0)
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
 		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
 		if (ns < 0)
+			return std::nullopt;
+		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	}
+
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
+			return std::nullopt;
+		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		if (ns <= 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
@@ -168,8 +177,8 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet)
 		Packet raw{
 			index,
 			StormByte::Buffer::FIFO{std::move(bytes)},
-			TicksToDuration(demux.m_impl->m_scratch.Pts(), tb),
-			TicksToDuration(demux.m_impl->m_scratch.Dts(), tb),
+			TicksToPts(demux.m_impl->m_scratch.Pts(), tb),
+			TicksToPts(demux.m_impl->m_scratch.Dts(), tb),
 			TicksToDuration(demux.m_impl->m_scratch.Duration(), tb),
 			(demux.m_impl->m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
 		};
@@ -197,12 +206,14 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 
 	std::optional<FFmpeg::AVCodecParameters> params;
 	std::optional<StormByte::Multimedia::Stream::Properties> mapped;
+	AVRational timeBase{0, 1};
 	bool found = false;
 	for (const auto& stream : demux.m_impl->m_ctx.Streams()) {
 		if (stream.Index() != decoder.Index())
 			continue;
 		params = stream.CodecParameters();
 		mapped = FFmpeg::MapProperties(stream);
+		timeBase = stream.TimeBase();
 		found = true;
 		break;
 	}
@@ -220,6 +231,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	}
 
 	auto impl = std::make_unique<Decoder::Impl>(std::move(backend.value()));
+	impl->m_timeBase = timeBase;
 	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
 		impl->m_video = std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped));
 	decoder.Bind(std::move(impl));

@@ -37,6 +37,7 @@
  */
 
 #include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/frame_impl.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
@@ -47,10 +48,14 @@ Frame::Frame(int stream_index, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	std::optional<StormByte::Multimedia::Property::Video> video,
-	std::vector<class SideData> side_data) noexcept
+	std::vector<class SideData> attachments) noexcept
 : m_streamIndex(stream_index), m_payload(std::move(payload)),
 m_pts(std::move(pts)), m_duration(std::move(duration)),
-m_video(std::move(video)), m_sideData(std::move(side_data)) {}
+m_video(std::move(video)), m_attachments(std::move(attachments)) {}
+
+Frame::Frame(Frame&&) noexcept = default;
+Frame::~Frame() noexcept = default;
+Frame& Frame::operator=(Frame&&) noexcept = default;
 
 int Frame::StreamIndex() const noexcept {
 	return m_streamIndex;
@@ -68,14 +73,24 @@ const std::optional<StormByte::Multimedia::Property::Video>& Frame::Video() cons
 	return m_video;
 }
 
-const std::vector<class SideData>& Frame::SideData() const noexcept {
-	return m_sideData;
+const std::vector<class SideData>& Frame::Attachments() const noexcept {
+	return m_attachments;
+}
+
+StormByte::Buffer::FIFO& Frame::Payload() noexcept {
+	if (m_impl && !m_impl->m_payloadReady) {
+		StormByte::Buffer::DataType bytes;
+		m_impl->m_backend.CopyPrimaryBuffer(bytes);
+		m_payload = StormByte::Buffer::FIFO{std::move(bytes)};
+		m_impl->m_payloadReady = true;
+	}
+	return m_payload;
 }
 
 const StormByte::Buffer::FIFO& Frame::Payload() const noexcept {
 	return m_payload;
 }
 
-StormByte::Buffer::FIFO& Frame::Payload() noexcept {
-	return m_payload;
+void Frame::Bind(std::unique_ptr<Impl> impl) noexcept {
+	m_impl = std::move(impl);
 }

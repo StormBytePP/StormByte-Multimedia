@@ -36,13 +36,150 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/decoder_impl.hxx>
+#include <StormByte/multimedia/pipeline/frame_impl.hxx>
 #include <StormByte/multimedia/property/hdr10.hxx>
+#include <StormByte/multimedia/property/point.hxx>
+
+#include <cstdint>
+
+extern "C" {
+	#include <libavutil/avutil.h>
+	#include <libavutil/frame.h>
+	#include <libavutil/mastering_display_metadata.h>
+	#include <libavutil/mathematics.h>
+	#include <libavutil/rational.h>
+}
 
 using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+
+namespace {
+	constexpr int kChromaDen = 50000;
+
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
+			return std::nullopt;
+		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		if (ns < 0)
+			return std::nullopt;
+		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	}
+
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
+			return std::nullopt;
+		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		if (ns <= 0)
+			return std::nullopt;
+		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	}
+
+	std::int64_t NsToTicks(const std::optional<StormByte::Multimedia::Property::Duration>& value, AVRational timeBase) noexcept {
+		if (!value.has_value() || timeBase.num <= 0 || timeBase.den <= 0)
+			return AV_NOPTS_VALUE;
+		return av_rescale_q(value->Nanoseconds().count(), AVRational{1, 1000000000}, timeBase);
+	}
+
+	StormByte::Multimedia::Property::Point FromRationalPair(const AVRational& x, const AVRational& y) noexcept {
+		return StormByte::Multimedia::Property::Point::Normalized(x.num, x.den, y.num, y.den, kChromaDen);
+	}
+
+	SideDataKind MapKind(AVFrameSideDataType type) noexcept {
+		switch (type) {
+			case AV_FRAME_DATA_MASTERING_DISPLAY_METADATA:	return SideDataKind::MasteringDisplay;
+			case AV_FRAME_DATA_CONTENT_LIGHT_LEVEL:			return SideDataKind::ContentLight;
+			case AV_FRAME_DATA_DYNAMIC_HDR_PLUS:			return SideDataKind::HdrPlus;
+			case AV_FRAME_DATA_DYNAMIC_HDR_VIVID:			return SideDataKind::HdrVivid;
+			case AV_FRAME_DATA_A53_CC:						return SideDataKind::A53CC;
+			case AV_FRAME_DATA_STEREO3D:					return SideDataKind::Stereo3D;
+			case AV_FRAME_DATA_DISPLAYMATRIX:				return SideDataKind::DisplayMatrix;
+			case AV_FRAME_DATA_ICC_PROFILE:					return SideDataKind::IccProfile;
+			case AV_FRAME_DATA_S12M_TIMECODE:				return SideDataKind::S12MTimecode;
+			case AV_FRAME_DATA_SPHERICAL:					return SideDataKind::Spherical;
+			case AV_FRAME_DATA_SEI_UNREGISTERED:			return SideDataKind::SeiUnregistered;
+			case AV_FRAME_DATA_FILM_GRAIN_PARAMS:			return SideDataKind::FilmGrain;
+			case AV_FRAME_DATA_DOVI_RPU_BUFFER:				return SideDataKind::DolbyVisionRpu;
+			case AV_FRAME_DATA_DOVI_METADATA:				return SideDataKind::DolbyVision;
+			case AV_FRAME_DATA_AMBIENT_VIEWING_ENVIRONMENT:	return SideDataKind::AmbientViewing;
+			default:										return SideDataKind::Other;
+		}
+	}
+
+	std::vector<SideData> MapAttachments(const ::AVFrame* av) noexcept {
+		std::vector<SideData> out;
+		if (!av)
+			return out;
+		for (int i = 0; i < av->nb_side_data; ++i) {
+			const AVFrameSideData* sd = av->side_data[i];
+			if (!sd || !sd->data || sd->size <= 0)
+				continue;
+			StormByte::Buffer::DataType bytes(
+				reinterpret_cast<const std::byte*>(sd->data),
+				reinterpret_cast<const std::byte*>(sd->data) + sd->size);
+			const auto kind = MapKind(sd->type);
+			if (kind == SideDataKind::Other) {
+				const char* name = av_frame_side_data_name(sd->type);
+				out.emplace_back(name ? std::string(name) : std::string("unknown"),
+					StormByte::Buffer::FIFO{std::move(bytes)});
+			}
+			else
+				out.emplace_back(kind, StormByte::Buffer::FIFO{std::move(bytes)});
+		}
+		return out;
+	}
+
+	std::optional<StormByte::Multimedia::Property::HDR10> MapFrameHDR10(
+		const ::AVFrame* av, bool heuristics, const StormByte::Multimedia::Property::Video& video) noexcept {
+		const AVFrameSideData* mdmSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA) : nullptr;
+		const AVFrameSideData* cllSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL) : nullptr;
+		const AVFrameSideData* plusSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_DYNAMIC_HDR_PLUS) : nullptr;
+		const auto* mdm = (mdmSd && mdmSd->size >= sizeof(AVMasteringDisplayMetadata))
+			? reinterpret_cast<const AVMasteringDisplayMetadata*>(mdmSd->data) : nullptr;
+		const auto* cll = (cllSd && cllSd->size >= sizeof(AVContentLightMetadata))
+			? reinterpret_cast<const AVContentLightMetadata*>(cllSd->data) : nullptr;
+		const bool plus = plusSd != nullptr;
+
+		std::optional<StormByte::Multimedia::Property::Point> light;
+		if (cll && (cll->MaxCLL || cll->MaxFALL))
+			light = StormByte::Multimedia::Property::Point{static_cast<int>(cll->MaxCLL), static_cast<int>(cll->MaxFALL)};
+
+		if (mdm && mdm->has_primaries && mdm->has_luminance) {
+			StormByte::Multimedia::Property::HDR10 out{
+				FromRationalPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
+				FromRationalPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
+				FromRationalPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
+				FromRationalPair(mdm->white_point[0], mdm->white_point[1]),
+				FromRationalPair(mdm->min_luminance, mdm->max_luminance),
+				light,
+				StormByte::Multimedia::Property::HDR10::Source::Metadata
+			};
+			out.HDR10Plus(plus);
+			return out;
+		}
+
+		if (heuristics && video.Color().IsHDR10()) {
+			StormByte::Multimedia::Property::HDR10 out = StormByte::Multimedia::Property::HDR10::DEFAULT;
+			if (light)
+				out = StormByte::Multimedia::Property::HDR10{
+					out.Red(), out.Green(), out.Blue(), out.White(), out.Luminance(),
+					light, StormByte::Multimedia::Property::HDR10::Source::Heuristics
+				};
+			out.HDR10Plus(plus);
+			return out;
+		}
+		if (video.HDR10()) {
+			auto kept = *video.HDR10();
+			if (plus)
+				kept.HDR10Plus(true);
+			return kept;
+		}
+		return std::nullopt;
+	}
+}
 
 Decoder::Decoder(int stream_index, DecoderFlags flags) noexcept
 : m_index(stream_index), m_flags(flags), m_failed(false) {}
@@ -115,6 +252,12 @@ Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& dec
 		return packet;
 	}
 
+	const auto tb = decoder.m_impl->m_timeBase;
+	const std::int64_t duration = packet.Duration()
+		? av_rescale_q(packet.Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, tb)
+		: 0;
+	raw.Timestamps(NsToTicks(packet.Pts(), tb), NsToTicks(packet.Dts(), tb), duration);
+
 	auto result = decoder.m_impl->m_decoder.SendPacket(raw);
 	while (result == FFmpeg::OperationResult::TryAgain) {
 		StormByte::Multimedia::Pipeline::Frame ignored;
@@ -132,7 +275,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 	if (decoder.m_failed || !decoder.m_impl)
 		return decoder;
 
-	const auto result = decoder.m_impl->m_decoder.ReceiveFrame(decoder.m_impl->m_scratch);
+	auto holder = std::make_unique<Frame::Impl>();
+	const auto result = decoder.m_impl->m_decoder.ReceiveFrame(holder->m_backend);
 	if (result == FFmpeg::OperationResult::TryAgain || result == FFmpeg::OperationResult::EndOfFile)
 		return decoder;
 	if (result != FFmpeg::OperationResult::Success) {
@@ -140,24 +284,23 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		return decoder;
 	}
 
+	const auto tb = decoder.m_impl->m_timeBase;
 	auto video = decoder.m_impl->m_video;
-	if (video && decoder.m_flags.Has(DecoderFlag::HeuristicsHDR10)) {
-		const auto& hdr = video->HDR10();
-		if ((!hdr.has_value() || hdr->Origin() != StormByte::Multimedia::Property::HDR10::Source::Metadata)
-			&& video->Color().IsHDR10())
-			video = StormByte::Multimedia::Property::Video(
-				video->Color(), video->Resolution(),
-				StormByte::Multimedia::Property::HDR10::DEFAULT);
+	auto attachments = MapAttachments(holder->m_backend.Get());
+	if (video) {
+		auto hdr = MapFrameHDR10(holder->m_backend.Get(),
+			decoder.m_flags.Has(DecoderFlag::HeuristicsHDR10), *video);
+		video = StormByte::Multimedia::Property::Video(video->Color(), video->Resolution(), std::move(hdr));
 	}
 
 	frame = Frame(
 		decoder.m_index,
 		StormByte::Buffer::FIFO{},
-		std::nullopt,
-		std::nullopt,
+		TicksToPts(holder->m_backend.Pts(), tb),
+		TicksToDuration(holder->m_backend.DurationTicks(), tb),
 		std::move(video),
-		{}
+		std::move(attachments)
 	);
-	decoder.m_impl->m_scratch.Unref();
+	frame.Bind(std::move(holder));
 	return decoder;
 }

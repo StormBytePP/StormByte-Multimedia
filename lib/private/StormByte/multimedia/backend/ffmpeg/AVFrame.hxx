@@ -41,6 +41,8 @@
 #include <StormByte/buffer/typedefs.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 
+#include <cstdint>
+
 extern "C" {
 	#include <libavutil/frame.h>
 }
@@ -111,6 +113,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @param out Destination (cleared first).
 			 */
 			void CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept;
+
+			/**
+			 * @brief Presentation timestamp in the decoder time base.
+			 * @return PTS, or `AV_NOPTS_VALUE`.
+			 */
+			std::int64_t Pts() const noexcept;
+
+			/**
+			 * @brief Frame duration in the decoder time base.
+			 * @return Duration ticks, or 0.
+			 */
+			std::int64_t DurationTicks() const noexcept;
 
 		private:
 			/**

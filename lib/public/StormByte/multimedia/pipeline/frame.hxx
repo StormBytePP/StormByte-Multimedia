@@ -44,6 +44,7 @@
 #include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -52,15 +53,15 @@
  * @brief Demux / decode / filter / encode / mux types.
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Decoder;
+
 	/**
 	 * @class Frame
-	 * @brief One decoded access unit: payload, timestamps, video props, side data.
+	 * @brief One decoded access unit.
 	 *
-	 * Move-only. Payload is a Buffer::FIFO (not thread-safe). HDR10 lives in
-	 * Video() when present. SideData() holds raw SEI / side data from the
-	 * decoder, including MasteringDisplay / ContentLight / HdrPlus when the
-	 * bitstream carried them. Heuristics fill Video().HDR10() only, never
-	 * the side-data bag.
+	 * Move-only. Planes stay in an opaque backend buffer until Payload()
+	 * is called. Attachments() is filled at receive time. Heuristics fill
+	 * Video().HDR10() only, never the side-data bag.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
 		public:
@@ -70,19 +71,19 @@ namespace StormByte::Multimedia::Pipeline {
 			Frame() noexcept;
 
 			/**
-			 * @brief Builds a frame.
+			 * @brief Builds a frame without a backend buffer.
 			 * @param stream_index Container stream index.
 			 * @param payload Owned sample / plane bytes.
 			 * @param pts Presentation timestamp, if known.
 			 * @param duration Frame duration, if known.
 			 * @param video Video properties, if this is a video frame.
-			 * @param side_data Raw side-data blobs.
+			 * @param attachments Raw side-data blobs.
 			 */
 			Frame(int stream_index, StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
 				std::optional<Property::Video> video = std::nullopt,
-				std::vector<SideData> side_data = {}) noexcept;
+				std::vector<class SideData> attachments = {}) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -92,12 +93,12 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Move constructor.
 			 */
-			Frame(Frame&&) noexcept = default;
+			Frame(Frame&&) noexcept;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Frame() noexcept = default;
+			~Frame() noexcept;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -109,7 +110,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Frame& operator=(Frame&&) noexcept = default;
+			Frame& operator=(Frame&&) noexcept;
 
 			/**
 			 * @brief Container stream index.
@@ -136,29 +137,41 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<Property::Video>& Video() const noexcept;
 
 			/**
-			 * @brief Raw side data from the decoder.
+			 * @brief Raw side data captured at receive.
 			 * @return Blobs.
 			 */
-			const std::vector<SideData>& SideData() const noexcept;
+			const std::vector<class SideData>& Attachments() const noexcept;
 
 			/**
-			 * @brief Owned payload.
-			 * @return FIFO.
-			 */
-			const StormByte::Buffer::FIFO& Payload() const noexcept;
-
-			/**
-			 * @brief Owned payload (mutable).
+			 * @brief Payload. Materialises planes on first call if a backend frame is held.
 			 * @return FIFO.
 			 */
 			StormByte::Buffer::FIFO& Payload() noexcept;
 
+			/**
+			 * @brief Payload.
+			 * @return FIFO. Empty until a non-const Payload() materialised it.
+			 */
+			const StormByte::Buffer::FIFO& Payload() const noexcept;
+
+			friend class Decoder;
+			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+
 		private:
-			int m_streamIndex;					///< Stream index
-			StormByte::Buffer::FIFO m_payload;			///< Samples / planes
-			std::optional<Property::Duration> m_pts;		///< Presentation timestamp
-			std::optional<Property::Duration> m_duration;		///< Frame duration
-			std::optional<Property::Video> m_video;			///< Video properties
-			std::vector<class SideData> m_sideData;			///< Raw side data
+			class Impl;
+
+			int m_streamIndex;						///< Stream index
+			StormByte::Buffer::FIFO m_payload;				///< Samples / planes
+			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
+			std::optional<Property::Duration> m_duration;			///< Frame duration
+			std::optional<Property::Video> m_video;				///< Video properties
+			std::vector<class SideData> m_attachments;			///< Raw side data
+			std::unique_ptr<Impl> m_impl;					///< Optional backend frame
+
+			/**
+			 * @brief Adopts a backend frame for lazy Payload().
+			 * @param impl Backend holder.
+			 */
+			void Bind(std::unique_ptr<Impl> impl) noexcept;
 	};
 }

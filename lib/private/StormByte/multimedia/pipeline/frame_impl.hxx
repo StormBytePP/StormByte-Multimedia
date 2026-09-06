@@ -38,24 +38,11 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 
-#include <optional>
-
-extern "C" {
-	#include <libavutil/rational.h>
-}
-
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
+class StormByte::Multimedia::Pipeline::Frame::Impl {
 	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1} {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		AVRational m_timeBase;
+		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_backend;
+		bool m_payloadReady = false;
 };

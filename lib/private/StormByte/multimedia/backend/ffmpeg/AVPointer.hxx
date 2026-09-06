@@ -51,7 +51,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @brief Move-only RAII base for FFmpeg C pointers.
 	 * @tparam AVType Underlying FFmpeg struct type.
 	 *
-	 * Derived classes must implement Free().
+	 * Derived classes must implement Free(). Get() is public inside the
+	 * library; the type itself is not part of the installed API.
 	 */
 	template<typename AVType>
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer {
@@ -101,10 +102,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			}
 
 			/**
-			 * @brief Const view of the raw pointer.
+			 * @brief Const view of the raw FFmpeg pointer.
 			 * @return Pointer or nullptr.
 			 */
 			constexpr const std::decay_t<AVType>* Get() const noexcept {
+				return m_ptr;
+			}
+
+			/**
+			 * @brief Mutable view of the raw FFmpeg pointer.
+			 * @return Pointer or nullptr.
+			 */
+			constexpr std::decay_t<AVType>* Get() noexcept {
 				return m_ptr;
 			}
 
@@ -117,14 +126,6 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			explicit constexpr AVPointer(std::decay_t<AVType>* ptr) noexcept
 			: m_ptr(ptr) {}
-
-			/**
-			 * @brief Mutable view of the raw pointer.
-			 * @return Pointer or nullptr.
-			 */
-			constexpr std::decay_t<AVType>* Get() noexcept {
-				return m_ptr;
-			}
 
 			/**
 			 * @brief Releases the underlying resource.

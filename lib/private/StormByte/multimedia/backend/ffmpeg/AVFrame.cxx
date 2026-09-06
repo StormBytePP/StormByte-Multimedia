@@ -38,6 +38,10 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 
+extern "C" {
+	#include <libavutil/avutil.h>
+}
+
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVFrame::AVFrame() noexcept:
@@ -63,6 +67,16 @@ void FFmpeg::AVFrame::CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const 
 		return;
 	const auto* p = reinterpret_cast<const std::byte*>(m_ptr->buf[0]->data);
 	out.assign(p, p + m_ptr->buf[0]->size);
+}
+
+std::int64_t FFmpeg::AVFrame::Pts() const noexcept {
+	if (!m_ptr)
+		return AV_NOPTS_VALUE;
+	return m_ptr->pts != AV_NOPTS_VALUE ? m_ptr->pts : m_ptr->best_effort_timestamp;
+}
+
+std::int64_t FFmpeg::AVFrame::DurationTicks() const noexcept {
+	return m_ptr ? m_ptr->duration : 0;
 }
 
 void FFmpeg::AVFrame::Free() noexcept {

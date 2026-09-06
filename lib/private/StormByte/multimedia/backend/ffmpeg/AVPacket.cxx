@@ -77,7 +77,18 @@ bool FFmpeg::AVPacket::Load(const std::uint8_t* data, int size, int stream_index
 	}
 	m_ptr->stream_index = stream_index;
 	m_ptr->flags = key_frame ? AV_PKT_FLAG_KEY : 0;
+	m_ptr->pts = AV_NOPTS_VALUE;
+	m_ptr->dts = AV_NOPTS_VALUE;
+	m_ptr->duration = 0;
 	return true;
+}
+
+void FFmpeg::AVPacket::Timestamps(std::int64_t pts, std::int64_t dts, std::int64_t duration) noexcept {
+	if (!m_ptr)
+		return;
+	m_ptr->pts = pts;
+	m_ptr->dts = dts;
+	m_ptr->duration = duration;
 }
 
 int FFmpeg::AVPacket::StreamIndex() const noexcept {
