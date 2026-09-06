@@ -39,15 +39,23 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 
 #include <cstdint>
+#include <cstring>
 
 extern "C" {
 	#include <libavutil/avutil.h>
 	#include <libavutil/frame.h>
 	#include <libavutil/imgutils.h>
+	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/samplefmt.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
+using StormByte::Multimedia::Pipeline::SideDataKind;
+
+namespace {
+	constexpr int ChromaDenominator = 50000;
+	constexpr int LumaDenominator = 10000;
+}
 
 FFmpeg::AVFrame::AVFrame() noexcept:
 AVPointer(av_frame_alloc()) {}
@@ -104,6 +112,72 @@ void FFmpeg::AVFrame::CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const 
 		if (av_samples_copy(&dst, m_ptr->extended_data, 0, 0,
 			m_ptr->nb_samples, m_ptr->ch_layout.nb_channels, format) < 0)
 			out.clear();
+	}
+}
+
+void FFmpeg::AVFrame::WriteHdr10(const StormByte::Multimedia::Property::HDR10& hdr10) noexcept {
+	if (!m_ptr)
+		return;
+
+	av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+	av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+
+	auto* mdm = av_mastering_display_metadata_create_side_data(m_ptr);
+	if (mdm) {
+		mdm->has_primaries = 1;
+		mdm->display_primaries[0][0] = AVRational{hdr10.Red().X(), ChromaDenominator};
+		mdm->display_primaries[0][1] = AVRational{hdr10.Red().Y(), ChromaDenominator};
+		mdm->display_primaries[1][0] = AVRational{hdr10.Green().X(), ChromaDenominator};
+		mdm->display_primaries[1][1] = AVRational{hdr10.Green().Y(), ChromaDenominator};
+		mdm->display_primaries[2][0] = AVRational{hdr10.Blue().X(), ChromaDenominator};
+		mdm->display_primaries[2][1] = AVRational{hdr10.Blue().Y(), ChromaDenominator};
+		mdm->white_point[0] = AVRational{hdr10.White().X(), ChromaDenominator};
+		mdm->white_point[1] = AVRational{hdr10.White().Y(), ChromaDenominator};
+		mdm->has_luminance = 1;
+		mdm->min_luminance = AVRational{hdr10.Luminance().X(), LumaDenominator};
+		mdm->max_luminance = AVRational{hdr10.Luminance().Y(), LumaDenominator};
+	}
+
+	if (const auto& light = hdr10.LightLevel(); light.has_value()) {
+		auto* cll = av_content_light_metadata_create_side_data(m_ptr);
+		if (cll) {
+			cll->MaxCLL = static_cast<unsigned>(light->X());
+			cll->MaxFALL = static_cast<unsigned>(light->Y());
+		}
+	}
+}
+
+void FFmpeg::AVFrame::WriteSideData(
+	const std::vector<StormByte::Multimedia::Pipeline::SideData>& attachments) noexcept {
+	if (!m_ptr)
+		return;
+
+	for (const auto& item : attachments) {
+		AVFrameSideDataType type = AV_FRAME_DATA_SEI_UNREGISTERED;
+		switch (item.Kind()) {
+			case SideDataKind::MasteringDisplay:
+			case SideDataKind::ContentLight:
+				continue;
+			case SideDataKind::HdrPlus:
+				type = AV_FRAME_DATA_DYNAMIC_HDR_PLUS;
+				break;
+			case SideDataKind::A53CC:
+				type = AV_FRAME_DATA_A53_CC;
+				break;
+			default:
+				type = AV_FRAME_DATA_SEI_UNREGISTERED;
+				break;
+		}
+		const auto size = item.Payload().AvailableBytes();
+		if (size == 0)
+			continue;
+		StormByte::Buffer::DataType bytes;
+		if (!item.Payload().Peek(size, bytes) || bytes.empty())
+			continue;
+		AVFrameSideData* side = av_frame_new_side_data(m_ptr, type, static_cast<int>(bytes.size()));
+		if (!side)
+			continue;
+		std::memcpy(side->data, bytes.data(), bytes.size());
 	}
 }
 

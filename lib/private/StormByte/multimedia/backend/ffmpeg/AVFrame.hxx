@@ -40,8 +40,11 @@
 
 #include <StormByte/buffer/typedefs.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/pipeline/side_data.hxx>
+#include <StormByte/multimedia/property/hdr10.hxx>
 
 #include <cstdint>
+#include <vector>
 
 extern "C" {
 	#include <libavutil/frame.h>
@@ -109,22 +112,38 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			const AVFrameSideData* SideData(int type) const noexcept;
 
 			/**
-			 * @brief Copies `buf[0]` into @p out.
+			 * @brief Presentation timestamp in stream ticks.
+			 * @return pts, or `AV_NOPTS_VALUE`.
+			 */
+			std::int64_t Pts() const noexcept;
+
+			/**
+			 * @brief Duration in stream ticks.
+			 * @return Duration, or 0.
+			 */
+			std::int64_t DurationTicks() const noexcept;
+
+			/**
+			 * @brief Packs planar video/audio into @p out without linesize padding.
 			 * @param out Destination (cleared first).
 			 */
 			void CopyPrimaryBuffer(StormByte::Buffer::DataType& out) const noexcept;
 
 			/**
-			 * @brief Presentation timestamp in the decoder time base.
-			 * @return PTS, or `AV_NOPTS_VALUE`.
+			 * @brief Writes mastering display and content light from @p hdr10.
+			 * @param hdr10 High-level HDR10 bag.
+			 *
+			 * Replaces existing MDM/CLL side data. No-op if @p hdr10 is empty.
 			 */
-			std::int64_t Pts() const noexcept;
+			void WriteHdr10(const StormByte::Multimedia::Property::HDR10& hdr10) noexcept;
 
 			/**
-			 * @brief Frame duration in the decoder time base.
-			 * @return Duration ticks, or 0.
+			 * @brief Copies raw SEI/side-data blobs onto the frame.
+			 * @param attachments High-level side data.
+			 *
+			 * Known HDR types are skipped here; use WriteHdr10 for those.
 			 */
-			std::int64_t DurationTicks() const noexcept;
+			void WriteSideData(const std::vector<StormByte::Multimedia::Pipeline::SideData>& attachments) noexcept;
 
 		private:
 			/**
