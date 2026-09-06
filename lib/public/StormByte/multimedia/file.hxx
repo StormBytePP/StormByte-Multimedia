@@ -91,10 +91,10 @@ namespace StormByte::Multimedia {
 			File& operator=(const File&) = delete;
 
 			/**
-			 * @brief Move assignment.
+			 * @brief Move assignment (deleted: Container is a reference).
 			 * @return *this.
 			 */
-			File& operator=(File&&) = default;
+			File& operator=(File&&) = delete;
 
 			/**
 			 * @brief Filesystem path passed to Open, or empty if the source is a Consumer.

@@ -56,14 +56,15 @@ namespace StormByte::Multimedia {
 
 	/**
 	 * @class Stream
-	 * @brief One media stream: registry Codec, tags and optional property bag.
+	 * @brief One media stream: registry Codec, duration, properties and tags.
 	 *
 	 * Copies share the same Codec instance. The Codec outlives every Stream.
+	 * Assignment is deleted because Codec is held by reference.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Stream {
 		public:
 			/**
-			 * @brief Per-stream property bag.
+			 * @brief Per-stream typed properties.
 			 */
 			using Properties = std::variant<std::monostate, Property::Video, Property::Audio>;
 
@@ -83,16 +84,16 @@ namespace StormByte::Multimedia {
 			~Stream() = default;
 
 			/**
-			 * @brief Copy assignment.
+			 * @brief Copy assignment (deleted: Codec is a reference).
 			 * @return *this.
 			 */
-			Stream& operator=(const Stream&) = default;
+			Stream& operator=(const Stream&) = delete;
 
 			/**
-			 * @brief Move assignment.
+			 * @brief Move assignment (deleted: Codec is a reference).
 			 * @return *this.
 			 */
-			Stream& operator=(Stream&&) = default;
+			Stream& operator=(Stream&&) = delete;
 
 			/**
 			 * @brief Codec of this stream.
@@ -116,22 +117,22 @@ namespace StormByte::Multimedia {
 			 * @brief Stream duration.
 			 * @return Duration in nanoseconds, or empty if unknown.
 			 *
-			 * Filled from the container header at Open, or when File::Duration()
-			 * scans this instance. Empty if it cannot be determined.
+			 * Header value from Open, or a value filled by File::Duration() after
+			 * a packet scan. Empty if it cannot be determined.
 			 */
 			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
 
 			/**
-			 * @brief Video property bag, if this stream has one.
-			 * @return Video properties, or nullptr.
+			 * @brief Video properties when this stream is video.
+			 * @return Pointer to properties, or nullptr.
 			 */
 			const Property::Video* Video() const noexcept {
 				return std::get_if<Property::Video>(&m_properties);
 			}
 
 			/**
-			 * @brief Audio property bag, if this stream has one.
-			 * @return Audio properties, or nullptr.
+			 * @brief Audio properties when this stream is audio.
+			 * @return Pointer to properties, or nullptr.
 			 */
 			const Property::Audio* Audio() const noexcept {
 				return std::get_if<Property::Audio>(&m_properties);
@@ -140,21 +141,20 @@ namespace StormByte::Multimedia {
 		private:
 			friend class File;
 
-			const class Codec& m_codec;							///< Registry codec
-			Metadata::Stream m_metadata;						///< Stream tags
+			const class Codec& m_codec;									///< Registry codec
+			Metadata::Stream m_metadata;								///< Stream tags
 			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Stream duration
-			Properties m_properties;							///< Video, audio, or none
+			Properties m_properties;									///< Video, audio, or none
 
 			/**
 			 * @brief File-only constructor.
 			 * @param codec Registry codec.
 			 * @param metadata Stream tags.
-			 * @param duration Stream duration, if known.
-			 * @param properties Video or audio bag, or monostate.
+			 * @param duration Stream duration from the header, if any.
+			 * @param properties Typed property bag.
 			 */
 			Stream(const class Codec& codec, Metadata::Stream metadata,
-				std::optional<std::chrono::nanoseconds> duration = std::nullopt,
-				Properties properties = std::monostate {}) noexcept
+				std::optional<std::chrono::nanoseconds> duration, Properties properties) noexcept
 			: m_codec(codec), m_metadata(std::move(metadata)),
 			m_duration(duration), m_properties(std::move(properties)) {}
 	};
