@@ -151,8 +151,56 @@ namespace {
 		});
 	}
 
+	bool IsStillImageCodec(int codecId) noexcept {
+		switch (static_cast<AVCodecID>(codecId)) {
+			case AV_CODEC_ID_MJPEG:
+			case AV_CODEC_ID_MJPEGB:
+			case AV_CODEC_ID_PNG:
+			case AV_CODEC_ID_APNG:
+			case AV_CODEC_ID_BMP:
+			case AV_CODEC_ID_GIF:
+			case AV_CODEC_ID_WEBP:
+			case AV_CODEC_ID_TIFF:
+			case AV_CODEC_ID_JPEG2000:
+			case AV_CODEC_ID_PAM:
+			case AV_CODEC_ID_PPM:
+			case AV_CODEC_ID_JPEGLS:
+				return true;
+			default:
+				return false;
+		}
+	}
+
 	bool IsAttachedPicture(const FFmpeg::AVStream& stream) noexcept {
 		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
+	}
+
+	bool HasPrimaryVideo(const FFmpeg::AVFormatContext& ctx) noexcept {
+		for (const auto& stream : ctx.Streams()) {
+			if (stream.Type() != AVMEDIA_TYPE_VIDEO)
+				continue;
+			if (IsAttachedPicture(stream))
+				continue;
+			if (IsStillImageCodec(stream.CodecParameters().CodecId()))
+				continue;
+			return true;
+		}
+		return false;
+	}
+
+	bool IsCoverStream(const FFmpeg::AVStream& stream, bool hasPrimaryVideo) noexcept {
+		if (IsAttachedPicture(stream))
+			return true;
+		if (!hasPrimaryVideo)
+			return false;
+		if (stream.Type() != AVMEDIA_TYPE_VIDEO)
+			return false;
+		if (!IsStillImageCodec(stream.CodecParameters().CodecId()))
+			return false;
+		const auto duration = stream.Duration();
+		if (!duration.has_value() || *duration <= std::chrono::milliseconds{50})
+			return true;
+		return false;
 	}
 
 	Attachment MakeAttachment(const FFmpeg::AVStream& stream) noexcept {
@@ -168,6 +216,53 @@ namespace {
 			bytes.assign(p, p + raw->attached_pic.size);
 		}
 		return Attachment(std::move(name), std::move(mime), StormByte::Buffer::FIFO{std::move(bytes)});
+	}
+
+	void FillEmptyAttachmentPayloads(FFmpeg::AVFormatContext& ctx,
+		Multimedia::Attachments& attachments, const std::vector<int>& coverIndex) noexcept {
+		bool missing = false;
+		for (const auto& item : attachments) {
+			if (item.Payload().AvailableBytes() == 0) {
+				missing = true;
+				break;
+			}
+		}
+		if (!missing || coverIndex.empty())
+			return;
+
+		FFmpeg::AVPacket packet;
+		std::size_t filled = 0;
+		for (;;) {
+			const auto result = ctx.ReadPacket(packet);
+			if (result == FFmpeg::OperationResult::EndOfFile)
+				break;
+			if (result == FFmpeg::OperationResult::TryAgain)
+				continue;
+			if (result != FFmpeg::OperationResult::Success)
+				break;
+
+			const int index = packet.StreamIndex();
+			for (std::size_t n = 0; n < coverIndex.size(); ++n) {
+				if (coverIndex[n] != index)
+					continue;
+				if (attachments[n].Payload().AvailableBytes() != 0)
+					break;
+				StormByte::Buffer::DataType bytes;
+				if (const auto* data = packet.Data(); data && packet.Size() > 0) {
+					const auto* raw = reinterpret_cast<const std::byte*>(data);
+					bytes.assign(raw, raw + packet.Size());
+				}
+				attachments[n] = Attachment(
+					attachments[n].FileName(),
+					attachments[n].MimeType(),
+					StormByte::Buffer::FIFO{std::move(bytes)});
+				++filled;
+				break;
+			}
+			packet.Unref();
+			if (filled == coverIndex.size())
+				break;
+		}
 	}
 }
 
@@ -212,7 +307,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 	if (!opened.has_value())
 		return FailOpen(*origin, opened.error()->what());
 
-	const FFmpeg::AVFormatContext& ctx = opened.value();
+	FFmpeg::AVFormatContext& ctx = opened.value();
 	const char* formatName = ctx.FormatName();
 	if (!formatName)
 		return FailOpen(*origin, "unknown container format");
@@ -221,11 +316,14 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 	if (!container.has_value())
 		return FailOpen(*origin, container.error()->what());
 
+	const bool hasPrimaryVideo = HasPrimaryVideo(ctx);
 	Multimedia::Streams streams;
 	Multimedia::Attachments attachments;
+	std::vector<int> coverIndex;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsAttachedPicture(stream)) {
+		if (IsCoverStream(stream, hasPrimaryVideo)) {
 			attachments.push_back(MakeAttachment(stream));
+			coverIndex.push_back(stream.Index());
 			continue;
 		}
 		auto codec = ResolveCodec(stream);
@@ -238,6 +336,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 			FFmpeg::MapProperties(stream)
 		));
 	}
+	FillEmptyAttachmentPayloads(ctx, attachments, coverIndex);
 
 	if (knownDuration.has_value())
 		return File(std::move(origin), container.value(), std::move(streams), std::move(attachments),
@@ -271,12 +370,13 @@ void File::ResolveDuration() const noexcept {
 		return;
 
 	FFmpeg::AVFormatContext& ctx = opened.value();
+	const bool hasPrimaryVideo = HasPrimaryVideo(ctx);
 	std::unordered_map<int, std::size_t> byIndex;
 	std::vector<AVRational> timeBase;
 	std::vector<std::int64_t> endTick;
 	std::size_t i = 0;
 	for (const auto& stream : ctx.Streams()) {
-		if (IsAttachedPicture(stream))
+		if (IsCoverStream(stream, hasPrimaryVideo))
 			continue;
 		byIndex.emplace(stream.Index(), i);
 		timeBase.push_back(stream.TimeBase());
