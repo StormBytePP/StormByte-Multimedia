@@ -47,29 +47,26 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <optional>
-#include <variant>
 
 /**
  * @namespace StormByte::Multimedia
  * @brief Public multimedia types: codecs, containers, streams and files.
  */
 namespace StormByte::Multimedia {
+	class Origin;
+
 	/**
 	 * @class File
 	 * @brief Snapshot of a media source: path or Consumer, container, streams and tags.
 	 *
 	 * File is move-only. Open() probes with private FFmpeg RAII and drops the
-	 * demuxer before return. A Consumer source is copied and kept; its Ring is
-	 * exclusive to this File for its lifetime.
+	 * demuxer before return. A Consumer origin is kept; its Ring is exclusive
+	 * to this File for its lifetime.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC File {
 		public:
-			/**
-			 * @brief Media source held by File.
-			 */
-			using Source = std::variant<std::filesystem::path, StormByte::Buffer::Consumer>;
-
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
@@ -78,12 +75,12 @@ namespace StormByte::Multimedia {
 			/**
 			 * @brief Move constructor.
 			 */
-			File(File&&) = default;
+			File(File&&) noexcept;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~File() = default;
+			~File() noexcept;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -98,7 +95,7 @@ namespace StormByte::Multimedia {
 			File& operator=(File&&) = delete;
 
 			/**
-			 * @brief Filesystem path passed to Open, or empty if the source is a Consumer.
+			 * @brief Filesystem path passed to Open, or empty if the origin is a Consumer.
 			 * @return Path.
 			 */
 			const std::filesystem::path& Path() const noexcept;
@@ -139,9 +136,6 @@ namespace StormByte::Multimedia {
 			 * @brief Opens and probes @p path.
 			 * @param path Media file.
 			 * @return Snapshot or FileOpenErrorException.
-			 *
-			 * Duration() may later scan the file to resolve missing stream
-			 * durations even when the container header has a duration.
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
 
@@ -150,11 +144,6 @@ namespace StormByte::Multimedia {
 			 * @param path Media file.
 			 * @param duration Authoritative container duration in nanoseconds.
 			 * @return Snapshot or FileOpenErrorException.
-			 *
-			 * Duration() will not scan. @p duration is stored as-is.
-			 * Pass this only when the value is known to be correct (index, previous
-			 * probe, database). Do not use it to skip work: if you do not need
-			 * duration, call Open(path) and do not call Duration().
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path,
 				std::chrono::nanoseconds duration) noexcept;
@@ -163,12 +152,6 @@ namespace StormByte::Multimedia {
 			 * @brief Opens and probes a Consumer.
 			 * @param consumer Shared ring handle (copied and kept).
 			 * @return Snapshot or FileOpenErrorException.
-			 *
-			 * The Consumer is copied and kept by File. The underlying Ring is
-			 * exclusive to this File for its lifetime: do not Read, Extract, Seek
-			 * or Open another File on any Consumer that shares the same Ring.
-			 * Duration() may later scan the Ring to resolve missing stream
-			 * durations even when the header has a duration.
 			 */
 			static ExpectedFile Open(StormByte::Buffer::Consumer consumer) noexcept;
 
@@ -177,45 +160,38 @@ namespace StormByte::Multimedia {
 			 * @param consumer Shared ring handle (copied and kept).
 			 * @param duration Authoritative container duration in nanoseconds.
 			 * @return Snapshot or FileOpenErrorException.
-			 *
-			 * Duration() will not scan. @p duration is stored as-is.
-			 * Pass this only when the value is known to be correct. Do not use it
-			 * to skip work: if you do not need duration, call Open(consumer) and
-			 * do not call Duration(). The Ring remains exclusive to this File.
 			 */
 			static ExpectedFile Open(StormByte::Buffer::Consumer consumer,
 				std::chrono::nanoseconds duration) noexcept;
 
 		private:
-			mutable Source m_source;								///< Path or Consumer
+			std::unique_ptr<Origin> m_origin;						///< Path or Consumer
 			const class Container& m_container;						///< Registry container
 			mutable Multimedia::Streams m_streams;					///< Probed streams
-			Metadata::File m_metadata;							///< Container tags
-			mutable std::optional<Property::Duration> m_duration;			///< Container duration
+			Metadata::File m_metadata;								///< Container tags
+			mutable std::optional<Property::Duration> m_duration;	///< Container duration
 			mutable bool m_durationResolved;						///< Caller-supplied or scan done
 
 			/**
 			 * @brief Snapshot constructor.
-			 * @param source Path or Consumer.
+			 * @param origin Path or Consumer.
 			 * @param container Registry container.
 			 * @param streams Probed streams.
 			 * @param metadata Container tags.
 			 * @param duration Container duration.
 			 * @param durationResolved true if Duration() must not scan.
 			 */
-			File(Source source, const class Container& container,
+			File(std::unique_ptr<Origin> origin, const class Container& container,
 				Multimedia::Streams streams, Metadata::File metadata,
-				std::optional<Property::Duration> duration, bool durationResolved) noexcept
-			: m_source(std::move(source)), m_container(container), m_streams(std::move(streams)),
-			m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
+				std::optional<Property::Duration> duration, bool durationResolved) noexcept;
 
 			/**
 			 * @brief Shared Open implementation.
-			 * @param source Path or Consumer.
+			 * @param origin Path or Consumer.
 			 * @param duration Caller-supplied duration, if any.
 			 * @return Snapshot or FileOpenErrorException.
 			 */
-			static ExpectedFile Open(Source source,
+			static ExpectedFile Open(std::unique_ptr<Origin> origin,
 				std::optional<std::chrono::nanoseconds> duration) noexcept;
 
 			/**

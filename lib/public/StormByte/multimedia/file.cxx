@@ -36,13 +36,14 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/registry.hxx>
 
 #include <cstdint>
@@ -125,60 +126,69 @@ namespace {
 		return Property::Duration{*ns};
 	}
 
-	FFmpeg::ExpectedAVFormatContext OpenSource(File::Source& source) {
-		if (auto* path = std::get_if<std::filesystem::path>(&source))
-			return FFmpeg::AVFormatContext::Open(*path);
-		return FFmpeg::AVFormatContext::Open(std::get<StormByte::Buffer::Consumer>(source));
-	}
-
-	std::string SourceName(const File::Source& source) {
-		if (const auto* path = std::get_if<std::filesystem::path>(&source))
+	std::string OriginName(const Origin& origin) {
+		if (const auto* path = origin.Path())
 			return path->string();
 		return "buffer";
 	}
+
+	FFmpeg::ExpectedAVFormatContext OpenOrigin(Origin& origin) {
+		return origin.Visit([](auto&& held) {
+			return FFmpeg::AVFormatContext::Open(held);
+		});
+	}
 }
 
+File::File(std::unique_ptr<Origin> origin, const class Container& container,
+	Multimedia::Streams streams, Metadata::File metadata,
+	std::optional<Property::Duration> duration, bool durationResolved) noexcept
+: m_origin(std::move(origin)), m_container(container), m_streams(std::move(streams)),
+m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
+
+File::File(File&&) noexcept = default;
+File::~File() noexcept = default;
+
 ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
-	return Open(Source{path}, std::nullopt);
+	return Open(std::make_unique<Origin>(path), std::nullopt);
 }
 
 ExpectedFile File::Open(const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept {
-	return Open(Source{path}, std::optional<std::chrono::nanoseconds>{duration});
+	return Open(std::make_unique<Origin>(path), std::optional<std::chrono::nanoseconds>{duration});
 }
 
 ExpectedFile File::Open(StormByte::Buffer::Consumer consumer) noexcept {
-	return Open(Source{std::move(consumer)}, std::nullopt);
+	return Open(std::make_unique<Origin>(std::move(consumer)), std::nullopt);
 }
 
 ExpectedFile File::Open(StormByte::Buffer::Consumer consumer, std::chrono::nanoseconds duration) noexcept {
-	return Open(Source{std::move(consumer)}, std::optional<std::chrono::nanoseconds>{duration});
+	return Open(std::make_unique<Origin>(std::move(consumer)), std::optional<std::chrono::nanoseconds>{duration});
 }
 
-ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
-	if (auto* path = std::get_if<std::filesystem::path>(&source)) {
+ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
+	if (const auto* path = origin->Path()) {
 		std::string reason;
 		if (!IsReadableFile(*path, reason))
 			return Unexpected(FileOpenErrorException(path->string(), reason));
 	}
 
-	auto opened = OpenSource(source);
+	auto opened = OpenOrigin(*origin);
 	if (!opened.has_value())
-		return Unexpected(FileOpenErrorException(SourceName(source), opened.error()->what()));
+		return Unexpected(FileOpenErrorException(OriginName(*origin), opened.error()->what()));
 
 	const FFmpeg::AVFormatContext& ctx = opened.value();
 	const char* formatName = ctx.FormatName();
 	if (!formatName)
-		return Unexpected(FileOpenErrorException(SourceName(source), "unknown container format"));
+		return Unexpected(FileOpenErrorException(OriginName(*origin), "unknown container format"));
 
 	auto container = ResolveContainer(formatName);
 	if (!container.has_value())
-		return Unexpected(FileOpenErrorException(SourceName(source), container.error()->what()));
+		return Unexpected(FileOpenErrorException(OriginName(*origin), container.error()->what()));
 
 	Multimedia::Streams streams;
 	for (const auto& stream : ctx.Streams()) {
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
-			return Unexpected(FileOpenErrorException(SourceName(source), codec.error()->what()));
+			return Unexpected(FileOpenErrorException(OriginName(*origin), codec.error()->what()));
 		streams.emplace_back(Stream(
 			codec.value(),
 			Detail::Probe::Stream(stream),
@@ -188,15 +198,15 @@ ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> k
 	}
 
 	if (knownDuration.has_value())
-		return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
+		return File(std::move(origin), container.value(), std::move(streams), Detail::Probe::File(ctx),
 			Property::Duration{*knownDuration}, true);
 
-	return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
+	return File(std::move(origin), container.value(), std::move(streams), Detail::Probe::File(ctx),
 		WrapDuration(ctx.Duration()), false);
 }
 
 const std::filesystem::path& File::Path() const noexcept {
-	if (const auto* path = std::get_if<std::filesystem::path>(&m_source))
+	if (const auto* path = m_origin->Path())
 		return *path;
 	return EmptyPath();
 }
@@ -210,7 +220,7 @@ const std::optional<Property::Duration>& File::Duration() const noexcept {
 void File::ResolveDuration() const noexcept {
 	m_durationResolved = true;
 
-	auto opened = OpenSource(m_source);
+	auto opened = OpenOrigin(*m_origin);
 	if (!opened.has_value())
 		return;
 
