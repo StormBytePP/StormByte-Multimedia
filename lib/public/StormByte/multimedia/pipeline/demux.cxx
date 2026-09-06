@@ -103,6 +103,14 @@ const std::optional<std::string>& Demux::Error() const noexcept {
 	return m_error;
 }
 
+Filter::Pipe& Demux::Pipe() noexcept {
+	return m_pipe;
+}
+
+const Filter::Pipe& Demux::Pipe() const noexcept {
+	return m_pipe;
+}
+
 void Demux::Fail(std::string reason) noexcept {
 	m_failed = true;
 	m_error = std::move(reason);
@@ -162,15 +170,24 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet)
 			bytes.assign(raw, raw + size);
 		}
 
-		packet = Packet(
+		Packet raw{
 			index,
 			StormByte::Buffer::FIFO{std::move(bytes)},
 			TicksToDuration(demux.m_impl->m_scratch.Pts(), tb),
 			TicksToDuration(demux.m_impl->m_scratch.Dts(), tb),
 			TicksToDuration(demux.m_impl->m_scratch.Duration(), tb),
 			(demux.m_impl->m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
-		);
+		};
 		demux.m_impl->m_scratch.Unref();
+
+		auto filtered = demux.m_pipe.Push(std::move(raw));
+		if (demux.m_pipe.Failed()) {
+			demux.Fail(demux.m_pipe.Error().value_or("packet filter failed"));
+			return demux;
+		}
+		if (!filtered.has_value())
+			continue;
+		packet = std::move(*filtered);
 		return demux;
 	}
 }

@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/multimedia/pipeline/filters/pipe.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -65,7 +66,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
 
 	/**
-	 * @brief Reads one packet into @p packet. Never throws.
+	 * @brief Reads one packet into @p packet after the filter pipe. Never throws.
 	 * @param demux Source demuxer.
 	 * @param packet Replaced on success.
 	 * @return @p demux.
@@ -78,7 +79,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Open and read go through operator>>. Hard errors set Failed(); EOF
 	 * sets Eof(). Neither throws. operator>> on a failed or ended Demux
-	 * is a no-op. operator bool() is false on fail or EOF so
+	 * is a no-op. Packets pass through Pipe() before they are returned.
+	 * An empty pipe is identity. A step that absorbs a packet makes Demux
+	 * read the next one. operator bool() is false on fail or EOF so
 	 * `while (demux >> packet)` stops. Check Failed() when the run finishes.
 	 *
 	 * One Demux per File if the origin is a Consumer. File::Duration() on a
@@ -125,7 +128,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether a hard error occurred.
-			 * @return true on open/read error.
+			 * @return true on open/read/filter error.
 			 */
 			bool Failed() const noexcept;
 
@@ -141,15 +144,28 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const std::optional<std::string>& Error() const noexcept;
 
+			/**
+			 * @brief Packet filter pipe. Add steps before the first packet read.
+			 * @return Pipe.
+			 */
+			Filter::Pipe& Pipe() noexcept;
+
+			/**
+			 * @brief Packet filter pipe.
+			 * @return Pipe.
+			 */
+			const Filter::Pipe& Pipe() const noexcept;
+
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
 			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
 
 		private:
 			class Impl;
-			std::unique_ptr<Impl> m_impl;				///< FFmpeg context
-			bool m_failed;						///< Hard error
-			bool m_eof;						///< End of source
-			std::optional<std::string> m_error;			///< Failure text
+			std::unique_ptr<Impl> m_impl;			///< FFmpeg context
+			Filter::Pipe m_pipe;				///< Packet steps
+			bool m_failed;					///< Hard error
+			bool m_eof;					///< End of source
+			std::optional<std::string> m_error;		///< Failure text
 
 			/**
 			 * @brief Marks a hard error.
