@@ -119,6 +119,12 @@ namespace {
 		return std::chrono::nanoseconds{ns};
 	}
 
+	std::optional<Property::Duration> WrapDuration(const std::optional<std::chrono::nanoseconds>& ns) noexcept {
+		if (!ns.has_value())
+			return std::nullopt;
+		return Property::Duration{*ns};
+	}
+
 	FFmpeg::ExpectedAVFormatContext OpenSource(File::Source& source) {
 		if (auto* path = std::get_if<std::filesystem::path>(&source))
 			return FFmpeg::AVFormatContext::Open(*path);
@@ -176,18 +182,17 @@ ExpectedFile File::Open(Source source, std::optional<std::chrono::nanoseconds> k
 		streams.emplace_back(Stream(
 			codec.value(),
 			Detail::Probe::Stream(stream),
-			stream.Duration(),
+			WrapDuration(stream.Duration()),
 			FFmpeg::MapProperties(stream)
 		));
 	}
 
 	if (knownDuration.has_value())
 		return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
-			knownDuration, true);
+			Property::Duration{*knownDuration}, true);
 
-	auto header = ctx.Duration();
 	return File(std::move(source), container.value(), std::move(streams), Detail::Probe::File(ctx),
-		header, false);
+		WrapDuration(ctx.Duration()), false);
 }
 
 const std::filesystem::path& File::Path() const noexcept {
@@ -196,7 +201,7 @@ const std::filesystem::path& File::Path() const noexcept {
 	return EmptyPath();
 }
 
-const std::optional<std::chrono::nanoseconds>& File::Duration() const noexcept {
+const std::optional<Property::Duration>& File::Duration() const noexcept {
 	if (!m_durationResolved)
 		ResolveDuration();
 	return m_duration;
@@ -245,15 +250,16 @@ void File::ResolveDuration() const noexcept {
 			end = pts;
 	}
 
-	std::optional<std::chrono::nanoseconds> longest;
+	std::optional<Property::Duration> longest;
 	for (std::size_t n = 0; n < endTick.size(); ++n) {
 		auto ns = TicksToNs(endTick[n], timeBase[n]);
 		if (!ns.has_value())
 			continue;
+		const Property::Duration measured{*ns};
 		if (n < m_streams.size() && !m_streams[n].m_duration.has_value())
-			m_streams[n].m_duration = ns;
-		if (!longest.has_value() || *ns > *longest)
-			longest = ns;
+			m_streams[n].m_duration = measured;
+		if (!longest.has_value() || measured.Nanoseconds() > longest->Nanoseconds())
+			longest = measured;
 	}
 
 	if (!m_duration.has_value())

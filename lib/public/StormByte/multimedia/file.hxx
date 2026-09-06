@@ -41,6 +41,7 @@
 #include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/metadata/file.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 
@@ -122,7 +123,7 @@ namespace StormByte::Multimedia {
 
 			/**
 			 * @brief Container duration.
-			 * @return Duration in nanoseconds, or empty if it cannot be determined.
+			 * @return Duration, or empty if it cannot be determined.
 			 *
 			 * Returns the header value, the duration passed to Open, or a value
 			 * cached after the first scan. The first call may read the whole source
@@ -132,7 +133,7 @@ namespace StormByte::Multimedia {
 			 * instance. If Open(..., duration) was used, this is that value, there
 			 * is no I/O, and stream durations stay as probed.
 			 */
-			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept;
+			const std::optional<Property::Duration>& Duration() const noexcept;
 
 			/**
 			 * @brief Opens and probes @p path.
@@ -190,7 +191,7 @@ namespace StormByte::Multimedia {
 			const class Container& m_container;						///< Registry container
 			mutable Multimedia::Streams m_streams;					///< Probed streams
 			Metadata::File m_metadata;							///< Container tags
-			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Container duration
+			mutable std::optional<Property::Duration> m_duration;			///< Container duration
 			mutable bool m_durationResolved;						///< Caller-supplied or scan done
 
 			/**
@@ -204,7 +205,7 @@ namespace StormByte::Multimedia {
 			 */
 			File(Source source, const class Container& container,
 				Multimedia::Streams streams, Metadata::File metadata,
-				std::optional<std::chrono::nanoseconds> duration, bool durationResolved) noexcept
+				std::optional<Property::Duration> duration, bool durationResolved) noexcept
 			: m_source(std::move(source)), m_container(container), m_streams(std::move(streams)),
 			m_metadata(std::move(metadata)), m_duration(duration), m_durationResolved(durationResolved) {}
 

@@ -41,9 +41,9 @@
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/metadata/stream.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 
-#include <chrono>
 #include <optional>
 #include <variant>
 
@@ -115,12 +115,12 @@ namespace StormByte::Multimedia {
 
 			/**
 			 * @brief Stream duration.
-			 * @return Duration in nanoseconds, or empty if unknown.
+			 * @return Duration, or empty if unknown.
 			 *
 			 * Header value from Open, or a value filled by File::Duration() after
 			 * a packet scan. Empty if it cannot be determined.
 			 */
-			const std::optional<std::chrono::nanoseconds>& Duration() const noexcept { return m_duration; }
+			const std::optional<Property::Duration>& Duration() const noexcept { return m_duration; }
 
 			/**
 			 * @brief Video properties when this stream is video.
@@ -143,7 +143,7 @@ namespace StormByte::Multimedia {
 
 			const class Codec& m_codec;									///< Registry codec
 			Metadata::Stream m_metadata;								///< Stream tags
-			mutable std::optional<std::chrono::nanoseconds> m_duration;	///< Stream duration
+			mutable std::optional<Property::Duration> m_duration;				///< Stream duration
 			Properties m_properties;									///< Video, audio, or none
 
 			/**
@@ -154,7 +154,7 @@ namespace StormByte::Multimedia {
 			 * @param properties Typed property bag.
 			 */
 			Stream(const class Codec& codec, Metadata::Stream metadata,
-				std::optional<std::chrono::nanoseconds> duration, Properties properties) noexcept
+				std::optional<Property::Duration> duration, Properties properties) noexcept
 			: m_codec(codec), m_metadata(std::move(metadata)),
 			m_duration(duration), m_properties(std::move(properties)) {}
 	};
