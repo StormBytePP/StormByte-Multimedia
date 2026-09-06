@@ -121,10 +121,34 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			std::int64_t Pts() const noexcept;
 
 			/**
+			 * @brief Decode timestamp in stream time base.
+			 * @return DTS, or `AV_NOPTS_VALUE`.
+			 */
+			std::int64_t Dts() const noexcept;
+
+			/**
 			 * @brief Packet duration in stream time base.
 			 * @return Duration ticks, or 0.
 			 */
 			std::int64_t Duration() const noexcept;
+
+			/**
+			 * @brief Packet flags (`AV_PKT_FLAG_*`).
+			 * @return Flags, or 0 if empty.
+			 */
+			int Flags() const noexcept;
+
+			/**
+			 * @brief Compressed payload pointer.
+			 * @return `data`, or nullptr if empty.
+			 */
+			const std::uint8_t* Data() const noexcept;
+
+			/**
+			 * @brief Compressed payload size in bytes.
+			 * @return `size`, or 0 if empty.
+			 */
+			int Size() const noexcept;
 
 		private:
 			/**

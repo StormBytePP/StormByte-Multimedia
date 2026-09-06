@@ -57,6 +57,11 @@
 namespace StormByte::Multimedia {
 	class Origin;
 
+	namespace Pipeline {
+		class Demux;
+		Demux& operator>>(const File&, Demux&) noexcept;
+	}
+
 	/**
 	 * @class File
 	 * @brief Snapshot of a media source: path or Consumer, container, streams and tags.
@@ -135,7 +140,7 @@ namespace StormByte::Multimedia {
 			/**
 			 * @brief Opens and probes @p path.
 			 * @param path Media file.
-			 * @return Snapshot or FileOpenErrorException.
+			 * @return Snapshot or FileOpenException.
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
 
@@ -143,7 +148,7 @@ namespace StormByte::Multimedia {
 			 * @brief Opens and probes @p path with an already known duration.
 			 * @param path Media file.
 			 * @param duration Authoritative container duration in nanoseconds.
-			 * @return Snapshot or FileOpenErrorException.
+			 * @return Snapshot or FileOpenException.
 			 */
 			static ExpectedFile Open(const std::filesystem::path& path,
 				std::chrono::nanoseconds duration) noexcept;
@@ -151,7 +156,7 @@ namespace StormByte::Multimedia {
 			/**
 			 * @brief Opens and probes a Consumer.
 			 * @param consumer Shared ring handle (copied and kept).
-			 * @return Snapshot or FileOpenErrorException.
+			 * @return Snapshot or FileOpenException.
 			 */
 			static ExpectedFile Open(StormByte::Buffer::Consumer consumer) noexcept;
 
@@ -159,12 +164,14 @@ namespace StormByte::Multimedia {
 			 * @brief Opens and probes a Consumer with an already known duration.
 			 * @param consumer Shared ring handle (copied and kept).
 			 * @param duration Authoritative container duration in nanoseconds.
-			 * @return Snapshot or FileOpenErrorException.
+			 * @return Snapshot or FileOpenException.
 			 */
 			static ExpectedFile Open(StormByte::Buffer::Consumer consumer,
 				std::chrono::nanoseconds duration) noexcept;
 
 		private:
+			friend Pipeline::Demux& Pipeline::operator>>(const File&, Pipeline::Demux&) noexcept;
+
 			std::unique_ptr<Origin> m_origin;						///< Path or Consumer
 			const class Container& m_container;						///< Registry container
 			mutable Multimedia::Streams m_streams;					///< Probed streams
@@ -189,7 +196,7 @@ namespace StormByte::Multimedia {
 			 * @brief Shared Open implementation.
 			 * @param origin Path or Consumer.
 			 * @param duration Caller-supplied duration, if any.
-			 * @return Snapshot or FileOpenErrorException.
+			 * @return Snapshot or FileOpenException.
 			 */
 			static ExpectedFile Open(std::unique_ptr<Origin> origin,
 				std::optional<std::chrono::nanoseconds> duration) noexcept;

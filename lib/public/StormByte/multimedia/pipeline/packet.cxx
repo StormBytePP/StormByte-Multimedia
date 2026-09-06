@@ -40,6 +40,9 @@
 
 using namespace StormByte::Multimedia::Pipeline;
 
+Packet::Packet() noexcept
+: m_streamIndex(-1), m_keyFrame(false) {}
+
 Packet::Packet(int stream_index, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> dts,

@@ -71,8 +71,24 @@ std::int64_t FFmpeg::AVPacket::Pts() const noexcept {
 	return m_ptr ? m_ptr->pts : AV_NOPTS_VALUE;
 }
 
+std::int64_t FFmpeg::AVPacket::Dts() const noexcept {
+	return m_ptr ? m_ptr->dts : AV_NOPTS_VALUE;
+}
+
 std::int64_t FFmpeg::AVPacket::Duration() const noexcept {
 	return m_ptr ? m_ptr->duration : 0;
+}
+
+int FFmpeg::AVPacket::Flags() const noexcept {
+	return m_ptr ? m_ptr->flags : 0;
+}
+
+const std::uint8_t* FFmpeg::AVPacket::Data() const noexcept {
+	return m_ptr ? m_ptr->data : nullptr;
+}
+
+int FFmpeg::AVPacket::Size() const noexcept {
+	return m_ptr ? m_ptr->size : 0;
 }
 
 void FFmpeg::AVPacket::Free() noexcept {

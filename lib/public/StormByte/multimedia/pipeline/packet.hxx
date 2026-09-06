@@ -61,6 +61,11 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet {
 		public:
 			/**
+			 * @brief Empty packet (no payload, index -1).
+			 */
+			Packet() noexcept;
+			
+			/**
 			 * @brief Builds a packet.
 			 * @param stream_index Container stream index.
 			 * @param payload Owned compressed bytes.
