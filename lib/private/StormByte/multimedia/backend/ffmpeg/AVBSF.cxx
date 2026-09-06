@@ -36,12 +36,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVBSF.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVBSF.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVBSF::AVBSF(AVBSFContext* ctx) noexcept
 :AVPointer(ctx) {}
@@ -112,4 +112,4 @@ void FFmpeg::AVBSF::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVBSFContext>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVBSFContext>;

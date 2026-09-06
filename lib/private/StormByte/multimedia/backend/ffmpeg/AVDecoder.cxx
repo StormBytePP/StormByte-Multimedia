@@ -36,14 +36,14 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVBSF.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVBSF.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVDecoder::AVDecoder(::AVCodecContext* ctx) noexcept:
 AVPointer(ctx) {}
@@ -148,4 +148,4 @@ void FFmpeg::AVDecoder::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVCodecContext>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVCodecContext>;

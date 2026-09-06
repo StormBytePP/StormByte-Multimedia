@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
@@ -48,10 +48,10 @@ extern "C" {
 }
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	/**
 	 * @class AVCodecParameters
 	 * @brief Deep-copying RAII wrapper for ::AVCodecParameters.

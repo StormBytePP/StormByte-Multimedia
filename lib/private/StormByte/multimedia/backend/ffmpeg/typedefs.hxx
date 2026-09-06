@@ -38,17 +38,51 @@
 
 #pragma once
 
-#include <StormByte/multimedia/stream.hxx>
-#include <StormByte/multimedia/visibility.h>
+#include <StormByte/expected.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/exception.hxx>
 
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+#include <set>
+
+extern "C" {
+	#include <libavutil/error.h>
+}
+
+/**
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
+ * @brief Private RAII wrappers over libav*.
+ */
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	/**
+	 * @enum OperationResult
+	 * @brief Result of send/receive style FFmpeg calls.
+	 */
+	enum STORMBYTE_MULTIMEDIA_PRIVATE OperationResult {
+		Success,	///< Completed successfully
+		EndOfFile,	///< EOF reached
+		Error,		///< Hard error
+		TryAgain	///< EAGAIN — need more input/output
+	};
+
+	class AVBSF;
+	class AVDecoder;
+	class AVEncoder;
+	class AVFormatContext;
 	class AVStream;
 
+	using ExpectedAVFormatContext = StormByte::Expected<AVFormatContext, FFmpeg::DecoderError>;	///< Open demuxer
+	using ExpectedAVDecoder = StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;			///< Open decoder
+	using ExpectedAVEncoder = StormByte::Expected<AVEncoder, FFmpeg::EncoderError>;			///< Open encoder
+	using ExpectedAVBSF = StormByte::Expected<AVBSF, FFmpeg::BSFError>;				///< Create BSF
+	using Streams = std::set<AVStream>;								///< Stream set
+
 	/**
-	 * @brief Builds the public property bag from a stream view.
-	 * @param stream Stream view.
-	 * @return Video, audio or monostate.
+	 * @brief Converts an FFmpeg error code to a string.
+	 * @param errnum Code from av_strerror.
+	 * @return Human-readable message.
 	 */
-	STORMBYTE_MULTIMEDIA_PRIVATE Multimedia::Stream::Properties
-	MapProperties(const AVStream& stream) noexcept;
+	inline std::string ErrorToString(int errnum) {
+		char buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+		av_strerror(errnum, buf, sizeof(buf));
+		return buf;
+	}
 }

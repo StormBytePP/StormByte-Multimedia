@@ -38,98 +38,93 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVBSF.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
-#include <cstdint>
-
-extern "C" {
-	#include <libavcodec/packet.h>
-}
+#include <deque>
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVPacket;
+
 	/**
-	 * @class AVPacket
-	 * @brief RAII wrapper for ::AVPacket.
+	 * @class AVBSFPipeline
+	 * @brief Ordered chain of bitstream filters applied to packets.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE AVPacket: public AVPointer<::AVPacket> {
-		friend class AVBSF;
-		friend class AVDecoder;
-		friend class AVEncoder;
-		friend class AVFormatContext;
+	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSFPipeline {
 		public:
 			/**
-			 * @brief Allocates an empty packet.
+			 * @brief Default constructor.
 			 */
-			AVPacket() noexcept;
+			AVBSFPipeline() noexcept = default;
 
 			/**
 			 * @brief Copy constructor (deleted).
-			 * @param other Unused.
 			 */
-			AVPacket(const AVPacket& other) = delete;
+			AVBSFPipeline(const AVBSFPipeline&) = delete;
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Source packet.
+			 * @param other Source pipeline.
 			 */
-			AVPacket(AVPacket&& other) noexcept = default;
+			AVBSFPipeline(AVBSFPipeline&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~AVPacket() noexcept override;
+			~AVBSFPipeline() noexcept = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
-			 * @param other Unused.
 			 * @return *this.
 			 */
-			AVPacket& operator=(const AVPacket& other) = delete;
+			AVBSFPipeline& operator=(const AVBSFPipeline&) = delete;
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Source packet.
+			 * @param other Source pipeline.
 			 * @return *this.
 			 */
-			AVPacket& operator=(AVPacket&& other) noexcept = default;
+			AVBSFPipeline& operator=(AVBSFPipeline&& other) noexcept;
 
 			/**
-			 * @brief New packet referencing the same data (av_packet_ref).
-			 * @return Referenced packet.
+			 * @brief Appends a filter to the chain.
+			 * @param bsf Filter to take ownership of.
 			 */
-			FFmpeg::AVPacket Ref() const noexcept;
+			void Add(AVBSF&& bsf) noexcept;
 
 			/**
-			 * @brief Unreferences packet data (av_packet_unref).
+			 * @brief Runs @p pkt through all filters in order.
+			 * @param pkt Packet in/out.
+			 * @return Operation result.
 			 */
-			void Unref() noexcept;
+			OperationResult Process(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Packet stream index.
-			 * @return stream_index, or -1 if empty.
+			 * @brief Flushes every filter.
 			 */
-			int StreamIndex() const noexcept;
+			void Flush() noexcept;
 
 			/**
-			 * @brief Presentation timestamp in stream time base.
-			 * @return PTS, or `AV_NOPTS_VALUE`.
+			 * @brief Signals EOF on every filter.
 			 */
-			std::int64_t Pts() const noexcept;
+			void SetEof() noexcept;
 
 			/**
-			 * @brief Packet duration in stream time base.
-			 * @return Duration ticks, or 0.
+			 * @brief Removes all filters.
 			 */
-			std::int64_t Duration() const noexcept;
+			void Clear() noexcept;
+
+			/**
+			 * @brief Whether the chain is empty.
+			 * @return true if no filters are registered.
+			 */
+			bool Empty() const noexcept;
 
 		private:
-			/**
-			 * @brief Frees the packet (av_packet_free).
-			 */
-			void Free() noexcept override;
+			std::deque<AVBSF> m_filters;	///< Filter chain
 	};
 }

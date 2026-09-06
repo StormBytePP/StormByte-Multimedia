@@ -36,9 +36,9 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVFrame::AVFrame() noexcept:
 AVPointer(av_frame_alloc()) {}
@@ -65,4 +65,4 @@ void FFmpeg::AVFrame::Free() noexcept {
 }
 
 // Explicit template instantiation
-template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVFrame>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVFrame>;

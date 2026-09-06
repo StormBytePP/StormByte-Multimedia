@@ -36,10 +36,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVStream::AVStream(::AVStream* stream) noexcept
 :m_stream(stream) {}

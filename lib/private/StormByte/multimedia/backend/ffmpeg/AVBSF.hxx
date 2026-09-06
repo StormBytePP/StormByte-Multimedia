@@ -38,93 +38,100 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVBSF.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/typedefs.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
-#include <deque>
+extern "C" {
+	#include <libavcodec/avcodec.h>
+	#include <libavcodec/bsf.h>
+}
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVCodecParameters;
 	class AVPacket;
 
 	/**
-	 * @class AVBSFPipeline
-	 * @brief Ordered chain of bitstream filters applied to packets.
+	 * @class AVBSF
+	 * @brief RAII bitstream filter context.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSFPipeline {
+	class STORMBYTE_MULTIMEDIA_PRIVATE AVBSF: public AVPointer<::AVBSFContext> {
 		public:
-			/**
-			 * @brief Default constructor.
-			 */
-			AVBSFPipeline() noexcept = default;
-
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
-			AVBSFPipeline(const AVBSFPipeline&) = delete;
+			AVBSF(const AVBSF&) = delete;
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Source pipeline.
+			 * @param other Source filter.
 			 */
-			AVBSFPipeline(AVBSFPipeline&& other) noexcept;
+			AVBSF(AVBSF&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~AVBSFPipeline() noexcept = default;
+			~AVBSF() noexcept override;
 
 			/**
 			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			AVBSFPipeline& operator=(const AVBSFPipeline&) = delete;
+			AVBSF& operator=(const AVBSF&) = delete;
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Source pipeline.
+			 * @param other Source filter.
 			 * @return *this.
 			 */
-			AVBSFPipeline& operator=(AVBSFPipeline&& other) noexcept;
+			AVBSF& operator=(AVBSF&& other) noexcept;
 
 			/**
-			 * @brief Appends a filter to the chain.
-			 * @param bsf Filter to take ownership of.
+			 * @brief Creates and initializes a named BSF.
+			 * @param name Filter name (e.g. "h264_mp4toannexb").
+			 * @param params Input codec parameters.
+			 * @param time_base Input time base.
+			 * @return AVBSF or BSFError.
 			 */
-			void Add(AVBSF&& bsf) noexcept;
+			static ExpectedAVBSF Create(const std::string& name, const AVCodecParameters& params, AVRational time_base) noexcept;
 
 			/**
-			 * @brief Runs @p pkt through all filters in order.
-			 * @param pkt Packet in/out.
+			 * @brief Sends a packet into the filter.
+			 * @param pkt Packet to send.
 			 * @return Operation result.
 			 */
-			OperationResult Process(AVPacket& pkt) noexcept;
+			OperationResult SendPacket(AVPacket& pkt) noexcept;
 
 			/**
-			 * @brief Flushes every filter.
+			 * @brief Receives a filtered packet.
+			 * @param pkt Destination packet.
+			 * @return Operation result.
+			 */
+			OperationResult ReceivePacket(AVPacket& pkt) noexcept;
+
+			/**
+			 * @brief Flushes the filter.
 			 */
 			void Flush() noexcept;
 
 			/**
-			 * @brief Signals EOF on every filter.
+			 * @brief Signals EOF (null packet).
 			 */
 			void SetEof() noexcept;
 
-			/**
-			 * @brief Removes all filters.
-			 */
-			void Clear() noexcept;
-
-			/**
-			 * @brief Whether the chain is empty.
-			 * @return true if no filters are registered.
-			 */
-			bool Empty() const noexcept;
-
 		private:
-			std::deque<AVBSF> m_filters;	///< Filter chain
+			/**
+			 * @brief Adopts an allocated BSF context.
+			 * @param ctx Allocated BSF context.
+			 */
+			explicit AVBSF(AVBSFContext* ctx) noexcept;
+
+			/**
+			 * @brief Frees the BSF (av_bsf_free).
+			 */
+			void Free() noexcept override;
 	};
 }

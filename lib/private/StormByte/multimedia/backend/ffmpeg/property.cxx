@@ -36,9 +36,9 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 
 #include <cstdint>
 #include <optional>
@@ -51,7 +51,7 @@ extern "C" {
 	#include <libavutil/pixfmt.h>
 }
 
-namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 using StormByte::Multimedia::Property::Audio;
 using StormByte::Multimedia::Property::ChannelLayout;
 using StormByte::Multimedia::Property::Color;

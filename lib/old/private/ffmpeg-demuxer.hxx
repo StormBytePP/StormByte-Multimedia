@@ -38,14 +38,14 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/demuxer.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/backend/demuxer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 
 /**
  * @namespace FFmpeg
  * @brief Internal FFmpeg wrappers.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	/**
 	 * @class Demuxer
 	 * @brief FFmpeg implementation of Backend::Demuxer.

@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/demuxer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/demuxer.hxx>
 #include <StormByte/multimedia/engine/demuxer.hxx>
 
 using namespace StormByte::Multimedia::Engine;
@@ -53,7 +53,7 @@ ExpectedDemuxer Demuxer::Open(const std::filesystem::path& path, enum Implementa
 	switch(implementation) {
 		case Implementation::FFmpeg: {
 			// Create FFmpeg demuxer
-			Engine::Backend::FFmpeg::Demuxer ffmpeg_demuxer;
+			Backend::FFmpeg::Demuxer ffmpeg_demuxer;
 
 			// Open demuxer and get components
 			auto expected_tuple = ffmpeg_demuxer.Open(path);

@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/typedefs.hxx>
+#include <StormByte/multimedia/backend/typedefs.hxx>
 #include <StormByte/multimedia/engine/streams.hxx>
 #include <StormByte/multimedia/metadata.hxx>
 
@@ -49,7 +49,7 @@
  * @namespace Backend
  * @brief Internal demuxer backends.
  */
-namespace StormByte::Multimedia::Engine::Backend {
+namespace StormByte::Multimedia::Backend {
 	/**
 	 * @class Demuxer
 	 * @brief Abstract backend demuxer (Open → metadata + streams).

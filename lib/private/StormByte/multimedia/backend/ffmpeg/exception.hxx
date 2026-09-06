@@ -41,10 +41,10 @@
 #include <StormByte/multimedia/exception.hxx>
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	/**
 	 * @class Exception
 	 * @brief Base for FFmpeg backend errors.

@@ -42,10 +42,10 @@
 #include <StormByte/type_traits.hxx>
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	/**
 	 * @class AVPointer
 	 * @brief Move-only RAII base for FFmpeg C pointers.

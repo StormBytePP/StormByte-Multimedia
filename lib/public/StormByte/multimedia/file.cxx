@@ -37,11 +37,11 @@
  */
 
 #include <StormByte/multimedia/detail/probe.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/registry.hxx>
 
@@ -58,7 +58,7 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia;
-namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
 	const std::filesystem::path& EmptyPath() noexcept {

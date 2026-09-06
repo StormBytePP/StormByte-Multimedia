@@ -61,7 +61,7 @@ namespace StormByte::Multimedia::Engine {
 			 */
 			template <typename... Args>
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
-			StormByte::Multimedia::Exception("Engine::" + component, fmt, std::forward<Args>(args)...) {}
+			StormByte::Multimedia::Exception("" + component, fmt, std::forward<Args>(args)...) {}
 
 			/**
 			 * Destructor.

@@ -47,6 +47,6 @@
  * @namespace Backend
  * @brief Internal demuxer backends.
  */
-namespace StormByte::Multimedia::Engine::OCR {
+namespace StormByte::Multimedia::OCR {
 	using ExpectedTessData = Expected<std::span<const std::uint8_t>, TessDataNotFoundException>;		///< Tessdata result
 }

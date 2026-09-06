@@ -36,9 +36,9 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend;
+using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVCodecParameters::AVCodecParameters(::AVCodecParameters* par) noexcept
 :AVPointer(avcodec_parameters_alloc()) {
@@ -124,4 +124,4 @@ void FFmpeg::AVCodecParameters::Free() noexcept {
 	}
 }
 
-template class StormByte::Multimedia::Engine::Backend::FFmpeg::AVPointer<::AVCodecParameters>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVCodecParameters>;

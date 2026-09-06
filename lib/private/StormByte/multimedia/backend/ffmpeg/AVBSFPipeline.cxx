@@ -36,10 +36,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVBSFPipeline.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVBSFPipeline.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
-using namespace StormByte::Multimedia::Engine::Backend::FFmpeg;
+using namespace StormByte::Multimedia::Backend::FFmpeg;
 
 AVBSFPipeline::AVBSFPipeline(AVBSFPipeline&& other) noexcept:
 m_filters(std::move(other.m_filters)) {

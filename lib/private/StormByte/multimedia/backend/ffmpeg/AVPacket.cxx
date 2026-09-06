@@ -36,21 +36,50 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/engine/exception.hxx>
-#include <StormByte/multimedia/engine/streams.hxx>
-#include <StormByte/multimedia/metadata.hxx>
-
-#include <filesystem>
-#include <tuple>
-
-/**
- * @namespace StormByte::Multimedia::Engine::Backend
- * @brief Internal backend facades.
- */
-namespace StormByte::Multimedia::Engine::Backend {
-	using DemuxerTuple = std::tuple<Metadata, Streams>;					///< Metadata + streams
-	using ExpectedDemuxerTuple = Expected<DemuxerTuple, DemuxerException>;		///< Open result
+extern "C" {
+	#include <libavutil/avutil.h>
 }
+
+using namespace StormByte::Multimedia::Backend;
+
+FFmpeg::AVPacket::AVPacket() noexcept:
+AVPointer(av_packet_alloc()) {}
+
+FFmpeg::AVPacket::~AVPacket() noexcept {
+	Free();
+}
+
+FFmpeg::AVPacket FFmpeg::AVPacket::Ref() const noexcept {
+	AVPacket copy;
+	if (m_ptr && copy.m_ptr)
+		av_packet_ref(copy.m_ptr, m_ptr);
+	return copy;
+}
+
+void FFmpeg::AVPacket::Unref() noexcept {
+	if (m_ptr)
+		av_packet_unref(m_ptr);
+}
+
+int FFmpeg::AVPacket::StreamIndex() const noexcept {
+	return m_ptr ? m_ptr->stream_index : -1;
+}
+
+std::int64_t FFmpeg::AVPacket::Pts() const noexcept {
+	return m_ptr ? m_ptr->pts : AV_NOPTS_VALUE;
+}
+
+std::int64_t FFmpeg::AVPacket::Duration() const noexcept {
+	return m_ptr ? m_ptr->duration : 0;
+}
+
+void FFmpeg::AVPacket::Free() noexcept {
+	if (m_ptr) {
+		av_packet_free(&m_ptr);
+		m_ptr = nullptr;
+	}
+}
+
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVPacket>;

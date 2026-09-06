@@ -43,6 +43,6 @@
 
 #include <string_view>
 
-namespace StormByte::Multimedia::Engine::OCR {
+namespace StormByte::Multimedia::OCR {
 	STORMBYTE_MULTIMEDIA_PUBLIC ExpectedTessData TessData(std::string_view language);
 }

@@ -48,7 +48,7 @@
  * @namespace OCR
  * @brief OCR-related engine utilities.
  */
-namespace StormByte::Multimedia::Engine::OCR {
+namespace StormByte::Multimedia::OCR {
 	/**
 	 * @class TessDataNotFoundException
 	 * @brief Thrown when requested tessdata language data is missing or unsupported.
@@ -56,24 +56,24 @@ namespace StormByte::Multimedia::Engine::OCR {
 	 * Internal (private ABI) exception. Constructed with the language code so
 	 * Unexpected<TessDataNotFoundException>(...) and direct construction both work.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE TessDataNotFoundException: public StormByte::Multimedia::Engine::Exception {
+	class STORMBYTE_MULTIMEDIA_PRIVATE TessDataNotFoundException: public StormByte::Multimedia::Exception {
 		public:
 			/**
 			 * @brief Construct from a language code.
 			 * @param lang Requested language identifier (e.g. "eng", "chi_tra_vert").
 			 */
 			explicit TessDataNotFoundException(std::string_view lang):
-				StormByte::Multimedia::Engine::Exception(
+				StormByte::Multimedia::Exception(
 					"OCR",
 					"Unsupported or missing language: {}",
 					std::string(lang)
 				) {}
 
 			/**
-			 * Inherit remaining constructors from Engine::Exception
+			 * Inherit remaining constructors from Exception
 			 * (needed if Unexpected formats a message and constructs from std::string).
 			 */
-			using StormByte::Multimedia::Engine::Exception::Exception;
+			using StormByte::Multimedia::Exception::Exception;
 
 			/**
 			 * Destructor.

@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/metadata/file.hxx>
 #include <StormByte/multimedia/metadata/stream.hxx>
 
@@ -59,14 +59,14 @@ namespace StormByte::Multimedia::Detail {
 			 * @param context Format context.
 			 * @return Snapshot.
 			 */
-			static Metadata::File File(const Engine::Backend::FFmpeg::AVFormatContext& context) noexcept;
+			static Metadata::File File(const Backend::FFmpeg::AVFormatContext& context) noexcept;
 
 			/**
 			 * @brief Stream tags from an open stream view.
 			 * @param stream Stream view.
 			 * @return Snapshot.
 			 */
-			static Metadata::Stream Stream(const Engine::Backend::FFmpeg::AVStream& stream) noexcept;
+			static Metadata::Stream Stream(const Backend::FFmpeg::AVStream& stream) noexcept;
 
 		private:
 			/**

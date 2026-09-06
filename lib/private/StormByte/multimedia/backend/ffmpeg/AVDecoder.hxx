@@ -38,9 +38,9 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVBSFPipeline.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/typedefs.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVBSFPipeline.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -48,10 +48,10 @@ extern "C" {
 }
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	class AVFormatContext;
 	class AVFrame;
 	class AVPacket;

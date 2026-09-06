@@ -37,7 +37,7 @@
  */
 
 #include <StormByte/multimedia/detail/probe.hxx>
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 
 #include <charconv>
 
@@ -45,7 +45,7 @@ extern "C" {
 	#include <libavformat/avformat.h>
 }
 
-namespace FFmpeg = StormByte::Multimedia::Engine::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
 	const char* NonEmpty(const char* value) noexcept {

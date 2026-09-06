@@ -133,7 +133,7 @@ ExpectedCodec Codec::Find(Type type, const std::optional<Features>& required) no
 Decoders Codec::Decoders() const noexcept {
 	void* opaque = nullptr;
 	const AVCodec* c = nullptr;
-	Engine::Decoders decoders;
+	Decoders decoders;
 
 	while ((c = av_codec_iterate(&opaque))) {
 		if (c->id == m_codec_id && av_codec_is_decoder(c))
@@ -146,7 +146,7 @@ Decoders Codec::Decoders() const noexcept {
 Encoders Codec::Encoders() const noexcept {
 	void* opaque = nullptr;
 	const AVCodec* c = nullptr;
-	Engine::Encoders encoders;
+	Encoders encoders;
 
 	while ((c = av_codec_iterate(&opaque))) {
 		if (c->id == m_codec_id && av_codec_is_encoder(c))

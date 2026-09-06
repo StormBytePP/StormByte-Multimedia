@@ -38,17 +38,17 @@
 
 #pragma once
 
-#include <StormByte/multimedia/engine/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 
 extern "C" {
 	#include <libavutil/frame.h>
 }
 
 /**
- * @namespace StormByte::Multimedia::Engine::Backend::FFmpeg
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Engine::Backend::FFmpeg {
+namespace StormByte::Multimedia::Backend::FFmpeg {
 	/**
 	 * @class AVFrame
 	 * @brief RAII wrapper for ::AVFrame.
