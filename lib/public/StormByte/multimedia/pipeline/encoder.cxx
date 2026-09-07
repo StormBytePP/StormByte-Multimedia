@@ -386,7 +386,19 @@ namespace {
 		return params;
 	}
 
-	Packet MakePacket(int index, const FFmpeg::AVPacket& raw, AVRational timeBase) noexcept {
+	/**
+	 * @brief Builds a pipeline packet from an encoded AVPacket.
+	 * @param index Output stream index.
+	 * @param raw Encoder output (payload + optional side data).
+	 * @param timeBase Encoder time base for PTS/DTS/duration.
+	 * @param keepPacketHdrPlus When true (default), copy HDR10+ as packet
+	 *        side data (VP9 and other container-side-data codecs). When
+	 *        false, skip it: HEVC already carries ST 2094-40 in a prefix
+	 *        SEI. Mastering display and content light are always copied
+	 *        when present. Other side-data kinds are dropped.
+	 * @return Move-only packet ready for the mux queue.
+	 */
+	Packet MakePacket(int index, const FFmpeg::AVPacket& raw, AVRational timeBase, bool keepPacketHdrPlus = true) noexcept {
 		StormByte::Buffer::DataType bytes;
 		const auto* data = raw.Data();
 		const int size = raw.Size();
@@ -400,6 +412,12 @@ namespace {
 			for (int i = 0; i < pkt->side_data_elems; ++i) {
 				const AVPacketSideData& sd = pkt->side_data[i];
 				if (!sd.data || sd.size <= 0)
+					continue;
+				if (sd.type == AV_PKT_DATA_DYNAMIC_HDR10_PLUS && !keepPacketHdrPlus)
+					continue;
+				if (sd.type != AV_PKT_DATA_DYNAMIC_HDR10_PLUS
+					&& sd.type != AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+					&& sd.type != AV_PKT_DATA_CONTENT_LIGHT_LEVEL)
 					continue;
 				StormByte::Buffer::DataType blob(
 					reinterpret_cast<const std::byte*>(sd.data),
@@ -418,10 +436,6 @@ namespace {
 							StormByte::Buffer::FIFO{std::move(blob)});
 						break;
 					default:
-						attachments.emplace_back(
-							std::string(av_packet_side_data_name(sd.type)
-								? av_packet_side_data_name(sd.type) : "unknown"),
-							StormByte::Buffer::FIFO{std::move(blob)});
 						break;
 				}
 			}
@@ -862,7 +876,9 @@ bool Encoder::DrainOne() noexcept {
 		Fail("failed to receive packet");
 		return false;
 	}
-	m_impl->m_pending.push_back(MakePacket(m_index, m_impl->m_scratch, m_impl->m_timeBase));
+	const auto* ctx = m_impl->m_encoder.Get();
+	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
+	m_impl->m_pending.push_back(MakePacket(m_index, m_impl->m_scratch, m_impl->m_timeBase, keepPacketHdrPlus));
 	m_impl->m_scratch.Unref();
 	return true;
 }
@@ -970,6 +986,18 @@ bool Encoder::Open(const Frame& frame) noexcept {
 		opts.emplace(row->style_key, *m_tune);
 
 	const bool pack = row && HasKey(row->tune_key);
+	if (pack) {
+		if (!blob.contains("wpp") && !m_fineTune.contains("wpp"))
+			blob.emplace("wpp", "1");
+		if (!blob.contains("pools") && !blob.contains("numa-pools")
+			&& !m_fineTune.contains("pools") && !m_fineTune.contains("numa-pools"))
+			blob.emplace("pools", "*");
+	}
+	if (row && (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9")) {
+		if (!opts.contains("row-mt") && !m_fineTune.contains("row-mt"))
+			opts.emplace("row-mt", "1");
+	}
+
 	for (const auto& [key, value] : m_fineTune) {
 		if (key.empty())
 			continue;

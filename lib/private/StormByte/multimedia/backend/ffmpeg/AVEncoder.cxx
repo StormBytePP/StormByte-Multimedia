@@ -235,6 +235,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	PromoteCodedSideData(ctx);
 
 	ctx->thread_count = 0;
+	ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
 	ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
 	if (time_base.num > 0 && time_base.den > 0) {

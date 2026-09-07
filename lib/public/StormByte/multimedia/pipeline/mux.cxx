@@ -69,6 +69,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 		constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
 
+		constexpr std::size_t MuxQueueCeiling = 4096;
+
 		std::int64_t NsToTicks(std::int64_t ns, AVRational time_base) noexcept {
 			if (ns < 0 || time_base.num <= 0 || time_base.den <= 0)
 				return AV_NOPTS_VALUE;
@@ -81,31 +83,44 @@ namespace StormByte::Multimedia::Pipeline {
 			return buf;
 		}
 
+		std::span<const std::byte> UnreadSpan(const StormByte::Buffer::FIFO& fifo) noexcept {
+			const auto& stored = fifo.Data();
+			const auto avail = fifo.AvailableBytes();
+			if (avail == 0 || avail > stored.size())
+				return {};
+			return std::span<const std::byte>{stored.data() + (stored.size() - avail), avail};
+		}
+
 		AVPacket* MakeAvPacket(Packet& packet) noexcept {
-			auto& fifo = packet.Payload();
-			const auto size = fifo.AvailableBytes();
-			StormByte::Buffer::DataType bytes;
-			if (size > 0 && !fifo.Extract(size, bytes))
-				return nullptr;
 			AVPacket* raw = av_packet_alloc();
 			if (!raw)
 				return nullptr;
-			if (!bytes.empty()) {
-				if (av_new_packet(raw, static_cast<int>(bytes.size())) < 0) {
+
+			auto& fifo = packet.Payload();
+			const auto size = fifo.AvailableBytes();
+			if (size > 0) {
+				if (av_new_packet(raw, static_cast<int>(size)) < 0) {
 					av_packet_free(&raw);
 					return nullptr;
 				}
-				std::memcpy(raw->data, bytes.data(), bytes.size());
+				const auto view = UnreadSpan(fifo);
+				if (view.size() != size) {
+					av_packet_free(&raw);
+					return nullptr;
+				}
+				std::memcpy(raw->data, view.data(), size);
+				if (!fifo.Drop(size)) {
+					av_packet_free(&raw);
+					return nullptr;
+				}
 			}
 			if (packet.KeyFrame())
 				raw->flags |= AV_PKT_FLAG_KEY;
 
 			for (const auto& side : packet.Attachments()) {
-				const auto& stored = side.Payload().Data();
-				const auto avail = side.Payload().AvailableBytes();
-				if (avail == 0 || avail > stored.size())
+				const auto view = UnreadSpan(side.Payload());
+				if (view.empty())
 					continue;
-				const auto* src = stored.data() + (stored.size() - avail);
 				enum AVPacketSideDataType type = AV_PKT_DATA_NB;
 				switch (side.Kind()) {
 					case SideDataKind::HdrPlus:
@@ -122,12 +137,12 @@ namespace StormByte::Multimedia::Pipeline {
 				}
 				if (type == AV_PKT_DATA_NB)
 					continue;
-				uint8_t* dst = av_packet_new_side_data(raw, type, static_cast<size_t>(avail));
+				uint8_t* dst = av_packet_new_side_data(raw, type, view.size());
 				if (!dst) {
 					av_packet_free(&raw);
 					return nullptr;
 				}
-				std::memcpy(dst, src, avail);
+				std::memcpy(dst, view.data(), view.size());
 			}
 			return raw;
 		}
@@ -140,14 +155,6 @@ namespace StormByte::Multimedia::Pipeline {
 			if (*mime == "image/png")
 				return AV_CODEC_ID_PNG;
 			return AV_CODEC_ID_NONE;
-		}
-
-		std::span<const std::byte> UnreadSpan(const StormByte::Buffer::FIFO& fifo) noexcept {
-			const auto& stored = fifo.Data();
-			const auto avail = fifo.AvailableBytes();
-			if (avail == 0 || avail > stored.size())
-				return {};
-			return std::span<const std::byte>{stored.data() + (stored.size() - avail), avail};
 		}
 	}
 
@@ -584,16 +591,24 @@ namespace StormByte::Multimedia::Pipeline {
 			mux.Fail("packet stream index is not a mux track");
 			return packet;
 		}
-		mux.m_impl->m_queue.push_back(std::move(packet));
-		if (!mux.m_impl->m_ctx)
+		if (!mux.m_impl->m_ctx) {
+			mux.m_impl->m_queue.push_back(std::move(packet));
 			return packet;
+		}
 		if (!mux.WriteHeaderIfReady())
 			return packet;
-		if (mux.m_impl->m_header && !mux.m_impl->m_queue.empty()) {
-			Packet leftover = std::move(mux.m_impl->m_queue.front());
-			mux.m_impl->m_queue.pop_front();
-			mux.WritePacket(leftover);
+		if (mux.m_impl->m_header) {
+			while (!mux.m_impl->m_queue.empty()) {
+				Packet leftover = std::move(mux.m_impl->m_queue.front());
+				mux.m_impl->m_queue.pop_front();
+				if (!mux.WritePacket(leftover))
+					return packet;
+			}
+			mux.WritePacket(packet);
+			return packet;
 		}
+		mux.m_impl->m_queue.push_back(std::move(packet));
+		(void)MuxQueueCeiling;
 		return packet;
 	}
 }

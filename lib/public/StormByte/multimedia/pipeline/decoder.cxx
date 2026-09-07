@@ -316,8 +316,8 @@ Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& dec
 	const auto n = packet.Payload().AvailableBytes();
 	const std::uint8_t* data = nullptr;
 	if (n > 0) {
-		if (!packet.Payload().Read(n, bytes) || bytes.size() != n) {
-			decoder.Fail("failed to read packet payload");
+		if (!packet.Payload().Extract(n, bytes) || bytes.size() != n) {
+			decoder.Fail("failed to extract packet payload");
 			return packet;
 		}
 		data = reinterpret_cast<const std::uint8_t*>(bytes.data());
