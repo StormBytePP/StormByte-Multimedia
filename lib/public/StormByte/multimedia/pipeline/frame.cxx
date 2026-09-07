@@ -48,10 +48,12 @@ Frame::Frame(int stream_index, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	std::optional<StormByte::Multimedia::Property::Video> video,
-	std::vector<class SideData> attachments) noexcept
+	std::vector<class SideData> attachments,
+	std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept
 : m_streamIndex(stream_index), m_payload(std::move(payload)),
 m_pts(std::move(pts)), m_duration(std::move(duration)),
-m_video(std::move(video)), m_attachments(std::move(attachments)) {}
+m_video(std::move(video)), m_audio(std::move(audio)),
+m_attachments(std::move(attachments)) {}
 
 Frame::Frame(Frame&&) noexcept = default;
 Frame::~Frame() noexcept = default;
@@ -71,6 +73,10 @@ const std::optional<StormByte::Multimedia::Property::Duration>& Frame::Duration(
 
 const std::optional<StormByte::Multimedia::Property::Video>& Frame::Video() const noexcept {
 	return m_video;
+}
+
+const std::optional<StormByte::Multimedia::Property::Audio>& Frame::Audio() const noexcept {
+	return m_audio;
 }
 
 const std::vector<class SideData>& Frame::Attachments() const noexcept {

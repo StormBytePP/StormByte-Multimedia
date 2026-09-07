@@ -40,6 +40,7 @@
 
 #include <StormByte/buffer/fifo.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -54,6 +55,7 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
+	class Encoder;
 	namespace Filter {
 		class Resize;
 		class Watermark;
@@ -66,6 +68,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Move-only. Planes stay in an opaque backend buffer until Payload()
 	 * is called. Attachments() is filled at receive time. Heuristics fill
 	 * Video().HDR10() only, never the side-data bag.
+	 * Audio() is set on audio frames; empty on video and subtitle frames.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
 		public:
@@ -82,12 +85,14 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param duration Frame duration, if known.
 			 * @param video Video properties, if this is a video frame.
 			 * @param attachments Raw side-data blobs.
+			 * @param audio Audio properties, if this is an audio frame.
 			 */
 			Frame(int stream_index, StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
 				std::optional<Property::Video> video = std::nullopt,
-				std::vector<class SideData> attachments = {}) noexcept;
+				std::vector<class SideData> attachments = {},
+				std::optional<Property::Audio> audio = std::nullopt) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -141,6 +146,12 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<Property::Video>& Video() const noexcept;
 
 			/**
+			 * @brief Audio properties (layout, rate, channels).
+			 * @return Audio, or empty.
+			 */
+			const std::optional<Property::Audio>& Audio() const noexcept;
+
+			/**
 			 * @brief Raw side data captured at receive.
 			 * @return Blobs.
 			 */
@@ -160,6 +171,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 			friend class Decoder;
 			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+			friend class Encoder;
+			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 			friend class Filter::Resize;
 			friend class Filter::Watermark;
 
@@ -171,6 +184,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Duration> m_pts;
 			std::optional<Property::Duration> m_duration;
 			std::optional<Property::Video> m_video;
+			std::optional<Property::Audio> m_audio;
 			std::vector<class SideData> m_attachments;
 			std::unique_ptr<Impl> m_impl;
 

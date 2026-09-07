@@ -50,6 +50,7 @@
 #include <StormByte/multimedia/pipeline/decoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/demux_impl.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/registry.hxx>
 #include <tables/decoder/table.hxx>
@@ -299,8 +300,11 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	}
 
 	std::optional<StormByte::Multimedia::Property::Video> video;
+	std::optional<StormByte::Multimedia::Property::Audio> audio;
 	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
-		video = std::get<StormByte::Multimedia::Property::Video>(*mapped);
+		video = std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped));
+	else if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Audio>(*mapped))
+		audio = std::get<StormByte::Multimedia::Property::Audio>(std::move(*mapped));
 
 	const auto need = StreamNeed(decoder.Require(), video);
 	const char* ffmpegName = avcodec_get_name(static_cast<::AVCodecID>(params->CodecId()));
@@ -348,6 +352,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	auto impl = std::make_unique<Decoder::Impl>(std::move(backend.value()));
 	impl->m_timeBase = timeBase;
 	impl->m_video = std::move(video);
+	impl->m_audio = std::move(audio);
 	if (row) {
 		decoder.Implementation(row->name);
 		decoder.m_capabilities = row->features;

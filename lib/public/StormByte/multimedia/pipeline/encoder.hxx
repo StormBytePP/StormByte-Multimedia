@@ -1,0 +1,360 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Multimedia.
+ *
+ * StormByte-Multimedia original source is dual-licensed:
+ *
+ * 1. GNU Lesser General Public License v3.0 (or later)
+ *    You may redistribute and/or modify this file under the terms of the
+ *    GNU Lesser General Public License as published by the Free Software
+ *    Foundation, either version 3 of the License, or (at your option)
+ *    any later version.
+ *
+ * 2. Commercial license
+ *    Alternatively, this file may be used under the terms of a commercial
+ *    license agreement with the copyright holder
+ *    (David C. Manuelda <StormByte@gmail.com>).
+ *
+ * Both licenses apply only to original StormByte-Multimedia source in this
+ * file. Third-party components — including FFmpeg and embedded trained data —
+ * remain under their own licenses and are not covered by the commercial grant.
+ *
+ * Neither license grants any patent rights. Any patent licenses required
+ * to use this software or third-party components must be obtained separately
+ * from the patent holders.
+ *
+ * StormByte-Multimedia is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 3 along with StormByte-Multimedia. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+ */
+
+#pragma once
+
+#include <StormByte/multimedia/codec.hxx>
+#include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/visibility.h>
+
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline
+ * @brief Demux / decode / filter / encode / mux types.
+ */
+namespace StormByte::Multimedia::Pipeline {
+	class Encoder;
+
+	/**
+	 * @brief Sends @p frame to @p encoder. Never throws.
+	 * @param frame Decoded frame (HDR metadata lives here).
+	 * @param encoder Destination.
+	 * @return @p frame.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
+
+	/**
+	 * @brief Receives one encoded packet. Never throws.
+	 * @param encoder Source.
+	 * @param packet Replaced on success.
+	 * @return @p encoder.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Packet& packet) noexcept;
+
+	/**
+	 * @class Encoder
+	 * @brief Encodes Frame into Packet for one output track.
+	 *
+	 * Index() is the mux output index. Copy does not use Encoder.
+	 * CRF / BitRate / MaxBitRate / Preset / Tune are first-class setters.
+	 * FineTune is vendor leftovers. bufsize is internal.
+	 * Open is lazy on the first frame >> encoder.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder {
+		public:
+			/**
+			 * @name Lifetime
+			 * @{
+			 */
+
+			/**
+			 * @brief Encoder for output track @p output_index and destination @p codec.
+			 * @param output_index Mux track index.
+			 * @param codec Registry codec. Must HasAccess(Write) at open.
+			 */
+			Encoder(int output_index, const Codec& codec) noexcept;
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 */
+			Encoder(const Encoder&) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Source encoder.
+			 */
+			Encoder(Encoder&& other) noexcept;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Encoder() noexcept;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @return *this.
+			 */
+			Encoder& operator=(const Encoder&) = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Source encoder.
+			 * @return *this.
+			 */
+			Encoder& operator=(Encoder&& other) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name State
+			 * @{
+			 */
+
+			/**
+			 * @brief true if open and not failed.
+			 */
+			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Mux output track index.
+			 * @return Index set at construction.
+			 */
+			int Index() const noexcept;
+
+			/**
+			 * @brief Destination codec.
+			 * @return Registry codec bound at construction.
+			 */
+			const Codec& Destination() const noexcept;
+
+			/**
+			 * @brief Whether a hard error occurred.
+			 * @return true on open/encode error.
+			 */
+			bool Failed() const noexcept;
+
+			/**
+			 * @brief Failure text, if Failed().
+			 * @return Message, or empty.
+			 */
+			const std::optional<std::string>& Error() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Implementation
+			 * @{
+			 */
+
+			/**
+			 * @brief Pinned FFmpeg encoder name, if any.
+			 * @return Name, or empty.
+			 */
+			const std::optional<std::string>& Implementation() const noexcept;
+
+			/**
+			 * @brief Pins an FFmpeg encoder name. Empty clears the pin.
+			 * @param name avcodec_find_encoder_by_name key.
+			 */
+			void Implementation(std::string name) noexcept;
+
+			/**
+			 * @brief Extra features the caller demands besides Frame HDR.
+			 * @return Mask.
+			 */
+			const Features& Require() const noexcept;
+
+			/**
+			 * @brief Replaces the extra feature mask (before open).
+			 * @param features Required bits.
+			 */
+			void Require(Features features) noexcept;
+
+			/**
+			 * @brief Features of the row selected at open. Empty if fallback.
+			 * @return Mask.
+			 */
+			const Features& Capabilities() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Rate and style
+			 * @{
+			 */
+
+			/**
+			 * @brief Constant quality (CRF/CQ). Incompatible with BitRate.
+			 * @param value Encoder quality value.
+			 */
+			void CRF(int value) noexcept;
+
+			/**
+			 * @brief CRF/CQ, if set.
+			 * @return Value, or empty.
+			 */
+			const std::optional<int>& CRF() const noexcept;
+
+			/**
+			 * @brief Target bitrate in bits per second. Incompatible with CRF.
+			 * @param bits_per_second Bitrate.
+			 */
+			void BitRate(std::int64_t bits_per_second) noexcept;
+
+			/**
+			 * @brief Target bitrate, if set.
+			 * @return Bits per second, or empty.
+			 */
+			const std::optional<std::int64_t>& BitRate() const noexcept;
+
+			/**
+			 * @brief VBV ceiling in bits per second. bufsize is derived internally.
+			 * @param bits_per_second Max bitrate.
+			 */
+			void MaxBitRate(std::int64_t bits_per_second) noexcept;
+
+			/**
+			 * @brief VBV ceiling, if set.
+			 * @return Bits per second, or empty.
+			 */
+			const std::optional<std::int64_t>& MaxBitRate() const noexcept;
+
+			/**
+			 * @brief Encoder preset (`medium`, `p4`, …).
+			 * @param name Preset name.
+			 */
+			void Preset(std::string name) noexcept;
+
+			/**
+			 * @brief Preset, if set.
+			 * @return Name, or empty.
+			 */
+			const std::optional<std::string>& Preset() const noexcept;
+
+			/**
+			 * @brief Content tune (`animation`, `film`, …).
+			 * @param name Tune name.
+			 */
+			void Tune(std::string name) noexcept;
+
+			/**
+			 * @brief Content tune, if set.
+			 * @return Name, or empty.
+			 */
+			const std::optional<std::string>& Tune() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name FineTune
+			 * @{
+			 */
+
+			/**
+			 * @brief Vendor leftovers. Not CRF/preset/tune/bufsize.
+			 * @return Key/value map.
+			 */
+			const std::map<std::string, std::string>& FineTune() const noexcept;
+
+			/**
+			 * @brief Replaces the vendor dict (before open).
+			 * @param options Key/value pairs.
+			 */
+			void FineTune(std::map<std::string, std::string> options) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Pipe
+			 * @{
+			 */
+
+			/**
+			 * @brief Signals EOF to the backend. Drain with encoder >> packet afterwards.
+			 */
+			void Flush() noexcept;
+
+			/**
+			 * @}
+			 */
+
+			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
+			friend Encoder& operator>>(Encoder& encoder, Packet& packet) noexcept;
+
+		private:
+			class Impl;
+
+			int m_index;
+			const Codec* m_codec;
+			std::optional<std::string> m_implementation;
+			Features m_require;
+			Features m_capabilities;
+			std::optional<int> m_crf;
+			std::optional<std::int64_t> m_bitRate;
+			std::optional<std::int64_t> m_maxBitRate;
+			std::optional<std::string> m_preset;
+			std::optional<std::string> m_tune;
+			std::map<std::string, std::string> m_fineTune;
+			std::unique_ptr<Impl> m_impl;
+			bool m_failed;
+			std::optional<std::string> m_error;
+
+			/**
+			 * @brief Marks a hard error and drops the backend.
+			 * @param reason Message.
+			 */
+			void Fail(std::string reason) noexcept;
+
+			/**
+			 * @brief Adopts backend state after a successful open.
+			 * @param impl Opened implementation.
+			 */
+			void Bind(std::unique_ptr<Impl> impl) noexcept;
+
+			/**
+			 * @brief Picks the table row, applies setters and opens the backend.
+			 * @param frame First frame (resolution / HDR / audio layout).
+			 * @return false if Fail() was called.
+			 */
+			bool Open(const Frame& frame) noexcept;
+
+			/**
+			 * @brief Receives one backend packet into the pending queue.
+			 * @return true if a packet was queued.
+			 */
+			bool DrainOne() noexcept;
+	};
+}

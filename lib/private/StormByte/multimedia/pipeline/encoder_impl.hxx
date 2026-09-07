@@ -38,29 +38,24 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/pipeline/encoder.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
-#include <optional>
+#include <deque>
 
 extern "C" {
 	#include <libavutil/rational.h>
 }
 
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
+class StormByte::Multimedia::Pipeline::Encoder::Impl {
 	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
+		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVEncoder encoder) noexcept
+		: m_encoder(std::move(encoder)), m_timeBase{0, 1} {}
 
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
+		StormByte::Multimedia::Backend::FFmpeg::AVEncoder m_encoder;
+		StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;
+		std::deque<StormByte::Multimedia::Pipeline::Packet> m_pending;
 		AVRational m_timeBase;
-		bool m_subtitle;
 };

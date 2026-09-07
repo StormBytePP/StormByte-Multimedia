@@ -36,31 +36,23 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <tables/encoder/table.hxx>
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+using namespace StormByte::Multimedia;
+using namespace StormByte::Multimedia::Tables::Encoder;
 
-#include <optional>
-
-extern "C" {
-	#include <libavutil/rational.h>
+namespace {
+	constexpr EncoderDef table[] = {
+		{ "AAC", "aac", "Native AAC encoder", 0, Feature::LowDelay, "", "", "", "", "b", "", "", "", "" },
+		{ "AAC", "libfdk_aac", "Fraunhofer FDK AAC", 1, Feature::HighQuality | Feature::LowDelay | Feature::ProfileBased | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
+		{ "Vorbis", "libvorbis", "libvorbis encoder", 0, Feature::HighQuality | Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
+		{ "Opus", "libopus", "libopus encoder", 0, Feature::HighQuality | Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
+		{ "MP3", "libmp3lame", "LAME MP3 encoder", 0, Feature::HighQuality | Feature::LowDelay, "", "", "", "", "b", "", "", "", "" },
+		{ "FLAC", "flac", "FLAC encoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound, "", "", "", "", "", "", "", "", "" },
+		{ "ALAC", "alac", "ALAC encoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound, "", "", "", "", "", "", "", "", "" },
+	};
 }
 
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};
+std::span<const EncoderDef> StormByte::Multimedia::Tables::Encoder::Audio() noexcept {
+	return table;
+}

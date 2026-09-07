@@ -42,9 +42,13 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
+#include <map>
+#include <string>
+
 extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavformat/avformat.h>
+	#include <libavutil/rational.h>
 }
 
 /**
@@ -52,6 +56,7 @@ extern "C" {
  * @brief Private RAII wrappers over libav*.
  */
 namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVCodecParameters;
 	class AVFormatContext;
 	class AVFrame;
 	class AVPacket;
@@ -64,9 +69,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 		public:
 			/**
 			 * @brief Copy constructor (deleted).
-			 * @param other Unused.
 			 */
-			AVEncoder(const AVEncoder& other) = delete;
+			AVEncoder(const AVEncoder&) = delete;
 
 			/**
 			 * @brief Move constructor.
@@ -90,10 +94,10 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @param other Source encoder.
 			 * @return *this.
 			 */
-			AVEncoder& operator=(AVEncoder&& other) noexcept;
+			AVEncoder& operator=(AVEncoder&& other) noexcept = default;
 
 			/**
-			 * @brief Opens an encoder from codec and parameters; may attach BSF.
+			 * @brief Opens an encoder; may attach BSF from @p fmt.
 			 * @param codec Encoder codec.
 			 * @param params Stream codec parameters.
 			 * @param fmt Format context (for BSF decision).
@@ -101,6 +105,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @return Encoder or EncoderError.
 			 */
 			static ExpectedAVEncoder Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
+
+			/**
+			 * @brief Opens an encoder without a muxer (no BSF).
+			 * @param codec Encoder codec.
+			 * @param params Stream codec parameters.
+			 * @param stream_index Output track index.
+			 * @param options av_opt_set pairs applied before avcodec_open2.
+			 * @param time_base Encoder time base. Ignored if num/den are not positive.
+			 * @return Encoder or EncoderError.
+			 */
+			static ExpectedAVEncoder Open(AVCodec* codec, const AVCodecParameters& params, int stream_index,
+				const std::map<std::string, std::string>& options, AVRational time_base) noexcept;
 
 			/**
 			 * @brief Sends a frame to the encoder.
@@ -123,6 +139,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int StreamIndex() const noexcept;
 
 			/**
+			 * @brief Encoder time base.
+			 * @return `time_base`, or 0/1.
+			 */
+			AVRational TimeBase() const noexcept;
+
+			/**
 			 * @brief Flushes encoder and BSF.
 			 */
 			void Flush() noexcept;
@@ -133,8 +155,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void SetEof() noexcept;
 
 		private:
-			int m_stream_index = -1;			///< Bound stream index
-			FFmpeg::AVBSFPipeline m_bsf_pipeline;		///< Optional BSF chain
+			int m_stream_index = -1;
+			FFmpeg::AVBSFPipeline m_bsf_pipeline;
 
 			/**
 			 * @brief Adopts an opened codec context.

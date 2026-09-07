@@ -388,7 +388,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		TicksToPts(holder->m_backend.Pts(), tb),
 		TicksToDuration(holder->m_backend.DurationTicks(), tb),
 		std::move(video),
-		std::move(attachments)
+		std::move(attachments),
+		decoder.m_impl->m_audio
 	);
 	frame.Bind(std::move(holder));
 	runPipe();

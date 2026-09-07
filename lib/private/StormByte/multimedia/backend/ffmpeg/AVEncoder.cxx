@@ -42,6 +42,10 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 
+extern "C" {
+	#include <libavutil/opt.h>
+}
+
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVEncoder::AVEncoder(::AVCodecContext* ctx) noexcept
@@ -51,43 +55,57 @@ FFmpeg::AVEncoder::~AVEncoder() noexcept {
 	Free();
 }
 
-// Open using codec parameters and optional BSF
-FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecParameters& params, const FFmpeg::AVFormatContext& fmt, int stream_index) noexcept {
+FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecParameters& params, int stream_index,
+	const std::map<std::string, std::string>& options, AVRational time_base) noexcept {
 	if (!codec || !params.Get())
 		return Unexpected<FFmpeg::EncoderError>("Invalid codec or parameters");
 
-	// Allocate context
 	AVCodecContext* ctx = avcodec_alloc_context3(codec);
 	if (!ctx)
 		return Unexpected<FFmpeg::EncoderError>("Out of memory allocating codec context");
 
-	// Copy parameters into encoder context
 	if (avcodec_parameters_to_context(ctx, params.Get()) < 0) {
 		avcodec_free_context(&ctx);
 		return Unexpected<FFmpeg::EncoderError>("Failed to copy codec parameters to encoder context");
 	}
 
-	// Open encoder
+	ctx->thread_count = 0;
+	if (time_base.num > 0 && time_base.den > 0) {
+		ctx->time_base = time_base;
+		ctx->pkt_timebase = time_base;
+	}
+
+	for (const auto& [key, value] : options) {
+		if (key.empty())
+			continue;
+		if (av_opt_set(ctx, key.c_str(), value.c_str(), AV_OPT_SEARCH_CHILDREN) < 0) {
+			avcodec_free_context(&ctx);
+			return Unexpected<FFmpeg::EncoderError>("failed to set encoder option '" + key + "'");
+		}
+	}
+
 	if (avcodec_open2(ctx, codec, nullptr) < 0) {
 		avcodec_free_context(&ctx);
 		return Unexpected<FFmpeg::EncoderError>("Failed to open encoder");
 	}
 
-	// Construct encoder RAII wrapper
 	AVEncoder enc(ctx);
 	enc.m_stream_index = stream_index;
+	return enc;
+}
 
-	// Checks for required BSF
+FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecParameters& params, const FFmpeg::AVFormatContext& fmt, int stream_index) noexcept {
+	auto opened = Open(codec, params, stream_index, {}, AVRational{0, 1});
+	if (!opened.has_value())
+		return opened;
 	auto bsf = fmt.Mp4ToAnnexB(params.Get()->codec_id, stream_index, params);
 	if (bsf)
-		enc.m_bsf_pipeline.Add(std::move(*bsf));
-
-	return enc;
+		opened->m_bsf_pipeline.Add(std::move(*bsf));
+	return opened;
 }
 
 FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
 	int ret = avcodec_send_frame(m_ptr, frame.Get());
-
 	switch (ret) {
 		case 0:
 			return OperationResult::Success;
@@ -101,7 +119,6 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
 }
 
 FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept {
-	// First, pull packets from encoder into a temporary packet
 	AVPacket tmp;
 	int ret = avcodec_receive_packet(m_ptr, tmp.Get());
 	if (ret == AVERROR(EAGAIN))
@@ -111,26 +128,22 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept
 	if (ret < 0)
 		return OperationResult::Error;
 
-	// Send encoded packet to BSF
-	ret = m_bsf_pipeline.Process(tmp);
-	if (ret < 0) {
-		return OperationResult::Error;
-	}
+	const auto filtered = m_bsf_pipeline.Process(tmp);
+	if (filtered != OperationResult::Success)
+		return filtered;
 
 	pkt = std::move(tmp);
-
-	if (ret == 0)
-		return OperationResult::Success;
-	if (ret == AVERROR(EAGAIN))
-		return OperationResult::TryAgain;
-	if (ret == AVERROR_EOF)
-		return OperationResult::EndOfFile;
-
-	return OperationResult::Error;
+	return OperationResult::Success;
 }
 
 int FFmpeg::AVEncoder::StreamIndex() const noexcept {
 	return m_stream_index;
+}
+
+AVRational FFmpeg::AVEncoder::TimeBase() const noexcept {
+	if (!m_ptr)
+		return AVRational{0, 1};
+	return m_ptr->time_base;
 }
 
 void FFmpeg::AVEncoder::Flush() noexcept {
@@ -139,7 +152,6 @@ void FFmpeg::AVEncoder::Flush() noexcept {
 }
 
 void FFmpeg::AVEncoder::SetEof() noexcept {
-	// Signal EOF to encoder
 	avcodec_send_frame(m_ptr, nullptr);
 	m_bsf_pipeline.SetEof();
 }
@@ -151,5 +163,4 @@ void FFmpeg::AVEncoder::Free() noexcept {
 	}
 }
 
-// Explicit template instantiation
 template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVCodecContext>;

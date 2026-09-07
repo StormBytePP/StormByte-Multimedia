@@ -42,9 +42,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-
-#include <algorithm>
-#include <thread>
+#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 
 using namespace StormByte::Multimedia::Backend;
 
@@ -68,8 +66,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 		return Unexpected<DecoderError>("Failed to copy codec parameters");
 	}
 
-	ctx->thread_count = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
-	ctx->thread_type = FF_THREAD_FRAME;
+	ctx->thread_count = 0;
 
 	if (avcodec_open2(ctx, codec, nullptr) < 0) {
 		avcodec_free_context(&ctx);
@@ -107,7 +104,7 @@ FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(AVPacket& pkt) noexcept {
 
 FFmpeg::OperationResult FFmpeg::AVDecoder::ReceiveFrame(AVFrame& frame) noexcept {
 	int ret = avcodec_receive_frame(m_ptr, frame.Get());
-	switch (ret) {
+	switch(ret) {
 		case 0:
 			return OperationResult::Success;
 		case AVERROR(EAGAIN):
@@ -126,7 +123,7 @@ int FFmpeg::AVDecoder::StreamIndex() const noexcept {
 AVRational FFmpeg::AVDecoder::TimeBase() const noexcept {
 	if (!m_ptr)
 		return AVRational{0, 1};
-	if (m_ptr->pkt_timebase.num && m_ptr->pkt_timebase.den)
+	if (m_ptr->pkt_timebase.num > 0 && m_ptr->pkt_timebase.den > 0)
 		return m_ptr->pkt_timebase;
 	return m_ptr->time_base;
 }
@@ -146,8 +143,11 @@ bool FFmpeg::AVDecoder::IsSubtitle() const noexcept {
 }
 
 FFmpeg::OperationResult FFmpeg::AVDecoder::DecodeSubtitle(AVPacket& pkt, FFmpeg::AVSubtitle& out) noexcept {
-	if (!m_ptr)
+	if (!m_ptr || !IsSubtitle())
 		return OperationResult::Error;
+	if (pkt.StreamIndex() != m_stream_index)
+		return OperationResult::Error;
+
 	int got = 0;
 	const int ret = avcodec_decode_subtitle2(m_ptr, out.Get(), &got, pkt.Get());
 	if (ret < 0)

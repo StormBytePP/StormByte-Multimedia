@@ -38,29 +38,53 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/features.hxx>
 
-#include <optional>
+#include <span>
+#include <string_view>
 
-extern "C" {
-	#include <libavutil/rational.h>
+/**
+ * @namespace StormByte::Multimedia::Tables::Encoder
+ * @brief Handcrafted encoder implementations: preference, features, FineTune key and HDR signaling.
+ */
+namespace StormByte::Multimedia::Tables::Encoder {
+	/**
+	 * @struct EncoderDef
+	 * @brief One FFmpeg encoder implementation for a StormByte codec identity.
+	 *
+	 * tune_key empty: FineTune pairs go to av_opt_set one by one.
+	 * tune_key set: FineTune is packed into that private-options blob.
+	 * signal_hdr10 / signal_hdr10plus: library-owned k=v[:k=v] when the Frame
+	 * carries that metadata. Never quality knobs.
+	 * Empty crf_key / bitrate_key / maxrate_key / bufsize_key / preset_key /
+	 * style_key: that setter is not valid for the row.
+	 */
+	struct EncoderDef {
+		const char* codec;
+		const char* name;
+		const char* description;
+		int preference;
+		Features features;
+		const char* tune_key;
+		const char* signal_hdr10;
+		const char* signal_hdr10plus;
+		const char* crf_key;
+		const char* bitrate_key;
+		const char* maxrate_key;
+		const char* bufsize_key;
+		const char* preset_key;
+		const char* style_key;
+	};
+
+	/**
+	 * @brief Video encoder rows.
+	 * @return Span over the static video table.
+	 */
+	std::span<const EncoderDef> Video() noexcept;
+
+	/**
+	 * @brief Audio encoder rows.
+	 * @return Span over the static audio table.
+	 */
+	std::span<const EncoderDef> Audio() noexcept;
 }
-
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};

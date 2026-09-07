@@ -69,40 +69,90 @@ int FFmpeg::AVCodecParameters::CodecId() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->codec_id) : static_cast<int>(AV_CODEC_ID_NONE);
 }
 
+void FFmpeg::AVCodecParameters::CodecId(int id) noexcept {
+	if (m_ptr)
+		m_ptr->codec_id = static_cast<::AVCodecID>(id);
+}
+
 std::int64_t FFmpeg::AVCodecParameters::BitRate() const noexcept {
 	return m_ptr ? m_ptr->bit_rate : 0;
+}
+
+void FFmpeg::AVCodecParameters::BitRate(std::int64_t bit_rate) noexcept {
+	if (m_ptr)
+		m_ptr->bit_rate = bit_rate;
 }
 
 int FFmpeg::AVCodecParameters::Width() const noexcept {
 	return m_ptr ? m_ptr->width : 0;
 }
 
+void FFmpeg::AVCodecParameters::Width(int width) noexcept {
+	if (m_ptr)
+		m_ptr->width = width;
+}
+
 int FFmpeg::AVCodecParameters::Height() const noexcept {
 	return m_ptr ? m_ptr->height : 0;
+}
+
+void FFmpeg::AVCodecParameters::Height(int height) noexcept {
+	if (m_ptr)
+		m_ptr->height = height;
 }
 
 int FFmpeg::AVCodecParameters::Format() const noexcept {
 	return m_ptr ? m_ptr->format : static_cast<int>(AV_PIX_FMT_NONE);
 }
 
+void FFmpeg::AVCodecParameters::Format(int format) noexcept {
+	if (m_ptr)
+		m_ptr->format = format;
+}
+
 int FFmpeg::AVCodecParameters::ColorRange() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->color_range) : static_cast<int>(AVCOL_RANGE_UNSPECIFIED);
+}
+
+void FFmpeg::AVCodecParameters::ColorRange(int range) noexcept {
+	if (m_ptr)
+		m_ptr->color_range = static_cast<::AVColorRange>(range);
 }
 
 int FFmpeg::AVCodecParameters::ColorSpace() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->color_space) : static_cast<int>(AVCOL_SPC_UNSPECIFIED);
 }
 
+void FFmpeg::AVCodecParameters::ColorSpace(int space) noexcept {
+	if (m_ptr)
+		m_ptr->color_space = static_cast<::AVColorSpace>(space);
+}
+
 int FFmpeg::AVCodecParameters::ColorPrimaries() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->color_primaries) : static_cast<int>(AVCOL_PRI_UNSPECIFIED);
+}
+
+void FFmpeg::AVCodecParameters::ColorPrimaries(int primaries) noexcept {
+	if (m_ptr)
+		m_ptr->color_primaries = static_cast<::AVColorPrimaries>(primaries);
 }
 
 int FFmpeg::AVCodecParameters::ColorTransfer() const noexcept {
 	return m_ptr ? static_cast<int>(m_ptr->color_trc) : static_cast<int>(AVCOL_TRC_UNSPECIFIED);
 }
 
+void FFmpeg::AVCodecParameters::ColorTransfer(int transfer) noexcept {
+	if (m_ptr)
+		m_ptr->color_trc = static_cast<::AVColorTransferCharacteristic>(transfer);
+}
+
 int FFmpeg::AVCodecParameters::SampleRate() const noexcept {
 	return m_ptr ? m_ptr->sample_rate : 0;
+}
+
+void FFmpeg::AVCodecParameters::SampleRate(int rate) noexcept {
+	if (m_ptr)
+		m_ptr->sample_rate = rate;
 }
 
 int FFmpeg::AVCodecParameters::Channels() const noexcept {
@@ -113,8 +163,29 @@ int FFmpeg::AVCodecParameters::Profile() const noexcept {
 	return m_ptr ? m_ptr->profile : AV_PROFILE_UNKNOWN;
 }
 
+void FFmpeg::AVCodecParameters::Profile(int profile) noexcept {
+	if (m_ptr)
+		m_ptr->profile = profile;
+}
+
 const AVChannelLayout* FFmpeg::AVCodecParameters::ChannelLayout() const noexcept {
 	return m_ptr ? &m_ptr->ch_layout : nullptr;
+}
+
+void FFmpeg::AVCodecParameters::DefaultChannelLayout(int channels) noexcept {
+	if (!m_ptr || channels <= 0)
+		return;
+	av_channel_layout_uninit(&m_ptr->ch_layout);
+	av_channel_layout_default(&m_ptr->ch_layout, channels);
+}
+
+int FFmpeg::AVCodecParameters::CodecType() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->codec_type) : static_cast<int>(AVMEDIA_TYPE_UNKNOWN);
+}
+
+void FFmpeg::AVCodecParameters::CodecType(int type) noexcept {
+	if (m_ptr)
+		m_ptr->codec_type = static_cast<::AVMediaType>(type);
 }
 
 void FFmpeg::AVCodecParameters::Free() noexcept {

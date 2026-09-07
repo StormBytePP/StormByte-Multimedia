@@ -102,10 +102,22 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int CodecId() const noexcept;
 
 			/**
+			 * @brief Sets the FFmpeg codec id.
+			 * @param id `AVCodecID` as int.
+			 */
+			void CodecId(int id) noexcept;
+
+			/**
 			 * @brief Stream bitrate in bits per second.
 			 * @return Bitrate, or 0 if unknown.
 			 */
 			std::int64_t BitRate() const noexcept;
+
+			/**
+			 * @brief Sets stream bitrate in bits per second.
+			 * @param bit_rate Bitrate. 0 = unknown.
+			 */
+			void BitRate(std::int64_t bit_rate) noexcept;
 
 			/**
 			 * @brief Frame width in pixels.
@@ -114,16 +126,34 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int Width() const noexcept;
 
 			/**
+			 * @brief Sets frame width.
+			 * @param width Width in pixels.
+			 */
+			void Width(int width) noexcept;
+
+			/**
 			 * @brief Frame height in pixels.
 			 * @return Height, or 0.
 			 */
 			int Height() const noexcept;
 
 			/**
-			 * @brief Pixel format.
-			 * @return `AVPixelFormat` as int, or `AV_PIX_FMT_NONE`.
+			 * @brief Sets frame height.
+			 * @param height Height in pixels.
+			 */
+			void Height(int height) noexcept;
+
+			/**
+			 * @brief Pixel or sample format.
+			 * @return Format as int, or `AV_PIX_FMT_NONE`.
 			 */
 			int Format() const noexcept;
+
+			/**
+			 * @brief Sets pixel or sample format.
+			 * @param format Format as int.
+			 */
+			void Format(int format) noexcept;
 
 			/**
 			 * @brief Color range.
@@ -132,10 +162,22 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int ColorRange() const noexcept;
 
 			/**
+			 * @brief Sets color range.
+			 * @param range `AVColorRange` as int.
+			 */
+			void ColorRange(int range) noexcept;
+
+			/**
 			 * @brief Matrix coefficients.
 			 * @return `AVColorSpace` as int.
 			 */
 			int ColorSpace() const noexcept;
+
+			/**
+			 * @brief Sets matrix coefficients.
+			 * @param space `AVColorSpace` as int.
+			 */
+			void ColorSpace(int space) noexcept;
 
 			/**
 			 * @brief Color primaries.
@@ -144,16 +186,34 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int ColorPrimaries() const noexcept;
 
 			/**
+			 * @brief Sets color primaries.
+			 * @param primaries `AVColorPrimaries` as int.
+			 */
+			void ColorPrimaries(int primaries) noexcept;
+
+			/**
 			 * @brief Transfer characteristics.
 			 * @return `AVColorTransferCharacteristic` as int.
 			 */
 			int ColorTransfer() const noexcept;
 
 			/**
+			 * @brief Sets transfer characteristics.
+			 * @param transfer `AVColorTransferCharacteristic` as int.
+			 */
+			void ColorTransfer(int transfer) noexcept;
+
+			/**
 			 * @brief Audio sample rate in Hz.
 			 * @return Sample rate, or 0.
 			 */
 			int SampleRate() const noexcept;
+
+			/**
+			 * @brief Sets audio sample rate.
+			 * @param rate Sample rate in Hz.
+			 */
+			void SampleRate(int rate) noexcept;
 
 			/**
 			 * @brief Audio channel count.
@@ -168,10 +228,34 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int Profile() const noexcept;
 
 			/**
+			 * @brief Sets codec profile id.
+			 * @param profile Profile.
+			 */
+			void Profile(int profile) noexcept;
+
+			/**
 			 * @brief Channel layout owned by this wrapper.
 			 * @return Layout, or nullptr.
 			 */
 			const AVChannelLayout* ChannelLayout() const noexcept;
+
+			/**
+			 * @brief Replaces the layout with FFmpeg's default for @p channels.
+			 * @param channels Channel count.
+			 */
+			void DefaultChannelLayout(int channels) noexcept;
+
+			/**
+			 * @brief Media type.
+			 * @return `AVMediaType` as int.
+			 */
+			int CodecType() const noexcept;
+
+			/**
+			 * @brief Sets media type.
+			 * @param type `AVMediaType` as int.
+			 */
+			void CodecType(int type) noexcept;
 
 		private:
 			/**
