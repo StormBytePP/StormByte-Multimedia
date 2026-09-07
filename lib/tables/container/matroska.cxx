@@ -145,7 +145,7 @@ namespace {
 		{ "mka",	"Delphine CIN Audio" },
 		{ "mka",	"Discworld II BMV Audio" },
 		{ "mka",	"Dolby E" },
-		{ "mka",	"E-AC-3" },
+		{ "mka",	"E-AC3" },
 		{ "mka",	"EVRC" },
 		{ "mka",	"FLAC" },
 		{ "mka",	"FTR" },

@@ -145,7 +145,7 @@ namespace {
 		{ "Delphine CIN Audio",			"Delphine Software CIN audio",					{ "dsicinaudio" } },
 		{ "Discworld II BMV Audio",		"Discworld II BMV audio",						{ "bmv_audio" } },
 		{ "Dolby E",					"Dolby E",										{ "dolby_e" } },
-		{ "E-AC-3",						"Dolby Digital Plus",							{ "eac3" } },
+		{ "E-AC3",						"Dolby Digital Plus",							{ "eac3" } },
 		{ "EVRC",						"Enhanced Variable Rate Codec",					{ "evrc" } },
 		{ "FLAC",						"Free Lossless Audio Codec",					{ "flac" } },
 		{ "FTR",						"FTR Voice",									{ "ftr" } },

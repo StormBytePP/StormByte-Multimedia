@@ -42,7 +42,7 @@ using namespace StormByte::Multimedia::Tables::Container;
 
 namespace {
 	constexpr CompatDef table[] = {
-		{ nullptr,	"E-AC-3" },
+		{ nullptr,	"E-AC3" },
 	};
 }
 

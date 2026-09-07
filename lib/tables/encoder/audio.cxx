@@ -52,7 +52,7 @@ namespace {
 		{ "ALAC", "alac", "ALAC encoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound, "", "", "", "", "", "", "", "", "" },
 		{ "AC-3", "ac3", "Native AC-3 encoder", 0, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
 		{ "AC-3", "ac3_fixed", "Fixed-point AC-3 encoder", 1, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "E-AC-3", "eac3", "Native E-AC-3 encoder", 0, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
+		{ "E-AC3", "eac3", "Native E-AC3 encoder", 0, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
 	};
 }
 

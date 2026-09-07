@@ -44,7 +44,7 @@ namespace {
 	constexpr CompatDef table[] = {
 		{ nullptr,	"AC-3" },
 		{ nullptr,	"DTS" },
-		{ nullptr,	"E-AC-3" },
+		{ nullptr,	"E-AC3" },
 		{ nullptr,	"TrueHD" },
 	};
 }

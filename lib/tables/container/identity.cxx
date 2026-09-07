@@ -119,7 +119,7 @@ namespace {
 		{ "DXA",				"Feeble DXA",				{ "dxa" },					{ "dxa" } },
 		{ "EA",					"Electronic Arts",			{ "ea" },					{ "ea" } },
 		{ "EA cdata",			"Electronic Arts cdata",	{ "ea_cdata" },				{ "cdata" } },
-		{ "E-AC-3",				"Raw E-AC-3",				{ "eac3" },					{ "eac3" } },
+		{ "E-AC3",				"Raw E-AC3",				{ "eac3" },					{ "eac3" } },
 		{ "EPAF",				"Ensoniq Paris Audio",		{ "epaf" },					{ "epaf", "fap" } },
 		{ "FFmpeg metadata",	"FFmpeg metadata",			{ "ffmetadata" },			{ "ffmeta" } },
 		{ "FITS",				"Flexible Image Transport",	{ "fits" },					{ "fits" } },

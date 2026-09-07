@@ -123,7 +123,7 @@ namespace StormByte::Multimedia::Tables::Container {
 			{ "DXA",				DXA },
 			{ "EA",					EA },
 			{ "EA cdata",			EACdata },
-			{ "E-AC-3",				EAC3 },
+			{ "E-AC3",				EAC3 },
 			{ "EPAF",				EPAF },
 			{ "FFmpeg metadata",	FFMetadata },
 			{ "FITS",				FITS },

@@ -54,7 +54,7 @@ namespace {
 
 		{ nullptr,	"AAC" },
 		{ nullptr,	"AC-3" },
-		{ nullptr,	"E-AC-3" },
+		{ nullptr,	"E-AC3" },
 		{ nullptr,	"MP2" },
 		{ nullptr,	"PCM S16 BE" },
 		{ nullptr,	"PCM S16 LE" },

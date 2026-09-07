@@ -54,7 +54,7 @@ namespace {
 		{ nullptr,	"AAC LATM" },
 		{ nullptr,	"AC-3" },
 		{ nullptr,	"DTS" },
-		{ nullptr,	"E-AC-3" },
+		{ nullptr,	"E-AC3" },
 		{ nullptr,	"MP1" },
 		{ nullptr,	"MP2" },
 		{ nullptr,	"MP3" },

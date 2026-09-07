@@ -79,7 +79,7 @@ namespace {
 		{ nullptr,	"ALAC" },
 		{ nullptr,	"AMR-NB" },
 		{ nullptr,	"AMR-WB" },
-		{ nullptr,	"E-AC-3" },
+		{ nullptr,	"E-AC3" },
 		{ nullptr,	"FLAC" },
 		{ nullptr,	"GSM" },
 		{ nullptr,	"MACE 3:1" },

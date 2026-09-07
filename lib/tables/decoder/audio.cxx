@@ -46,7 +46,7 @@ namespace {
 		{ "AAC", "aac", "Native AAC decoder", 0, Feature::LowDelay | Feature::SideData },
 		{ "AAC", "fdk_aac", "Fraunhofer FDK AAC decoder", 1, Feature::HighQuality | Feature::LowDelay },
 		{ "AC-3", "ac3", "Native AC-3 decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
-		{ "E-AC-3", "eac3", "Native E-AC-3 decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
+		{ "E-AC3", "eac3", "Native E-AC3 decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
 		{ "Vorbis", "vorbis", "Native Vorbis decoder", 0, Feature::LowDelay | Feature::SideData },
 		{ "Vorbis", "libvorbis", "libvorbis decoder", 1, Feature::HighQuality | Feature::LowDelay },
 		{ "Opus", "opus", "Native Opus decoder", 0, Feature::LowDelay | Feature::SideData },

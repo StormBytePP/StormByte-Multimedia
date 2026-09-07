@@ -264,7 +264,7 @@ namespace StormByte::Multimedia::Tables::Container {
 	std::span<const CompatDef> EA() noexcept;
 	/** @brief Codec rows for EA cdata. @return Compatibility span. */
 	std::span<const CompatDef> EACdata() noexcept;
-	/** @brief Codec rows for E-AC-3. @return Compatibility span. */
+	/** @brief Codec rows for E-AC3. @return Compatibility span. */
 	std::span<const CompatDef> EAC3() noexcept;
 	/** @brief Codec rows for EPAF. @return Compatibility span. */
 	std::span<const CompatDef> EPAF() noexcept;
