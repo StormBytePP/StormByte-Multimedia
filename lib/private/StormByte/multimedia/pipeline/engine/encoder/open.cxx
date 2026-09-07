@@ -59,10 +59,12 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavutil/avutil.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/mathematics.h>
 	#include <libavutil/pixfmt.h>
 	#include <libavutil/rational.h>
+	#include <libavutil/samplefmt.h>
 }
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
@@ -285,6 +287,53 @@ namespace {
 
 	bool HasKey(const char* key) noexcept {
 		return key && key[0] != '\0';
+	}
+
+	int PickAudioSampleFormat(const ::AVCodec* codec, int frameFormat) noexcept {
+		if (!codec)
+			return frameFormat;
+		const void* cfg = nullptr;
+		int count = 0;
+		if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, &cfg, &count) < 0
+			|| !cfg || count <= 0)
+			return frameFormat;
+		const auto* fmts = static_cast<const AVSampleFormat*>(cfg);
+		for (int i = 0; i < count; ++i) {
+			if (fmts[i] == frameFormat)
+				return frameFormat;
+		}
+		return static_cast<int>(fmts[0]);
+	}
+
+	bool LayoutSupported(const ::AVCodec* codec, const AVChannelLayout& layout) noexcept {
+		if (!codec)
+			return false;
+		const void* cfg = nullptr;
+		int count = 0;
+		if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_CHANNEL_LAYOUT, 0, &cfg, &count) < 0
+			|| !cfg || count <= 0)
+			return true;
+		const auto* layouts = static_cast<const AVChannelLayout*>(cfg);
+		for (int i = 0; i < count; ++i) {
+			if (av_channel_layout_compare(&layouts[i], &layout) == 0)
+				return true;
+		}
+		return false;
+	}
+
+	bool PickAudioLayout(const ::AVCodec* codec, const AVChannelLayout& src, AVChannelLayout& out) noexcept {
+		av_channel_layout_uninit(&out);
+		if (LayoutSupported(codec, src))
+			return av_channel_layout_copy(&out, &src) >= 0;
+		if (src.nb_channels <= 6)
+			return false;
+		if (av_channel_layout_from_mask(&out, AV_CH_LAYOUT_5POINT1) >= 0 && LayoutSupported(codec, out))
+			return true;
+		av_channel_layout_uninit(&out);
+		if (av_channel_layout_from_mask(&out, AV_CH_LAYOUT_5POINT1_BACK) >= 0 && LayoutSupported(codec, out))
+			return true;
+		av_channel_layout_uninit(&out);
+		return false;
 	}
 
 	std::int64_t EstimateCeiling(const Frame& frame) noexcept {
@@ -593,9 +642,22 @@ StormByte::Multimedia::Pipeline::Engine::Encoder::Open::Access::Open(class Encod
 
 	std::optional<int> sampleFormat;
 	if (frame.Audio() && frame.m_engine && frame.m_engine->m_backend.Get())
-		sampleFormat = frame.m_engine->m_backend.Get()->format;
+		sampleFormat = PickAudioSampleFormat(codec, frame.m_engine->m_backend.Get()->format);
+
+	AVChannelLayout want{};
+	if (kind == StormByte::Multimedia::Type::Audio
+		&& frame.m_engine && frame.m_engine->m_backend.Get()) {
+		if (!PickAudioLayout(codec, frame.m_engine->m_backend.Get()->ch_layout, want)) {
+			owner.Fail("encoder does not support this channel layout");
+			return std::nullopt;
+		}
+	}
 
 	auto params = FillParams(frame, codec, owner.BitRate(), sampleFormat);
+	if (want.nb_channels > 0 && params.Get())
+		av_channel_layout_copy(&params.Get()->ch_layout, &want);
+	av_channel_layout_uninit(&want);
+
 	if (kind == StormByte::Multimedia::Type::Video
 		&& frame.m_engine && frame.m_engine->m_backend.Get()) {
 		const auto* raw = frame.m_engine->m_backend.Get();
@@ -609,7 +671,7 @@ StormByte::Multimedia::Pipeline::Engine::Encoder::Open::Access::Open(class Encod
 	const auto timeBase = ChooseTimeBase(frame, kind);
 	auto backend = FFmpeg::AVEncoder::Open(const_cast<::AVCodec*>(codec), params, owner.Index(), opts, timeBase);
 	if (!backend.has_value()) {
-		owner.Fail(backend.error()->what());
+		owner.Fail(backend.error() ? backend.error()->what() : "Failed to open encoder");
 		return std::nullopt;
 	}
 

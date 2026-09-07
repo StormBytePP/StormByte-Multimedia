@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/engine.hxx>
@@ -48,7 +49,9 @@
 #include <optional>
 
 extern "C" {
+	#include <libavutil/audio_fifo.h>
 	#include <libavutil/rational.h>
+	#include <libswresample/swresample.h>
 }
 
 /**
@@ -60,7 +63,10 @@ extern "C" {
 namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 	/**
 	 * @class Audio
-	 * @brief Audio encode backend. Sample-format conversion belongs here later.
+	 * @brief Audio encode backend.
+	 *
+	 * Converts sample format and, when the encoder rejects >5.1, downmixes
+	 * to 5.1. Same sample rate. Buffers to encoder frame_size.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -72,9 +78,9 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			Audio() noexcept;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. Frees swr and the sample fifo.
 			 */
-			~Audio() noexcept override = default;
+			~Audio() noexcept override;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -91,14 +97,14 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Audio(Audio&&) noexcept = default;
+			Audio(Audio&&) noexcept;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Audio& operator=(Audio&&) noexcept = default;
+			Audio& operator=(Audio&&) noexcept;
 
 			/**
 			 * @brief Whether the FFmpeg encoder is open.
@@ -130,7 +136,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			bool DrainOne(class Encoder& owner) noexcept override;
 
 			/**
-			 * @brief Signals EOF and drains. No-op if already flushed.
+			 * @brief Signals EOF, flushes the fifo and drains.
 			 * @param owner Public encoder.
 			 */
 			void Flush(class Encoder& owner) noexcept override;
@@ -157,8 +163,41 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 		private:
 			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
 			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
+			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
 			std::deque<Packet> m_pending;												///< Packets waiting for Mux
 			AVRational m_timeBase{0, 1};												///< Encoder time base
+			SwrContext* m_swr = nullptr;												///< Format / layout converter
+			AVAudioFifo* m_fifo = nullptr;												///< Samples waiting for frame_size
+			int m_inFormat = -1;														///< Decoded sample format
+			int m_outFormat = -1;														///< Encoder sample format
+			int m_frameSize = 0;														///< Encoder frame_size
+			int m_channels = 0;															///< Encoder channel count
+			std::int64_t m_nextPts = 0;													///< Next encoder PTS in samples
 			bool m_flushed = false;														///< EOF already signalled
+
+			/**
+			 * @brief Builds swr and the sample fifo.
+			 * @param owner Public encoder.
+			 * @param src First decoded frame.
+			 * @param ctx Opened encoder context.
+			 * @return false if owner.Fail() was called.
+			 */
+			bool PrepareConvert(class Encoder& owner, const ::AVFrame* src, const AVCodecContext* ctx) noexcept;
+
+			/**
+			 * @brief Converts @p src and writes samples into the fifo.
+			 * @param owner Public encoder.
+			 * @param src Decoded frame.
+			 * @return false if owner.Fail() was called.
+			 */
+			bool Ingest(class Encoder& owner, ::AVFrame* src) noexcept;
+
+			/**
+			 * @brief Sends encoder-sized frames from the fifo.
+			 * @param owner Public encoder.
+			 * @param last true to send a short tail frame.
+			 * @return false if owner.Fail() was called.
+			 */
+			bool Emit(class Encoder& owner, bool last) noexcept;
 	};
 }
