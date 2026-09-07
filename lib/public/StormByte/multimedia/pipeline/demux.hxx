@@ -55,8 +55,10 @@ namespace StormByte::Multimedia {
  * @brief Demux / decode / filter / encode / mux types.
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Copy;
 	class Decoder;
 	class Demux;
+	class Mux;
 
 	/**
 	 * @brief Opens @p file into @p demux. Never throws.
@@ -83,6 +85,17 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @return @p decoder.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+
+	/**
+	 * @brief Binds a demux input stream onto @p copy. Never throws.
+	 *
+	 * Declared in copy.hxx. Friend access is granted here so the operator
+	 * can read the format context.
+	 * @param demux Open demuxer.
+	 * @param copy Destination copy track.
+	 * @return @p copy.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 
 	/**
 	 * @class Demux
@@ -194,6 +207,8 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
 			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+			friend Copy& operator>>(Demux& demux, Copy& copy) noexcept;
+			friend Mux& operator>>(Demux&, Mux&) noexcept;
 
 		private:
 			class Impl;

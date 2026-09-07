@@ -130,14 +130,15 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			AVRational TimeBase() const noexcept;
 
 			/**
-			 * @brief Flushes decoder and BSF buffers.
+			 * @brief Flushes decoder and BSF buffers (does not signal EOF).
 			 */
 			void Flush() noexcept;
 
 			/**
-			 * @brief Signals EOF to decoder and BSF.
+			 * @brief Signals EOF (`avcodec_send_packet(nullptr)` + BSF EOF).
+			 * @return Success/EndOfFile when the null packet was accepted, TryAgain if frames must be drained first.
 			 */
-			void SetEof() noexcept;
+			FFmpeg::OperationResult SetEof() noexcept;
 
 			/**
 			 * @brief true if the opened codec is a subtitle decoder.
@@ -155,7 +156,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 
 		private:
 			int m_stream_index = -1;		///< Bound stream index
-			AVBSFPipeline m_bsf_pipeline;		///< Optional BSF chain
+			AVBSFPipeline m_bsf_pipeline;	///< Optional BSF chain
 
 			/**
 			 * @brief Adopts an opened codec context.

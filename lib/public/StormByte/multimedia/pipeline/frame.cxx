@@ -83,6 +83,18 @@ void Frame::Language(std::string language) noexcept {
 	m_language = std::move(language);
 }
 
+const std::optional<std::string>& Frame::Title() const noexcept {
+	return m_title;
+}
+
+void Frame::Title(std::string title) noexcept {
+	if (title.empty()) {
+		m_title.reset();
+		return;
+	}
+	m_title = std::move(title);
+}
+
 const std::optional<StormByte::Multimedia::Property::Video>& Frame::Video() const noexcept {
 	return m_video;
 }

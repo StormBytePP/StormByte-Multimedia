@@ -230,6 +230,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 				continue;
 			if (const auto& language = stream.Metadata().Language(); language)
 				decoder.Language(*language);
+			if (const auto& title = stream.Metadata().Title(); title)
+				decoder.Title(*title);
 			break;
 		}
 	}

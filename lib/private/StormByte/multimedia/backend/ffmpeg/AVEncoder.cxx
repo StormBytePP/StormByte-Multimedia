@@ -45,9 +45,13 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavutil/error.h>
+	#include <libavutil/frame.h>
+	#include <libavutil/hdr_dynamic_metadata.h>
 	#include <libavutil/mem.h>
 	#include <libavutil/opt.h>
 }
@@ -70,6 +74,140 @@ namespace {
 		char buf[AV_ERROR_MAX_STRING_SIZE];
 		av_strerror(err, buf, sizeof(buf));
 		return buf;
+	}
+
+	AVFrameSideDataType FrameTypeFromPacket(enum AVPacketSideDataType type) noexcept {
+		switch (type) {
+			case AV_PKT_DATA_MASTERING_DISPLAY_METADATA:
+				return AV_FRAME_DATA_MASTERING_DISPLAY_METADATA;
+			case AV_PKT_DATA_CONTENT_LIGHT_LEVEL:
+				return AV_FRAME_DATA_CONTENT_LIGHT_LEVEL;
+			case AV_PKT_DATA_DYNAMIC_HDR10_PLUS:
+				return AV_FRAME_DATA_DYNAMIC_HDR_PLUS;
+			default:
+				return AV_FRAME_DATA_SEI_UNREGISTERED;
+		}
+	}
+
+	void PromoteCodedSideData(::AVCodecContext* ctx) noexcept {
+		if (!ctx || !ctx->coded_side_data)
+			return;
+		for (int i = 0; i < ctx->nb_coded_side_data; ++i) {
+			const AVPacketSideData& src = ctx->coded_side_data[i];
+			if (!src.data || src.size <= 0)
+				continue;
+			const auto frameType = FrameTypeFromPacket(src.type);
+			if (frameType == AV_FRAME_DATA_SEI_UNREGISTERED
+				&& src.type != AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+				&& src.type != AV_PKT_DATA_CONTENT_LIGHT_LEVEL
+				&& src.type != AV_PKT_DATA_DYNAMIC_HDR10_PLUS)
+				continue;
+			AVFrameSideData* dst = av_frame_side_data_new(&ctx->decoded_side_data,
+				&ctx->nb_decoded_side_data, frameType, src.size, 0);
+			if (!dst || !dst->data)
+				continue;
+			std::memcpy(dst->data, src.data, static_cast<std::size_t>(src.size));
+		}
+	}
+
+	void PushSeiLength(std::vector<std::uint8_t>& out, std::size_t value) noexcept {
+		while (value >= 255) {
+			out.push_back(0xFF);
+			value -= 255;
+		}
+		out.push_back(static_cast<std::uint8_t>(value));
+	}
+
+	void AppendRbsp(std::vector<std::uint8_t>& out, const std::uint8_t* src, std::size_t size) noexcept {
+		int zeros = 0;
+		for (std::size_t i = 0; i < size; ++i) {
+			if (zeros >= 2 && src[i] <= 0x03) {
+				out.push_back(0x03);
+				zeros = 0;
+			}
+			out.push_back(src[i]);
+			zeros = (src[i] == 0) ? zeros + 1 : 0;
+		}
+	}
+
+	std::vector<std::uint8_t> MakeHevcPrefixSeiT35(const std::vector<std::uint8_t>& t35) noexcept {
+		std::vector<std::uint8_t> payload;
+		payload.push_back(4);
+		PushSeiLength(payload, t35.size());
+		payload.insert(payload.end(), t35.begin(), t35.end());
+		payload.push_back(0x80);
+
+		std::vector<std::uint8_t> nal;
+		nal.push_back(0x4E);
+		nal.push_back(0x01);
+		AppendRbsp(nal, payload.data(), payload.size());
+		return nal;
+	}
+
+	bool PacketLooksAnnexB(const std::uint8_t* data, int size) noexcept {
+		if (!data || size < 3)
+			return false;
+		if (data[0] == 0 && data[1] == 0 && data[2] == 1)
+			return true;
+		return size >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1;
+	}
+
+	bool PrependHevcSei(FFmpeg::AVPacket& pkt, const std::vector<std::uint8_t>& t35) noexcept {
+		const auto* src = pkt.Data();
+		const int srcSize = pkt.Size();
+		if (!src || srcSize <= 0 || t35.empty())
+			return true;
+
+		const auto nal = MakeHevcPrefixSeiT35(t35);
+		std::vector<std::uint8_t> out;
+		if (PacketLooksAnnexB(src, srcSize)) {
+			out.insert(out.end(), {0x00, 0x00, 0x00, 0x01});
+			out.insert(out.end(), nal.begin(), nal.end());
+			out.insert(out.end(), src, src + srcSize);
+		}
+		else {
+			const auto len = static_cast<std::uint32_t>(nal.size());
+			out.push_back(static_cast<std::uint8_t>((len >> 24) & 0xFF));
+			out.push_back(static_cast<std::uint8_t>((len >> 16) & 0xFF));
+			out.push_back(static_cast<std::uint8_t>((len >> 8) & 0xFF));
+			out.push_back(static_cast<std::uint8_t>(len & 0xFF));
+			out.insert(out.end(), nal.begin(), nal.end());
+			out.insert(out.end(), src, src + srcSize);
+		}
+
+		::AVPacket* raw = pkt.Get();
+		const int stream = raw ? raw->stream_index : 0;
+		const bool key = raw && (raw->flags & AV_PKT_FLAG_KEY);
+		const std::int64_t pts = raw ? raw->pts : AV_NOPTS_VALUE;
+		const std::int64_t dts = raw ? raw->dts : AV_NOPTS_VALUE;
+		const std::int64_t duration = raw ? raw->duration : 0;
+		if (!pkt.Load(out.data(), static_cast<int>(out.size()), stream, key))
+			return false;
+		pkt.Timestamps(pts, dts, duration);
+		return true;
+	}
+
+	std::vector<std::uint8_t> T35FromFrame(const ::AVFrame* frame) noexcept {
+		std::vector<std::uint8_t> out;
+		if (!frame)
+			return out;
+		const AVFrameSideData* sd = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+		if (!sd || !sd->data || sd->size <= 0)
+			return out;
+		const auto* plus = reinterpret_cast<const AVDynamicHDRPlus*>(sd->data);
+		uint8_t* data = nullptr;
+		size_t size = 0;
+		if (av_dynamic_hdr_plus_to_t35(plus, &data, &size) < 0 || !data || size == 0)
+			return out;
+		out = {
+			0xB5,
+			0x00, 0x3C,
+			0x00, 0x01,
+			0x04
+		};
+		out.insert(out.end(), data, data + size);
+		av_free(data);
+		return out;
 	}
 }
 
@@ -94,7 +232,11 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 		return Unexpected<FFmpeg::EncoderError>("Failed to copy codec parameters to encoder context");
 	}
 
+	PromoteCodedSideData(ctx);
+
 	ctx->thread_count = 0;
+	ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
 	if (time_base.num > 0 && time_base.den > 0) {
 		ctx->time_base = time_base;
 		ctx->pkt_timebase = time_base;
@@ -127,6 +269,15 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 		return Unexpected<FFmpeg::EncoderError>("Failed to open encoder: " + why);
 	}
 
+	if (ctx->time_base.num <= 0 || ctx->time_base.den <= 0) {
+		if (time_base.num > 0 && time_base.den > 0)
+			ctx->time_base = time_base;
+		else
+			ctx->time_base = AVRational{1, 1000};
+	}
+	if (ctx->pkt_timebase.num <= 0 || ctx->pkt_timebase.den <= 0)
+		ctx->pkt_timebase = ctx->time_base;
+
 	AVEncoder enc(ctx);
 	enc.m_stream_index = stream_index;
 	return enc;
@@ -143,6 +294,15 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 }
 
 FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
+	if (m_ptr && m_ptr->codec_id == AV_CODEC_ID_HEVC) {
+		auto t35 = T35FromFrame(frame.Get());
+		if (!t35.empty()) {
+			const std::int64_t pts = frame.Get() ? frame.Get()->pts : AV_NOPTS_VALUE;
+			if (pts != AV_NOPTS_VALUE)
+				m_hdrPlusT35[pts] = std::move(t35);
+		}
+	}
+
 	int ret = avcodec_send_frame(m_ptr, frame.Get());
 	switch (ret) {
 		case 0:
@@ -185,14 +345,38 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept
 	int ret = avcodec_receive_packet(m_ptr, tmp.Get());
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
-	if (ret == AVERROR_EOF)
+	if (ret == AVERROR_EOF) {
+		m_bsf_pipeline.SetEof();
+		if (!m_bsf_pipeline.Empty()) {
+			const auto filtered = m_bsf_pipeline.Process(tmp);
+			if (filtered == OperationResult::Success) {
+				pkt = std::move(tmp);
+				return OperationResult::Success;
+			}
+			if (filtered == OperationResult::TryAgain)
+				return OperationResult::EndOfFile;
+			return filtered;
+		}
 		return OperationResult::EndOfFile;
+	}
 	if (ret < 0)
 		return OperationResult::Error;
 
-	const auto filtered = m_bsf_pipeline.Process(tmp);
-	if (filtered != OperationResult::Success)
-		return filtered;
+	if (!m_bsf_pipeline.Empty()) {
+		const auto filtered = m_bsf_pipeline.Process(tmp);
+		if (filtered != OperationResult::Success)
+			return filtered;
+	}
+
+	if (m_ptr && m_ptr->codec_id == AV_CODEC_ID_HEVC && tmp.Get()) {
+		const std::int64_t pts = tmp.Get()->pts;
+		auto found = m_hdrPlusT35.find(pts);
+		if (found != m_hdrPlusT35.end()) {
+			if (!PrependHevcSei(tmp, found->second))
+				return OperationResult::Error;
+			m_hdrPlusT35.erase(found);
+		}
+	}
 
 	pkt = std::move(tmp);
 	return OperationResult::Success;
@@ -215,12 +399,22 @@ bool FFmpeg::AVEncoder::IsSubtitle() const noexcept {
 void FFmpeg::AVEncoder::Flush() noexcept {
 	avcodec_flush_buffers(m_ptr);
 	m_bsf_pipeline.Flush();
+	m_hdrPlusT35.clear();
 }
 
-void FFmpeg::AVEncoder::SetEof() noexcept {
-	if (m_ptr && m_ptr->codec_type != AVMEDIA_TYPE_SUBTITLE)
-		avcodec_send_frame(m_ptr, nullptr);
-	m_bsf_pipeline.SetEof();
+FFmpeg::OperationResult FFmpeg::AVEncoder::SetEof() noexcept {
+	if (!m_ptr || m_ptr->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+		m_bsf_pipeline.SetEof();
+		return OperationResult::EndOfFile;
+	}
+	const int ret = avcodec_send_frame(m_ptr, nullptr);
+	if (ret == 0 || ret == AVERROR_EOF) {
+		m_bsf_pipeline.SetEof();
+		return (ret == 0) ? OperationResult::Success : OperationResult::EndOfFile;
+	}
+	if (ret == AVERROR(EAGAIN))
+		return OperationResult::TryAgain;
+	return OperationResult::Error;
 }
 
 void FFmpeg::AVEncoder::Free() noexcept {

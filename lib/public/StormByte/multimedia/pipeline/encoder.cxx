@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/encoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/frame_impl.hxx>
+#include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/channel_layout.hxx>
 #include <StormByte/multimedia/property/color.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -50,6 +51,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <map>
 #include <optional>
 #include <span>
@@ -62,6 +64,7 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavutil/avutil.h>
+	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/mathematics.h>
 	#include <libavutil/pixfmt.h>
 	#include <libavutil/rational.h>
@@ -206,13 +209,8 @@ namespace {
 		const StormByte::Multimedia::Features& extra,
 		const Frame& frame) noexcept {
 		StormByte::Multimedia::Features need = extra;
-		if (!frame.Video() || !frame.Video()->HDR10())
-			return need;
-		need.Add(StormByte::Multimedia::Feature::HDR10);
-		if (frame.Video()->HDR10()->IsHDR10Plus()) {
-			need.Add(StormByte::Multimedia::Feature::HDR10Plus);
-			need.Add(StormByte::Multimedia::Feature::SideData);
-		}
+		if (frame.Video() && frame.Video()->HDR10())
+			need.Add(StormByte::Multimedia::Feature::HDR10);
 		return need;
 	}
 
@@ -311,6 +309,47 @@ namespace {
 		return EstimateCeiling(frame) * 2;
 	}
 
+	void AddHdr10SideData(::AVCodecParameters* par, const StormByte::Multimedia::Property::HDR10& hdr10) noexcept {
+		if (!par)
+			return;
+
+		const bool hasMastering = hdr10.Red().X() != 0 || hdr10.Red().Y() != 0
+			|| hdr10.Green().X() != 0 || hdr10.Green().Y() != 0
+			|| hdr10.Blue().X() != 0 || hdr10.Blue().Y() != 0
+			|| hdr10.White().X() != 0 || hdr10.White().Y() != 0
+			|| hdr10.Luminance().X() != 0 || hdr10.Luminance().Y() != 0;
+		const bool hasLight = hdr10.LightLevel().has_value()
+			&& (hdr10.LightLevel()->X() != 0 || hdr10.LightLevel()->Y() != 0);
+
+		if (hasMastering) {
+			AVMasteringDisplayMetadata mdm{};
+			mdm.display_primaries[0][0] = av_make_q(static_cast<int>(hdr10.Red().X()), 50000);
+			mdm.display_primaries[0][1] = av_make_q(static_cast<int>(hdr10.Red().Y()), 50000);
+			mdm.display_primaries[1][0] = av_make_q(static_cast<int>(hdr10.Green().X()), 50000);
+			mdm.display_primaries[1][1] = av_make_q(static_cast<int>(hdr10.Green().Y()), 50000);
+			mdm.display_primaries[2][0] = av_make_q(static_cast<int>(hdr10.Blue().X()), 50000);
+			mdm.display_primaries[2][1] = av_make_q(static_cast<int>(hdr10.Blue().Y()), 50000);
+			mdm.white_point[0] = av_make_q(static_cast<int>(hdr10.White().X()), 50000);
+			mdm.white_point[1] = av_make_q(static_cast<int>(hdr10.White().Y()), 50000);
+			mdm.min_luminance = av_make_q(static_cast<int>(hdr10.Luminance().X()), 10000);
+			mdm.max_luminance = av_make_q(static_cast<int>(hdr10.Luminance().Y()), 10000);
+			mdm.has_primaries = 1;
+			mdm.has_luminance = 1;
+			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
+					AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(mdm), 0))
+				std::memcpy(sd->data, &mdm, sizeof(mdm));
+		}
+
+		if (hasLight) {
+			AVContentLightMetadata cll{};
+			cll.MaxCLL = static_cast<unsigned>(hdr10.LightLevel()->X());
+			cll.MaxFALL = static_cast<unsigned>(hdr10.LightLevel()->Y());
+			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
+					AV_PKT_DATA_CONTENT_LIGHT_LEVEL, sizeof(cll), 0))
+				std::memcpy(sd->data, &cll, sizeof(cll));
+		}
+	}
+
 	FFmpeg::AVCodecParameters FillParams(const Frame& frame, const ::AVCodec* codec,
 		const std::optional<std::int64_t>& bitRate, std::optional<int> sampleFormat) noexcept {
 		FFmpeg::AVCodecParameters params(nullptr);
@@ -329,6 +368,8 @@ namespace {
 			params.ColorSpace(ToAVSpace(video.Color().Space()));
 			params.ColorPrimaries(ToAVPrimaries(video.Color().Primaries()));
 			params.ColorTransfer(ToAVTransfer(video.Color().Transfer()));
+			if (video.HDR10())
+				AddHdr10SideData(params.Get(), *video.HDR10());
 		}
 		if (frame.Audio()) {
 			const auto& audio = *frame.Audio();
@@ -353,13 +394,47 @@ namespace {
 			const auto* rawBytes = reinterpret_cast<const std::byte*>(data);
 			bytes.assign(rawBytes, rawBytes + size);
 		}
+
+		std::vector<SideData> attachments;
+		if (const auto* pkt = raw.Get()) {
+			for (int i = 0; i < pkt->side_data_elems; ++i) {
+				const AVPacketSideData& sd = pkt->side_data[i];
+				if (!sd.data || sd.size <= 0)
+					continue;
+				StormByte::Buffer::DataType blob(
+					reinterpret_cast<const std::byte*>(sd.data),
+					reinterpret_cast<const std::byte*>(sd.data) + sd.size);
+				switch (sd.type) {
+					case AV_PKT_DATA_DYNAMIC_HDR10_PLUS:
+						attachments.emplace_back(SideDataKind::HdrPlus,
+							StormByte::Buffer::FIFO{std::move(blob)});
+						break;
+					case AV_PKT_DATA_MASTERING_DISPLAY_METADATA:
+						attachments.emplace_back(SideDataKind::MasteringDisplay,
+							StormByte::Buffer::FIFO{std::move(blob)});
+						break;
+					case AV_PKT_DATA_CONTENT_LIGHT_LEVEL:
+						attachments.emplace_back(SideDataKind::ContentLight,
+							StormByte::Buffer::FIFO{std::move(blob)});
+						break;
+					default:
+						attachments.emplace_back(
+							std::string(av_packet_side_data_name(sd.type)
+								? av_packet_side_data_name(sd.type) : "unknown"),
+							StormByte::Buffer::FIFO{std::move(blob)});
+						break;
+				}
+			}
+		}
+
 		return Packet{
 			index,
 			StormByte::Buffer::FIFO{std::move(bytes)},
 			TicksToPts(raw.Pts(), timeBase),
 			TicksToPts(raw.Dts(), timeBase),
 			TicksToDuration(raw.Duration(), timeBase),
-			(raw.Flags() & AV_PKT_FLAG_KEY) != 0
+			(raw.Flags() & AV_PKT_FLAG_KEY) != 0,
+			std::move(attachments)
 		};
 	}
 
@@ -557,7 +632,9 @@ namespace {
 }
 
 Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec) noexcept
-: m_index(output_index), m_codec(&codec), m_failed(false) {}
+: m_index(output_index), m_codec(&codec),
+m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION),
+m_failed(false) {}
 
 Encoder::Encoder(Encoder&&) noexcept = default;
 Encoder::~Encoder() noexcept = default;
@@ -581,6 +658,32 @@ bool Encoder::Failed() const noexcept {
 
 const std::optional<std::string>& Encoder::Error() const noexcept {
 	return m_error;
+}
+
+const std::optional<std::string>& Encoder::Language() const noexcept {
+	return m_language;
+}
+
+void Encoder::Language(std::string language) noexcept {
+	if (language.empty())
+		m_language.reset();
+	else
+		m_language = std::move(language);
+}
+
+const std::optional<std::string>& Encoder::Title() const noexcept {
+	return m_title;
+}
+
+void Encoder::Title(std::string title) noexcept {
+	if (title.empty())
+		m_title.reset();
+	else
+		m_title = std::move(title);
+}
+
+const std::string& Encoder::EncoderTag() const noexcept {
+	return m_encoderTag;
 }
 
 const std::optional<std::string>& Encoder::Implementation() const noexcept {
@@ -709,9 +812,29 @@ void Encoder::FineTune(std::map<std::string, std::string> options) noexcept {
 }
 
 void Encoder::Flush() noexcept {
-	if (m_failed || !m_impl)
+	if (m_failed || !m_impl || m_flushed)
 		return;
-	m_impl->m_encoder.SetEof();
+	if (m_impl->m_encoder.IsSubtitle()) {
+		m_flushed = true;
+		return;
+	}
+
+	for (;;) {
+		const auto sent = m_impl->m_encoder.SetEof();
+		if (sent == FFmpeg::OperationResult::Success || sent == FFmpeg::OperationResult::EndOfFile)
+			break;
+		if (sent == FFmpeg::OperationResult::TryAgain) {
+			if (!DrainOne())
+				break;
+			continue;
+		}
+		Fail("failed to signal encoder EOF");
+		return;
+	}
+
+	while (DrainOne())
+		;
+	m_flushed = true;
 }
 
 void Encoder::Fail(std::string reason) noexcept {
@@ -834,9 +957,12 @@ bool Encoder::Open(const Frame& frame) noexcept {
 		opts.emplace(row->crf_key, std::to_string(*m_crf));
 	if (m_bitRate && row && HasKey(row->bitrate_key))
 		opts.emplace(row->bitrate_key, std::to_string(*m_bitRate));
+	else if (m_crf && !m_bitRate && row && HasKey(row->bitrate_key)
+		&& (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9"))
+		opts.emplace(row->bitrate_key, "0");
 	if (m_maxBitRate && row && HasKey(row->maxrate_key))
 		opts.emplace(row->maxrate_key, std::to_string(*m_maxBitRate));
-	if (row && HasKey(row->bufsize_key) && frame.Video())
+	if (row && HasKey(row->bufsize_key) && frame.Video() && (m_bitRate || m_maxBitRate))
 		opts.emplace(row->bufsize_key, std::to_string(BufSizeBits(*this, frame)));
 	if (m_preset && row && HasKey(row->preset_key))
 		opts.emplace(row->preset_key, *m_preset);
@@ -898,6 +1024,10 @@ bool Encoder::Open(const Frame& frame) noexcept {
 Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encoder) noexcept {
 	if (encoder.m_failed)
 		return frame;
+	if (frame.Language() && !encoder.m_language)
+		encoder.Language(*frame.Language());
+	if (frame.Title() && !encoder.m_title)
+		encoder.Title(*frame.Title());
 	if (!encoder.m_impl && !encoder.Open(frame))
 		return frame;
 	if (!encoder.m_impl)
@@ -983,14 +1113,8 @@ Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encode
 		return frame;
 	}
 
-	if (frame.Video() && frame.Video()->HDR10()) {
-		if (frame.Video()->HDR10()->IsHDR10Plus()
-			&& !encoder.m_capabilities.Has(StormByte::Multimedia::Feature::HDR10Plus)) {
-			encoder.Fail("encoder implementation lacks required features");
-			return frame;
-		}
+	if (frame.Video() && frame.Video()->HDR10())
 		frame.m_impl->m_backend.WriteHdr10(*frame.Video()->HDR10());
-	}
 	frame.m_impl->m_backend.WriteSideData(frame.Attachments());
 
 	auto* raw = frame.m_impl->m_backend.Get();

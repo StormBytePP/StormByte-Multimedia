@@ -127,7 +127,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Construct with a stream index. Implementation() pins an FFmpeg decoder
 	 * name from the handcrafted table. Empty pin picks the lowest preference
 	 * row that covers Require() plus stream HDR10 / HDR10Plus. demux >> decoder
-	 * opens the backend and copies the stream language tag from File metadata.
+	 * opens the backend and copies stream language and title from File metadata.
 	 * packet >> decoder ignores other indexes.
 	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits EOF,
 	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
@@ -220,6 +220,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param language ISO code (`spa`, `eng`, `es`, …). Empty clears it.
 			 */
 			void Language(std::string language) noexcept;
+
+			/**
+			 * @brief Stream title tag copied from File metadata.
+			 * @return Title, or empty if the stream had none.
+			 */
+			const std::optional<std::string>& Title() const noexcept;
+
+			/**
+			 * @brief Sets the stream title tag (used before demux >> decoder if needed).
+			 * @param title Title from File metadata. Empty clears it.
+			 */
+			void Title(std::string title) noexcept;
 
 			/** @} */
 
@@ -318,6 +330,7 @@ namespace StormByte::Multimedia::Pipeline {
 			DecoderFlags m_flags;							///< Heuristics / future bits
 			std::optional<std::string> m_implementation;	///< Pinned or selected FFmpeg name
 			std::optional<std::string> m_language;			///< Stream language from File metadata
+			std::optional<std::string> m_title;				///< Stream title from File metadata
 			Features m_require;								///< Extra required bits
 			Features m_capabilities;						///< Features of the opened row
 			Filter::FramePipe m_pipe;						///< Frame steps

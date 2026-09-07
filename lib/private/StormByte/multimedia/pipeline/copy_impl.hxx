@@ -36,55 +36,49 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/packet.hxx>
+#pragma once
 
-using namespace StormByte::Multimedia::Pipeline;
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/pipeline/copy.hxx>
 
-Packet::Packet() noexcept
-: m_streamIndex(-1), m_keyFrame(false) {}
+#include <optional>
+#include <string>
 
-Packet::Packet(int stream_index, StormByte::Buffer::FIFO payload,
-std::optional<StormByte::Multimedia::Property::Duration> pts,
-std::optional<StormByte::Multimedia::Property::Duration> dts,
-std::optional<StormByte::Multimedia::Property::Duration> duration,
-bool key_frame,
-std::vector<SideData> attachments) noexcept
-: m_streamIndex(stream_index), m_payload(std::move(payload)),
-m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
-m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
-
-int Packet::StreamIndex() const noexcept {
-return m_streamIndex;
+extern "C" {
+	#include <libavutil/rational.h>
 }
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Pts() const noexcept {
-return m_pts;
-}
+/**
+ * @class StormByte::Multimedia::Pipeline::Copy::Impl
+ * @brief Snapshotted codec parameters, time base and tags from the demux stream.
+ */
+class StormByte::Multimedia::Pipeline::Copy::Impl {
+	public:
+		/**
+		 * @brief Empty parameters (not bound).
+		 */
+		Impl() noexcept
+		: params(nullptr), bound(false) {}
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Dts() const noexcept {
-return m_dts;
-}
+		/**
+		 * @brief Destructor.
+		 */
+		~Impl() noexcept = default;
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Duration() const noexcept {
-return m_duration;
-}
+		/**
+		 * @brief Copy constructor (deleted).
+		 */
+		Impl(const Impl&) = delete;
 
-bool Packet::KeyFrame() const noexcept {
-return m_keyFrame;
-}
+		/**
+		 * @brief Copy assignment (deleted).
+		 * @return *this.
+		 */
+		Impl& operator=(const Impl&) = delete;
 
-const StormByte::Buffer::FIFO& Packet::Payload() const noexcept {
-return m_payload;
-}
-
-StormByte::Buffer::FIFO& Packet::Payload() noexcept {
-return m_payload;
-}
-
-const std::vector<SideData>& Packet::Attachments() const noexcept {
-return m_attachments;
-}
-
-std::vector<SideData>& Packet::Attachments() noexcept {
-return m_attachments;
-}
+		Backend::FFmpeg::AVCodecParameters params;	///< Demux codecpar snapshot
+		AVRational timeBase{0, 1};			///< Demux stream time base
+		std::optional<std::string> language;		///< language tag
+		std::optional<std::string> title;		///< title tag
+		bool bound;					///< true after demux >> copy
+};

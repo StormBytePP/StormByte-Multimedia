@@ -85,7 +85,8 @@ namespace StormByte::Multimedia {
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Operation: std::uint8_t {
 		None	= 0,		///< No access
 		Read	= 1 << 0,	///< Decode / demux is available
-		Write	= 1 << 1	///< At least one encoder exists in this FFmpeg
+		Write	= 1 << 1,	///< At least one encoder / muxer exists
+		Attach	= 1 << 2	///< Container can hold real attachments (covers, fonts)
 	};
 
 	/**

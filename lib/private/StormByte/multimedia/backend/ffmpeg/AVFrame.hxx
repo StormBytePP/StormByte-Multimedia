@@ -141,7 +141,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Copies raw SEI/side-data blobs onto the frame.
 			 * @param attachments High-level side data.
 			 *
-			 * Known HDR types are skipped here; use WriteHdr10 for those.
+			 * MDM/CLL are skipped (WriteHdr10 owns those). HDR10+ is written
+			 * as AV_FRAME_DATA_DYNAMIC_HDR_PLUS via the libav helper.
 			 */
 			void WriteSideData(const std::vector<StormByte::Multimedia::Pipeline::SideData>& attachments) noexcept;
 

@@ -44,6 +44,7 @@
 extern "C" {
 	#include <libavutil/avutil.h>
 	#include <libavutil/frame.h>
+	#include <libavutil/hdr_dynamic_metadata.h>
 	#include <libavutil/imgutils.h>
 	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/samplefmt.h>
@@ -119,26 +120,36 @@ void FFmpeg::AVFrame::WriteHdr10(const StormByte::Multimedia::Property::HDR10& h
 	if (!m_ptr)
 		return;
 
-	av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
-	av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+	const bool hasMastering =
+		hdr10.Red().X() != 0 || hdr10.Red().Y() != 0 ||
+		hdr10.Green().X() != 0 || hdr10.Green().Y() != 0 ||
+		hdr10.Blue().X() != 0 || hdr10.Blue().Y() != 0 ||
+		hdr10.White().X() != 0 || hdr10.White().Y() != 0 ||
+		hdr10.Luminance().X() != 0 || hdr10.Luminance().Y() != 0;
+	const auto& light = hdr10.LightLevel();
+	const bool hasLight = light.has_value() && (light->X() != 0 || light->Y() != 0);
 
-	auto* mdm = av_mastering_display_metadata_create_side_data(m_ptr);
-	if (mdm) {
-		mdm->has_primaries = 1;
-		mdm->display_primaries[0][0] = AVRational{hdr10.Red().X(), ChromaDenominator};
-		mdm->display_primaries[0][1] = AVRational{hdr10.Red().Y(), ChromaDenominator};
-		mdm->display_primaries[1][0] = AVRational{hdr10.Green().X(), ChromaDenominator};
-		mdm->display_primaries[1][1] = AVRational{hdr10.Green().Y(), ChromaDenominator};
-		mdm->display_primaries[2][0] = AVRational{hdr10.Blue().X(), ChromaDenominator};
-		mdm->display_primaries[2][1] = AVRational{hdr10.Blue().Y(), ChromaDenominator};
-		mdm->white_point[0] = AVRational{hdr10.White().X(), ChromaDenominator};
-		mdm->white_point[1] = AVRational{hdr10.White().Y(), ChromaDenominator};
-		mdm->has_luminance = 1;
-		mdm->min_luminance = AVRational{hdr10.Luminance().X(), LumaDenominator};
-		mdm->max_luminance = AVRational{hdr10.Luminance().Y(), LumaDenominator};
+	if (hasMastering) {
+		av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+		auto* mdm = av_mastering_display_metadata_create_side_data(m_ptr);
+		if (mdm) {
+			mdm->has_primaries = 1;
+			mdm->display_primaries[0][0] = AVRational{hdr10.Red().X(), ChromaDenominator};
+			mdm->display_primaries[0][1] = AVRational{hdr10.Red().Y(), ChromaDenominator};
+			mdm->display_primaries[1][0] = AVRational{hdr10.Green().X(), ChromaDenominator};
+			mdm->display_primaries[1][1] = AVRational{hdr10.Green().Y(), ChromaDenominator};
+			mdm->display_primaries[2][0] = AVRational{hdr10.Blue().X(), ChromaDenominator};
+			mdm->display_primaries[2][1] = AVRational{hdr10.Blue().Y(), ChromaDenominator};
+			mdm->white_point[0] = AVRational{hdr10.White().X(), ChromaDenominator};
+			mdm->white_point[1] = AVRational{hdr10.White().Y(), ChromaDenominator};
+			mdm->has_luminance = 1;
+			mdm->min_luminance = AVRational{hdr10.Luminance().X(), LumaDenominator};
+			mdm->max_luminance = AVRational{hdr10.Luminance().Y(), LumaDenominator};
+		}
 	}
 
-	if (const auto& light = hdr10.LightLevel(); light.has_value()) {
+	if (hasLight) {
+		av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 		auto* cll = av_content_light_metadata_create_side_data(m_ptr);
 		if (cll) {
 			cll->MaxCLL = static_cast<unsigned>(light->X());
@@ -153,14 +164,29 @@ void FFmpeg::AVFrame::WriteSideData(
 		return;
 
 	for (const auto& item : attachments) {
+		const auto size = item.Payload().AvailableBytes();
+		if (size == 0)
+			continue;
+		StormByte::Buffer::DataType bytes;
+		if (!item.Payload().Peek(size, bytes) || bytes.empty())
+			continue;
+
+		if (item.Kind() == SideDataKind::MasteringDisplay
+			|| item.Kind() == SideDataKind::ContentLight)
+			continue;
+
+		if (item.Kind() == SideDataKind::HdrPlus) {
+			av_frame_remove_side_data(m_ptr, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+			AVDynamicHDRPlus* plus = av_dynamic_hdr_plus_create_side_data(m_ptr);
+			if (!plus)
+				continue;
+			const std::size_t copy = std::min(bytes.size(), sizeof(AVDynamicHDRPlus));
+			std::memcpy(plus, bytes.data(), copy);
+			continue;
+		}
+
 		AVFrameSideDataType type = AV_FRAME_DATA_SEI_UNREGISTERED;
 		switch (item.Kind()) {
-			case SideDataKind::MasteringDisplay:
-			case SideDataKind::ContentLight:
-				continue;
-			case SideDataKind::HdrPlus:
-				type = AV_FRAME_DATA_DYNAMIC_HDR_PLUS;
-				break;
 			case SideDataKind::A53CC:
 				type = AV_FRAME_DATA_A53_CC;
 				break;
@@ -168,12 +194,6 @@ void FFmpeg::AVFrame::WriteSideData(
 				type = AV_FRAME_DATA_SEI_UNREGISTERED;
 				break;
 		}
-		const auto size = item.Payload().AvailableBytes();
-		if (size == 0)
-			continue;
-		StormByte::Buffer::DataType bytes;
-		if (!item.Payload().Peek(size, bytes) || bytes.empty())
-			continue;
 		AVFrameSideData* side = av_frame_new_side_data(m_ptr, type, static_cast<int>(bytes.size()));
 		if (!side)
 			continue;

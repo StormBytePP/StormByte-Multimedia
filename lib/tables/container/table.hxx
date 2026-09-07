@@ -60,11 +60,8 @@ namespace StormByte::Multimedia::Tables::Container {
 		const char* description;				///< Description
 		std::array<const char*, 4> ffmpegIds;	///< FFmpeg format ids; unused slots nullptr
 		std::array<const char*, 8> extensions;	///< Primary + aliases; unused slots nullptr
+		bool attachments = false;				///< Real AttachedFile (covers, fonts)
 
-		/**
-		 * @brief Number of non-null FFmpeg ids.
-		 * @return Count in `[0, 4]`.
-		 */
 		constexpr std::size_t FfmpegIdCount() const noexcept {
 			std::size_t n = 0;
 			for (const char* id : ffmpegIds) {
@@ -75,21 +72,12 @@ namespace StormByte::Multimedia::Tables::Container {
 			return n;
 		}
 
-		/**
-		 * @brief FFmpeg id at @p index.
-		 * @param index Zero-based index.
-		 * @return Id, or nullptr if out of range.
-		 */
 		constexpr const char* FfmpegId(std::size_t index) const noexcept {
 			if (index >= FfmpegIdCount())
 				return nullptr;
 			return ffmpegIds[index];
 		}
 
-		/**
-		 * @brief Number of non-null extensions.
-		 * @return Count in `[0, 8]`.
-		 */
 		constexpr std::size_t ExtensionCount() const noexcept {
 			std::size_t n = 0;
 			for (const char* ext : extensions) {
@@ -100,21 +88,12 @@ namespace StormByte::Multimedia::Tables::Container {
 			return n;
 		}
 
-		/**
-		 * @brief Extension at @p index (no dot).
-		 * @param index Zero-based index; 0 is primary.
-		 * @return Extension, or nullptr if out of range.
-		 */
 		constexpr const char* Extension(std::size_t index) const noexcept {
 			if (index >= ExtensionCount())
 				return nullptr;
 			return extensions[index];
 		}
 
-		/**
-		 * @brief Primary extension (no dot).
-		 * @return extensions[0], or nullptr.
-		 */
 		constexpr const char* PrimaryExtension() const noexcept {
 			return Extension(0);
 		}

@@ -36,26 +36,36 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <tables/encoder/table.hxx>
+#include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/codec.hxx>
 
 using namespace StormByte::Multimedia;
-using namespace StormByte::Multimedia::Tables::Encoder;
 
-namespace {
-	constexpr EncoderDef table[] = {
-		{ "AAC", "aac", "Native AAC encoder", 0, Feature::LowDelay, "", "", "", "", "b", "", "", "", "" },
-		{ "AAC", "libfdk_aac", "Fraunhofer FDK AAC", 1, Feature::HighQuality | Feature::LowDelay | Feature::ProfileBased | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "Vorbis", "libvorbis", "libvorbis encoder", 0, Feature::HighQuality | Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "Opus", "libopus", "libopus encoder", 0, Feature::HighQuality | Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "MP3", "libmp3lame", "LAME MP3 encoder", 0, Feature::HighQuality | Feature::LowDelay, "", "", "", "", "b", "", "", "", "" },
-		{ "FLAC", "flac", "FLAC encoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound, "", "", "", "", "", "", "", "", "" },
-		{ "ALAC", "alac", "ALAC encoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound, "", "", "", "", "", "", "", "", "" },
-		{ "AC-3", "ac3", "Native AC-3 encoder", 0, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "AC-3", "ac3_fixed", "Fixed-point AC-3 encoder", 1, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-		{ "E-AC-3", "eac3", "Native E-AC-3 encoder", 0, Feature::LowDelay | Feature::SurroundSound, "", "", "", "", "b", "", "", "", "" },
-	};
+bool Container::operator==(const Container& other) const noexcept {
+	return this == &other;
 }
 
-std::span<const EncoderDef> StormByte::Multimedia::Tables::Encoder::Audio() noexcept {
-	return table;
+bool Container::operator!=(const Container& other) const noexcept {
+	return !(*this == other);
+}
+
+bool Container::HasAccess(Access access) const noexcept {
+	return m_access.Has(access);
+}
+
+bool Container::Allows(const CodecRefs& codecs) const noexcept {
+	if (codecs.empty())
+		return true;
+	for (const Codec& codec : codecs) {
+		bool found = false;
+		for (const Codec& allowed : m_allowed) {
+			if (codec == allowed) {
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			return false;
+	}
+	return true;
 }

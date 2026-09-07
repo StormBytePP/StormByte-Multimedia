@@ -5,17 +5,6 @@ file(GLOB_RECURSE STORMBYTE_MULTIMEDIA_SOURCES CONFIGURE_DEPENDS
 	"${CMAKE_CURRENT_LIST_DIR}/private/*.cxx"
 )
 
-# Generate implemented backends file
-# set(IMPLEMENTED_BACKENDS "Implementation::FFmpeg") # Improve when more backends exist
-# set(SOURCE_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_LIST_DIR}/private/StormByte/multimedia/engine/implementation.cxx.in")
-# set(GENERATED_IMPLEMENTED_BACKENDS_FILE "${CMAKE_CURRENT_BINARY_DIR}/implementation.cxx")
-# configure_file(
-# 	${SOURCE_IMPLEMENTED_BACKENDS_FILE}
-# 	${GENERATED_IMPLEMENTED_BACKENDS_FILE}
-# 	@ONLY
-# )
-# list(APPEND STORMBYTE_MULTIMEDIA_SOURCES "${GENERATED_IMPLEMENTED_BACKENDS_FILE}")
-
 add_library(StormByte-Multimedia SHARED ${STORMBYTE_MULTIMEDIA_SOURCES})
 add_library(StormByte::Multimedia ALIAS StormByte-Multimedia)
 
@@ -42,6 +31,10 @@ else()
 		$<$<CONFIG:Debug>:-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0>
 	)
 endif()
+
+target_compile_definitions(StormByte-Multimedia PRIVATE
+	"STORMBYTE_MULTIMEDIA_VERSION=\"${CMAKE_PROJECT_VERSION}\""
+)
 
 target_include_directories(StormByte-Multimedia
 	SYSTEM BEFORE

@@ -57,6 +57,7 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
+	class Mux;
 
 	/**
 	 * @brief Sends @p frame to @p encoder. Never throws.
@@ -82,6 +83,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * CRF / BitRate / MaxBitRate / Preset / Tune are first-class setters.
 	 * FineTune is vendor leftovers. bufsize is internal.
 	 * Open is lazy on the first frame >> encoder.
+	 * Language() and Title() are stamped from the first frame and written
+	 * onto the mux stream for every destination codec.
+	 * EncoderTag() overwrites stream metadata ENCODER on every encode.
+	 * Flush() signals EOF and drains the backend into the pending queue.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder {
 		public:
@@ -163,6 +168,48 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return Message, or empty.
 			 */
 			const std::optional<std::string>& Error() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Stream tags
+			 * @{
+			 */
+
+			/**
+			 * @brief Stream language tag stamped from the decoded frame.
+			 * @return Language, or empty if none was received.
+			 */
+			const std::optional<std::string>& Language() const noexcept;
+
+			/**
+			 * @brief Sets the stream language tag (before or after open).
+			 * @param language ISO code (`spa`, `eng`, `es`, …). Empty clears it.
+			 */
+			void Language(std::string language) noexcept;
+
+			/**
+			 * @brief Stream title tag stamped from the decoded frame.
+			 * @return Title, or empty if none was received.
+			 */
+			const std::optional<std::string>& Title() const noexcept;
+
+			/**
+			 * @brief Sets the stream title tag (before or after open).
+			 * @param title Title from File metadata. Empty clears it.
+			 */
+			void Title(std::string title) noexcept;
+
+			/**
+			 * @brief Writing-application tag stamped on every encoded stream.
+			 *
+			 * Always `StormByte-Multimedia <version>`. Copy tracks do not
+			 * use Encoder, so they keep the source tag.
+			 * @return Tag string. Never empty after construction.
+			 */
+			const std::string& EncoderTag() const noexcept;
 
 			/**
 			 * @}
@@ -303,7 +350,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Signals EOF to the backend. Drain with encoder >> packet afterwards.
+			 * @brief Signals EOF to the backend and drains remaining packets.
+			 *
+			 * Safe to call more than once. After Flush(), `encoder >> packet`
+			 * only yields packets already queued. Mux::Flush() calls this on
+			 * every reserved encoder and writes those packets to the file.
 			 */
 			void Flush() noexcept;
 
@@ -313,24 +364,29 @@ namespace StormByte::Multimedia::Pipeline {
 
 			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 			friend Encoder& operator>>(Encoder& encoder, Packet& packet) noexcept;
+			friend class Mux;
 
 		private:
 			class Impl;
 
-			int m_index;
-			const Codec* m_codec;
-			std::optional<std::string> m_implementation;
-			Features m_require;
-			Features m_capabilities;
-			std::optional<int> m_crf;
-			std::optional<std::int64_t> m_bitRate;
-			std::optional<std::int64_t> m_maxBitRate;
-			std::optional<std::string> m_preset;
-			std::optional<std::string> m_tune;
-			std::map<std::string, std::string> m_fineTune;
-			std::unique_ptr<Impl> m_impl;
-			bool m_failed;
-			std::optional<std::string> m_error;
+			int m_index;									///< Mux output index
+			const Codec* m_codec;							///< Destination codec
+			std::optional<std::string> m_implementation;	///< Pinned encoder name
+			std::optional<std::string> m_language;			///< Stream language from the frame
+			std::optional<std::string> m_title;				///< Stream title from the frame
+			std::string m_encoderTag;						///< ENCODER tag overwritten on encode
+			Features m_require;								///< Extra required features
+			Features m_capabilities;						///< Selected row features
+			std::optional<int> m_crf;						///< CRF/CQ
+			std::optional<std::int64_t> m_bitRate;			///< Target bitrate
+			std::optional<std::int64_t> m_maxBitRate;		///< VBV ceiling
+			std::optional<std::string> m_preset;			///< Preset
+			std::optional<std::string> m_tune;				///< Tune
+			std::map<std::string, std::string> m_fineTune;	///< Vendor leftovers
+			std::unique_ptr<Impl> m_impl;					///< Opened backend
+			bool m_failed;									///< Hard error
+			bool m_flushed = false;							///< SetEof + drain already done
+			std::optional<std::string> m_error;				///< Failure text
 
 			/**
 			 * @brief Marks a hard error and drops the backend.

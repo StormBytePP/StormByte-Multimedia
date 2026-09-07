@@ -44,6 +44,10 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 
+extern "C" {
+	#include <libavcodec/avcodec.h>
+}
+
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVDecoder::AVDecoder(::AVCodecContext* ctx) noexcept:
@@ -67,6 +71,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 	}
 
 	ctx->thread_count = 0;
+	ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
 
 	if (avcodec_open2(ctx, codec, nullptr) < 0) {
 		avcodec_free_context(&ctx);
@@ -133,9 +138,23 @@ void FFmpeg::AVDecoder::Flush() noexcept {
 	m_bsf_pipeline.Flush();
 }
 
-void FFmpeg::AVDecoder::SetEof() noexcept {
-	avcodec_send_packet(m_ptr, nullptr);
-	m_bsf_pipeline.SetEof();
+FFmpeg::OperationResult FFmpeg::AVDecoder::SetEof() noexcept {
+	if (!m_ptr) {
+		m_bsf_pipeline.SetEof();
+		return OperationResult::EndOfFile;
+	}
+	if (IsSubtitle()) {
+		m_bsf_pipeline.SetEof();
+		return OperationResult::EndOfFile;
+	}
+	const int ret = avcodec_send_packet(m_ptr, nullptr);
+	if (ret == 0 || ret == AVERROR_EOF) {
+		m_bsf_pipeline.SetEof();
+		return (ret == 0) ? OperationResult::Success : OperationResult::EndOfFile;
+	}
+	if (ret == AVERROR(EAGAIN))
+		return OperationResult::TryAgain;
+	return OperationResult::Error;
 }
 
 bool FFmpeg::AVDecoder::IsSubtitle() const noexcept {

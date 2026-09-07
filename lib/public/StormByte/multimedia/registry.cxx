@@ -160,6 +160,8 @@ Access Registry::ProbeContainer(const Tables::Container::ContainerDef& def) cons
 		if (av_guess_format(id, nullptr, nullptr) != nullptr)
 			access |= Access(Operation::Write);
 	}
+	if (def.attachments)
+		access |= Access(Operation::Attach);
 	return access;
 }
 

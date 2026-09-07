@@ -70,7 +70,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * is called. Attachments() is filled at receive time. Heuristics fill
 	 * Video().HDR10() only, never the side-data bag.
 	 * Audio() is set on audio frames; empty on video and subtitle frames.
-	 * Language() is the stream tag copied by the decoder when known.
+	 * Language() and Title() are stream tags copied by the decoder when known.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
 		public:
@@ -170,6 +170,18 @@ namespace StormByte::Multimedia::Pipeline {
 			void Language(std::string language) noexcept;
 
 			/**
+			 * @brief Stream title tag copied from File metadata.
+			 * @return Title, or empty if the stream had none.
+			 */
+			const std::optional<std::string>& Title() const noexcept;
+
+			/**
+			 * @brief Sets the stream title tag.
+			 * @param title Title from File metadata. Empty clears it.
+			 */
+			void Title(std::string title) noexcept;
+
+			/**
 			 * @}
 			 */
 
@@ -229,6 +241,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Video> m_video;				///< Video properties
 			std::optional<Property::Audio> m_audio;				///< Audio properties
 			std::optional<std::string> m_language;				///< Stream language tag
+			std::optional<std::string> m_title;					///< Stream title tag
 			std::vector<class SideData> m_attachments;			///< Raw side data
 			std::unique_ptr<Impl> m_impl;						///< Backend holder
 

@@ -42,8 +42,10 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
+#include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -123,6 +125,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Sends a frame to the encoder.
 			 * @param frame Source frame.
 			 * @return Operation result.
+			 *
+			 * Captures HDR10+ (`AV_FRAME_DATA_DYNAMIC_HDR_PLUS`) and keeps the
+			 * ITU-T T.35 payload keyed by PTS so ReceivePacket can emit SEI.
 			 */
 			FFmpeg::OperationResult SendFrame(AVFrame& frame) noexcept;
 
@@ -138,6 +143,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Receives an encoded packet (after BSF).
 			 * @param pkt Destination packet.
 			 * @return Operation result.
+			 *
+			 * For HEVC, prepends a prefix SEI NAL with the matching HDR10+ T.35.
 			 */
 			FFmpeg::OperationResult ReceivePacket(AVPacket& pkt) noexcept;
 
@@ -166,12 +173,14 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 
 			/**
 			 * @brief Signals EOF to encoder and BSF.
+			 * @return Operation result.
 			 */
-			void SetEof() noexcept;
+			FFmpeg::OperationResult SetEof() noexcept;
 
 		private:
-			int m_stream_index = -1;
-			FFmpeg::AVBSFPipeline m_bsf_pipeline;
+			int m_stream_index = -1;										///< Output track
+			FFmpeg::AVBSFPipeline m_bsf_pipeline;							///< Optional annex-B filter
+			std::map<std::int64_t, std::vector<std::uint8_t>> m_hdrPlusT35;	///< PTS → ST 2094-40 T.35
 
 			/**
 			 * @brief Adopts an opened codec context.

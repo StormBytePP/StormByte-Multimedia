@@ -293,6 +293,12 @@ namespace {
 		{ "mks",	"VPlayer" },
 		{ "mks",	"WebVTT" },
 		{ "mks",	"XSUB" },
+
+		{ nullptr,	"MJPEG" },
+		{ nullptr,	"PNG" },
+		{ nullptr,	"TrueType Font" },
+		{ nullptr,	"OpenType Font" },
+		{ nullptr,	"Binary Data" },
 	};
 }
 

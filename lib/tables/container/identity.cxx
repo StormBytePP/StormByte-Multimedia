@@ -206,7 +206,7 @@ namespace {
 		{ "MVI",				"Motion Pixels MVI",		{ "mvi" },					{ "mvi" } },
 		{ "MXF",				"Material eXchange Format",	{ "mxf" },					{ "mxf" } },
 		{ "MXG",				"MxPEG clip",				{ "mxg" },					{ "mxg" } },
-		{ "Matroska",			"Matroska",					{ "matroska" },				{ "mkv", "mka", "mks", "mk3d" } },
+		{ "Matroska",			"Matroska",					{ "matroska" },				{ "mkv", "mka", "mks", "mk3d" }, true },
 		{ "MicroDVD",			"MicroDVD subtitles",		{ "microdvd" },				{ "sub" } },
 		{ "NC",					"NC camera",				{ "nc" },					{ "v" } },
 		{ "NIST SPHERE",		"NIST SPHERE",				{ "nistsphere" },			{ "nist", "sph" } },

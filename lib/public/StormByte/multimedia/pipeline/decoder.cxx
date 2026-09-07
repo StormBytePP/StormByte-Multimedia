@@ -184,9 +184,11 @@ namespace {
 		return std::nullopt;
 	}
 
-	void StampLanguage(Decoder& decoder, Frame& frame) noexcept {
+	void StampTags(Decoder& decoder, Frame& frame) noexcept {
 		if (decoder.Language())
 			frame.Language(*decoder.Language());
+		if (decoder.Title())
+			frame.Title(*decoder.Title());
 	}
 }
 
@@ -222,6 +224,17 @@ void Decoder::Language(std::string language) noexcept {
 		m_language.reset();
 	else
 		m_language = std::move(language);
+}
+
+const std::optional<std::string>& Decoder::Title() const noexcept {
+	return m_title;
+}
+
+void Decoder::Title(std::string title) noexcept {
+	if (title.empty())
+		m_title.reset();
+	else
+		m_title = std::move(title);
 }
 
 const std::optional<std::string>& Decoder::Implementation() const noexcept {
@@ -279,8 +292,17 @@ void Decoder::Bind(std::unique_ptr<Impl> impl) noexcept {
 void Decoder::Flush() noexcept {
 	if (m_failed || !m_impl)
 		return;
-	if (!m_impl->m_decoder.IsSubtitle())
-		m_impl->m_decoder.SetEof();
+	if (m_impl->m_decoder.IsSubtitle())
+		return;
+	for (;;) {
+		const auto sent = m_impl->m_decoder.SetEof();
+		if (sent == FFmpeg::OperationResult::Success || sent == FFmpeg::OperationResult::EndOfFile)
+			return;
+		if (sent == FFmpeg::OperationResult::TryAgain)
+			return;
+		Fail("failed to signal decoder EOF");
+		return;
+	}
 }
 
 Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& decoder) noexcept {
@@ -406,7 +428,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 			std::nullopt,
 			{}
 		);
-		StampLanguage(decoder, incoming);
+		StampTags(decoder, incoming);
 
 		const bool hasCue = incoming.Payload().AvailableBytes() > 0;
 		if (decoder.m_impl->m_heldSubtitle) {
@@ -464,7 +486,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		std::move(attachments),
 		decoder.m_impl->m_audio
 	);
-	StampLanguage(decoder, frame);
+	StampTags(decoder, frame);
 	frame.Bind(std::move(holder));
 	runPipe();
 	return decoder;
