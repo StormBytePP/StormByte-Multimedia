@@ -25,6 +25,11 @@ else()
 	list(APPEND TESSERACT_OPTIONS "-DBUILD_SHARED_LIBS=OFF")
 endif()
 
+set(TESSERACT_EXTRA "GIT={RESET;PATCH={${TESSERACT_PATCHES}};TITLE=tesseract unversioned name}")
+if(WIN32)
+	string(APPEND TESSERACT_EXTRA ";TOOLCHAIN=msvc")
+endif()
+
 buildmaster_component(
 	tesseract
 	"${TESSERACT_COMPONENT}"
@@ -32,7 +37,7 @@ buildmaster_component(
 	"${TESSERACT_OPTIONS}"
 	"${OCR_BUNDLED_TYPE}"
 	"tesseract"
-	"GIT={RESET;PATCH={${TESSERACT_PATCHES}};TITLE=tesseract unversioned name}"
+	"${TESSERACT_EXTRA}"
 )
 buildmaster_link(tesseract leptonica)
 buildmaster_group_add(OCR tesseract)
