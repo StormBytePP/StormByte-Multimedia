@@ -61,6 +61,7 @@ namespace Details = StormByte::Multimedia::Pipeline::Engine::Decoder::Details;
 
 namespace {
 	constexpr int ChromaDenominator = 50000;
+	constexpr int LuminanceDenominator = 10000;
 
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
@@ -86,8 +87,13 @@ namespace {
 		return av_rescale_q(value->Nanoseconds().count(), AVRational{1, 1000000000}, timeBase);
 	}
 
-	StormByte::Multimedia::Property::Point FromRationalPair(const AVRational& x, const AVRational& y) noexcept {
+	StormByte::Multimedia::Property::Point FromChromaPair(const AVRational& x, const AVRational& y) noexcept {
 		return StormByte::Multimedia::Property::Point::Normalized(x.num, x.den, y.num, y.den, ChromaDenominator);
+	}
+
+	StormByte::Multimedia::Property::Point FromLuminancePair(const AVRational& minNits, const AVRational& maxNits) noexcept {
+		return StormByte::Multimedia::Property::Point::Normalized(
+			minNits.num, minNits.den, maxNits.num, maxNits.den, LuminanceDenominator);
 	}
 
 	StormByte::Multimedia::Pipeline::SideDataKind MapKind(AVFrameSideDataType type) noexcept {
@@ -151,16 +157,31 @@ namespace {
 
 		if (mdm && mdm->has_primaries && mdm->has_luminance) {
 			StormByte::Multimedia::Property::HDR10 out{
-				FromRationalPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
-				FromRationalPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
-				FromRationalPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
-				FromRationalPair(mdm->white_point[0], mdm->white_point[1]),
-				FromRationalPair(mdm->min_luminance, mdm->max_luminance),
-				light,
+				FromChromaPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
+				FromChromaPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
+				FromChromaPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
+				FromChromaPair(mdm->white_point[0], mdm->white_point[1]),
+				FromLuminancePair(mdm->min_luminance, mdm->max_luminance),
+				light ? light : (video.HDR10() ? video.HDR10()->LightLevel() : std::nullopt),
 				StormByte::Multimedia::Property::HDR10::Source::Metadata
 			};
-			out.HDR10Plus(plus);
+			out.HDR10Plus(plus || (video.HDR10() && video.HDR10()->IsHDR10Plus()));
 			return out;
+		}
+
+		if (video.HDR10()) {
+			auto kept = *video.HDR10();
+			if (plus)
+				kept.HDR10Plus(true);
+			if (light) {
+				kept = StormByte::Multimedia::Property::HDR10{
+					kept.Red(), kept.Green(), kept.Blue(), kept.White(), kept.Luminance(),
+					light, kept.Origin()
+				};
+				if (plus || video.HDR10()->IsHDR10Plus())
+					kept.HDR10Plus(true);
+			}
+			return kept;
 		}
 
 		if (heuristics && video.Color().IsHDR10()) {
@@ -172,12 +193,6 @@ namespace {
 				};
 			out.HDR10Plus(plus);
 			return out;
-		}
-		if (video.HDR10()) {
-			auto kept = *video.HDR10();
-			if (plus)
-				kept.HDR10Plus(true);
-			return kept;
 		}
 		return std::nullopt;
 	}
@@ -252,7 +267,8 @@ bool Details::Video::Receive(class Decoder& owner, class Frame& frame) noexcept 
 	if (video) {
 		auto hdr = MapFrameHDR10(holder->m_backend.Get(),
 			owner.Flags().Has(StormByte::Multimedia::Pipeline::DecoderFlag::HeuristicsHDR10), *video);
-		video = StormByte::Multimedia::Property::Video(video->Color(), video->Resolution(), std::move(hdr));
+		video = StormByte::Multimedia::Property::Video(
+			video->Color(), video->Resolution(), std::move(hdr), video->FrameRate());
 	}
 
 	frame = StormByte::Multimedia::Pipeline::Frame(

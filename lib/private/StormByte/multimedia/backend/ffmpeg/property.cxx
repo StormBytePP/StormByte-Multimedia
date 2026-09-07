@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/property/rate.hxx>
 
 #include <cstdint>
 #include <optional>
@@ -67,10 +68,15 @@ using StormByte::Multimedia::Property::Transfer;
 using StormByte::Multimedia::Property::Video;
 
 namespace {
-	constexpr int kChromaDen = 50000;
+	constexpr int ChromaDenominator = 50000;
+	constexpr int LuminanceDenominator = 10000;
 
-	Point FromRationalPair(const AVRational& x, const AVRational& y) noexcept {
-		return Point::Normalized(x.num, x.den, y.num, y.den, kChromaDen);
+	Point FromChromaPair(const AVRational& x, const AVRational& y) noexcept {
+		return Point::Normalized(x.num, x.den, y.num, y.den, ChromaDenominator);
+	}
+
+	Point FromLuminancePair(const AVRational& minNits, const AVRational& maxNits) noexcept {
+		return Point::Normalized(minNits.num, minNits.den, maxNits.num, maxNits.den, LuminanceDenominator);
 	}
 
 	const uint8_t* CodecSideData(const ::AVStream* raw, enum AVPacketSideDataType type, size_t& size) noexcept {
@@ -114,11 +120,11 @@ namespace {
 
 		if (mdm && mdm->has_primaries && mdm->has_luminance) {
 			HDR10 out{
-				FromRationalPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
-				FromRationalPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
-				FromRationalPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
-				FromRationalPair(mdm->white_point[0], mdm->white_point[1]),
-				FromRationalPair(mdm->min_luminance, mdm->max_luminance),
+				FromChromaPair(mdm->display_primaries[0][0], mdm->display_primaries[0][1]),
+				FromChromaPair(mdm->display_primaries[1][0], mdm->display_primaries[1][1]),
+				FromChromaPair(mdm->display_primaries[2][0], mdm->display_primaries[2][1]),
+				FromChromaPair(mdm->white_point[0], mdm->white_point[1]),
+				FromLuminancePair(mdm->min_luminance, mdm->max_luminance),
 				light,
 				HDR10::Source::Metadata
 			};
@@ -369,9 +375,13 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 			const auto primaries = MapPrimaries(params.ColorPrimaries());
 			const auto transfer = MapTransfer(params.ColorTransfer());
 			std::optional<Rate> frameRate;
-			const AVRational fps = stream.FrameRateRational();
-			if (fps.num > 0 && fps.den > 0)
-				frameRate = Rate{fps.num, fps.den};
+			if (const auto* raw = stream.Raw()) {
+				AVRational fps = raw->avg_frame_rate;
+				if (fps.num <= 0 || fps.den <= 0)
+					fps = raw->r_frame_rate;
+				if (fps.num > 0 && fps.den > 0)
+					frameRate = Rate{fps.num, fps.den};
+			}
 			return Video{
 				Color{pix, range, space, primaries, transfer},
 				Resolution{
