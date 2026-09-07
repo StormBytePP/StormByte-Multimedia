@@ -164,4 +164,18 @@ namespace StormByte::Multimedia {
 			explicit FileBufferOpenException(const std::string& reason):
 			FileOpenException(std::format("failed to open buffer: {}", reason)) {}
 	};
+
+	/**
+	 * @class TranscodeException
+	 * @brief Thrown when Transcode::Open or a configuration call fails.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC TranscodeException: public Exception {
+		public:
+			/**
+			 * @brief Constructs the exception with a finished message.
+			 * @param message Already formatted reason text.
+			 */
+			explicit TranscodeException(const std::string& message):
+			Exception("Transcode", "{}", message) {}
+	};
 }

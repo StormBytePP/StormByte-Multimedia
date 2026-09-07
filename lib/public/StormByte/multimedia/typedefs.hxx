@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/exception.hxx>
 
 #include <functional>
+#include <memory>
 #include <vector>
 
 /**
@@ -54,10 +55,15 @@ namespace StormByte::Multimedia {
 	class File;
 	class Stream;
 
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;				///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;	///< Result of FindContainer
-	using ExpectedFile = StormByte::Expected<File, FileOpenException>;								///< Result of OpenFile
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;								///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;						///< List of container references
-	using Streams = std::vector<Stream>;															///< Ordered streams
+	namespace Pipeline {
+		class Transcode;
+	}
+
+	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;							///< Result of FindCodec
+	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;				///< Result of FindContainer
+	using ExpectedFile = StormByte::Expected<File, FileOpenException>;											///< Result of OpenFile
+	using ExpectedTranscode = StormByte::Expected<std::unique_ptr<Pipeline::Transcode>, TranscodeException>;	///< Result of Transcode::Open
+	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;											///< List of codec references
+	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;								///< List of container references
+	using Streams = std::vector<Stream>;																	///< Ordered streams
 }
