@@ -60,6 +60,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	class AVFormatContext;
 	class AVFrame;
 	class AVPacket;
+	class AVSubtitle;
 
 	/**
 	 * @class AVEncoder
@@ -126,6 +127,14 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			FFmpeg::OperationResult SendFrame(AVFrame& frame) noexcept;
 
 			/**
+			 * @brief Encodes one text subtitle (`avcodec_encode_subtitle`).
+			 * @param sub Filled subtitle.
+			 * @param pkt Destination packet.
+			 * @return Operation result.
+			 */
+			FFmpeg::OperationResult EncodeSubtitle(AVSubtitle& sub, AVPacket& pkt) noexcept;
+
+			/**
 			 * @brief Receives an encoded packet (after BSF).
 			 * @param pkt Destination packet.
 			 * @return Operation result.
@@ -143,6 +152,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @return `time_base`, or 0/1.
 			 */
 			AVRational TimeBase() const noexcept;
+
+			/**
+			 * @brief true if the opened codec is a subtitle encoder.
+			 * @return true for subtitle codecs.
+			 */
+			bool IsSubtitle() const noexcept;
 
 			/**
 			 * @brief Flushes encoder and BSF.

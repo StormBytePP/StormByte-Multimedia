@@ -36,61 +36,23 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <tables/encoder/table.hxx>
 
-#include <StormByte/multimedia/features.hxx>
+using namespace StormByte::Multimedia;
+using namespace StormByte::Multimedia::Tables::Encoder;
 
-#include <span>
-#include <string_view>
-
-/**
- * @namespace StormByte::Multimedia::Tables::Encoder
- * @brief Handcrafted encoder implementations: preference, features, FineTune key and HDR signaling.
- */
-namespace StormByte::Multimedia::Tables::Encoder {
-	/**
-	 * @struct EncoderDef
-	 * @brief One FFmpeg encoder implementation for a StormByte codec identity.
-	 *
-	 * tune_key empty: FineTune pairs go to av_opt_set one by one.
-	 * tune_key set: FineTune is packed into that private-options blob.
-	 * signal_hdr10 / signal_hdr10plus: library-owned k=v[:k=v] when the Frame
-	 * carries that metadata. Never quality knobs.
-	 * Empty crf_key / bitrate_key / maxrate_key / bufsize_key / preset_key /
-	 * style_key: that setter is not valid for the row.
-	 */
-	struct EncoderDef {
-		const char* codec;
-		const char* name;
-		const char* description;
-		int preference;
-		Features features;
-		const char* tune_key;
-		const char* signal_hdr10;
-		const char* signal_hdr10plus;
-		const char* crf_key;
-		const char* bitrate_key;
-		const char* maxrate_key;
-		const char* bufsize_key;
-		const char* preset_key;
-		const char* style_key;
+namespace {
+	constexpr EncoderDef table[] = {
+		{ "SRT", "srt", "SubRip encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "SubRip", "srt", "SubRip encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "ASS", "ass", "ASS encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "SSA", "ssa", "SSA encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "WebVTT", "webvtt", "WebVTT encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "UTF-8 Text", "text", "Raw UTF-8 text encoder", 1, Features{}, "", "", "", "", "", "", "", "", "" },
+		{ "3GPP Timed Text", "mov_text", "3GPP / MP4 timed text encoder", 0, Features{}, "", "", "", "", "", "", "", "", "" },
 	};
+}
 
-	/**
-	 * @brief Video encoder rows.
-	 * @return Span over the static video table.
-	 */
-	std::span<const EncoderDef> Video() noexcept;
-
-	/**
-	 * @brief Audio encoder rows.
-	 * @return Span over the static audio table.
-	 */
-	std::span<const EncoderDef> Audio() noexcept;
-
-	/**
-	 * @brief Text subtitle encoder rows (ASS/SRT/WebVTT/…). Not bitmap, not OCR.
-	 * @return Span over the static subtitle table.
-	 */
-	std::span<const EncoderDef> Subtitle() noexcept;
+std::span<const EncoderDef> StormByte::Multimedia::Tables::Encoder::Subtitle() noexcept {
+	return table;
 }

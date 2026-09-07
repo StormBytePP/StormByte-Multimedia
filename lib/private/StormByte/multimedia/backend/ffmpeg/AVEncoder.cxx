@@ -41,12 +41,37 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+
+#include <cstring>
+#include <string>
 
 extern "C" {
+	#include <libavutil/error.h>
+	#include <libavutil/mem.h>
 	#include <libavutil/opt.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
+
+namespace {
+	constexpr const char DefaultAssHeader[] =
+		"[Script Info]\n"
+		"ScriptType: v4.00+\n"
+		"\n"
+		"[V4+ Styles]\n"
+		"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+		"Style: Default,Arial,16,&Hffffff,&Hffffff,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0\n"
+		"\n"
+		"[Events]\n"
+		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+
+	std::string AvError(int err) noexcept {
+		char buf[AV_ERROR_MAX_STRING_SIZE];
+		av_strerror(err, buf, sizeof(buf));
+		return buf;
+	}
+}
 
 FFmpeg::AVEncoder::AVEncoder(::AVCodecContext* ctx) noexcept
 :AVPointer(ctx) {}
@@ -75,6 +100,17 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 		ctx->pkt_timebase = time_base;
 	}
 
+	if (ctx->codec_type == AVMEDIA_TYPE_SUBTITLE && !ctx->subtitle_header) {
+		const auto n = std::strlen(DefaultAssHeader);
+		ctx->subtitle_header = static_cast<std::uint8_t*>(av_malloc(n + 1));
+		if (!ctx->subtitle_header) {
+			avcodec_free_context(&ctx);
+			return Unexpected<FFmpeg::EncoderError>("Out of memory allocating subtitle header");
+		}
+		std::memcpy(ctx->subtitle_header, DefaultAssHeader, n + 1);
+		ctx->subtitle_header_size = static_cast<int>(n);
+	}
+
 	for (const auto& [key, value] : options) {
 		if (key.empty())
 			continue;
@@ -84,9 +120,11 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 		}
 	}
 
-	if (avcodec_open2(ctx, codec, nullptr) < 0) {
+	const int opened = avcodec_open2(ctx, codec, nullptr);
+	if (opened < 0) {
+		const std::string why = AvError(opened);
 		avcodec_free_context(&ctx);
-		return Unexpected<FFmpeg::EncoderError>("Failed to open encoder");
+		return Unexpected<FFmpeg::EncoderError>("Failed to open encoder: " + why);
 	}
 
 	AVEncoder enc(ctx);
@@ -118,6 +156,30 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
 	}
 }
 
+FFmpeg::OperationResult FFmpeg::AVEncoder::EncodeSubtitle(AVSubtitle& sub, AVPacket& pkt) noexcept {
+	if (!m_ptr || m_ptr->codec_type != AVMEDIA_TYPE_SUBTITLE)
+		return OperationResult::Error;
+
+	std::uint8_t buf[65536];
+	const int n = avcodec_encode_subtitle(m_ptr, buf, static_cast<int>(sizeof(buf)), sub.Get());
+	if (n < 0)
+		return OperationResult::Error;
+	if (n == 0)
+		return OperationResult::TryAgain;
+	if (!pkt.Load(buf, n, m_stream_index, false))
+		return OperationResult::Error;
+
+	const std::int64_t pts = sub.Pts();
+	const AVRational tb = (m_ptr->time_base.num > 0) ? m_ptr->time_base : AVRational{1, AV_TIME_BASE};
+	const std::int64_t duration = av_rescale_q(static_cast<std::int64_t>(sub.DisplayDurationMs()),
+		AVRational{1, 1000}, tb);
+	const std::int64_t scaled = (pts == AV_NOPTS_VALUE)
+		? AV_NOPTS_VALUE
+		: av_rescale_q(pts, AVRational{1, AV_TIME_BASE}, tb);
+	pkt.Timestamps(scaled, scaled, duration);
+	return OperationResult::Success;
+}
+
 FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept {
 	AVPacket tmp;
 	int ret = avcodec_receive_packet(m_ptr, tmp.Get());
@@ -146,13 +208,18 @@ AVRational FFmpeg::AVEncoder::TimeBase() const noexcept {
 	return m_ptr->time_base;
 }
 
+bool FFmpeg::AVEncoder::IsSubtitle() const noexcept {
+	return m_ptr && m_ptr->codec_type == AVMEDIA_TYPE_SUBTITLE;
+}
+
 void FFmpeg::AVEncoder::Flush() noexcept {
 	avcodec_flush_buffers(m_ptr);
 	m_bsf_pipeline.Flush();
 }
 
 void FFmpeg::AVEncoder::SetEof() noexcept {
-	avcodec_send_frame(m_ptr, nullptr);
+	if (m_ptr && m_ptr->codec_type != AVMEDIA_TYPE_SUBTITLE)
+		avcodec_send_frame(m_ptr, nullptr);
 	m_bsf_pipeline.SetEof();
 }
 

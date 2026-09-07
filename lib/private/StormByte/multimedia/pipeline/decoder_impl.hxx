@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 
 #include <optional>
@@ -59,6 +60,8 @@ class StormByte::Multimedia::Pipeline::Decoder::Impl {
 		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
 		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
 		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
+		std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;
+		std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;
 		std::optional<StormByte::Multimedia::Property::Video> m_video;
 		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
 		AVRational m_timeBase;

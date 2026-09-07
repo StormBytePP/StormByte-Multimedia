@@ -294,6 +294,8 @@ Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& dec
 	raw.Timestamps(NsToTicks(packet.Pts(), tb), NsToTicks(packet.Dts(), tb), duration);
 
 	if (decoder.m_impl->m_decoder.IsSubtitle()) {
+		decoder.m_impl->m_packetPts = packet.Pts();
+		decoder.m_impl->m_packetDuration = packet.Duration();
 		FFmpeg::AVSubtitle sub;
 		const auto result = decoder.m_impl->m_decoder.DecodeSubtitle(raw, sub);
 		if (result == FFmpeg::OperationResult::Error)
@@ -347,10 +349,15 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 			reinterpret_cast<const std::byte*>(text.data()) + text.size());
 
 		auto pts = TicksToPts(sub.Pts(), AVRational{1, AV_TIME_BASE});
+		if (!pts)
+			pts = decoder.m_impl->m_packetPts;
+
 		std::optional<StormByte::Multimedia::Property::Duration> duration;
 		if (sub.DisplayDurationMs() > 0)
 			duration = StormByte::Multimedia::Property::Duration{
 				std::chrono::milliseconds{sub.DisplayDurationMs()}};
+		if (!duration)
+			duration = decoder.m_impl->m_packetDuration;
 
 		frame = Frame(
 			decoder.m_index,

@@ -54,10 +54,15 @@ namespace {
 	Access ProbeAccess(const StormByte::Multimedia::Tables::Codec::CodecDef& def) noexcept {
 		Access access(Operation::Read);
 		for (std::size_t i = 0; i < def.FfmpegIdCount(); ++i) {
-			const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(def.FfmpegId(i));
-			if (!desc)
+			const char* id = def.FfmpegId(i);
+			if (!id)
 				continue;
-			if (avcodec_find_encoder(desc->id) != nullptr) {
+			if (avcodec_find_encoder_by_name(id) != nullptr) {
+				access |= Access(Operation::Write);
+				break;
+			}
+			const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(id);
+			if (desc && avcodec_find_encoder(desc->id) != nullptr) {
 				access |= Access(Operation::Write);
 				break;
 			}

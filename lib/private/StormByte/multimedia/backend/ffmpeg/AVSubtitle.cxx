@@ -40,6 +40,7 @@
 
 extern "C" {
 	#include <libavutil/avutil.h>
+	#include <libavutil/mem.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
@@ -97,6 +98,34 @@ std::string FFmpeg::AVSubtitle::Text() const noexcept {
 		out.append(text);
 	}
 	return out;
+}
+
+void FFmpeg::AVSubtitle::FillText(std::string text, std::int64_t pts, std::uint32_t duration_ms, bool ass) noexcept {
+	Free();
+	m_sub.pts = pts;
+	m_sub.start_display_time = 0;
+	m_sub.end_display_time = duration_ms;
+	m_sub.num_rects = 1;
+	m_sub.rects = static_cast<AVSubtitleRect**>(av_mallocz(sizeof(AVSubtitleRect*)));
+	if (!m_sub.rects) {
+		m_sub.num_rects = 0;
+		return;
+	}
+	m_sub.rects[0] = static_cast<AVSubtitleRect*>(av_mallocz(sizeof(AVSubtitleRect)));
+	if (!m_sub.rects[0]) {
+		av_free(m_sub.rects);
+		m_sub.rects = nullptr;
+		m_sub.num_rects = 0;
+		return;
+	}
+	if (ass) {
+		m_sub.rects[0]->type = SUBTITLE_ASS;
+		m_sub.rects[0]->ass = av_strdup(text.c_str());
+	}
+	else {
+		m_sub.rects[0]->type = SUBTITLE_TEXT;
+		m_sub.rects[0]->text = av_strdup(text.c_str());
+	}
 }
 
 void FFmpeg::AVSubtitle::Free() noexcept {

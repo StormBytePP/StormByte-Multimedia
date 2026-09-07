@@ -37,6 +37,7 @@
  */
 
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/encoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/frame_impl.hxx>
@@ -45,6 +46,7 @@
 #include <StormByte/multimedia/type.hxx>
 #include <tables/encoder/table.hxx>
 
+#include <cctype>
 #include <map>
 #include <span>
 #include <string>
@@ -67,6 +69,8 @@ namespace Prop = StormByte::Multimedia::Property;
 
 namespace {
 	constexpr AVRational NanoTimeBase{1, 1000000000};
+	constexpr std::size_t DialogueFieldsBeforeText = 9;
+	constexpr std::size_t PackedAssFieldsBeforeText = 8;
 
 	int ToAVPixelFormat(Prop::PixelFormat format) noexcept {
 		switch (format) {
@@ -183,7 +187,9 @@ namespace {
 		return av_rescale_q(ns, NanoTimeBase, timeBase);
 	}
 
-	AVRational ChooseTimeBase(const Frame& frame) noexcept {
+	AVRational ChooseTimeBase(const Frame& frame, StormByte::Multimedia::Type type) noexcept {
+		if (type == StormByte::Multimedia::Type::Subtitle)
+			return AVRational{1, AV_TIME_BASE};
 		if (frame.Audio()) {
 			const int rate = static_cast<int>(frame.Audio()->SampleRate());
 			if (rate > 0)
@@ -206,46 +212,44 @@ namespace {
 		return need;
 	}
 
+	const StormByte::Multimedia::Tables::Encoder::EncoderDef* ScanRows(
+		std::span<const StormByte::Multimedia::Tables::Encoder::EncoderDef> rows,
+		std::string_view codec, std::string_view pin, bool matchNeed,
+		const StormByte::Multimedia::Features& need) noexcept {
+		const StormByte::Multimedia::Tables::Encoder::EncoderDef* best = nullptr;
+		for (const auto& row : rows) {
+			if (codec != row.codec)
+				continue;
+			if (!pin.empty() && pin != row.name)
+				continue;
+			if (matchNeed && !row.features.Has(need))
+				continue;
+			if (matchNeed && avcodec_find_encoder_by_name(row.name) == nullptr)
+				continue;
+			if (!matchNeed)
+				return &row;
+			if (!best || row.preference < best->preference)
+				best = &row;
+		}
+		return best;
+	}
+
 	const StormByte::Multimedia::Tables::Encoder::EncoderDef* FindRow(
 		std::string_view codec, std::string_view pin) noexcept {
-		auto scan = [&](std::span<const StormByte::Multimedia::Tables::Encoder::EncoderDef> rows)
-			-> const StormByte::Multimedia::Tables::Encoder::EncoderDef* {
-			for (const auto& row : rows) {
-				if (codec != row.codec)
-					continue;
-				if (pin != row.name)
-					continue;
-				return &row;
-			}
-			return nullptr;
-		};
-		if (const auto* row = scan(StormByte::Multimedia::Tables::Encoder::Video()))
+		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Video(), codec, pin, false, {}))
 			return row;
-		return scan(StormByte::Multimedia::Tables::Encoder::Audio());
+		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Audio(), codec, pin, false, {}))
+			return row;
+		return ScanRows(StormByte::Multimedia::Tables::Encoder::Subtitle(), codec, pin, false, {});
 	}
 
 	const StormByte::Multimedia::Tables::Encoder::EncoderDef* PickEncoder(
 		std::string_view codec, std::string_view pin, const StormByte::Multimedia::Features& need) noexcept {
-		auto scan = [&](std::span<const StormByte::Multimedia::Tables::Encoder::EncoderDef> rows)
-			-> const StormByte::Multimedia::Tables::Encoder::EncoderDef* {
-			const StormByte::Multimedia::Tables::Encoder::EncoderDef* best = nullptr;
-			for (const auto& row : rows) {
-				if (codec != row.codec)
-					continue;
-				if (!pin.empty() && pin != row.name)
-					continue;
-				if (!row.features.Has(need))
-					continue;
-				if (avcodec_find_encoder_by_name(row.name) == nullptr)
-					continue;
-				if (!best || row.preference < best->preference)
-					best = &row;
-			}
-			return best;
-		};
-		if (const auto* row = scan(StormByte::Multimedia::Tables::Encoder::Video()))
+		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Video(), codec, pin, true, need))
 			return row;
-		return scan(StormByte::Multimedia::Tables::Encoder::Audio());
+		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Audio(), codec, pin, true, need))
+			return row;
+		return ScanRows(StormByte::Multimedia::Tables::Encoder::Subtitle(), codec, pin, true, need);
 	}
 
 	std::vector<std::pair<std::string, std::string>> SplitBlob(std::string_view blob) noexcept {
@@ -353,6 +357,134 @@ namespace {
 			TicksToDuration(raw.Duration(), timeBase),
 			(raw.Flags() & AV_PKT_FLAG_KEY) != 0
 		};
+	}
+
+	std::string_view AfterCommas(std::string_view fields, std::size_t need) noexcept {
+		std::size_t commas = 0;
+		for (std::size_t i = 0; i < fields.size(); ++i) {
+			if (fields[i] != ',')
+				continue;
+			++commas;
+			if (commas == need)
+				return fields.substr(i + 1);
+		}
+		return {};
+	}
+
+	bool LooksPackedAss(std::string_view in) noexcept {
+		if (in.empty() || !std::isdigit(static_cast<unsigned char>(in.front())))
+			return false;
+		std::size_t commas = 0;
+		for (const char c : in)
+			if (c == ',')
+				++commas;
+		return commas >= PackedAssFieldsBeforeText;
+	}
+
+	std::string DialogueBody(std::string_view in) noexcept {
+		while (!in.empty() && (in.front() == '\0' || in.front() == ' ' || in.front() == '\t'))
+			in.remove_prefix(1);
+		while (!in.empty() && (in.back() == '\0' || in.back() == '\n' || in.back() == '\r'))
+			in.remove_suffix(1);
+
+		const auto tag = in.find("Dialogue:");
+		if (tag != std::string_view::npos) {
+			auto fields = in.substr(tag + 9);
+			while (!fields.empty() && (fields.front() == ' ' || fields.front() == '\t'))
+				fields.remove_prefix(1);
+			const auto body = AfterCommas(fields, DialogueFieldsBeforeText);
+			if (!body.empty())
+				return std::string(body);
+		}
+
+		if (LooksPackedAss(in)) {
+			const auto body = AfterCommas(in, PackedAssFieldsBeforeText);
+			if (!body.empty())
+				return std::string(body);
+		}
+		return std::string(in);
+	}
+
+	std::string StripAssTags(std::string_view in) noexcept {
+		std::string out;
+		out.reserve(in.size());
+		bool tag = false;
+		for (const char c : in) {
+			if (c == '{')
+				tag = true;
+			else if (c == '}')
+				tag = false;
+			else if (!tag)
+				out.push_back(c);
+		}
+		return out;
+	}
+
+	std::string NewlinesFromAss(std::string text) noexcept {
+		for (std::size_t i = 0; i + 1 < text.size(); ++i) {
+			if (text[i] == '\\' && (text[i + 1] == 'N' || text[i + 1] == 'n')) {
+				text[i] = '\n';
+				text.erase(i + 1, 1);
+			}
+		}
+		return text;
+	}
+
+	bool WantsAssRect(std::string_view impl) noexcept {
+		return impl == "ass" || impl == "ssa";
+	}
+
+	bool PlainTextDest(std::string_view impl) noexcept {
+		return impl == "srt" || impl == "subrip" || impl == "webvtt" || impl == "text";
+	}
+
+	std::string ReadCue(Frame& frame) noexcept {
+		auto& pay = frame.Payload();
+		const auto n = pay.AvailableBytes();
+		if (n == 0)
+			return {};
+		StormByte::Buffer::DataType bytes;
+		if (!pay.Peek(n, bytes) || bytes.empty())
+			return {};
+		std::size_t begin = 0;
+		std::size_t end = bytes.size();
+		while (begin < end && bytes[begin] == std::byte{0})
+			++begin;
+		while (end > begin && (bytes[end - 1] == std::byte{0} || bytes[end - 1] == std::byte{'\n'}
+			|| bytes[end - 1] == std::byte{'\r'}))
+			--end;
+		if (begin >= end)
+			return {};
+		return std::string(reinterpret_cast<const char*>(bytes.data() + begin), end - begin);
+	}
+
+	std::string FormatAssTime(std::int64_t nanoseconds) noexcept {
+		if (nanoseconds < 0)
+			nanoseconds = 0;
+		const auto cs = static_cast<std::int64_t>(nanoseconds / 10000000);
+		const auto h = cs / 360000;
+		const auto m = (cs / 6000) % 60;
+		const auto s = (cs / 100) % 60;
+		const auto c = cs % 100;
+		char buf[32];
+		std::snprintf(buf, sizeof(buf), "%d:%02d:%02d.%02d",
+			static_cast<int>(h), static_cast<int>(m), static_cast<int>(s), static_cast<int>(c));
+		return buf;
+	}
+
+	std::string WrapAss(std::string text, std::int64_t startNs, std::int64_t endNs) noexcept {
+		if (text.find("Dialogue:") != std::string::npos)
+			return text;
+		return "Dialogue: 0," + FormatAssTime(startNs) + "," + FormatAssTime(endNs)
+			+ ",Default,NTP,0000,0000,0000,," + std::move(text);
+	}
+
+	void StampSubtitlePacket(FFmpeg::AVPacket& pkt, std::int64_t pts, std::uint32_t durationMs, AVRational tb) noexcept {
+		const std::int64_t duration = av_rescale_q(static_cast<std::int64_t>(durationMs), AVRational{1, 1000}, tb);
+		const std::int64_t scaled = (pts == AV_NOPTS_VALUE)
+			? AV_NOPTS_VALUE
+			: av_rescale_q(pts, AVRational{1, AV_TIME_BASE}, tb);
+		pkt.Timestamps(scaled, scaled, duration);
 	}
 }
 
@@ -530,6 +662,8 @@ void Encoder::Bind(std::unique_ptr<Impl> impl) noexcept {
 bool Encoder::DrainOne() noexcept {
 	if (m_failed || !m_impl)
 		return false;
+	if (m_impl->m_encoder.IsSubtitle())
+		return false;
 	const auto result = m_impl->m_encoder.ReceivePacket(m_impl->m_scratch);
 	if (result == FFmpeg::OperationResult::TryAgain || result == FFmpeg::OperationResult::EndOfFile)
 		return false;
@@ -547,15 +681,17 @@ bool Encoder::Open(const Frame& frame) noexcept {
 		Fail("codec is not writable");
 		return false;
 	}
-	if (m_codec->Type() == StormByte::Multimedia::Type::Video && !frame.Video()) {
+	const auto kind = m_codec->Type();
+	if (kind == StormByte::Multimedia::Type::Video && !frame.Video()) {
 		Fail("encoder destination is video but frame is not");
 		return false;
 	}
-	if (m_codec->Type() == StormByte::Multimedia::Type::Audio && !frame.Audio()) {
+	if (kind == StormByte::Multimedia::Type::Audio && !frame.Audio()) {
 		Fail("encoder destination is audio but frame is not");
 		return false;
 	}
-	if (!frame.m_impl || !frame.m_impl->m_backend.Get()) {
+	if (kind != StormByte::Multimedia::Type::Subtitle
+		&& (!frame.m_impl || !frame.m_impl->m_backend.Get())) {
 		Fail("frame has no backend buffer");
 		return false;
 	}
@@ -672,7 +808,7 @@ bool Encoder::Open(const Frame& frame) noexcept {
 		sampleFormat = frame.m_impl->m_backend.Get()->format;
 
 	auto params = FillParams(frame, codec, m_bitRate, sampleFormat);
-	const auto timeBase = ChooseTimeBase(frame);
+	const auto timeBase = ChooseTimeBase(frame, kind);
 	auto backend = FFmpeg::AVEncoder::Open(const_cast<::AVCodec*>(codec), params, m_index, opts, timeBase);
 	if (!backend.has_value()) {
 		Fail(backend.error()->what());
@@ -692,47 +828,104 @@ bool Encoder::Open(const Frame& frame) noexcept {
 }
 
 Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encoder) noexcept {
-	if (encoder.m_failed)
-		return frame;
-	if (!encoder.m_impl && !encoder.Open(frame))
-		return frame;
-	if (!encoder.m_impl)
-		return frame;
-	if (!frame.m_impl || !frame.m_impl->m_backend.Get()) {
-		encoder.Fail("frame has no backend buffer");
-		return frame;
-	}
+    if (encoder.m_failed)
+        return frame;
+    if (!encoder.m_impl && !encoder.Open(frame))
+        return frame;
+    if (!encoder.m_impl)
+        return frame;
 
-	if (frame.Video() && frame.Video()->HDR10()) {
-		if (frame.Video()->HDR10()->IsHDR10Plus()
-			&& !encoder.m_capabilities.Has(StormByte::Multimedia::Feature::HDR10Plus)) {
-			encoder.Fail("encoder implementation lacks required features");
-			return frame;
-		}
-		frame.m_impl->m_backend.WriteHdr10(*frame.Video()->HDR10());
-	}
-	frame.m_impl->m_backend.WriteSideData(frame.Attachments());
+    if (encoder.m_codec->Type() == StormByte::Multimedia::Type::Subtitle) {
+        auto text = DialogueBody(ReadCue(frame));
+        if (text.empty()) {
+            encoder.Fail("subtitle is bitmap; OCR required");
+            return frame;
+        }
+        const auto impl = encoder.m_implementation ? *encoder.m_implementation : std::string{};
+        const std::int64_t startNs = frame.Pts() ? frame.Pts()->Nanoseconds().count() : 0;
+        std::int64_t durationNs = 0;
+        if (frame.Duration())
+            durationNs = frame.Duration()->Nanoseconds().count();
+        const std::int64_t endNs = startNs + (durationNs > 0 ? durationNs : 0);
+        const std::int64_t pts = frame.Pts()
+            ? NsToTicks(startNs, AVRational{1, AV_TIME_BASE})
+            : AV_NOPTS_VALUE;
+        std::uint32_t durationMs = 0;
+        if (durationNs > 0) {
+            const auto ms = durationNs / 1000000;
+            if (ms > 0)
+                durationMs = static_cast<std::uint32_t>(ms);
+        }
+        const AVRational tb = (encoder.m_impl->m_timeBase.num > 0)
+            ? encoder.m_impl->m_timeBase
+            : AVRational{1, AV_TIME_BASE};
 
-	auto* raw = frame.m_impl->m_backend.Get();
-	const auto tb = encoder.m_impl->m_timeBase;
-	if (frame.Pts())
-		raw->pts = NsToTicks(frame.Pts()->Nanoseconds().count(), tb);
-	if (frame.Duration())
-		raw->duration = NsToTicks(frame.Duration()->Nanoseconds().count(), tb);
+        if (PlainTextDest(impl)) {
+            text = NewlinesFromAss(StripAssTags(text));
+            if (!encoder.m_impl->m_scratch.Load(
+                    reinterpret_cast<const std::uint8_t*>(text.data()),
+                    static_cast<int>(text.size()),
+                    encoder.m_index, true)) {
+                encoder.Fail("failed to encode subtitle");
+                return frame;
+            }
+            StampSubtitlePacket(encoder.m_impl->m_scratch, pts, durationMs, tb);
+            encoder.m_impl->m_pending.push_back(
+                MakePacket(encoder.m_index, encoder.m_impl->m_scratch, encoder.m_impl->m_timeBase));
+            encoder.m_impl->m_scratch.Unref();
+            return frame;
+        }
 
-	auto result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
-	while (result == FFmpeg::OperationResult::TryAgain) {
-		if (!encoder.DrainOne()) {
-			if (encoder.m_failed)
-				return frame;
-			encoder.Fail("encoder stalled");
-			return frame;
-		}
-		result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
-	}
-	if (result == FFmpeg::OperationResult::Error)
-		encoder.Fail("failed to send frame");
-	return frame;
+        if (WantsAssRect(impl))
+            text = WrapAss(std::move(text), startNs, endNs);
+        FFmpeg::AVSubtitle sub;
+        sub.FillText(std::move(text), pts, durationMs, WantsAssRect(impl));
+        const auto result = encoder.m_impl->m_encoder.EncodeSubtitle(sub, encoder.m_impl->m_scratch);
+        if (result != FFmpeg::OperationResult::Success) {
+            encoder.Fail("failed to encode subtitle");
+            return frame;
+        }
+        encoder.m_impl->m_pending.push_back(
+            MakePacket(encoder.m_index, encoder.m_impl->m_scratch, encoder.m_impl->m_timeBase));
+        encoder.m_impl->m_scratch.Unref();
+        return frame;
+    }
+
+    if (!frame.m_impl || !frame.m_impl->m_backend.Get()) {
+        encoder.Fail("frame has no backend buffer");
+        return frame;
+    }
+
+    if (frame.Video() && frame.Video()->HDR10()) {
+        if (frame.Video()->HDR10()->IsHDR10Plus()
+            && !encoder.m_capabilities.Has(StormByte::Multimedia::Feature::HDR10Plus)) {
+            encoder.Fail("encoder implementation lacks required features");
+            return frame;
+        }
+        frame.m_impl->m_backend.WriteHdr10(*frame.Video()->HDR10());
+    }
+    frame.m_impl->m_backend.WriteSideData(frame.Attachments());
+
+    auto* raw = frame.m_impl->m_backend.Get();
+    const auto tb = encoder.m_impl->m_timeBase;
+    if (frame.Pts())
+        raw->pts = NsToTicks(frame.Pts()->Nanoseconds().count(), tb);
+    if (frame.Duration())
+        raw->duration = NsToTicks(frame.Duration()->Nanoseconds().count(), tb);
+
+    auto result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
+    while (result == FFmpeg::OperationResult::TryAgain) {
+        if (!encoder.DrainOne()) {
+            if (encoder.m_failed)
+                return frame;
+            encoder.Fail("encoder stalled");
+            return frame;
+        }
+        result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
+    }
+    if (result == FFmpeg::OperationResult::Error)
+        encoder.Fail("failed to send frame");
+    return frame;
 }
 
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Packet& packet) noexcept {

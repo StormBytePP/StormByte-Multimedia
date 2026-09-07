@@ -123,11 +123,20 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			std::string Text() const noexcept;
 
 			/**
+			 * @brief Builds one text or ASS rectangle for encoding.
+			 * @param text Cue body.
+			 * @param pts Timestamp in `AV_TIME_BASE`.
+			 * @param duration_ms Display window in milliseconds.
+			 * @param ass true writes `SUBTITLE_ASS`, false writes `SUBTITLE_TEXT`.
+			 */
+			void FillText(std::string text, std::int64_t pts, std::uint32_t duration_ms, bool ass) noexcept;
+
+			/**
 			 * @brief Releases rects (`avsubtitle_free`).
 			 */
 			void Free() noexcept;
 
 		private:
-			::AVSubtitle m_sub;	///< Owned subtitle
+			::AVSubtitle m_sub;
 	};
 }
