@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/detail/cover.hxx>
+#include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -50,8 +51,13 @@
 #include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/demux_impl.hxx>
 #include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/registry.hxx>
+#include <tables/decoder/table.hxx>
 
 #include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
 #include <variant>
 
 extern "C" {
@@ -83,6 +89,64 @@ namespace {
 		if (ns <= 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	}
+
+	StormByte::Multimedia::Features StreamNeed(
+		const StormByte::Multimedia::Features& extra,
+		const std::optional<StormByte::Multimedia::Property::Video>& video) noexcept {
+		StormByte::Multimedia::Features need = extra;
+		if (!video || !video->HDR10())
+			return need;
+		need.Add(StormByte::Multimedia::Feature::HDR10);
+		if (video->HDR10()->IsHDR10Plus()) {
+			need.Add(StormByte::Multimedia::Feature::HDR10Plus);
+			need.Add(StormByte::Multimedia::Feature::SideData);
+		}
+		return need;
+	}
+
+	const StormByte::Multimedia::Tables::Decoder::DecoderDef* FindRow(
+		std::string_view codec, std::string_view pin) noexcept {
+		auto scan = [&](std::span<const StormByte::Multimedia::Tables::Decoder::DecoderDef> rows)
+			-> const StormByte::Multimedia::Tables::Decoder::DecoderDef* {
+			for (const auto& row : rows) {
+				if (codec != row.codec)
+					continue;
+				if (!pin.empty() && pin != row.name)
+					continue;
+				if (pin.empty())
+					continue;
+				return &row;
+			}
+			return nullptr;
+		};
+		if (const auto* row = scan(StormByte::Multimedia::Tables::Decoder::Video()))
+			return row;
+		return scan(StormByte::Multimedia::Tables::Decoder::Audio());
+	}
+
+	const StormByte::Multimedia::Tables::Decoder::DecoderDef* PickDecoder(
+		std::string_view codec, std::string_view pin, const StormByte::Multimedia::Features& need) noexcept {
+		auto scan = [&](std::span<const StormByte::Multimedia::Tables::Decoder::DecoderDef> rows)
+			-> const StormByte::Multimedia::Tables::Decoder::DecoderDef* {
+			const StormByte::Multimedia::Tables::Decoder::DecoderDef* best = nullptr;
+			for (const auto& row : rows) {
+				if (codec != row.codec)
+					continue;
+				if (!pin.empty() && pin != row.name)
+					continue;
+				if (!row.features.Has(need))
+					continue;
+				if (avcodec_find_decoder_by_name(row.name) == nullptr)
+					continue;
+				if (!best || row.preference < best->preference)
+					best = &row;
+			}
+			return best;
+		};
+		if (const auto* row = scan(StormByte::Multimedia::Tables::Decoder::Video()))
+			return row;
+		return scan(StormByte::Multimedia::Tables::Decoder::Audio());
 	}
 }
 
@@ -234,7 +298,46 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 		return decoder;
 	}
 
-	const ::AVCodec* codec = avcodec_find_decoder(static_cast<::AVCodecID>(params->CodecId()));
+	std::optional<StormByte::Multimedia::Property::Video> video;
+	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
+		video = std::get<StormByte::Multimedia::Property::Video>(*mapped);
+
+	const auto need = StreamNeed(decoder.Require(), video);
+	const char* ffmpegName = avcodec_get_name(static_cast<::AVCodecID>(params->CodecId()));
+	std::string stormName;
+	if (ffmpegName) {
+		auto codec = StormByte::Multimedia::Registry::Instance().FindCodec(ffmpegName);
+		if (codec.has_value())
+			stormName = std::string(codec.value().get().Name());
+	}
+
+	const std::string_view pin = decoder.Implementation()
+		? std::string_view{*decoder.Implementation()} : std::string_view{};
+
+	if (!pin.empty()) {
+		if (avcodec_find_decoder_by_name(std::string(pin).c_str()) == nullptr) {
+			decoder.Fail("decoder implementation is unavailable");
+			return decoder;
+		}
+		const auto* listed = stormName.empty() ? nullptr : FindRow(stormName, pin);
+		if (!listed || !listed->features.Has(need)) {
+			decoder.Fail("decoder implementation lacks required features");
+			return decoder;
+		}
+	}
+
+	const auto* row = stormName.empty() ? nullptr : PickDecoder(stormName, pin, need);
+
+	const ::AVCodec* codec = nullptr;
+	if (row)
+		codec = avcodec_find_decoder_by_name(row->name);
+	if (!codec)
+		codec = avcodec_find_decoder(static_cast<::AVCodecID>(params->CodecId()));
+	if (!codec) {
+		decoder.Fail("no decoder for stream codec");
+		return decoder;
+	}
+
 	auto backend = FFmpeg::AVDecoder::Open(
 		const_cast<::AVCodec*>(codec), *params, demux.m_impl->m_ctx, decoder.Index());
 	if (!backend.has_value()) {
@@ -244,8 +347,13 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 
 	auto impl = std::make_unique<Decoder::Impl>(std::move(backend.value()));
 	impl->m_timeBase = timeBase;
-	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
-		impl->m_video = std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped));
+	impl->m_video = std::move(video);
+	if (row) {
+		decoder.Implementation(row->name);
+		decoder.m_capabilities = row->features;
+	}
+	else
+		decoder.m_capabilities = StormByte::Multimedia::Features{};
 	decoder.Bind(std::move(impl));
 	return decoder;
 }

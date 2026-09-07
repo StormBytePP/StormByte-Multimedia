@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/bitmask.hxx>
+#include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/pipeline/filters/frame_pipe.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -55,6 +56,12 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Demux;
+	class Decoder;
+
+	/**
+	 * @defgroup decoder_flags Decoder flags
+	 * @{
+	 */
 
 	/**
 	 * @enum DecoderFlag
@@ -62,7 +69,6 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	enum class DecoderFlag: std::uint8_t {
 		HeuristicsHDR10 = 1u << 0	///< Fill HDR10::DEFAULT when colorimetry is HDR10 without MDM
-		// HeuristicsAudio  = 1u << 1	///< Future audio sanitising
 	};
 
 	/**
@@ -75,11 +81,18 @@ namespace StormByte::Multimedia::Pipeline {
 	};
 
 	/**
-	 * @brief All current heuristic bits. Extend this value when adding flags.
+	 * @brief All current heuristic bits.
+	 *
+	 * Extend this value when adding flags.
 	 */
 	inline const DecoderFlags Heuristics{DecoderFlag::HeuristicsHDR10};
 
-	class Decoder;
+	/** @} */
+
+	/**
+	 * @defgroup decoder_ops Decoder stream operators
+	 * @{
+	 */
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
@@ -105,21 +118,30 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
 
+	/** @} */
+
 	/**
 	 * @class Decoder
 	 * @brief Decodes packets of one demuxed stream into Frame.
 	 *
-	 * Construct with a stream index. demux >> decoder opens the backend
-	 * on the Demux context. packet >> decoder ignores other indexes.
-	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits
-	 * EOF, Flush() then drain with decoder >> frame until StreamIndex()
-	 * is -1. Failbit on open/decode errors. Copy is not a Decoder mode.
+	 * Construct with a stream index. Implementation() pins an FFmpeg decoder
+	 * name from the handcrafted table. Empty pin picks the lowest preference
+	 * row that covers Require() plus stream HDR10 / HDR10Plus. demux >> decoder
+	 * opens the backend. packet >> decoder ignores other indexes.
+	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits EOF,
+	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
+	 * Failbit on open/decode errors. Copy is not a Decoder mode.
 	 *
-	 * Frame steps (bundled or user) go in Pipe(). They run inside
-	 * decoder >> frame. An empty pipe is identity.
+	 * Frame steps go in Pipe(). They run inside decoder >> frame.
+	 * An empty pipe is identity.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder {
 		public:
+			/**
+			 * @defgroup decoder_lifetime Lifetime
+			 * @{
+			 */
+
 			/**
 			 * @brief Decoder for @p stream_index. Does not open the backend.
 			 * @param stream_index File stream index.
@@ -159,6 +181,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			explicit operator bool() const noexcept;
 
+			/** @} */
+
+			/**
+			 * @defgroup decoder_bind Bind
+			 * @{
+			 */
+
 			/**
 			 * @brief Bound stream index.
 			 * @return Index.
@@ -177,6 +206,50 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Flags(DecoderFlags flags) noexcept;
 
+			/** @} */
+
+			/**
+			 * @defgroup decoder_impl Implementation selection
+			 * @{
+			 */
+
+			/**
+			 * @brief Pinned FFmpeg decoder name, if any.
+			 * @return Name, or empty before pin / auto-select.
+			 */
+			const std::optional<std::string>& Implementation() const noexcept;
+
+			/**
+			 * @brief Pins an FFmpeg decoder name (before demux >> decoder).
+			 * @param name Table `name` (`hevc`, `hevc_cuvid`, …). Empty clears the pin.
+			 */
+			void Implementation(std::string name) noexcept;
+
+			/**
+			 * @brief Extra required Feature bits (before demux >> decoder).
+			 * @return Mask. Empty = only stream-derived HDR bits.
+			 */
+			const Features& Require() const noexcept;
+
+			/**
+			 * @brief Replaces extra required Feature bits (before demux >> decoder).
+			 * @param features Bits the chosen table row must have.
+			 */
+			void Require(Features features) noexcept;
+
+			/**
+			 * @brief Features of the opened implementation.
+			 * @return Mask. Empty if not open or fallback without a table row.
+			 */
+			const Features& Capabilities() const noexcept;
+
+			/** @} */
+
+			/**
+			 * @defgroup decoder_pipe Frame pipe
+			 * @{
+			 */
+
 			/**
 			 * @brief Frame filter pipe. Add bundled or custom steps before reading frames.
 			 * @return Pipe.
@@ -188,6 +261,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return Pipe.
 			 */
 			const Filter::FramePipe& Pipe() const noexcept;
+
+			/** @} */
+
+			/**
+			 * @defgroup decoder_error Failure
+			 * @{
+			 */
 
 			/**
 			 * @brief Whether a hard error occurred.
@@ -209,6 +289,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Flush() noexcept;
 
+			/** @} */
+
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 			friend Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
 			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
@@ -216,19 +298,15 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			class Impl;
 
-			/* bind */
-			int m_index;							///< Stream index
-			std::unique_ptr<Impl> m_impl;			///< Opened backend
-
-			/* flags */
-			DecoderFlags m_flags;					///< Heuristics / future bits
-
-			/* filters */
-			Filter::FramePipe m_pipe;				///< Frame steps
-
-			/* fail */
-			bool m_failed;							///< Hard error
-			std::optional<std::string> m_error;		///< Failure text
+			int m_index;									///< Stream index
+			std::unique_ptr<Impl> m_impl;					///< Opened backend
+			DecoderFlags m_flags;							///< Heuristics / future bits
+			std::optional<std::string> m_implementation;	///< Pinned or selected FFmpeg name
+			Features m_require;								///< Extra required bits
+			Features m_capabilities;						///< Features of the opened row
+			Filter::FramePipe m_pipe;						///< Frame steps
+			bool m_failed;									///< Hard error
+			std::optional<std::string> m_error;				///< Failure text
 
 			/**
 			 * @brief Marks a hard error.

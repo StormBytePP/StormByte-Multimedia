@@ -206,6 +206,29 @@ void Decoder::Flags(DecoderFlags flags) noexcept {
 	m_flags = flags;
 }
 
+const std::optional<std::string>& Decoder::Implementation() const noexcept {
+	return m_implementation;
+}
+
+void Decoder::Implementation(std::string name) noexcept {
+	if (name.empty())
+		m_implementation.reset();
+	else
+		m_implementation = std::move(name);
+}
+
+const StormByte::Multimedia::Features& Decoder::Require() const noexcept {
+	return m_require;
+}
+
+void Decoder::Require(StormByte::Multimedia::Features features) noexcept {
+	m_require = features;
+}
+
+const StormByte::Multimedia::Features& Decoder::Capabilities() const noexcept {
+	return m_capabilities;
+}
+
 Filter::FramePipe& Decoder::Pipe() noexcept {
 	return m_pipe;
 }
@@ -225,6 +248,7 @@ const std::optional<std::string>& Decoder::Error() const noexcept {
 void Decoder::Fail(std::string reason) noexcept {
 	m_failed = true;
 	m_error = std::move(reason);
+	m_capabilities = StormByte::Multimedia::Features{};
 	m_impl.reset();
 }
 

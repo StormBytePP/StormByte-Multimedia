@@ -38,64 +38,62 @@
 
 #pragma once
 
-#include <StormByte/type_traits.hxx>
-#include <StormByte/multimedia/visibility.h>
 #include <cstdint>
 
 /**
- * @namespace Multimedia
- * @brief The namespace for all multimedia classes.
+ * @namespace StormByte::Multimedia
+ * @brief Public media types: codecs, registry and stream kinds.
  */
 namespace StormByte::Multimedia {
 	/**
 	 * @enum Feature
-	 * @brief Capability flags for codecs / implementations.
+	 * @brief Handcrafted capability of one decoder or encoder implementation.
 	 *
-	 * High nibble = category, low nibble = specific feature.
+	 * Preference is not a Feature; it lives on the table row.
+	 * Bits must be disjoint: Has() is a real bitmask test.
+	 * HDR10 / HDR10Plus / SideData mean the implementation surfaces
+	 * that metadata on Pipeline::Frame (decode) or writes it (encode).
+	 * Missing bits against source metadata is a failbit, never a silent drop.
 	 */
-	enum class Feature : std::uint8_t {
-		None = 0x00,
+	enum class Feature: std::uint32_t {
+		None					= 0,
 
-		// PERFORMANCE (0x1x)
-		MultiThreaded			= (0x01 << 4) | 0x1,	///< Frame/slice threading
-		RealTime				= (0x01 << 4) | 0x2,	///< Suitable for real-time use
-		LowDelay				= (0x01 << 4) | 0x3,	///< Low latency
-		ZeroCopy				= (0x01 << 4) | 0x4,	///< Zero-copy paths
-		HardwareAcceleration	= (0x01 << 4) | 0x5,	///< HW decode/encode
+		MultiThreaded			= 1u << 0,	///< Frame or slice threading
+		RealTime				= 1u << 1,	///< Suitable for real-time use
+		LowDelay				= 1u << 2,	///< Low latency
+		ZeroCopy				= 1u << 3,	///< Zero-copy paths
+		HardwareAcceleration	= 1u << 4,	///< HW decode or encode
 
-		// QUALITY (0x2x)
-		HighQuality				= (0x02 << 4) | 0x1,	///< High quality presets
-		PsychoVisual			= (0x02 << 4) | 0x2,	///< Psycho-visual tuning
-		AdaptiveQuantization	= (0x02 << 4) | 0x3,	///< Adaptive quantization
-		Lookahead				= (0x02 << 4) | 0x4,	///< Lookahead analysis
-		TwoPass					= (0x02 << 4) | 0x5,	///< Two-pass encoding
-		Lossless				= (0x02 << 4) | 0x6,	///< Lossless mode
-		ProfileBased			= (0x02 << 4) | 0x7,	///< Profile selection
-		ContentTuning			= (0x02 << 4) | 0x8,	///< Content-type tuning
+		HighQuality				= 1u << 5,	///< High quality presets
+		PsychoVisual			= 1u << 6,	///< Psycho-visual tuning
+		AdaptiveQuantization	= 1u << 7,	///< Adaptive quantization
+		Lookahead				= 1u << 8,	///< Lookahead analysis
+		TwoPass					= 1u << 9,	///< Two-pass encoding
+		Lossless				= 1u << 10,	///< Lossless mode
+		ProfileBased			= 1u << 11,	///< Profile selection
+		ContentTuning			= 1u << 12,	///< Content-type tuning
 
-		// BIT DEPTH / HDR (0x3x)
-		TenBit					= (0x03 << 4) | 0x1,	///< 10-bit
-		TwelveBit				= (0x03 << 4) | 0x2,	///< 12-bit
-		HDR10					= (0x03 << 4) | 0x3,	///< HDR10
-		HDR10Plus				= (0x03 << 4) | 0x4,	///< HDR10+
-		WideGamut				= (0x03 << 4) | 0x5,	///< Wide color gamut
-		SurroundSound			= (0x03 << 4) | 0x6,	///< Surround layouts
+		TenBit					= 1u << 13,	///< 10-bit
+		TwelveBit				= 1u << 14,	///< 12-bit
+		HDR10					= 1u << 15,	///< Static HDR10 metadata on the frame
+		HDR10Plus				= 1u << 16,	///< Dynamic HDR10+ side data on the frame
+		WideGamut				= 1u << 17,	///< Wide color gamut
+		SurroundSound			= 1u << 18,	///< Surround layouts
+		SideData				= 1u << 19,	///< Propagates packet or frame side data
 
-		// BITSTREAM STRUCTURE (0x4x)
-		BFrames					= (0x04 << 4) | 0x1,	///< B-frames
-		IntraOnly				= (0x04 << 4) | 0x2,	///< Intra-only
-		Interlaced				= (0x04 << 4) | 0x3,	///< Interlaced
-		Slices					= (0x04 << 4) | 0x4,	///< Slice coding
+		BFrames					= 1u << 20,	///< B-frames
+		IntraOnly				= 1u << 21,	///< Intra-only
+		Interlaced				= 1u << 22,	///< Interlaced
+		Slices					= 1u << 23,	///< Slice coding
 
-		// OPERATION MODES (0x5x)
-		Streamable				= (0x05 << 4) | 0x1,	///< Streamable output
-		Encodeable				= (0x05 << 4) | 0x2,	///< Can encode
+		Streamable				= 1u << 24,	///< Streamable output
+		Encodeable				= 1u << 25	///< Can encode (legacy; Write is Codec::HasAccess)
 	};
 
 	/**
-	 * Converts a Feature to a human-readable string.
+	 * @brief Converts a Feature to a stable token.
 	 * @param feature Feature value.
-	 * @return Null-terminated string literal.
+	 * @return Literal. Unknown bits return "UnknownFeature".
 	 */
 	constexpr const char* ToString(Feature feature) noexcept {
 		switch (feature) {
@@ -119,6 +117,7 @@ namespace StormByte::Multimedia {
 			case Feature::HDR10Plus:			return "HDR10Plus";
 			case Feature::WideGamut:			return "WideGamut";
 			case Feature::SurroundSound:		return "SurroundSound";
+			case Feature::SideData:				return "SideData";
 			case Feature::BFrames:				return "BFrames";
 			case Feature::IntraOnly:			return "IntraOnly";
 			case Feature::Interlaced:			return "Interlaced";

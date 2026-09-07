@@ -1,0 +1,65 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Multimedia.
+ *
+ * StormByte-Multimedia original source is dual-licensed:
+ *
+ * 1. GNU Lesser General Public License v3.0 (or later)
+ *    You may redistribute and/or modify this file under the terms of the
+ *    GNU Lesser General Public License as published by the Free Software
+ *    Foundation, either version 3 of the License, or (at your option)
+ *    any later version.
+ *
+ * 2. Commercial license
+ *    Alternatively, this file may be used under the terms of a commercial
+ *    license agreement with the copyright holder
+ *    (David C. Manuelda <StormByte@gmail.com>).
+ *
+ * Both licenses apply only to original StormByte-Multimedia source in this
+ * file. Third-party components — including FFmpeg and embedded trained data —
+ * remain under their own licenses and are not covered by the commercial grant.
+ *
+ * Neither license grants any patent rights. Any patent licenses required
+ * to use this software or third-party components must be obtained separately
+ * from the patent holders.
+ *
+ * StormByte-Multimedia is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 3 along with StormByte-Multimedia. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+ */
+
+#include <tables/decoder/table.hxx>
+
+using namespace StormByte::Multimedia;
+using namespace StormByte::Multimedia::Tables::Decoder;
+
+namespace {
+	constexpr DecoderDef table[] = {
+		{ "AAC", "aac", "Native AAC decoder", 0, Feature::LowDelay | Feature::SideData },
+		{ "AAC", "fdk_aac", "Fraunhofer FDK AAC decoder", 1, Feature::HighQuality | Feature::LowDelay },
+		{ "AC-3", "ac3", "Native AC-3 decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
+		{ "E-AC-3", "eac3", "Native E-AC-3 decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
+		{ "Vorbis", "vorbis", "Native Vorbis decoder", 0, Feature::LowDelay | Feature::SideData },
+		{ "Vorbis", "libvorbis", "libvorbis decoder", 1, Feature::HighQuality | Feature::LowDelay },
+		{ "Opus", "opus", "Native Opus decoder", 0, Feature::LowDelay | Feature::SideData },
+		{ "Opus", "libopus", "libopus decoder", 1, Feature::HighQuality | Feature::LowDelay },
+		{ "MP3", "mp3", "Native MP3 decoder", 0, Feature::LowDelay | Feature::SideData },
+		{ "MP3", "libmp3lame", "LAME MP3 decoder", 1, Feature::HighQuality | Feature::LowDelay },
+		{ "FLAC", "flac", "Native FLAC decoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SideData },
+		{ "DTS", "dca", "Native DTS decoder", 0, Feature::HighQuality | Feature::SurroundSound | Feature::SideData },
+		{ "TrueHD", "truehd", "Native TrueHD decoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SurroundSound | Feature::SideData },
+		{ "ALAC", "alac", "Native ALAC decoder", 0, Feature::HighQuality | Feature::Lossless | Feature::SideData },
+	};
+}
+
+std::span<const DecoderDef> StormByte::Multimedia::Tables::Decoder::Audio() noexcept {
+	return table;
+}

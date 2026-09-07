@@ -36,41 +36,41 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#pragma once
+
 #include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/type.hxx>
 
-using namespace StormByte::Multimedia;
+#include <cstddef>
+#include <cstdint>
+#include <span>
 
-Features::operator std::string() const noexcept {
-	std::string result;
-	bool first = true;
-	const std::string separator = " | ";
+/**
+ * @namespace StormByte::Multimedia::Tables::Decoder
+ * @brief Private static decoder implementation tables.
+ */
+namespace StormByte::Multimedia::Tables::Decoder {
+	/**
+	 * @struct DecoderDef
+	 * @brief One decoder implementation row.
+	 */
+	struct STORMBYTE_MULTIMEDIA_PRIVATE DecoderDef {
+		const char* codec;			///< StormByte codec name
+		const char* name;			///< FFmpeg decoder name
+		const char* description;	///< Human description
+		std::uint8_t preference;	///< 0 = most preferred
+		Features features;			///< Handcrafted capabilities
+	};
 
-	for (uint8_t cat = 1; cat <= 5; ++cat) {
-		for (uint8_t idx = 1; idx <= 8; ++idx) {
-			Feature feature = static_cast<Feature>((cat << 4) | idx);
-			if (Has(feature)) {
-				if (!first)
-					result += separator + ToString(feature);
-				else {
-					first = false;
-					result += ToString(feature);
-				}
-			}
-		}
-	}
+	/**
+	 * @brief Video decoder implementations.
+	 * @return Span over the video table.
+	 */
+	std::span<const DecoderDef> Video() noexcept;
 
-	return result;
+	/**
+	 * @brief Audio decoder implementations.
+	 * @return Span over the audio table.
+	 */
+	std::span<const DecoderDef> Audio() noexcept;
 }
-
-// ------------------------------------------------------------
-// Explicit instantiations for Feature bitwise operators
-// ------------------------------------------------------------
-template STORMBYTE_MULTIMEDIA_PUBLIC Feature operator|(Feature, Feature);
-template STORMBYTE_MULTIMEDIA_PUBLIC Feature operator&(Feature, Feature);
-template STORMBYTE_MULTIMEDIA_PUBLIC Feature operator^(Feature, Feature);
-template STORMBYTE_MULTIMEDIA_PUBLIC Feature operator~(Feature);
-
-// ------------------------------------------------------------
-// Explicit instantiation for Features Bitmask
-// ------------------------------------------------------------
-template class StormByte::Bitmask<StormByte::Multimedia::Features, StormByte::Multimedia::Feature>;
