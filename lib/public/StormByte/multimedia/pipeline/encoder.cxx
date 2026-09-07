@@ -36,640 +36,46 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/ocr/bitmap.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/encoder_impl.hxx>
-#include <StormByte/multimedia/pipeline/frame_impl.hxx>
-#include <StormByte/multimedia/pipeline/side_data.hxx>
-#include <StormByte/multimedia/property/channel_layout.hxx>
-#include <StormByte/multimedia/property/color.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/details/audio.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/details/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/details/video.hxx>
 #include <StormByte/multimedia/type.hxx>
-#include <tables/encoder/table.hxx>
-
-#include <cctype>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <map>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
-	#include <libavcodec/packet.h>
-	#include <libavutil/avutil.h>
-	#include <libavutil/mastering_display_metadata.h>
-	#include <libavutil/mathematics.h>
-	#include <libavutil/pixfmt.h>
+	#include <libavformat/avformat.h>
 	#include <libavutil/rational.h>
 }
 
 using namespace StormByte::Multimedia::Pipeline;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
-namespace Prop = StormByte::Multimedia::Property;
-
-namespace {
-	constexpr AVRational NanoTimeBase{1, 1000000000};
-	constexpr std::size_t DialogueFieldsBeforeText = 9;
-	constexpr std::size_t PackedAssFieldsBeforeText = 8;
-
-	int ToAVPixelFormat(Prop::PixelFormat format) noexcept {
-		switch (format) {
-			case Prop::PixelFormat::YUV420P:	return AV_PIX_FMT_YUV420P;
-			case Prop::PixelFormat::YUV422P:	return AV_PIX_FMT_YUV422P;
-			case Prop::PixelFormat::YUV444P:	return AV_PIX_FMT_YUV444P;
-			case Prop::PixelFormat::YUV420P10:	return AV_PIX_FMT_YUV420P10LE;
-			case Prop::PixelFormat::YUV422P10:	return AV_PIX_FMT_YUV422P10LE;
-			case Prop::PixelFormat::YUV444P10:	return AV_PIX_FMT_YUV444P10LE;
-			case Prop::PixelFormat::YUV420P12:	return AV_PIX_FMT_YUV420P12LE;
-			case Prop::PixelFormat::YUV422P12:	return AV_PIX_FMT_YUV422P12LE;
-			case Prop::PixelFormat::YUV444P12:	return AV_PIX_FMT_YUV444P12LE;
-			case Prop::PixelFormat::NV12:		return AV_PIX_FMT_NV12;
-			case Prop::PixelFormat::NV21:		return AV_PIX_FMT_NV21;
-			case Prop::PixelFormat::P010:		return AV_PIX_FMT_P010LE;
-			case Prop::PixelFormat::RGB24:		return AV_PIX_FMT_RGB24;
-			case Prop::PixelFormat::BGR24:		return AV_PIX_FMT_BGR24;
-			case Prop::PixelFormat::RGBA:		return AV_PIX_FMT_RGBA;
-			case Prop::PixelFormat::BGRA:		return AV_PIX_FMT_BGRA;
-			case Prop::PixelFormat::GRAY8:		return AV_PIX_FMT_GRAY8;
-			case Prop::PixelFormat::GRAY10:		return AV_PIX_FMT_GRAY10LE;
-			case Prop::PixelFormat::GRAY16:		return AV_PIX_FMT_GRAY16LE;
-			default:							return AV_PIX_FMT_NONE;
-		}
-	}
-
-	int ToAVRange(Prop::Range range) noexcept {
-		switch (range) {
-			case Prop::Range::TV:	return AVCOL_RANGE_MPEG;
-			case Prop::Range::Full:	return AVCOL_RANGE_JPEG;
-			default:				return AVCOL_RANGE_UNSPECIFIED;
-		}
-	}
-
-	int ToAVSpace(Prop::Space space) noexcept {
-		switch (space) {
-			case Prop::Space::RGB:					return AVCOL_SPC_RGB;
-			case Prop::Space::BT709:				return AVCOL_SPC_BT709;
-			case Prop::Space::FCC:					return AVCOL_SPC_FCC;
-			case Prop::Space::BT470BG:				return AVCOL_SPC_BT470BG;
-			case Prop::Space::SMPTE170M:			return AVCOL_SPC_SMPTE170M;
-			case Prop::Space::SMPTE240M:			return AVCOL_SPC_SMPTE240M;
-			case Prop::Space::YCgCo:				return AVCOL_SPC_YCGCO;
-			case Prop::Space::BT2020NCL:			return AVCOL_SPC_BT2020_NCL;
-			case Prop::Space::BT2020CL:				return AVCOL_SPC_BT2020_CL;
-			case Prop::Space::SMPTE2085:			return AVCOL_SPC_SMPTE2085;
-			case Prop::Space::ChromaDerivedNCL:		return AVCOL_SPC_CHROMA_DERIVED_NCL;
-			case Prop::Space::ChromaDerivedCL:		return AVCOL_SPC_CHROMA_DERIVED_CL;
-			case Prop::Space::ICtCp:				return AVCOL_SPC_ICTCP;
-			default:								return AVCOL_SPC_UNSPECIFIED;
-		}
-	}
-
-	int ToAVPrimaries(Prop::Primaries primaries) noexcept {
-		switch (primaries) {
-			case Prop::Primaries::BT709:		return AVCOL_PRI_BT709;
-			case Prop::Primaries::BT470M:		return AVCOL_PRI_BT470M;
-			case Prop::Primaries::BT470BG:		return AVCOL_PRI_BT470BG;
-			case Prop::Primaries::SMPTE170M:	return AVCOL_PRI_SMPTE170M;
-			case Prop::Primaries::SMPTE240M:	return AVCOL_PRI_SMPTE240M;
-			case Prop::Primaries::Film:			return AVCOL_PRI_FILM;
-			case Prop::Primaries::BT2020:		return AVCOL_PRI_BT2020;
-			case Prop::Primaries::SMPTE428:		return AVCOL_PRI_SMPTE428;
-			case Prop::Primaries::SMPTE431:		return AVCOL_PRI_SMPTE431;
-			case Prop::Primaries::SMPTE432:		return AVCOL_PRI_SMPTE432;
-			case Prop::Primaries::EBU3213:		return AVCOL_PRI_EBU3213;
-			default:							return AVCOL_PRI_UNSPECIFIED;
-		}
-	}
-
-	int ToAVTransfer(Prop::Transfer transfer) noexcept {
-		switch (transfer) {
-			case Prop::Transfer::BT709:			return AVCOL_TRC_BT709;
-			case Prop::Transfer::Gamma22:		return AVCOL_TRC_GAMMA22;
-			case Prop::Transfer::Gamma28:		return AVCOL_TRC_GAMMA28;
-			case Prop::Transfer::SMPTE170M:		return AVCOL_TRC_SMPTE170M;
-			case Prop::Transfer::SMPTE240M:		return AVCOL_TRC_SMPTE240M;
-			case Prop::Transfer::Linear:			return AVCOL_TRC_LINEAR;
-			case Prop::Transfer::Log:			return AVCOL_TRC_LOG;
-			case Prop::Transfer::LogSqrt:		return AVCOL_TRC_LOG_SQRT;
-			case Prop::Transfer::IEC61966_2_4:	return AVCOL_TRC_IEC61966_2_4;
-			case Prop::Transfer::BT1361:		return AVCOL_TRC_BT1361_ECG;
-			case Prop::Transfer::IEC61966_2_1:	return AVCOL_TRC_IEC61966_2_1;
-			case Prop::Transfer::BT2020_10:		return AVCOL_TRC_BT2020_10;
-			case Prop::Transfer::BT2020_12:		return AVCOL_TRC_BT2020_12;
-			case Prop::Transfer::SMPTE2084:		return AVCOL_TRC_SMPTE2084;
-			case Prop::Transfer::SMPTE428:		return AVCOL_TRC_SMPTE428;
-			case Prop::Transfer::ARIB_B67:		return AVCOL_TRC_ARIB_STD_B67;
-			default:							return AVCOL_TRC_UNSPECIFIED;
-		}
-	}
-
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
-			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, NanoTimeBase);
-		if (ns < 0)
-			return std::nullopt;
-		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
-	}
-
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
-			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, NanoTimeBase);
-		if (ns <= 0)
-			return std::nullopt;
-		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
-	}
-
-	std::int64_t NsToTicks(std::int64_t ns, AVRational timeBase) noexcept {
-		if (ns < 0 || timeBase.num <= 0 || timeBase.den <= 0)
-			return AV_NOPTS_VALUE;
-		return av_rescale_q(ns, NanoTimeBase, timeBase);
-	}
-
-	AVRational VideoTimeBaseFromFrame(const Frame& frame) noexcept {
-		if (frame.Video() && frame.Video()->FrameRate() && frame.Video()->FrameRate()->Valid()) {
-			const auto& fps = *frame.Video()->FrameRate();
-			return AVRational{fps.Den(), fps.Num()};
-		}
-		return AVRational{1, 24};
-	}
-
-	AVRational ChooseTimeBase(const Frame& frame, StormByte::Multimedia::Type type) noexcept {
-		if (type == StormByte::Multimedia::Type::Subtitle)
-			return AVRational{1, AV_TIME_BASE};
-		if (frame.Audio()) {
-			const int rate = static_cast<int>(frame.Audio()->SampleRate());
-			if (rate > 0)
-				return AVRational{1, rate};
-		}
-		return VideoTimeBaseFromFrame(frame);
-	}
-
-	std::int64_t DefaultFrameDurationTicks(AVRational timeBase) noexcept {
-		if (timeBase.num <= 0 || timeBase.den <= 0)
-			return 1;
-		return 1;
-	}
-
-	StormByte::Multimedia::Features FrameNeed(
-		const StormByte::Multimedia::Features& extra,
-		const Frame& frame) noexcept {
-		StormByte::Multimedia::Features need = extra;
-		if (frame.Video() && frame.Video()->HDR10())
-			need.Add(StormByte::Multimedia::Feature::HDR10);
-		return need;
-	}
-
-	const StormByte::Multimedia::Tables::Encoder::EncoderDef* ScanRows(
-		std::span<const StormByte::Multimedia::Tables::Encoder::EncoderDef> rows,
-		std::string_view codec, std::string_view pin, bool matchNeed,
-		const StormByte::Multimedia::Features& need) noexcept {
-		const StormByte::Multimedia::Tables::Encoder::EncoderDef* best = nullptr;
-		for (const auto& row : rows) {
-			if (codec != row.codec)
-				continue;
-			if (!pin.empty() && pin != row.name)
-				continue;
-			if (matchNeed && !row.features.Has(need))
-				continue;
-			if (matchNeed && avcodec_find_encoder_by_name(row.name) == nullptr)
-				continue;
-			if (!matchNeed)
-				return &row;
-			if (!best || row.preference < best->preference)
-				best = &row;
-		}
-		return best;
-	}
-
-	const StormByte::Multimedia::Tables::Encoder::EncoderDef* FindRow(
-		std::string_view codec, std::string_view pin) noexcept {
-		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Video(), codec, pin, false, {}))
-			return row;
-		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Audio(), codec, pin, false, {}))
-			return row;
-		return ScanRows(StormByte::Multimedia::Tables::Encoder::Subtitle(), codec, pin, false, {});
-	}
-
-	const StormByte::Multimedia::Tables::Encoder::EncoderDef* PickEncoder(
-		std::string_view codec, std::string_view pin, const StormByte::Multimedia::Features& need) noexcept {
-		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Video(), codec, pin, true, need))
-			return row;
-		if (const auto* row = ScanRows(StormByte::Multimedia::Tables::Encoder::Audio(), codec, pin, true, need))
-			return row;
-		return ScanRows(StormByte::Multimedia::Tables::Encoder::Subtitle(), codec, pin, true, need);
-	}
-
-	std::vector<std::pair<std::string, std::string>> SplitBlob(std::string_view blob) noexcept {
-		std::vector<std::pair<std::string, std::string>> out;
-		std::string_view rest = blob;
-		while (!rest.empty()) {
-			const auto cut = rest.find(':');
-			const auto piece = rest.substr(0, cut);
-			const auto eq = piece.find('=');
-			if (eq != std::string_view::npos && eq > 0)
-				out.emplace_back(std::string(piece.substr(0, eq)), std::string(piece.substr(eq + 1)));
-			if (cut == std::string_view::npos)
-				break;
-			rest = rest.substr(cut + 1);
-		}
-		return out;
-	}
-
-	std::string JoinBlob(const std::map<std::string, std::string>& values) noexcept {
-		std::string out;
-		for (const auto& [key, value] : values) {
-			if (key.empty())
-				continue;
-			if (!out.empty())
-				out += ':';
-			out += key;
-			out += '=';
-			out += value;
-		}
-		return out;
-	}
-
-	bool HasKey(const char* key) noexcept {
-		return key && key[0] != '\0';
-	}
-
-	std::int64_t EstimateCeiling(const Frame& frame) noexcept {
-		int height = 0;
-		if (frame.Video())
-			height = static_cast<int>(frame.Video()->Resolution().Height());
-		if (height <= 576)
-			return 4000000;
-		if (height <= 1080)
-			return 12000000;
-		if (height <= 1440)
-			return 20000000;
-		return 35000000;
-	}
-
-	std::int64_t BufSizeBits(const Encoder& encoder, const Frame& frame) noexcept {
-		if (encoder.MaxBitRate())
-			return *encoder.MaxBitRate() * 2;
-		if (encoder.BitRate())
-			return *encoder.BitRate() * 2;
-		return EstimateCeiling(frame) * 2;
-	}
-
-	void AddHdr10SideData(::AVCodecParameters* par, const StormByte::Multimedia::Property::HDR10& hdr10) noexcept {
-		if (!par)
-			return;
-
-		const bool hasMastering = hdr10.Red().X() != 0 || hdr10.Red().Y() != 0
-			|| hdr10.Green().X() != 0 || hdr10.Green().Y() != 0
-			|| hdr10.Blue().X() != 0 || hdr10.Blue().Y() != 0
-			|| hdr10.White().X() != 0 || hdr10.White().Y() != 0
-			|| hdr10.Luminance().X() != 0 || hdr10.Luminance().Y() != 0;
-		const bool hasLight = hdr10.LightLevel().has_value()
-			&& (hdr10.LightLevel()->X() != 0 || hdr10.LightLevel()->Y() != 0);
-
-		if (hasMastering) {
-			AVMasteringDisplayMetadata mdm{};
-			mdm.display_primaries[0][0] = av_make_q(static_cast<int>(hdr10.Red().X()), 50000);
-			mdm.display_primaries[0][1] = av_make_q(static_cast<int>(hdr10.Red().Y()), 50000);
-			mdm.display_primaries[1][0] = av_make_q(static_cast<int>(hdr10.Green().X()), 50000);
-			mdm.display_primaries[1][1] = av_make_q(static_cast<int>(hdr10.Green().Y()), 50000);
-			mdm.display_primaries[2][0] = av_make_q(static_cast<int>(hdr10.Blue().X()), 50000);
-			mdm.display_primaries[2][1] = av_make_q(static_cast<int>(hdr10.Blue().Y()), 50000);
-			mdm.white_point[0] = av_make_q(static_cast<int>(hdr10.White().X()), 50000);
-			mdm.white_point[1] = av_make_q(static_cast<int>(hdr10.White().Y()), 50000);
-			mdm.min_luminance = av_make_q(static_cast<int>(hdr10.Luminance().X()), 10000);
-			mdm.max_luminance = av_make_q(static_cast<int>(hdr10.Luminance().Y()), 10000);
-			mdm.has_primaries = 1;
-			mdm.has_luminance = 1;
-			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
-					AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(mdm), 0))
-				std::memcpy(sd->data, &mdm, sizeof(mdm));
-		}
-
-		if (hasLight) {
-			AVContentLightMetadata cll{};
-			cll.MaxCLL = static_cast<unsigned>(hdr10.LightLevel()->X());
-			cll.MaxFALL = static_cast<unsigned>(hdr10.LightLevel()->Y());
-			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
-					AV_PKT_DATA_CONTENT_LIGHT_LEVEL, sizeof(cll), 0))
-				std::memcpy(sd->data, &cll, sizeof(cll));
-		}
-	}
-
-	FFmpeg::AVCodecParameters FillParams(const Frame& frame, const ::AVCodec* codec,
-		const std::optional<std::int64_t>& bitRate, std::optional<int> sampleFormat) noexcept {
-		FFmpeg::AVCodecParameters params(nullptr);
-		if (codec) {
-			params.CodecId(static_cast<int>(codec->id));
-			params.CodecType(static_cast<int>(codec->type));
-		}
-		if (bitRate)
-			params.BitRate(*bitRate);
-		if (frame.Video()) {
-			const auto& video = *frame.Video();
-			params.Width(static_cast<int>(video.Resolution().Width()));
-			params.Height(static_cast<int>(video.Resolution().Height()));
-			params.Format(ToAVPixelFormat(video.Color().PixelFormat()));
-			params.ColorRange(ToAVRange(video.Color().Range()));
-			params.ColorSpace(ToAVSpace(video.Color().Space()));
-			params.ColorPrimaries(ToAVPrimaries(video.Color().Primaries()));
-			params.ColorTransfer(ToAVTransfer(video.Color().Transfer()));
-			if (video.HDR10())
-				AddHdr10SideData(params.Get(), *video.HDR10());
-		}
-		if (frame.Audio()) {
-			const auto& audio = *frame.Audio();
-			params.SampleRate(static_cast<int>(audio.SampleRate()));
-			if (!bitRate)
-				params.BitRate(static_cast<std::int64_t>(audio.BitRate()));
-			int channels = static_cast<int>(audio.Channels());
-			if (channels <= 0)
-				channels = static_cast<int>(Prop::ChannelCount(audio.Layout()));
-			params.DefaultChannelLayout(channels);
-			if (sampleFormat)
-				params.Format(*sampleFormat);
-		}
-		return params;
-	}
-
-	/**
-	 * @brief Builds a pipeline packet from an encoded AVPacket.
-	 * @param index Output stream index.
-	 * @param raw Encoder output (payload + optional side data).
-	 * @param timeBase Encoder time base for PTS/DTS/duration.
-	 * @param keepPacketHdrPlus When true (default), copy HDR10+ as packet
-	 *        side data (VP9 and other container-side-data codecs). When
-	 *        false, skip it: HEVC already carries ST 2094-40 in a prefix
-	 *        SEI. Mastering display and content light are always copied
-	 *        when present. Other side-data kinds are dropped.
-	 * @return Move-only packet ready for the mux queue.
-	 */
-	Packet MakePacket(int index, const FFmpeg::AVPacket& raw, AVRational timeBase, bool keepPacketHdrPlus = true) noexcept {
-		StormByte::Buffer::DataType bytes;
-		const auto* data = raw.Data();
-		const int size = raw.Size();
-		if (data && size > 0) {
-			const auto* rawBytes = reinterpret_cast<const std::byte*>(data);
-			bytes.assign(rawBytes, rawBytes + size);
-		}
-
-		std::vector<SideData> attachments;
-		if (const auto* pkt = raw.Get()) {
-			for (int i = 0; i < pkt->side_data_elems; ++i) {
-				const AVPacketSideData& sd = pkt->side_data[i];
-				if (!sd.data || sd.size <= 0)
-					continue;
-				if (sd.type == AV_PKT_DATA_DYNAMIC_HDR10_PLUS && !keepPacketHdrPlus)
-					continue;
-				if (sd.type != AV_PKT_DATA_DYNAMIC_HDR10_PLUS
-					&& sd.type != AV_PKT_DATA_MASTERING_DISPLAY_METADATA
-					&& sd.type != AV_PKT_DATA_CONTENT_LIGHT_LEVEL)
-					continue;
-				StormByte::Buffer::DataType blob(
-					reinterpret_cast<const std::byte*>(sd.data),
-					reinterpret_cast<const std::byte*>(sd.data) + sd.size);
-				switch (sd.type) {
-					case AV_PKT_DATA_DYNAMIC_HDR10_PLUS:
-						attachments.emplace_back(SideDataKind::HdrPlus,
-							StormByte::Buffer::FIFO{std::move(blob)});
-						break;
-					case AV_PKT_DATA_MASTERING_DISPLAY_METADATA:
-						attachments.emplace_back(SideDataKind::MasteringDisplay,
-							StormByte::Buffer::FIFO{std::move(blob)});
-						break;
-					case AV_PKT_DATA_CONTENT_LIGHT_LEVEL:
-						attachments.emplace_back(SideDataKind::ContentLight,
-							StormByte::Buffer::FIFO{std::move(blob)});
-						break;
-					default:
-						break;
-				}
-			}
-		}
-
-		return Packet{
-			index,
-			StormByte::Buffer::FIFO{std::move(bytes)},
-			TicksToPts(raw.Pts(), timeBase),
-			TicksToPts(raw.Dts(), timeBase),
-			TicksToDuration(raw.Duration(), timeBase),
-			(raw.Flags() & AV_PKT_FLAG_KEY) != 0,
-			std::move(attachments)
-		};
-	}
-
-	std::string_view AfterCommas(std::string_view fields, std::size_t need) noexcept {
-		std::size_t commas = 0;
-		for (std::size_t i = 0; i < fields.size(); ++i) {
-			if (fields[i] != ',')
-				continue;
-			++commas;
-			if (commas == need)
-				return fields.substr(i + 1);
-		}
-		return {};
-	}
-
-	bool LooksPackedAss(std::string_view in) noexcept {
-		if (in.empty() || !std::isdigit(static_cast<unsigned char>(in.front())))
-			return false;
-		std::size_t commas = 0;
-		for (const char c : in)
-			if (c == ',')
-				++commas;
-		return commas >= PackedAssFieldsBeforeText;
-	}
-
-	std::string DialogueBody(std::string_view in) noexcept {
-		while (!in.empty() && (in.front() == '\0' || in.front() == ' ' || in.front() == '\t'))
-			in.remove_prefix(1);
-		while (!in.empty() && (in.back() == '\0' || in.back() == '\n' || in.back() == '\r'))
-			in.remove_suffix(1);
-
-		const auto tag = in.find("Dialogue:");
-		if (tag != std::string_view::npos) {
-			auto fields = in.substr(tag + 9);
-			while (!fields.empty() && (fields.front() == ' ' || fields.front() == '\t'))
-				fields.remove_prefix(1);
-			const auto body = AfterCommas(fields, DialogueFieldsBeforeText);
-			if (!body.empty())
-				return std::string(body);
-		}
-
-		if (LooksPackedAss(in)) {
-			const auto body = AfterCommas(in, PackedAssFieldsBeforeText);
-			if (!body.empty())
-				return std::string(body);
-		}
-		return std::string(in);
-	}
-
-	std::string StripAssTags(std::string_view in) noexcept {
-		std::string out;
-		out.reserve(in.size());
-		bool tag = false;
-		for (const char c : in) {
-			if (c == '{')
-				tag = true;
-			else if (c == '}')
-				tag = false;
-			else if (!tag)
-				out.push_back(c);
-		}
-		return out;
-	}
-
-	std::string NewlinesFromAss(std::string text) noexcept {
-		for (std::size_t i = 0; i + 1 < text.size(); ++i) {
-			if (text[i] == '\\' && (text[i + 1] == 'N' || text[i + 1] == 'n')) {
-				text[i] = '\n';
-				text.erase(i + 1, 1);
-			}
-		}
-		return text;
-	}
-
-	std::string NewlinesToAss(std::string text) noexcept {
-		std::string out;
-		out.reserve(text.size() + 8);
-		for (const char c : text) {
-			if (c == '\r')
-				continue;
-			if (c == '\n') {
-				out += "\\N";
-				continue;
-			}
-			out.push_back(c);
-		}
-		return out;
-	}
-
-	bool WantsAssRect(std::string_view impl) noexcept {
-		return impl == "ass" || impl == "ssa";
-	}
-
-	bool PlainTextDest(std::string_view impl) noexcept {
-		return impl == "srt" || impl == "subrip" || impl == "webvtt" || impl == "text";
-	}
-
-	std::string ReadCue(Frame& frame) noexcept {
-		auto& pay = frame.Payload();
-		const auto n = pay.AvailableBytes();
-		if (n == 0)
-			return {};
-		StormByte::Buffer::DataType bytes;
-		if (!pay.Peek(n, bytes) || bytes.empty())
-			return {};
-		const auto* raw = reinterpret_cast<const std::uint8_t*>(bytes.data());
-		if (bytes.size() >= 4 && raw[0] == 'O' && raw[1] == 'C' && raw[2] == 'R' && raw[3] == '1')
-			return {};
-		std::size_t begin = 0;
-		std::size_t end = bytes.size();
-		while (begin < end && bytes[begin] == std::byte{0})
-			++begin;
-		while (end > begin && (bytes[end - 1] == std::byte{0} || bytes[end - 1] == std::byte{'\n'}
-			|| bytes[end - 1] == std::byte{'\r'}))
-			--end;
-		if (begin >= end)
-			return {};
-		return std::string(reinterpret_cast<const char*>(bytes.data() + begin), end - begin);
-	}
-
-	std::optional<StormByte::Multimedia::OCR::GrayBitmap> ReadOcrBitmap(Frame& frame) noexcept {
-		auto& pay = frame.Payload();
-		const auto n = pay.AvailableBytes();
-		if (n < 12)
-			return std::nullopt;
-		StormByte::Buffer::DataType bytes;
-		if (!pay.Peek(n, bytes) || bytes.size() < 12)
-			return std::nullopt;
-		const auto* p = reinterpret_cast<const std::uint8_t*>(bytes.data());
-		if (p[0] != 'O' || p[1] != 'C' || p[2] != 'R' || p[3] != '1')
-			return std::nullopt;
-		const auto get32 = [](const std::uint8_t* d) {
-			return static_cast<int>(d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24));
-		};
-		StormByte::Multimedia::OCR::GrayBitmap out;
-		out.width = get32(p + 4);
-		out.height = get32(p + 8);
-		out.stride = out.width;
-		if (out.width <= 0 || out.height <= 0)
-			return std::nullopt;
-		const std::size_t need = static_cast<std::size_t>(out.width) * static_cast<std::size_t>(out.height);
-		if (bytes.size() < 12 + need)
-			return std::nullopt;
-		out.pixels.assign(p + 12, p + 12 + need);
-		return out;
-	}
-
-	std::string TessLanguage(std::string_view tag) noexcept {
-		std::string out;
-		for (unsigned char c : tag)
-			out.push_back(static_cast<char>(std::tolower(c)));
-		if (out == "es" || out == "spa")
-			return "spa";
-		if (out == "en" || out == "eng")
-			return "eng";
-		if (out == "pt" || out == "por")
-			return "por";
-		if (out == "fr" || out == "fra" || out == "fre")
-			return "fra";
-		if (out == "de" || out == "deu" || out == "ger")
-			return "deu";
-		if (out == "it" || out == "ita")
-			return "ita";
-		return out;
-	}
-
-	std::string FormatAssTime(std::int64_t nanoseconds) noexcept {
-		if (nanoseconds < 0)
-			nanoseconds = 0;
-		const auto cs = static_cast<std::int64_t>(nanoseconds / 10000000);
-		const auto h = cs / 360000;
-		const auto m = (cs / 6000) % 60;
-		const auto s = (cs / 100) % 60;
-		const auto c = cs % 100;
-		char buf[32];
-		std::snprintf(buf, sizeof(buf), "%d:%02d:%02d.%02d",
-			static_cast<int>(h), static_cast<int>(m), static_cast<int>(s), static_cast<int>(c));
-		return buf;
-	}
-
-	std::string WrapAss(std::string text, std::int64_t startNs, std::int64_t endNs) noexcept {
-		if (text.find("Dialogue:") != std::string::npos)
-			return text;
-		return "Dialogue: 0," + FormatAssTime(startNs) + "," + FormatAssTime(endNs)
-			+ ",Default,NTP,0000,0000,0000,," + NewlinesToAss(std::move(text));
-	}
-
-	void StampSubtitlePacket(FFmpeg::AVPacket& pkt, std::int64_t pts, std::uint32_t durationMs, AVRational tb) noexcept {
-		const std::int64_t duration = av_rescale_q(static_cast<std::int64_t>(durationMs), AVRational{1, 1000}, tb);
-		const std::int64_t scaled = (pts == AV_NOPTS_VALUE)
-			? AV_NOPTS_VALUE
-			: av_rescale_q(pts, AVRational{1, AV_TIME_BASE}, tb);
-		pkt.Timestamps(scaled, scaled, duration);
-	}
-}
 
 Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec) noexcept
 : m_index(output_index), m_codec(&codec),
 m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION),
-m_failed(false) {}
+m_failed(false) {
+	switch (codec.Type()) {
+		case StormByte::Multimedia::Type::Video:
+			m_engine = std::make_unique<Engine::Encoder::Details::Video>();
+			break;
+		case StormByte::Multimedia::Type::Audio:
+			m_engine = std::make_unique<Engine::Encoder::Details::Audio>();
+			break;
+		case StormByte::Multimedia::Type::Subtitle:
+			m_engine = std::make_unique<Engine::Encoder::Details::Subtitle>();
+			break;
+		default:
+			Fail("encoder destination type is not video, audio or subtitle");
+			break;
+	}
+}
 
 Encoder::Encoder(Encoder&&) noexcept = default;
 Encoder::~Encoder() noexcept = default;
 Encoder& Encoder::operator=(Encoder&&) noexcept = default;
 
 Encoder::operator bool() const noexcept {
-	return !m_failed && static_cast<bool>(m_impl);
+	return !m_failed && m_engine && m_engine->IsOpen();
 }
 
 int Encoder::Index() const noexcept {
@@ -840,375 +246,64 @@ void Encoder::FineTune(std::map<std::string, std::string> options) noexcept {
 }
 
 void Encoder::Flush() noexcept {
-	if (m_failed || !m_impl || m_flushed)
+	if (m_failed || !m_engine)
 		return;
-	if (m_impl->m_encoder.IsSubtitle()) {
-		m_flushed = true;
-		return;
-	}
-
-	for (;;) {
-		const auto sent = m_impl->m_encoder.SetEof();
-		if (sent == FFmpeg::OperationResult::Success || sent == FFmpeg::OperationResult::EndOfFile)
-			break;
-		if (sent == FFmpeg::OperationResult::TryAgain) {
-			if (!DrainOne())
-				break;
-			continue;
-		}
-		Fail("failed to signal encoder EOF");
-		return;
-	}
-
-	while (DrainOne())
-		;
-	m_flushed = true;
+	m_engine->Flush(*this);
 }
 
 void Encoder::Fail(std::string reason) noexcept {
 	m_failed = true;
 	m_error = std::move(reason);
 	m_capabilities = StormByte::Multimedia::Features{};
-	m_impl.reset();
+	m_engine.reset();
 }
 
-void Encoder::Bind(std::unique_ptr<Impl> impl) noexcept {
-	m_impl = std::move(impl);
-	m_failed = false;
-	m_error.reset();
-}
-
-bool Encoder::DrainOne() noexcept {
-	if (m_failed || !m_impl)
+bool Encoder::MuxBindStream(void* avStream) noexcept {
+	if (!m_engine || !avStream)
 		return false;
-	if (m_impl->m_encoder.IsSubtitle())
+	auto* stream = static_cast<AVStream*>(avStream);
+	const auto* ctx = m_engine->Context();
+	if (!ctx)
 		return false;
-	const auto result = m_impl->m_encoder.ReceivePacket(m_impl->m_scratch);
-	if (result == FFmpeg::OperationResult::TryAgain || result == FFmpeg::OperationResult::EndOfFile)
+	if (avcodec_parameters_from_context(stream->codecpar, ctx) < 0)
 		return false;
-	if (result != FFmpeg::OperationResult::Success) {
-		Fail("failed to receive packet");
-		return false;
-	}
-	const auto* ctx = m_impl->m_encoder.Get();
-	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
-	m_impl->m_pending.push_back(MakePacket(m_index, m_impl->m_scratch, m_impl->m_timeBase, keepPacketHdrPlus));
-	m_impl->m_scratch.Unref();
+	AVRational tb = m_engine->TimeBase();
+	if (tb.num <= 0 || tb.den <= 0)
+		tb = ctx->time_base;
+	if (tb.num <= 0 || tb.den <= 0)
+		tb = AVRational{1, 1000};
+	stream->time_base = tb;
 	return true;
 }
 
-bool Encoder::Open(const Frame& frame) noexcept {
-	if (!m_codec->HasAccess(StormByte::Multimedia::Operation::Write)) {
-		Fail("codec is not writable");
+bool Encoder::MuxTakePacket(Packet& packet) noexcept {
+	if (!m_engine)
 		return false;
-	}
-	const auto kind = m_codec->Type();
-	if (kind == StormByte::Multimedia::Type::Video && !frame.Video()) {
-		Fail("encoder destination is video but frame is not");
+	if (m_engine->TakePacket(packet))
+		return true;
+	if (!m_engine->DrainOne(*this))
 		return false;
-	}
-	if (kind == StormByte::Multimedia::Type::Audio && !frame.Audio()) {
-		Fail("encoder destination is audio but frame is not");
-		return false;
-	}
-	if (kind != StormByte::Multimedia::Type::Subtitle
-		&& (!frame.m_impl || !frame.m_impl->m_backend.Get())) {
-		Fail("frame has no backend buffer");
-		return false;
-	}
-
-	const bool hdr10 = frame.Video() && frame.Video()->HDR10().has_value();
-	const bool hdr10plus = hdr10 && frame.Video()->HDR10()->IsHDR10Plus();
-	const auto need = FrameNeed(m_require, frame);
-	const std::string stormName{m_codec->Name()};
-	const std::string_view pin = m_implementation
-		? std::string_view{*m_implementation} : std::string_view{};
-
-	if (!pin.empty()) {
-		if (avcodec_find_encoder_by_name(std::string(pin).c_str()) == nullptr) {
-			Fail("encoder implementation is unavailable");
-			return false;
-		}
-		const auto* listed = FindRow(stormName, pin);
-		if (!listed || !listed->features.Has(need)) {
-			Fail("encoder implementation lacks required features");
-			return false;
-		}
-	}
-
-	const auto* row = PickEncoder(stormName, pin, need);
-	const ::AVCodec* codec = nullptr;
-	if (row)
-		codec = avcodec_find_encoder_by_name(row->name);
-	if (!codec) {
-		Fail("no encoder for destination codec");
-		return false;
-	}
-
-	if (m_crf && (!row || !HasKey(row->crf_key))) {
-		Fail("encoder implementation does not support CRF");
-		return false;
-	}
-	if (m_bitRate && (!row || !HasKey(row->bitrate_key))) {
-		Fail("encoder implementation does not support BitRate");
-		return false;
-	}
-	if (m_maxBitRate && (!row || !HasKey(row->maxrate_key))) {
-		Fail("encoder implementation does not support MaxBitRate");
-		return false;
-	}
-	if (m_preset && (!row || !HasKey(row->preset_key))) {
-		Fail("encoder implementation does not support Preset");
-		return false;
-	}
-	if (m_tune && (!row || !HasKey(row->style_key))) {
-		Fail("encoder implementation does not support Tune");
-		return false;
-	}
-
-	for (const auto& [key, value] : m_fineTune) {
-		(void)value;
-		if (key == "bufsize" || key == "vbv-bufsize") {
-			Fail("FineTune cannot set bufsize");
-			return false;
-		}
-	}
-
-	std::map<std::string, std::string> blob;
-	std::map<std::string, std::string> opts;
-	if (row && hdr10)
-		for (auto& pair : SplitBlob(row->signal_hdr10 ? row->signal_hdr10 : ""))
-			blob.insert(std::move(pair));
-	if (row && hdr10plus)
-		for (auto& pair : SplitBlob(row->signal_hdr10plus ? row->signal_hdr10plus : ""))
-			blob.insert(std::move(pair));
-
-	if (m_crf && row && HasKey(row->crf_key))
-		opts.emplace(row->crf_key, std::to_string(*m_crf));
-	if (m_bitRate && row && HasKey(row->bitrate_key))
-		opts.emplace(row->bitrate_key, std::to_string(*m_bitRate));
-	else if (m_crf && !m_bitRate && row && HasKey(row->bitrate_key)
-		&& (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9"))
-		opts.emplace(row->bitrate_key, "0");
-	if (m_maxBitRate && row && HasKey(row->maxrate_key))
-		opts.emplace(row->maxrate_key, std::to_string(*m_maxBitRate));
-	if (row && HasKey(row->bufsize_key) && frame.Video() && (m_bitRate || m_maxBitRate))
-		opts.emplace(row->bufsize_key, std::to_string(BufSizeBits(*this, frame)));
-	if (m_preset && row && HasKey(row->preset_key))
-		opts.emplace(row->preset_key, *m_preset);
-	if (m_tune && row && HasKey(row->style_key))
-		opts.emplace(row->style_key, *m_tune);
-
-	const bool pack = row && HasKey(row->tune_key);
-	if (pack) {
-		if (!blob.contains("wpp") && !m_fineTune.contains("wpp"))
-			blob.emplace("wpp", "1");
-		if (!blob.contains("pools") && !blob.contains("numa-pools")
-			&& !m_fineTune.contains("pools") && !m_fineTune.contains("numa-pools"))
-			blob.emplace("pools", "*");
-	}
-	if (row && (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9")) {
-		if (!opts.contains("row-mt") && !m_fineTune.contains("row-mt"))
-			opts.emplace("row-mt", "1");
-	}
-
-	for (const auto& [key, value] : m_fineTune) {
-		if (key.empty())
-			continue;
-		if (blob.contains(key) && blob[key] != value) {
-			Fail("FineTune conflicts with HDR signaling key '" + key + "'");
-			return false;
-		}
-		if (opts.contains(key) && opts[key] != value) {
-			Fail("FineTune conflicts with encoder setter key '" + key + "'");
-			return false;
-		}
-		if (pack)
-			blob.emplace(key, value);
-		else
-			opts.emplace(key, value);
-	}
-
-	if (pack) {
-		const auto packed = JoinBlob(blob);
-		if (!packed.empty())
-			opts.emplace(row->tune_key, packed);
-	}
-	else {
-		for (const auto& [key, value] : blob)
-			opts.emplace(key, value);
-	}
-
-	std::optional<int> sampleFormat;
-	if (frame.Audio() && frame.m_impl && frame.m_impl->m_backend.Get())
-		sampleFormat = frame.m_impl->m_backend.Get()->format;
-
-	auto params = FillParams(frame, codec, m_bitRate, sampleFormat);
-	if (kind == StormByte::Multimedia::Type::Video
-		&& frame.m_impl && frame.m_impl->m_backend.Get()) {
-		const auto* raw = frame.m_impl->m_backend.Get();
-		if (raw->format != AV_PIX_FMT_NONE)
-			params.Format(raw->format);
-		if (raw->width > 0)
-			params.Width(raw->width);
-		if (raw->height > 0)
-			params.Height(raw->height);
-	}
-	const auto timeBase = ChooseTimeBase(frame, kind);
-	auto backend = FFmpeg::AVEncoder::Open(const_cast<::AVCodec*>(codec), params, m_index, opts, timeBase);
-	if (!backend.has_value()) {
-		Fail(backend.error()->what());
-		return false;
-	}
-
-	auto impl = std::make_unique<Impl>(std::move(backend.value()));
-	impl->m_timeBase = impl->m_encoder.TimeBase();
-	if (impl->m_timeBase.num <= 0 || impl->m_timeBase.den <= 0)
-		impl->m_timeBase = timeBase;
-	if (row) {
-		Implementation(row->name);
-		m_capabilities = row->features;
-	}
-	Bind(std::move(impl));
-	return true;
+	return m_engine->TakePacket(packet);
 }
 
 Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encoder) noexcept {
-	if (encoder.m_failed)
+	if (encoder.m_failed || !encoder.m_engine)
 		return frame;
 	if (frame.Language() && !encoder.m_language)
 		encoder.Language(*frame.Language());
 	if (frame.Title() && !encoder.m_title)
 		encoder.Title(*frame.Title());
-	if (!encoder.m_impl && !encoder.Open(frame))
-		return frame;
-	if (!encoder.m_impl)
-		return frame;
-
-	if (encoder.m_codec->Type() == StormByte::Multimedia::Type::Subtitle) {
-		auto text = DialogueBody(ReadCue(frame));
-		if (text.empty()) {
-			auto bitmap = ReadOcrBitmap(frame);
-			if (!bitmap)
-				return frame;
-			if (frame.Language())
-				encoder.m_impl->m_ocr.Language(TessLanguage(*frame.Language()));
-			else
-				encoder.m_impl->m_ocr.Language({});
-			auto recognized = encoder.m_impl->m_ocr.Recognize(
-				std::span<const std::uint8_t>(bitmap->pixels.data(), bitmap->pixels.size()),
-				bitmap->width,
-				bitmap->height,
-				bitmap->stride);
-			if (!recognized.has_value()) {
-				encoder.Fail(recognized.error()->what());
-				return frame;
-			}
-			text = std::move(recognized.value());
-			if (text.empty())
-				return frame;
-		}
-		const auto impl = encoder.m_implementation ? *encoder.m_implementation : std::string{};
-		const std::int64_t startNs = frame.Pts() ? frame.Pts()->Nanoseconds().count() : 0;
-		std::int64_t durationNs = 0;
-		if (frame.Duration())
-			durationNs = frame.Duration()->Nanoseconds().count();
-		if (durationNs < 0)
-			durationNs = 0;
-		const std::int64_t endNs = startNs + durationNs;
-		const std::int64_t pts = frame.Pts()
-			? NsToTicks(startNs, AVRational{1, AV_TIME_BASE})
-			: AV_NOPTS_VALUE;
-		std::uint32_t durationMs = 0;
-		if (durationNs > 0) {
-			const auto ms = durationNs / 1000000;
-			if (ms > 0)
-				durationMs = static_cast<std::uint32_t>(ms);
-		}
-		const AVRational tb = (encoder.m_impl->m_timeBase.num > 0)
-			? encoder.m_impl->m_timeBase
-			: AVRational{1, AV_TIME_BASE};
-
-		if (PlainTextDest(impl)) {
-			text = NewlinesFromAss(StripAssTags(text));
-			if (!encoder.m_impl->m_scratch.Load(
-					reinterpret_cast<const std::uint8_t*>(text.data()),
-					static_cast<int>(text.size()),
-					encoder.m_index, true)) {
-				encoder.Fail("failed to encode subtitle");
-				return frame;
-			}
-			StampSubtitlePacket(encoder.m_impl->m_scratch, pts, durationMs, tb);
-			encoder.m_impl->m_pending.push_back(
-				MakePacket(encoder.m_index, encoder.m_impl->m_scratch, encoder.m_impl->m_timeBase));
-			encoder.m_impl->m_scratch.Unref();
-			return frame;
-		}
-
-		if (WantsAssRect(impl))
-			text = WrapAss(std::move(text), startNs, endNs);
-		FFmpeg::AVSubtitle sub;
-		sub.FillText(std::move(text), pts, durationMs, WantsAssRect(impl));
-		const auto result = encoder.m_impl->m_encoder.EncodeSubtitle(sub, encoder.m_impl->m_scratch);
-		if (result != FFmpeg::OperationResult::Success) {
-			encoder.Fail("failed to encode subtitle");
-			return frame;
-		}
-		encoder.m_impl->m_pending.push_back(
-			MakePacket(encoder.m_index, encoder.m_impl->m_scratch, encoder.m_impl->m_timeBase));
-		encoder.m_impl->m_scratch.Unref();
-		return frame;
-	}
-
-	if (!frame.m_impl || !frame.m_impl->m_backend.Get()) {
-		encoder.Fail("frame has no backend buffer");
-		return frame;
-	}
-
-	if (frame.Video() && frame.Video()->HDR10())
-		frame.m_impl->m_backend.WriteHdr10(*frame.Video()->HDR10());
-	frame.m_impl->m_backend.WriteSideData(frame.Attachments());
-
-	auto* raw = frame.m_impl->m_backend.Get();
-	const auto tb = encoder.m_impl->m_timeBase;
-	if (frame.Pts())
-		raw->pts = NsToTicks(frame.Pts()->Nanoseconds().count(), tb);
-	else
-		raw->pts = AV_NOPTS_VALUE;
-	if (frame.Duration()) {
-		raw->duration = NsToTicks(frame.Duration()->Nanoseconds().count(), tb);
-		if (raw->duration <= 0)
-			raw->duration = DefaultFrameDurationTicks(tb);
-	}
-	else
-		raw->duration = DefaultFrameDurationTicks(tb);
-
-	auto result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
-	while (result == FFmpeg::OperationResult::TryAgain) {
-		if (!encoder.DrainOne()) {
-			if (encoder.m_failed)
-				return frame;
-			encoder.Fail("encoder stalled");
-			return frame;
-		}
-		result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
-	}
-	if (result == FFmpeg::OperationResult::Error)
-		encoder.Fail("failed to send frame");
+	(void)encoder.m_engine->Push(encoder, frame);
 	return frame;
 }
 
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Packet& packet) noexcept {
-	if (encoder.m_failed || !encoder.m_impl)
+	if (encoder.m_failed || !encoder.m_engine)
 		return encoder;
-	if (!encoder.m_impl->m_pending.empty()) {
-		packet = std::move(encoder.m_impl->m_pending.front());
-		encoder.m_impl->m_pending.pop_front();
+	if (encoder.m_engine->TakePacket(packet))
 		return encoder;
-	}
-	if (!encoder.DrainOne())
+	if (!encoder.m_engine->DrainOne(encoder))
 		return encoder;
-	packet = std::move(encoder.m_impl->m_pending.front());
-	encoder.m_impl->m_pending.pop_front();
+	(void)encoder.m_engine->TakePacket(packet);
 	return encoder;
 }

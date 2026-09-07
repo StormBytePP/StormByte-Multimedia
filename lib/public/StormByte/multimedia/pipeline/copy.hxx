@@ -49,15 +49,49 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Copy;
 
 	/**
-	 * @brief Binds a demux input stream onto @p copy. Never throws.
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
 	 *
-	 * Copies codec parameters, time base, language and title from the
-	 * demux stream whose index is Copy::InputIndex().
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Copy
+		 * @brief Bitstream-copy backend.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Copy {
+			class Engine;
+		}
+		/**
+		 * @namespace Mux
+		 * @brief Mux backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Mux {
+			/**
+			 * @namespace Details
+			 * @brief Container and attachment mux engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Container;
+			}
+		}
+	}
+
+	/**
+	 * @brief Binds a demux input stream onto @p copy. Never throws.
 	 * @param demux Open demuxer.
 	 * @param copy Destination copy track.
 	 * @return @p copy.
@@ -66,9 +100,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Reserves Copy::Index() on @p mux as a remux track. Never throws.
-	 *
-	 * The track is ready immediately (no encoder open). Packets keep the
-	 * demux stream index; the mux remaps them to Copy::Index().
 	 * @param copy Bound copy track (must outlive the mux until the header).
 	 * @param mux Destination.
 	 * @return @p copy.
@@ -79,10 +110,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Copy
 	 * @brief Output track that remuxes one demux stream without decode/encode.
 	 *
-	 * Construct with the output index and the demux stream index.
-	 * `demux >> copy` snapshots codecpar and tags. `copy >> mux` reserves
-	 * the output slot. The header waits only for reserved *encoders* to
-	 * open; a bound copy is already ready.
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Copy {
 		public:
@@ -172,15 +200,14 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 			friend Copy& operator>>(Copy& copy, Mux& mux) noexcept;
 			friend class Mux;
+			friend class Engine::Mux::Details::Container;
 
 		private:
-			class Impl;
-
-			int m_index;					///< Mux output index
-			int m_input;					///< Demux stream index
-			std::unique_ptr<Impl> m_impl;			///< Codecpar, time base, tags
-			bool m_failed;					///< Hard error
-			std::optional<std::string> m_error;		///< Failure text
+			int m_index;											///< Mux output index
+			int m_input;											///< Demux stream index
+			std::unique_ptr<Engine::Copy::Engine> m_engine;			///< Codecpar, time base, tags
+			bool m_failed;											///< Hard error
+			std::optional<std::string> m_error;						///< Failure text
 
 			/**
 			 * @brief Marks a hard error.

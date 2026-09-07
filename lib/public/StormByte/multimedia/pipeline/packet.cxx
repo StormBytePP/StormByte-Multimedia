@@ -44,47 +44,47 @@ Packet::Packet() noexcept
 : m_streamIndex(-1), m_keyFrame(false) {}
 
 Packet::Packet(int stream_index, StormByte::Buffer::FIFO payload,
-std::optional<StormByte::Multimedia::Property::Duration> pts,
-std::optional<StormByte::Multimedia::Property::Duration> dts,
-std::optional<StormByte::Multimedia::Property::Duration> duration,
-bool key_frame,
-std::vector<SideData> attachments) noexcept
+	std::optional<StormByte::Multimedia::Property::Duration> pts,
+	std::optional<StormByte::Multimedia::Property::Duration> dts,
+	std::optional<StormByte::Multimedia::Property::Duration> duration,
+	bool key_frame,
+	std::vector<SideData> attachments) noexcept
 : m_streamIndex(stream_index), m_payload(std::move(payload)),
 m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
 m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
 
 int Packet::StreamIndex() const noexcept {
-return m_streamIndex;
+	return m_streamIndex;
 }
 
 const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Pts() const noexcept {
-return m_pts;
+	return m_pts;
 }
 
 const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Dts() const noexcept {
-return m_dts;
+	return m_dts;
 }
 
 const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Duration() const noexcept {
-return m_duration;
+	return m_duration;
 }
 
 bool Packet::KeyFrame() const noexcept {
-return m_keyFrame;
+	return m_keyFrame;
 }
 
 const StormByte::Buffer::FIFO& Packet::Payload() const noexcept {
-return m_payload;
+	return m_payload;
 }
 
 StormByte::Buffer::FIFO& Packet::Payload() noexcept {
-return m_payload;
+	return m_payload;
 }
 
 const std::vector<SideData>& Packet::Attachments() const noexcept {
-return m_attachments;
+	return m_attachments;
 }
 
 std::vector<SideData>& Packet::Attachments() noexcept {
-return m_attachments;
+	return m_attachments;
 }

@@ -53,10 +53,41 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Demux;
 	class Decoder;
+
+	/**
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Decoder
+		 * @brief Decode backends selected by stream type.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Decoder {
+			class Engine;
+			/**
+			 * @namespace Details
+			 * @brief Per-media decode engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Video;
+				class Audio;
+				class Subtitle;
+			}
+		}
+	}
 
 	/**
 	 * @defgroup decoder_flags Decoder flags
@@ -124,6 +155,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Decoder
 	 * @brief Decodes packets of one demuxed stream into Frame.
 	 *
+	 * Public entry point. Work lives in Engine::Decoder::Details::{Video,Audio,Subtitle}.
 	 * Construct with a stream index. Implementation() pins an FFmpeg decoder
 	 * name from the handcrafted table. Empty pin picks the lowest preference
 	 * row that covers Require() plus stream HDR10 / HDR10Plus. demux >> decoder
@@ -135,6 +167,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Frame steps go in Pipe(). They run inside decoder >> frame.
 	 * An empty pipe is identity.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder {
 		public:
@@ -316,37 +350,38 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Flush() noexcept;
 
-			/** @} */
-
-			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-			friend Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
-			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
-
-		private:
-			class Impl;
-
-			int m_index;									///< Stream index
-			std::unique_ptr<Impl> m_impl;					///< Opened backend
-			DecoderFlags m_flags;							///< Heuristics / future bits
-			std::optional<std::string> m_implementation;	///< Pinned or selected FFmpeg name
-			std::optional<std::string> m_language;			///< Stream language from File metadata
-			std::optional<std::string> m_title;				///< Stream title from File metadata
-			Features m_require;								///< Extra required bits
-			Features m_capabilities;						///< Features of the opened row
-			Filter::FramePipe m_pipe;						///< Frame steps
-			bool m_failed;									///< Hard error
-			std::optional<std::string> m_error;				///< Failure text
-
 			/**
 			 * @brief Marks a hard error.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
 
+			/** @} */
+
+			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+			friend Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
+			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+			friend class Engine::Decoder::Details::Video;
+			friend class Engine::Decoder::Details::Audio;
+			friend class Engine::Decoder::Details::Subtitle;
+
+		private:
+			int m_index;												///< Stream index
+			std::unique_ptr<Engine::Decoder::Engine> m_engine;			///< Opened backend
+			DecoderFlags m_flags;										///< Heuristics / future bits
+			std::optional<std::string> m_implementation;				///< Pinned or selected FFmpeg name
+			std::optional<std::string> m_language;						///< Stream language from File metadata
+			std::optional<std::string> m_title;							///< Stream title from File metadata
+			Features m_require;											///< Extra required bits
+			Features m_capabilities;									///< Features of the opened row
+			Filter::FramePipe m_pipe;									///< Frame steps
+			bool m_failed;												///< Hard error
+			std::optional<std::string> m_error;							///< Failure text
+
 			/**
 			 * @brief Adopts backend state built by demux >> decoder.
-			 * @param impl Opened implementation.
+			 * @param engine Opened implementation.
 			 */
-			void Bind(std::unique_ptr<Impl> impl) noexcept;
+			void Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept;
 	};
 }

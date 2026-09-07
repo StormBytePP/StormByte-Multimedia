@@ -37,7 +37,7 @@
  */
 
 #include <StormByte/multimedia/pipeline/filters/resize.hxx>
-#include <StormByte/multimedia/pipeline/frame_impl.hxx>
+#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 
 extern "C" {
@@ -63,10 +63,10 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
 	StormByte::Multimedia::Pipeline::Frame&& frame) noexcept {
 	if (Failed())
 		return std::nullopt;
-	if (!frame.Video() || !frame.m_impl)
+	if (!frame.Video() || !frame.m_engine)
 		return std::move(frame);
 
-	::AVFrame* src = frame.m_impl->m_backend.Get();
+	::AVFrame* src = frame.m_engine->m_backend.Get();
 	if (!src || src->width <= 0 || src->height <= 0) {
 		Fail("resize: missing video buffer");
 		return std::nullopt;
@@ -127,8 +127,8 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
 		return std::nullopt;
 	}
 
-	frame.m_impl->m_backend = std::move(dst);
-	frame.m_impl->m_payloadReady = false;
+	frame.m_engine->m_backend = std::move(dst);
+	frame.m_engine->m_payloadReady = false;
 	frame.m_payload = StormByte::Buffer::FIFO{};
 	frame.m_video = StormByte::Multimedia::Property::Video(
 		frame.Video()->Color(),

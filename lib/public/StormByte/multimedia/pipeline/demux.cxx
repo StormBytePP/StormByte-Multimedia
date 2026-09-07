@@ -39,50 +39,27 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/decoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
-#include <StormByte/multimedia/pipeline/demux_impl.hxx>
+#include <StormByte/multimedia/pipeline/engine/decoder/details/audio.hxx>
+#include <StormByte/multimedia/pipeline/engine/decoder/details/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/engine/decoder/details/video.hxx>
+#include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 
-#include <cstdint>
 #include <variant>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
-	#include <libavcodec/packet.h>
-	#include <libavutil/avutil.h>
-	#include <libavutil/mathematics.h>
-	#include <libavutil/rational.h>
 }
 
 using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
-
-namespace {
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
-			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
-		if (ns < 0)
-			return std::nullopt;
-		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
-	}
-
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
-			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
-		if (ns <= 0)
-			return std::nullopt;
-		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
-	}
-}
 
 Demux::Demux() noexcept
 : m_failed(false), m_eof(false) {}
@@ -92,7 +69,7 @@ Demux::~Demux() noexcept = default;
 Demux& Demux::operator=(Demux&&) noexcept = default;
 
 Demux::operator bool() const noexcept {
-	return !m_failed && !m_eof && static_cast<bool>(m_impl);
+	return !m_failed && !m_eof && m_engine && m_engine->IsOpen();
 }
 
 bool Demux::Failed() const noexcept {
@@ -101,6 +78,10 @@ bool Demux::Failed() const noexcept {
 
 bool Demux::Eof() const noexcept {
 	return m_eof;
+}
+
+void Demux::ReachedEof() noexcept {
+	m_eof = true;
 }
 
 const std::optional<std::string>& Demux::Error() const noexcept {
@@ -118,7 +99,7 @@ const Filter::Pipe& Demux::Pipe() const noexcept {
 void Demux::Fail(std::string reason) noexcept {
 	m_failed = true;
 	m_error = std::move(reason);
-	m_impl.reset();
+	m_engine.reset();
 	m_file = nullptr;
 }
 
@@ -134,7 +115,10 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demu
 		return demux;
 	}
 
-	demux.m_impl = std::make_unique<Demux::Impl>(std::move(opened.value()));
+	auto engine = std::make_unique<Engine::Demux::Details::Container>();
+	if (!engine->Adopt(demux, std::move(opened.value())))
+		return demux;
+	demux.m_engine = std::move(engine);
 	demux.m_file = &file;
 	demux.m_failed = false;
 	demux.m_eof = false;
@@ -145,47 +129,14 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demu
 Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet) noexcept {
 	if (demux.m_failed || demux.m_eof)
 		return demux;
-	if (!demux.m_impl) {
+	if (!demux.m_engine) {
 		demux.Fail("demuxer is not open");
 		return demux;
 	}
-
 	for (;;) {
-		const auto result = demux.m_impl->m_ctx.ReadPacket(demux.m_impl->m_scratch);
-		if (result == FFmpeg::OperationResult::EndOfFile) {
-			demux.m_eof = true;
+		Packet raw;
+		if (!demux.m_engine->Read(demux, raw))
 			return demux;
-		}
-		if (result == FFmpeg::OperationResult::TryAgain)
-			continue;
-		if (result != FFmpeg::OperationResult::Success) {
-			demux.Fail("failed to read packet");
-			return demux;
-		}
-
-		const int index = demux.m_impl->m_scratch.StreamIndex();
-		AVRational tb{0, 1};
-		if (const auto found = demux.m_impl->m_timeBase.find(index); found != demux.m_impl->m_timeBase.end())
-			tb = found->second;
-
-		StormByte::Buffer::DataType bytes;
-		const auto* data = demux.m_impl->m_scratch.Data();
-		const int size = demux.m_impl->m_scratch.Size();
-		if (data && size > 0) {
-			const auto* raw = reinterpret_cast<const std::byte*>(data);
-			bytes.assign(raw, raw + size);
-		}
-
-		Packet raw{
-			index,
-			StormByte::Buffer::FIFO{std::move(bytes)},
-			TicksToPts(demux.m_impl->m_scratch.Pts(), tb),
-			TicksToPts(demux.m_impl->m_scratch.Dts(), tb),
-			TicksToDuration(demux.m_impl->m_scratch.Duration(), tb),
-			(demux.m_impl->m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
-		};
-		demux.m_impl->m_scratch.Unref();
-
 		auto filtered = demux.m_pipe.Push(std::move(raw));
 		if (demux.m_pipe.Failed()) {
 			demux.Fail(demux.m_pipe.Error().value_or("packet filter failed"));
@@ -201,8 +152,14 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet)
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {
 	if (decoder.Failed())
 		return decoder;
-	if (demux.m_failed || !demux.m_impl) {
+	if (demux.m_failed || !demux.m_engine) {
 		decoder.Fail(demux.m_error.value_or("demuxer is not open"));
+		return decoder;
+	}
+	auto* container = static_cast<Engine::Demux::Details::Container*>(demux.m_engine.get());
+	auto* fmt = container ? container->Format() : nullptr;
+	if (!fmt) {
+		decoder.Fail("demuxer is not open");
 		return decoder;
 	}
 
@@ -210,7 +167,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	std::optional<StormByte::Multimedia::Stream::Properties> mapped;
 	AVRational timeBase{0, 1};
 	bool found = false;
-	for (const auto& stream : demux.m_impl->m_ctx.Streams()) {
+	for (const auto& stream : fmt->Streams()) {
 		if (stream.Index() != decoder.Index())
 			continue;
 		params = stream.CodecParameters();
@@ -238,18 +195,27 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 
 	const ::AVCodec* codec = avcodec_find_decoder(static_cast<::AVCodecID>(params->CodecId()));
 	auto backend = FFmpeg::AVDecoder::Open(
-		const_cast<::AVCodec*>(codec), *params, demux.m_impl->m_ctx, decoder.Index());
+		const_cast<::AVCodec*>(codec), *params, *fmt, decoder.Index());
 	if (!backend.has_value()) {
 		decoder.Fail(backend.error()->what());
 		return decoder;
 	}
 
-	auto impl = std::make_unique<Decoder::Impl>(std::move(backend.value()));
-	impl->m_timeBase = timeBase;
-	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped))
-		impl->m_video = std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped));
-	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Audio>(*mapped))
-		impl->m_audio = std::get<StormByte::Multimedia::Property::Audio>(std::move(*mapped));
-	decoder.Bind(std::move(impl));
+	std::unique_ptr<Engine::Decoder::Engine> engine;
+	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped)) {
+		engine = std::make_unique<Engine::Decoder::Details::Video>(
+			std::move(backend.value()), timeBase,
+			std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped)));
+	}
+	else if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Audio>(*mapped)) {
+		engine = std::make_unique<Engine::Decoder::Details::Audio>(
+			std::move(backend.value()), timeBase,
+			std::get<StormByte::Multimedia::Property::Audio>(std::move(*mapped)));
+	}
+	else {
+		engine = std::make_unique<Engine::Decoder::Details::Subtitle>(
+			std::move(backend.value()), timeBase);
+	}
+	decoder.Bind(std::move(engine));
 	return decoder;
 }

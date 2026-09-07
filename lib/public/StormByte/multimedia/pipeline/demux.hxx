@@ -53,12 +53,41 @@ namespace StormByte::Multimedia {
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Copy;
 	class Decoder;
 	class Demux;
 	class Mux;
+
+	/**
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Demux
+		 * @brief Demux backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Demux {
+			class Engine;
+			/**
+			 * @namespace Details
+			 * @brief Container demux engine.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Container;
+			}
+		}
+	}
 
 	/**
 	 * @brief Opens @p file into @p demux. Never throws.
@@ -78,8 +107,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
-	 *
-	 * Copies the matching File stream language tag onto the decoder.
 	 * @param demux Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
@@ -88,9 +115,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Binds a demux input stream onto @p copy. Never throws.
-	 *
-	 * Declared in copy.hxx. Friend access is granted here so the operator
-	 * can read the format context.
 	 * @param demux Open demuxer.
 	 * @param copy Destination copy track.
 	 * @return @p copy.
@@ -98,13 +122,21 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 
 	/**
+	 * @brief Forwards source attachments from @p demux onto @p mux. Never throws.
+	 * @param demux Open demuxer.
+	 * @param mux Destination.
+	 * @return @p mux.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+
+	/**
 	 * @class Demux
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
-	 * Open and read go through operator>>. Hard errors set Failed(); EOF
-	 * sets Eof(). Neither throws. Packets pass through Pipe() before they
-	 * are returned. operator bool() is false on fail or EOF.
-	 * The File pointer is kept so demux >> decoder can copy stream language.
+	 * Public entry point. Open and Read live in Details::Container.
+	 * Fail() and ReachedEof() are private; Container is a friend.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
 		public:
@@ -208,22 +240,26 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 			friend Copy& operator>>(Demux& demux, Copy& copy) noexcept;
-			friend Mux& operator>>(Demux&, Mux&) noexcept;
+			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+			friend class Engine::Demux::Details::Container;
 
 		private:
-			class Impl;
-
-			std::unique_ptr<Impl> m_impl;				///< Format context
-			const File* m_file = nullptr;				///< Snapshot used at open (language tags)
-			Filter::Pipe m_pipe;						///< Packet steps
-			bool m_failed;								///< Hard error
-			bool m_eof;									///< End of source
-			std::optional<std::string> m_error;			///< Failure text
+			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
+			const File* m_file = nullptr;						///< Snapshot used at open
+			Filter::Pipe m_pipe;								///< Packet steps
+			bool m_failed;										///< Hard error
+			bool m_eof;											///< End of source
+			std::optional<std::string> m_error;					///< Failure text
 
 			/**
-			 * @brief Marks a hard error.
+			 * @brief Marks a hard error and drops the backend.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
+
+			/**
+			 * @brief Marks end of source. Called by Details::Container on AVERROR_EOF.
+			 */
+			void ReachedEof() noexcept;
 	};
 }

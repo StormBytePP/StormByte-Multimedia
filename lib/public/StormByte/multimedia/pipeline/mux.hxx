@@ -53,11 +53,41 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Copy;
 	class Demux;
 	class Mux;
+
+	/**
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Mux
+		 * @brief Mux backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Mux {
+			class Engine;
+			/**
+			 * @namespace Details
+			 * @brief Container and attachment mux engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Container;
+				class Attachment;
+			}
+		}
+	}
 
 	/**
 	 * @defgroup mux_ops Mux stream operators
@@ -74,8 +104,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Reserves Copy::Index() on @p mux as a remux track. Never throws.
-	 *
-	 * Declared in copy.hxx. The track is ready immediately.
 	 * @param copy Bound copy track (must outlive the mux until the header).
 	 * @param mux Destination.
 	 * @return @p copy.
@@ -92,9 +120,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Writes @p packet after the packet pipe. Never throws.
-	 *
-	 * Encoded packets use Encoder::Index(). Copied packets keep the demux
-	 * stream index; the mux remaps them to the reserved output slot.
 	 * @param packet Encoded or copied packet.
 	 * @param mux Destination.
 	 * @return @p packet.
@@ -103,11 +128,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Snapshots File::Attachments() onto @p mux. Never throws.
-	 *
-	 * Must run before the header. If the destination container has no
-	 * Operation::Attach and the file has attachments, the mux fails.
-	 * Attachments are written as real AttachedFile streams, never as
-	 * AV_DISPOSITION_ATTACHED_PIC.
 	 * @param file Opened source file.
 	 * @param mux Destination.
 	 * @return @p mux.
@@ -116,9 +136,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Forwards the demuxer's File attachments onto @p mux. Never throws.
-	 *
-	 * Equivalent to `*demux.file >> mux` when the demuxer was opened with
-	 * `file >> demux`. No-op if the demuxer has no File pointer.
 	 * @param demux Open demuxer bound to a File.
 	 * @param mux Destination.
 	 * @return @p mux.
@@ -131,15 +148,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Mux
 	 * @brief Writes interleaved compressed packets to a destination file.
 	 *
-	 * The destination container is fixed at construction. mux >> path only
-	 * opens AVIO. encoder >> mux and copy >> mux reserve Index().
-	 * file >> mux (or demux >> mux) binds source attachments; they are
-	 * written at header time as container-native attachments.
-	 * packet >> mux queues until every reserved encoder has opened
-	 * (bound copies are already ready), then writes the header and drains.
-	 * Flush() signals EOF on every reserved encoder, writes leftover
-	 * packets and the trailer. The destructor calls Flush() if needed.
-	 * Format metadata ENCODER is StormByte-Multimedia plus the build version.
+	 * Public entry point. Work lives in Engine::Mux::Details::Container
+	 * and Details::Attachment. Fail() stays private; Details are friends.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Mux {
 		public:
@@ -247,12 +259,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Flushes every reserved encoder and writes leftover packets.
-			 *
-			 * Calls Encoder::Flush() on each encode track, writes queued
-			 * packets, then the container trailer. Safe to call more than
-			 * once. The destructor calls this automatically; keep the
-			 * encoders alive until after Flush() (declare Mux last, or call
-			 * Flush() yourself before the encoders die).
 			 */
 			void Flush() noexcept;
 
@@ -267,48 +273,21 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Mux& operator>>(const File& file, Mux& mux) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 			friend class Copy;
+			friend class Engine::Mux::Details::Container;
+			friend class Engine::Mux::Details::Attachment;
 
 		private:
-			class Impl;
-
-			const Container* m_container;				///< Destination container
-			std::unique_ptr<Impl> m_impl;				///< Output format context
-			Filter::Pipe m_pipe;						///< Packet steps
-			bool m_failed;								///< Hard error
-			std::optional<std::string> m_error;			///< Failure text
+			const Container* m_container;							///< Destination container
+			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Output format backend
+			Filter::Pipe m_pipe;									///< Packet steps
+			bool m_failed;											///< Hard error
+			std::optional<std::string> m_error;						///< Failure text
 
 			/**
 			 * @brief Marks a hard error and drops the backend.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
-
-			/**
-			 * @brief Writes header when every reserved encoder is open.
-			 *
-			 * Bound copy tracks are ready as soon as they are reserved.
-			 * Source attachments are written just before avformat_write_header.
-			 * Stamps format metadata ENCODER as StormByte-Multimedia <version>
-			 * so FFmpeg does not write Lavf*.
-			 * @return false if Fail() was called.
-			 */
-			bool WriteHeaderIfReady() noexcept;
-
-			/**
-			 * @brief Writes one packet after the header.
-			 * @param packet Source packet (output index after remap).
-			 * @return false if Fail() was called.
-			 */
-			bool WritePacket(Packet& packet) noexcept;
-
-			/**
-			 * @brief Adds File attachments as AVMEDIA_TYPE_ATTACHMENT streams.
-			 *
-			 * Uses extradata + filename/mimetype metadata. Never sets
-			 * AV_DISPOSITION_ATTACHED_PIC.
-			 * @return false if Fail() was called.
-			 */
-			bool WriteAttachments() noexcept;
 
 			/**
 			 * @brief Flush + close. Used from the destructor.

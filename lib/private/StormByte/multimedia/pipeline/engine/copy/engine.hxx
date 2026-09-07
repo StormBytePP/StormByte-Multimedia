@@ -38,11 +38,70 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/visibility.h>
 
-class StormByte::Multimedia::Pipeline::Frame::Impl {
-	public:
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_backend;
-		bool m_payloadReady = false;
-};
+#include <optional>
+#include <string>
+
+extern "C" {
+	#include <libavutil/rational.h>
+}
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Engine::Copy
+ * @brief Bitstream-copy backend behind the public Copy type.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Pipeline::Engine::Copy {
+	/**
+	 * @class Engine
+	 * @brief Snapshotted codecpar, time base and tags from the demux stream.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
+		public:
+			/**
+			 * @brief Empty parameters (not bound).
+			 */
+			Engine() noexcept
+			: params(nullptr), bound(false) {}
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Engine() noexcept = default;
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 */
+			Engine(const Engine&) = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @return *this.
+			 */
+			Engine& operator=(const Engine&) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Engine to take.
+			 */
+			Engine(Engine&&) noexcept = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Engine to take.
+			 * @return *this.
+			 */
+			Engine& operator=(Engine&&) noexcept = default;
+
+			Backend::FFmpeg::AVCodecParameters params;	///< Demux codecpar snapshot
+			AVRational timeBase{0, 1};					///< Demux stream time base
+			std::optional<std::string> language;		///< language tag
+			std::optional<std::string> title;			///< title tag
+			bool bound;									///< true after demux >> copy
+	};
+}

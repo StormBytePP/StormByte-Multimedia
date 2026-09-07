@@ -54,10 +54,67 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
 	class Mux;
+
+	/**
+	 * @namespace Engine
+	 * @brief Private backends behind the public pipeline types.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Encoder
+		 * @brief Encode backends selected by Codec::Type().
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Encoder {
+			class Engine;
+			/**
+			 * @namespace Open
+			 * @brief Shared FFmpeg open + packet wrap.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Open {
+				struct Access;
+			}
+			/**
+			 * @namespace Details
+			 * @brief Per-media encode engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Video;
+				class Audio;
+				class Subtitle;
+			}
+		}
+		/**
+		 * @namespace Mux
+		 * @brief Mux backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Mux {
+			/**
+			 * @namespace Details
+			 * @brief Container and attachment mux engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Container;
+			}
+		}
+	}
 
 	/**
 	 * @brief Sends @p frame to @p encoder. Never throws.
@@ -77,16 +134,18 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Encoder
-	 * @brief Encodes Frame into Packet for one output track.
+	 * @brief Public entry point: encodes Frame into Packet for one output track.
 	 *
 	 * Index() is the mux output index. Copy does not use Encoder.
-	 * CRF / BitRate / MaxBitRate / Preset / Tune are first-class setters.
-	 * FineTune is vendor leftovers. bufsize is internal.
+	 * The ctor picks Details::Video, Details::Audio or Details::Subtitle from Codec::Type().
 	 * Open is lazy on the first frame >> encoder.
-	 * Language() and Title() are stamped from the first frame and written
-	 * onto the mux stream for every destination codec.
+	 * Language() and Title() are stamped from the first frame.
 	 * EncoderTag() overwrites stream metadata ENCODER on every encode.
-	 * Flush() signals EOF and drains the backend into the pending queue.
+	 * Flush() signals EOF and drains the private engine.
+	 * Fail(), MuxBindStream() and MuxTakePacket() stay private.
+	 * Engine::Mux::Details::Container is a friend for the header/flush path.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder {
 		public:
@@ -131,9 +190,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			Encoder& operator=(Encoder&& other) noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name State
@@ -141,7 +198,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief true if open and not failed.
+			 * @brief true if the engine is open and not failed.
 			 */
 			explicit operator bool() const noexcept;
 
@@ -169,9 +226,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const std::optional<std::string>& Error() const noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name Stream tags
@@ -211,9 +266,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const std::string& EncoderTag() const noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name Implementation
@@ -250,9 +303,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Features& Capabilities() const noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name Rate and style
@@ -319,9 +370,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const std::optional<std::string>& Tune() const noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name FineTune
@@ -340,9 +389,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void FineTune(std::map<std::string, std::string> options) noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			/**
 			 * @name Pipe
@@ -350,67 +397,62 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Signals EOF to the backend and drains remaining packets.
+			 * @brief Signals EOF to the engine and drains remaining packets.
 			 *
-			 * Safe to call more than once. After Flush(), `encoder >> packet`
-			 * only yields packets already queued. Mux::Flush() calls this on
-			 * every reserved encoder and writes those packets to the file.
+			 * Safe to call more than once. Mux::Flush() calls this on every
+			 * reserved encoder.
 			 */
 			void Flush() noexcept;
 
-			/**
-			 * @}
-			 */
+			/** @} */
 
 			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 			friend Encoder& operator>>(Encoder& encoder, Packet& packet) noexcept;
 			friend class Mux;
+			friend class Engine::Mux::Details::Container;
+			friend struct Engine::Encoder::Open::Access;
+			friend class Engine::Encoder::Engine;
+			friend class Engine::Encoder::Details::Video;
+			friend class Engine::Encoder::Details::Audio;
+			friend class Engine::Encoder::Details::Subtitle;
 
 		private:
-			class Impl;
-
-			int m_index;									///< Mux output index
-			const Codec* m_codec;							///< Destination codec
-			std::optional<std::string> m_implementation;	///< Pinned encoder name
-			std::optional<std::string> m_language;			///< Stream language from the frame
-			std::optional<std::string> m_title;				///< Stream title from the frame
-			std::string m_encoderTag;						///< ENCODER tag overwritten on encode
-			Features m_require;								///< Extra required features
-			Features m_capabilities;						///< Selected row features
-			std::optional<int> m_crf;						///< CRF/CQ
-			std::optional<std::int64_t> m_bitRate;			///< Target bitrate
-			std::optional<std::int64_t> m_maxBitRate;		///< VBV ceiling
-			std::optional<std::string> m_preset;			///< Preset
-			std::optional<std::string> m_tune;				///< Tune
-			std::map<std::string, std::string> m_fineTune;	///< Vendor leftovers
-			std::unique_ptr<Impl> m_impl;					///< Opened backend
-			bool m_failed;									///< Hard error
-			bool m_flushed = false;							///< SetEof + drain already done
-			std::optional<std::string> m_error;				///< Failure text
+			int m_index;										///< Mux output index
+			const Codec* m_codec;								///< Destination codec
+			std::optional<std::string> m_implementation;		///< Pinned encoder name
+			std::optional<std::string> m_language;				///< Stream language from the frame
+			std::optional<std::string> m_title;					///< Stream title from the frame
+			std::string m_encoderTag;							///< ENCODER tag overwritten on encode
+			Features m_require;									///< Extra required features
+			Features m_capabilities;							///< Selected row features
+			std::optional<int> m_crf;							///< CRF/CQ
+			std::optional<std::int64_t> m_bitRate;				///< Target bitrate
+			std::optional<std::int64_t> m_maxBitRate;			///< VBV ceiling
+			std::optional<std::string> m_preset;				///< Preset
+			std::optional<std::string> m_tune;					///< Tune
+			std::map<std::string, std::string> m_fineTune;		///< Vendor leftovers
+			std::unique_ptr<Engine::Encoder::Engine> m_engine;	///< Video / audio / subtitle backend
+			bool m_failed;										///< Hard error
+			std::optional<std::string> m_error;					///< Failure text
 
 			/**
-			 * @brief Marks a hard error and drops the backend.
+			 * @brief Marks a hard error and drops the engine.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Adopts backend state after a successful open.
-			 * @param impl Opened implementation.
+			 * @brief Copies codecpar and time_base onto an AVStream for Mux.
+			 * @param avStream Opaque AVStream*.
+			 * @return false if the engine is not open.
 			 */
-			void Bind(std::unique_ptr<Impl> impl) noexcept;
+			bool MuxBindStream(void* avStream) noexcept;
 
 			/**
-			 * @brief Picks the table row, applies setters and opens the backend.
-			 * @param frame First frame (resolution / HDR / audio layout).
-			 * @return false if Fail() was called.
+			 * @brief Pops one pending encoded packet for Mux::Flush.
+			 * @param packet Destination.
+			 * @return true if @p packet was filled.
 			 */
-			bool Open(const Frame& frame) noexcept;
-
-			/**
-			 * @brief Receives one backend packet into the pending queue.
-			 * @return true if a packet was queued.
-			 */
-			bool DrainOne() noexcept;
+			bool MuxTakePacket(Packet& packet) noexcept;
 	};
 }

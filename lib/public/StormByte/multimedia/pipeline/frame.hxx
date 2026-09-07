@@ -53,6 +53,8 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
@@ -60,6 +62,71 @@ namespace StormByte::Multimedia::Pipeline {
 	namespace Filter {
 		class Resize;
 		class Watermark;
+	}
+
+	/**
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Frame
+		 * @brief Decoded-frame backend. The tag `class Frame` still names this type.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Frame {
+			class Engine;
+		}
+		/**
+		 * @namespace Encoder
+		 * @brief Encode backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Encoder {
+			/**
+			 * @namespace Open
+			 * @brief Shared encoder open helper.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Open {
+				struct Access;
+			}
+			/**
+			 * @namespace Details
+			 * @brief Per-media encode engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Video;
+				class Audio;
+				class Subtitle;
+			}
+		}
+		/**
+		 * @namespace Decoder
+		 * @brief Decode backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Decoder {
+			/**
+			 * @namespace Details
+			 * @brief Per-media decode engines.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Video;
+				class Audio;
+				class Subtitle;
+			}
+		}
 	}
 
 	/**
@@ -71,6 +138,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Video().HDR10() only, never the side-data bag.
 	 * Audio() is set on audio frames; empty on video and subtitle frames.
 	 * Language() and Title() are stream tags copied by the decoder when known.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
 		public:
@@ -230,25 +299,30 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 			friend class Filter::Resize;
 			friend class Filter::Watermark;
+			friend struct Engine::Encoder::Open::Access;
+			friend class Engine::Encoder::Details::Video;
+			friend class Engine::Encoder::Details::Audio;
+			friend class Engine::Encoder::Details::Subtitle;
+			friend class Engine::Decoder::Details::Video;
+			friend class Engine::Decoder::Details::Audio;
+			friend class Engine::Decoder::Details::Subtitle;
 
 		private:
-			class Impl;
-
-			int m_streamIndex;									///< Container stream index
-			StormByte::Buffer::FIFO m_payload;					///< Sample / subtitle bytes
-			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
-			std::optional<Property::Duration> m_duration;		///< Frame duration
-			std::optional<Property::Video> m_video;				///< Video properties
-			std::optional<Property::Audio> m_audio;				///< Audio properties
-			std::optional<std::string> m_language;				///< Stream language tag
-			std::optional<std::string> m_title;					///< Stream title tag
-			std::vector<class SideData> m_attachments;			///< Raw side data
-			std::unique_ptr<Impl> m_impl;						///< Backend holder
+			int m_streamIndex;											///< Container stream index
+			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
+			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
+			std::optional<Property::Duration> m_duration;				///< Frame duration
+			std::optional<Property::Video> m_video;						///< Video properties
+			std::optional<Property::Audio> m_audio;						///< Audio properties
+			std::optional<std::string> m_language;						///< Stream language tag
+			std::optional<std::string> m_title;							///< Stream title tag
+			std::vector<class SideData> m_attachments;					///< Raw side data
+			std::unique_ptr<Engine::Frame::Engine> m_engine;			///< Backend holder
 
 			/**
 			 * @brief Adopts a backend frame for lazy Payload().
-			 * @param impl Backend holder.
+			 * @param engine Backend holder.
 			 */
-			void Bind(std::unique_ptr<Impl> impl) noexcept;
+			void Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept;
 	};
 }

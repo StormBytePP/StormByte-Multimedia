@@ -38,13 +38,13 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/pipeline/copy.hxx>
-#include <StormByte/multimedia/pipeline/copy_impl.hxx>
-#include <StormByte/multimedia/pipeline/demux_impl.hxx>
-#include <StormByte/multimedia/pipeline/mux_impl.hxx>
+#include <StormByte/multimedia/pipeline/engine/copy/engine.hxx>
+#include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
+#include <StormByte/multimedia/pipeline/engine/mux/engine.hxx>
 
 namespace StormByte::Multimedia::Pipeline {
 	Copy::Copy(int output_index, int input_index) noexcept
-	: m_index(output_index), m_input(input_index), m_impl(std::make_unique<Impl>()), m_failed(false) {
+	: m_index(output_index), m_input(input_index), m_engine(std::make_unique<Engine::Copy::Engine>()), m_failed(false) {
 		if (m_index < 0)
 			Fail("copy output index is invalid");
 		else if (m_input < 0)
@@ -56,7 +56,7 @@ namespace StormByte::Multimedia::Pipeline {
 	Copy& Copy::operator=(Copy&&) noexcept = default;
 
 	Copy::operator bool() const noexcept {
-		return !m_failed && m_impl && m_impl->bound;
+		return !m_failed && m_engine && m_engine->bound;
 	}
 
 	int Copy::Index() const noexcept {
@@ -83,33 +83,40 @@ namespace StormByte::Multimedia::Pipeline {
 	Copy& operator>>(Demux& demux, Copy& copy) noexcept {
 		if (copy.m_failed || demux.Failed())
 			return copy;
-		if (!demux.m_impl) {
+		if (!demux.m_engine) {
 			copy.Fail("demuxer is not open");
 			return copy;
 		}
-		if (!copy.m_impl) {
+		if (!copy.m_engine) {
 			copy.Fail("copy has no backend");
 			return copy;
 		}
-		if (copy.m_impl->bound) {
+		if (copy.m_engine->bound) {
 			copy.Fail("copy input is already bound");
 			return copy;
 		}
 
-		for (const auto& stream : demux.m_impl->m_ctx.Streams()) {
+		auto* container = static_cast<Engine::Demux::Details::Container*>(demux.m_engine.get());
+		auto* fmt = container ? container->Format() : nullptr;
+		if (!fmt) {
+			copy.Fail("demuxer is not open");
+			return copy;
+		}
+
+		for (const auto& stream : fmt->Streams()) {
 			if (stream.Index() != copy.m_input)
 				continue;
-			copy.m_impl->params = stream.CodecParameters();
-			copy.m_impl->timeBase = stream.TimeBase();
+			copy.m_engine->params = stream.CodecParameters();
+			copy.m_engine->timeBase = stream.TimeBase();
 			if (const char* language = stream.Tag("language"))
-				copy.m_impl->language = language;
+				copy.m_engine->language = language;
 			if (const char* title = stream.Tag("title"))
-				copy.m_impl->title = title;
-			if (!copy.m_impl->params.Get()) {
+				copy.m_engine->title = title;
+			if (!copy.m_engine->params.Get()) {
 				copy.Fail("copy stream has no codec parameters");
 				return copy;
 			}
-			copy.m_impl->bound = true;
+			copy.m_engine->bound = true;
 			return copy;
 		}
 		copy.Fail("demux has no stream for copy input");
@@ -119,39 +126,11 @@ namespace StormByte::Multimedia::Pipeline {
 	Copy& operator>>(Copy& copy, Mux& mux) noexcept {
 		if (mux.Failed() || copy.m_failed)
 			return copy;
-		if (!mux.m_impl) {
+		if (!mux.m_engine) {
 			mux.Fail("muxer is not open");
 			return copy;
 		}
-		if (mux.m_impl->m_header) {
-			mux.Fail("cannot add a track after the header");
-			return copy;
-		}
-		if (!copy.m_impl || !copy.m_impl->bound) {
-			copy.Fail("copy input is not bound");
-			return copy;
-		}
-		if (copy.m_index < 0) {
-			mux.Fail("copy output index is invalid");
-			return copy;
-		}
-		if (mux.m_impl->m_tracks.contains(copy.m_index)) {
-			mux.Fail("duplicate mux output index");
-			return copy;
-		}
-		if (mux.m_impl->m_inToOut.contains(copy.m_input)) {
-			mux.Fail("duplicate mux copy input index");
-			return copy;
-		}
-
-		Mux::Impl::Track track;
-		track.copy = &copy;
-		track.inIndex = copy.m_input;
-		track.timeBase = copy.m_impl->timeBase;
-		track.language = copy.m_impl->language;
-		track.title = copy.m_impl->title;
-		mux.m_impl->m_tracks.emplace(copy.m_index, track);
-		mux.m_impl->m_inToOut.emplace(copy.m_input, copy.m_index);
+		mux.m_engine->ReserveCopy(mux, copy);
 		return copy;
 	}
 }

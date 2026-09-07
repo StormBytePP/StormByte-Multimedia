@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/pipeline/frame_impl.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
@@ -108,11 +108,11 @@ const std::vector<class SideData>& Frame::Attachments() const noexcept {
 }
 
 StormByte::Buffer::FIFO& Frame::Payload() noexcept {
-	if (m_impl && !m_impl->m_payloadReady) {
+	if (m_engine && !m_engine->m_payloadReady) {
 		StormByte::Buffer::DataType bytes;
-		m_impl->m_backend.CopyPrimaryBuffer(bytes);
+		m_engine->m_backend.CopyPrimaryBuffer(bytes);
 		m_payload = StormByte::Buffer::FIFO{std::move(bytes)};
-		m_impl->m_payloadReady = true;
+		m_engine->m_payloadReady = true;
 	}
 	return m_payload;
 }
@@ -121,6 +121,6 @@ const StormByte::Buffer::FIFO& Frame::Payload() const noexcept {
 	return m_payload;
 }
 
-void Frame::Bind(std::unique_ptr<Impl> impl) noexcept {
-	m_impl = std::move(impl);
+void Frame::Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept {
+	m_engine = std::move(engine);
 }

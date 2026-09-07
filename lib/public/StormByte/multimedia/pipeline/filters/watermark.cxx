@@ -37,7 +37,7 @@
  */
 
 #include <StormByte/multimedia/pipeline/filters/watermark.hxx>
-#include <StormByte/multimedia/pipeline/frame_impl.hxx>
+#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 
 #include <algorithm>
 #include <cstdint>
@@ -122,10 +122,10 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Watermark::Push(
 		return std::nullopt;
 	if (m_opacity == 0)
 		return std::move(frame);
-	if (!frame.Video() || !frame.m_impl)
+	if (!frame.Video() || !frame.m_engine)
 		return std::move(frame);
 
-	::AVFrame* dst = frame.m_impl->m_backend.Get();
+	::AVFrame* dst = frame.m_engine->m_backend.Get();
 	if (!dst || dst->width <= 0 || dst->height <= 0) {
 		Fail("watermark: missing video buffer");
 		return std::nullopt;
@@ -234,7 +234,7 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Watermark::Push(
 	sws_scale(fromRgba, srcPlanes, srcLinesize, 0, dst->height, dst->data, dst->linesize);
 	sws_freeContext(fromRgba);
 
-	frame.m_impl->m_payloadReady = false;
+	frame.m_engine->m_payloadReady = false;
 	frame.m_payload = StormByte::Buffer::FIFO{};
 	return std::move(frame);
 }

@@ -38,34 +38,59 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/duration.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/visibility.h>
 
-#include <optional>
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Engine::Frame
+ * @brief Decoded-frame backend behind the public Frame type.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Pipeline::Engine::Frame {
+	/**
+	 * @class Engine
+	 * @brief Opaque AVFrame holder until Payload() materialises planes.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
+		public:
+			/**
+			 * @brief Empty backend holder.
+			 */
+			Engine() noexcept = default;
 
-extern "C" {
-	#include <libavutil/rational.h>
+			/**
+			 * @brief Destructor.
+			 */
+			~Engine() noexcept = default;
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 */
+			Engine(const Engine&) = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @return *this.
+			 */
+			Engine& operator=(const Engine&) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Engine to take.
+			 */
+			Engine(Engine&&) noexcept = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Engine to take.
+			 * @return *this.
+			 */
+			Engine& operator=(Engine&&) noexcept = default;
+
+			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_backend;	///< FFmpeg frame
+			bool m_payloadReady = false;								///< true after Payload() materialised planes
+	};
 }
-
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Pipeline::Frame> m_heldSubtitle;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};

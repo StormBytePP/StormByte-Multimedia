@@ -38,47 +38,40 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/pipeline/copy.hxx>
-
-#include <optional>
-#include <string>
+#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/visibility.h>
 
 extern "C" {
-	#include <libavutil/rational.h>
+	struct AVFormatContext;
 }
 
 /**
- * @class StormByte::Multimedia::Pipeline::Copy::Impl
- * @brief Snapshotted codec parameters, time base and tags from the demux stream.
+ * @namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details
+ * @brief Mux backends.
+ *
+ * @ingroup multimedia_pipeline
  */
-class StormByte::Multimedia::Pipeline::Copy::Impl {
-	public:
-		/**
-		 * @brief Empty parameters (not bound).
-		 */
-		Impl() noexcept
-		: params(nullptr), bound(false) {}
-
-		/**
-		 * @brief Destructor.
-		 */
-		~Impl() noexcept = default;
-
-		/**
-		 * @brief Copy constructor (deleted).
-		 */
-		Impl(const Impl&) = delete;
-
-		/**
-		 * @brief Copy assignment (deleted).
-		 * @return *this.
-		 */
-		Impl& operator=(const Impl&) = delete;
-
-		Backend::FFmpeg::AVCodecParameters params;	///< Demux codecpar snapshot
-		AVRational timeBase{0, 1};			///< Demux stream time base
-		std::optional<std::string> language;		///< language tag
-		std::optional<std::string> title;		///< title tag
-		bool bound;					///< true after demux >> copy
-};
+namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
+	/**
+	 * @class Attachment
+	 * @brief Writes File attachments as AVMEDIA_TYPE_ATTACHMENT streams.
+	 *
+	 * Uses extradata + filename/mimetype metadata. Never sets
+	 * AV_DISPOSITION_ATTACHED_PIC. Called from Container just before
+	 * avformat_write_header.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PRIVATE Attachment {
+		public:
+			/**
+			 * @brief Writes every File attachment onto @p ctx.
+			 * @param owner Public muxer (Fail, Destination attach access).
+			 * @param ctx Output format context (streams already reserved for media).
+			 * @param file Source file whose Attachments() are copied.
+			 * @return false if owner.Fail() was called.
+			 */
+			static bool Write(class Mux& owner, AVFormatContext* ctx, const File& file) noexcept;
+	};
+}
