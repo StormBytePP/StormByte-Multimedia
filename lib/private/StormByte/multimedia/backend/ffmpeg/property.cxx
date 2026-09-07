@@ -60,6 +60,7 @@ using StormByte::Multimedia::Property::PixelFormat;
 using StormByte::Multimedia::Property::Point;
 using StormByte::Multimedia::Property::Primaries;
 using StormByte::Multimedia::Property::Range;
+using StormByte::Multimedia::Property::Rate;
 using StormByte::Multimedia::Property::Resolution;
 using StormByte::Multimedia::Property::Space;
 using StormByte::Multimedia::Property::Transfer;
@@ -367,13 +368,18 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 			const auto space = MapSpace(params.ColorSpace());
 			const auto primaries = MapPrimaries(params.ColorPrimaries());
 			const auto transfer = MapTransfer(params.ColorTransfer());
+			std::optional<Rate> frameRate;
+			const AVRational fps = stream.FrameRateRational();
+			if (fps.num > 0 && fps.den > 0)
+				frameRate = Rate{fps.num, fps.den};
 			return Video{
 				Color{pix, range, space, primaries, transfer},
 				Resolution{
 					static_cast<std::uint32_t>(params.Width()),
 					static_cast<std::uint32_t>(params.Height())
 				},
-				MapHDR10(stream.Raw(), transfer, primaries)
+				MapHDR10(stream.Raw(), transfer, primaries),
+				std::move(frameRate)
 			};
 		}
 		case AVMEDIA_TYPE_AUDIO: {

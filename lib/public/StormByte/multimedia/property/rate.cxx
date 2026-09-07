@@ -36,32 +36,22 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/property/rate.hxx>
 
 using namespace StormByte::Multimedia::Property;
 
-Video::Video(class Color color, class Resolution resolution,
-	std::optional<class HDR10> hdr10, std::optional<class Rate> frameRate) noexcept:
-m_color(std::move(color)),
-m_resolution(std::move(resolution)),
-m_hdr10(std::move(hdr10)),
-m_frameRate(std::move(frameRate)) {
-	if (m_frameRate && !m_frameRate->Valid())
-		m_frameRate.reset();
+Rate::Rate(int num, int den) noexcept:
+m_num(den > 0 ? num : 0),
+m_den(den > 0 ? den : 1) {}
+
+int Rate::Num() const noexcept {
+	return m_num;
 }
 
-const class Color& Video::Color() const noexcept {
-	return m_color;
+int Rate::Den() const noexcept {
+	return m_den;
 }
 
-const class Resolution& Video::Resolution() const noexcept {
-	return m_resolution;
-}
-
-const std::optional<class HDR10>& Video::HDR10() const noexcept {
-	return m_hdr10;
-}
-
-const std::optional<class Rate>& Video::FrameRate() const noexcept {
-	return m_frameRate;
+bool Rate::Valid() const noexcept {
+	return m_num > 0 && m_den > 0;
 }

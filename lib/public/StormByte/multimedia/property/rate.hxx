@@ -38,13 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/property/color.hxx>
-#include <StormByte/multimedia/property/hdr10.hxx>
-#include <StormByte/multimedia/property/rate.hxx>
-#include <StormByte/multimedia/property/resolution.hxx>
 #include <StormByte/multimedia/visibility.h>
-
-#include <optional>
 
 /**
  * @namespace StormByte::Multimedia::Property
@@ -52,77 +46,68 @@
  */
 namespace StormByte::Multimedia::Property {
 	/**
-	 * @class Video
-	 * @brief Per-stream video properties.
+	 * @class Rate
+	 * @brief Rational rate. For video, Num()/Den() is frames per second.
+	 *
+	 * 23.976 fps is `{24000, 1001}`. 24 fps is `{24, 1}`.
+	 * This is not an encoder time base and not a Matroska tick rate.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Video final {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Rate final {
 		public:
 			/**
-			 * @brief Constructs video properties.
-			 * @param color Colorimetry and pixel format.
-			 * @param resolution Frame size.
-			 * @param hdr10 Optional mastering-display metadata.
-			 * @param frameRate Frames per second from the container/stream. Empty if unknown.
+			 * @brief Constructs a rate.
+			 * @param num Numerator. For fps, frame count.
+			 * @param den Denominator. For fps, seconds. If @p den is &lt;= 0, stores `{0, 1}`.
 			 */
-			Video(Color color, Resolution resolution,
-				std::optional<HDR10> hdr10 = std::nullopt,
-				std::optional<Rate> frameRate = std::nullopt) noexcept;
+			Rate(int num, int den) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 */
-			Video(const Video&) = default;
+			Rate(const Rate&) = default;
 
 			/**
 			 * @brief Move constructor.
 			 */
-			Video(Video&&) noexcept = default;
+			Rate(Rate&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Video() noexcept = default;
+			~Rate() noexcept = default;
 
 			/**
 			 * @brief Copy assignment.
 			 * @return *this.
 			 */
-			Video& operator=(const Video&) = default;
+			Rate& operator=(const Rate&) = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Video& operator=(Video&&) noexcept = default;
+			Rate& operator=(Rate&&) noexcept = default;
 
 			/**
-			 * @brief Colorimetry and pixel format.
-			 * @return Color.
+			 * @brief Numerator.
+			 * @return Numerator.
 			 */
-			const class Color& Color() const noexcept;
+			int Num() const noexcept;
 
 			/**
-			 * @brief Frame size.
-			 * @return Resolution.
+			 * @brief Denominator.
+			 * @return Denominator, always &gt; 0.
 			 */
-			const class Resolution& Resolution() const noexcept;
+			int Den() const noexcept;
 
 			/**
-			 * @brief Mastering-display metadata, if present.
-			 * @return HDR10, or empty.
+			 * @brief Whether the rate can be used as fps.
+			 * @return true if both terms are positive.
 			 */
-			const std::optional<class HDR10>& HDR10() const noexcept;
-
-			/**
-			 * @brief Stream frame rate, if the container exposed one.
-			 * @return Rate in frames per second, or empty.
-			 */
-			const std::optional<class Rate>& FrameRate() const noexcept;
+			bool Valid() const noexcept;
 
 		private:
-			class Color m_color;						///< Color
-			class Resolution m_resolution;			///< Frame size
-			std::optional<class HDR10> m_hdr10;		///< Optional HDR10
-			std::optional<class Rate> m_frameRate;	///< Optional fps
+			int m_num;	///< Numerator
+			int m_den;	///< Denominator
 	};
 }

@@ -83,6 +83,16 @@ double FFmpeg::AVStream::FrameRate() const noexcept {
 	return 0.0;
 }
 
+AVRational FFmpeg::AVStream::FrameRateRational() const noexcept {
+	if (!m_stream)
+		return AVRational{0, 1};
+	if (m_stream->avg_frame_rate.num > 0 && m_stream->avg_frame_rate.den > 0)
+		return m_stream->avg_frame_rate;
+	if (m_stream->r_frame_rate.num > 0 && m_stream->r_frame_rate.den > 0)
+		return m_stream->r_frame_rate;
+	return AVRational{0, 1};
+}
+
 const char* FFmpeg::AVStream::Tag(const char* key) const noexcept {
 	if (!m_stream || !m_stream->metadata || !key)
 		return nullptr;

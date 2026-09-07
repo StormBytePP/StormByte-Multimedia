@@ -241,6 +241,10 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	if (time_base.num > 0 && time_base.den > 0) {
 		ctx->time_base = time_base;
 		ctx->pkt_timebase = time_base;
+		if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+			ctx->framerate.num = time_base.den;
+			ctx->framerate.den = time_base.num;
+		}
 	}
 
 	if (ctx->codec_type == AVMEDIA_TYPE_SUBTITLE && !ctx->subtitle_header) {
@@ -278,6 +282,12 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	}
 	if (ctx->pkt_timebase.num <= 0 || ctx->pkt_timebase.den <= 0)
 		ctx->pkt_timebase = ctx->time_base;
+	if (ctx->codec_type == AVMEDIA_TYPE_VIDEO
+		&& (ctx->framerate.num <= 0 || ctx->framerate.den <= 0)
+		&& ctx->time_base.num > 0 && ctx->time_base.den > 0) {
+		ctx->framerate.num = ctx->time_base.den;
+		ctx->framerate.den = ctx->time_base.num;
+	}
 
 	AVEncoder enc(ctx);
 	enc.m_stream_index = stream_index;

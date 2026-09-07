@@ -139,6 +139,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			double FrameRate() const noexcept;
 
 			/**
+			 * @brief Estimated FPS as a rational (avg_frame_rate, else r_frame_rate).
+			 * @return `{num, den}` with den &gt; 0. `{0, 1}` if unknown.
+			 */
+			AVRational FrameRateRational() const noexcept;
+
+			/**
 			 * @brief Looks up a stream metadata tag.
 			 * @param key Dictionary key (e.g. `"language"`).
 			 * @return Value, or nullptr if missing.

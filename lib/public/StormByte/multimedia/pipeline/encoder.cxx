@@ -194,6 +194,14 @@ namespace {
 		return av_rescale_q(ns, NanoTimeBase, timeBase);
 	}
 
+	AVRational VideoTimeBaseFromFrame(const Frame& frame) noexcept {
+		if (frame.Video() && frame.Video()->FrameRate() && frame.Video()->FrameRate()->Valid()) {
+			const auto& fps = *frame.Video()->FrameRate();
+			return AVRational{fps.Den(), fps.Num()};
+		}
+		return AVRational{1, 24};
+	}
+
 	AVRational ChooseTimeBase(const Frame& frame, StormByte::Multimedia::Type type) noexcept {
 		if (type == StormByte::Multimedia::Type::Subtitle)
 			return AVRational{1, AV_TIME_BASE};
@@ -202,7 +210,13 @@ namespace {
 			if (rate > 0)
 				return AVRational{1, rate};
 		}
-		return NanoTimeBase;
+		return VideoTimeBaseFromFrame(frame);
+	}
+
+	std::int64_t DefaultFrameDurationTicks(AVRational timeBase) noexcept {
+		if (timeBase.num <= 0 || timeBase.den <= 0)
+			return 1;
+		return 1;
 	}
 
 	StormByte::Multimedia::Features FrameNeed(
@@ -1030,6 +1044,16 @@ bool Encoder::Open(const Frame& frame) noexcept {
 		sampleFormat = frame.m_impl->m_backend.Get()->format;
 
 	auto params = FillParams(frame, codec, m_bitRate, sampleFormat);
+	if (kind == StormByte::Multimedia::Type::Video
+		&& frame.m_impl && frame.m_impl->m_backend.Get()) {
+		const auto* raw = frame.m_impl->m_backend.Get();
+		if (raw->format != AV_PIX_FMT_NONE)
+			params.Format(raw->format);
+		if (raw->width > 0)
+			params.Width(raw->width);
+		if (raw->height > 0)
+			params.Height(raw->height);
+	}
 	const auto timeBase = ChooseTimeBase(frame, kind);
 	auto backend = FFmpeg::AVEncoder::Open(const_cast<::AVCodec*>(codec), params, m_index, opts, timeBase);
 	if (!backend.has_value()) {
@@ -1149,8 +1173,15 @@ Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encode
 	const auto tb = encoder.m_impl->m_timeBase;
 	if (frame.Pts())
 		raw->pts = NsToTicks(frame.Pts()->Nanoseconds().count(), tb);
-	if (frame.Duration())
+	else
+		raw->pts = AV_NOPTS_VALUE;
+	if (frame.Duration()) {
 		raw->duration = NsToTicks(frame.Duration()->Nanoseconds().count(), tb);
+		if (raw->duration <= 0)
+			raw->duration = DefaultFrameDurationTicks(tb);
+	}
+	else
+		raw->duration = DefaultFrameDurationTicks(tb);
 
 	auto result = encoder.m_impl->m_encoder.SendFrame(frame.m_impl->m_backend);
 	while (result == FFmpeg::OperationResult::TryAgain) {

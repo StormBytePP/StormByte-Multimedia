@@ -474,7 +474,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 	if (video) {
 		auto hdr = MapFrameHDR10(holder->m_backend.Get(),
 			decoder.m_flags.Has(DecoderFlag::HeuristicsHDR10), *video);
-		video = StormByte::Multimedia::Property::Video(video->Color(), video->Resolution(), std::move(hdr));
+		video = StormByte::Multimedia::Property::Video(
+			video->Color(), video->Resolution(), std::move(hdr), video->FrameRate());
 	}
 
 	frame = Frame(
