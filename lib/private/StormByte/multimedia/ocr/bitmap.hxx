@@ -38,34 +38,32 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/duration.hxx>
-#include <StormByte/multimedia/property/video.hxx>
 
+#include <cstdint>
 #include <optional>
+#include <vector>
 
-extern "C" {
-	#include <libavutil/rational.h>
+/**
+ * @namespace StormByte::Multimedia::OCR
+ * @brief Private Tesseract OCR helpers.
+ */
+namespace StormByte::Multimedia::OCR {
+	/**
+	 * @struct GrayBitmap
+	 * @brief Packed 8-bit grayscale cue for Tesseract.
+	 */
+	struct GrayBitmap {
+		std::vector<std::uint8_t> pixels;	///< Row-major gray samples.
+		int width = 0;						///< Width in pixels.
+		int height = 0;						///< Height in pixels.
+		int stride = 0;						///< Bytes per row.
+	};
+
+	/**
+	 * @brief Renders paletted FFmpeg bitmap rects to dark-on-light gray.
+	 * @param sub Decoded AVSubtitle (PGS / DVD).
+	 * @return Image, or empty when there is no bitmap rect.
+	 */
+	std::optional<GrayBitmap> GrayFromSubtitle(const Backend::FFmpeg::AVSubtitle& sub) noexcept;
 }
-
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Pipeline::Frame> m_heldSubtitle;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};

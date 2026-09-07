@@ -76,6 +76,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
+	 *
+	 * Copies the matching File stream language tag onto the decoder.
 	 * @param demux Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
@@ -89,9 +91,15 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Open and read go through operator>>. Hard errors set Failed(); EOF
 	 * sets Eof(). Neither throws. Packets pass through Pipe() before they
 	 * are returned. operator bool() is false on fail or EOF.
+	 * The File pointer is kept so demux >> decoder can copy stream language.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
 		public:
+			/**
+			 * @name Construction
+			 * @{
+			 */
+
 			/**
 			 * @brief Empty demuxer (not open).
 			 */
@@ -104,8 +112,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Demuxer to take.
 			 */
-			Demux(Demux&&) noexcept;
+			Demux(Demux&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
@@ -120,9 +129,19 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Demuxer to take.
 			 * @return *this.
 			 */
-			Demux& operator=(Demux&&) noexcept;
+			Demux& operator=(Demux&& other) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name State
+			 * @{
+			 */
 
 			/**
 			 * @brief true if open, not failed and not at EOF.
@@ -148,6 +167,15 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Filters
+			 * @{
+			 */
+
+			/**
 			 * @brief Packet filter pipe. Add steps before the first packet read.
 			 * @return Pipe.
 			 */
@@ -159,6 +187,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Filter::Pipe& Pipe() const noexcept;
 
+			/**
+			 * @}
+			 */
+
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
 			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
@@ -166,13 +198,9 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			class Impl;
 
-			/* backend */
 			std::unique_ptr<Impl> m_impl;				///< Format context
-
-			/* filters */
+			const File* m_file = nullptr;				///< Snapshot used at open (language tags)
 			Filter::Pipe m_pipe;						///< Packet steps
-
-			/* fail */
 			bool m_failed;								///< Hard error
 			bool m_eof;									///< End of source
 			std::optional<std::string> m_error;			///< Failure text

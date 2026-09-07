@@ -8,3 +8,4 @@ buildmaster_component(
 )
 
 buildmaster_link(StormByte-Multimedia tessdata)
+buildmaster_group_add(OCR tessdata)

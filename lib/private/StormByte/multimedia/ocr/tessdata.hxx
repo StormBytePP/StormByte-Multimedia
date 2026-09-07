@@ -38,34 +38,15 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/duration.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/expected.hxx>
+#include <StormByte/multimedia/ocr/exception.hxx>
 
-#include <optional>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
-extern "C" {
-	#include <libavutil/rational.h>
+namespace StormByte::Multimedia::OCR {
+	using ExpectedTessData = Expected<std::span<const std::uint8_t>, TessDataNotFoundException>;
+
+	ExpectedTessData TessData(std::string_view language) noexcept;
 }
-
-class StormByte::Multimedia::Pipeline::Decoder::Impl {
-	public:
-		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder) noexcept
-		: m_decoder(std::move(decoder)), m_timeBase{0, 1}, m_subtitle(false) {}
-
-		StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;
-		std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;
-		std::optional<StormByte::Multimedia::Pipeline::Frame> m_heldSubtitle;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;
-		std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;
-		std::optional<StormByte::Multimedia::Property::Video> m_video;
-		std::optional<StormByte::Multimedia::Property::Audio> m_audio;
-		AVRational m_timeBase;
-		bool m_subtitle;
-};

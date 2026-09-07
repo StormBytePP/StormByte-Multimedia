@@ -127,7 +127,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Construct with a stream index. Implementation() pins an FFmpeg decoder
 	 * name from the handcrafted table. Empty pin picks the lowest preference
 	 * row that covers Require() plus stream HDR10 / HDR10Plus. demux >> decoder
-	 * opens the backend. packet >> decoder ignores other indexes.
+	 * opens the backend and copies the stream language tag from File metadata.
+	 * packet >> decoder ignores other indexes.
 	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits EOF,
 	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
 	 * Failbit on open/decode errors. Copy is not a Decoder mode.
@@ -156,8 +157,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Decoder to take.
 			 */
-			Decoder(Decoder&&) noexcept;
+			Decoder(Decoder&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
@@ -172,9 +174,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Decoder to take.
 			 * @return *this.
 			 */
-			Decoder& operator=(Decoder&&) noexcept;
+			Decoder& operator=(Decoder&& other) noexcept;
 
 			/**
 			 * @brief true if open and not failed.
@@ -205,6 +208,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param flags New mask.
 			 */
 			void Flags(DecoderFlags flags) noexcept;
+
+			/**
+			 * @brief Stream language tag copied from File metadata.
+			 * @return Language, or empty if the stream had none.
+			 */
+			const std::optional<std::string>& Language() const noexcept;
+
+			/**
+			 * @brief Sets the stream language tag (used before demux >> decoder if needed).
+			 * @param language ISO code (`spa`, `eng`, `es`, …). Empty clears it.
+			 */
+			void Language(std::string language) noexcept;
 
 			/** @} */
 
@@ -302,6 +317,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Impl> m_impl;					///< Opened backend
 			DecoderFlags m_flags;							///< Heuristics / future bits
 			std::optional<std::string> m_implementation;	///< Pinned or selected FFmpeg name
+			std::optional<std::string> m_language;			///< Stream language from File metadata
 			Features m_require;								///< Extra required bits
 			Features m_capabilities;						///< Features of the opened row
 			Filter::FramePipe m_pipe;						///< Frame steps

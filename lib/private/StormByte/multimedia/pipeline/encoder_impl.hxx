@@ -40,6 +40,7 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ocr/engine.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
@@ -49,13 +50,22 @@ extern "C" {
 	#include <libavutil/rational.h>
 }
 
+/**
+ * @class StormByte::Multimedia::Pipeline::Encoder::Impl
+ * @brief FFmpeg encoder backend, pending packets and OCR session.
+ */
 class StormByte::Multimedia::Pipeline::Encoder::Impl {
 	public:
+		/**
+		 * @brief Adopts an opened FFmpeg encoder.
+		 * @param encoder Backend encoder.
+		 */
 		explicit Impl(StormByte::Multimedia::Backend::FFmpeg::AVEncoder encoder) noexcept
 		: m_encoder(std::move(encoder)), m_timeBase{0, 1} {}
 
-		StormByte::Multimedia::Backend::FFmpeg::AVEncoder m_encoder;
-		StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;
-		std::deque<StormByte::Multimedia::Pipeline::Packet> m_pending;
-		AVRational m_timeBase;
+		StormByte::Multimedia::Backend::FFmpeg::AVEncoder m_encoder;	///< Opened encoder.
+		StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;	///< Receive / subtitle scratch packet.
+		std::deque<StormByte::Multimedia::Pipeline::Packet> m_pending;	///< Packets waiting for operator>>.
+		AVRational m_timeBase;	///< Encoder time base.
+		StormByte::Multimedia::OCR::Engine m_ocr;	///< Lazy Tesseract session for bitmap cues.
 };

@@ -47,6 +47,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 /**
@@ -69,9 +70,15 @@ namespace StormByte::Multimedia::Pipeline {
 	 * is called. Attachments() is filled at receive time. Heuristics fill
 	 * Video().HDR10() only, never the side-data bag.
 	 * Audio() is set on audio frames; empty on video and subtitle frames.
+	 * Language() is the stream tag copied by the decoder when known.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
 		public:
+			/**
+			 * @name Construction
+			 * @{
+			 */
+
 			/**
 			 * @brief Empty frame.
 			 */
@@ -101,8 +108,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Frame to take.
 			 */
-			Frame(Frame&&) noexcept;
+			Frame(Frame&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
@@ -117,9 +125,19 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Frame to take.
 			 * @return *this.
 			 */
-			Frame& operator=(Frame&&) noexcept;
+			Frame& operator=(Frame&& other) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Timing and identity
+			 * @{
+			 */
 
 			/**
 			 * @brief Container stream index.
@@ -138,6 +156,27 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return Duration, or empty.
 			 */
 			const std::optional<Property::Duration>& Duration() const noexcept;
+
+			/**
+			 * @brief Stream language tag copied from File metadata.
+			 * @return Language, or empty if the stream had none.
+			 */
+			const std::optional<std::string>& Language() const noexcept;
+
+			/**
+			 * @brief Sets the stream language tag.
+			 * @param language ISO code from File metadata (`spa`, `eng`, `es`, …).
+			 */
+			void Language(std::string language) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Properties
+			 * @{
+			 */
 
 			/**
 			 * @brief Video properties (includes HDR10 when set).
@@ -169,6 +208,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const StormByte::Buffer::FIFO& Payload() const noexcept;
 
+			/**
+			 * @}
+			 */
+
 			friend class Decoder;
 			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
 			friend class Encoder;
@@ -179,14 +222,15 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			class Impl;
 
-			int m_streamIndex;
-			StormByte::Buffer::FIFO m_payload;
-			std::optional<Property::Duration> m_pts;
-			std::optional<Property::Duration> m_duration;
-			std::optional<Property::Video> m_video;
-			std::optional<Property::Audio> m_audio;
-			std::vector<class SideData> m_attachments;
-			std::unique_ptr<Impl> m_impl;
+			int m_streamIndex;									///< Container stream index
+			StormByte::Buffer::FIFO m_payload;					///< Sample / subtitle bytes
+			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
+			std::optional<Property::Duration> m_duration;		///< Frame duration
+			std::optional<Property::Video> m_video;				///< Video properties
+			std::optional<Property::Audio> m_audio;				///< Audio properties
+			std::optional<std::string> m_language;				///< Stream language tag
+			std::vector<class SideData> m_attachments;			///< Raw side data
+			std::unique_ptr<Impl> m_impl;						///< Backend holder
 
 			/**
 			 * @brief Adopts a backend frame for lazy Payload().

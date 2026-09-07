@@ -104,23 +104,14 @@
 	path = thirdparty/ffmpeg/plugins/deps/fontconfig/src
 	url = https://gitlab.freedesktop.org/fontconfig/fontconfig.git
 [submodule "leptonica"]
-	path = thirdparty/ffmpeg/plugins/deps/leptonica/src
+	path = thirdparty/ocr/leptonica/src
 	url = https://github.com/DanBloomberg/leptonica.git
 [submodule "tesseract"]
-	path = thirdparty/ffmpeg/plugins/deps/tesseract/src
+	path = thirdparty/ocr/tesseract/src
 	url = https://github.com/tesseract-ocr/tesseract.git
 [submodule "tessdata"]
-	path = thirdparty/tessdata/cmake-wrapper/src
+	path = thirdparty/ocr/tessdata/cmake-wrapper/src
 	url = https://github.com/tesseract-ocr/tessdata_fast.git
-[submodule "libpng"]
-	path = thirdparty/ffmpeg/plugins/deps/png/src
-	url = https://github.com/pnggroup/libpng.git
-[submodule "libjpeg-turbo"]
-	path = thirdparty/ffmpeg/plugins/deps/jpeg-turbo/src
-	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
-[submodule "libtiff"]
-	path = thirdparty/ffmpeg/plugins/deps/tiff/src
-	url = https://gitlab.com/libtiff/libtiff.git
 [submodule "StormByte Buffer"]
 	path = thirdparty/StormByte/buffer/src
 	url = https://github.com/StormBytePP/StormByte-Buffer.git

@@ -71,6 +71,18 @@ const std::optional<StormByte::Multimedia::Property::Duration>& Frame::Duration(
 	return m_duration;
 }
 
+const std::optional<std::string>& Frame::Language() const noexcept {
+	return m_language;
+}
+
+void Frame::Language(std::string language) noexcept {
+	if (language.empty()) {
+		m_language.reset();
+		return;
+	}
+	m_language = std::move(language);
+}
+
 const std::optional<StormByte::Multimedia::Property::Video>& Frame::Video() const noexcept {
 	return m_video;
 }

@@ -87,6 +87,8 @@ jobs:
           configure-options: >-
             -DENABLE_TEST=ON
             -DWITH_FFMPEG=BUNDLED
+            -DWITH_STORMBYTE=BUNDLED
+            -DWITH_OCR=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
           run-tests: false
@@ -120,6 +122,8 @@ jobs:
           configure-options: >-
             -DENABLE_TEST=ON
             -DWITH_FFMPEG=BUNDLED
+            -DWITH_STORMBYTE=BUNDLED
+            -DWITH_OCR=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
           run-tests: false
@@ -164,6 +168,7 @@ jobs:
             -DENABLE_TEST=ON
             -DWITH_FFMPEG=BUNDLED
             -DWITH_STORMBYTE=BUNDLED
+            -DWITH_OCR=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
             "-DCMAKE_C_FLAGS=/W3 /wd4244 /wd4267 /wd4996 /wd4065 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"

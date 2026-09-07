@@ -1,3 +1,7 @@
+if(NOT OCR_BUNDLED_TYPE STREQUAL "static" AND NOT OCR_BUNDLED_TYPE STREQUAL "shared")
+	set(OCR_BUNDLED_TYPE "static")
+endif()
+
 set(TESSERACT_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(TESSERACT_COMPONENT "tesseract")
 set(TESSERACT_PATCHES
@@ -15,7 +19,7 @@ set(TESSERACT_OPTIONS
 if(CMAKE_INTERPROCEDURAL_OPTIMIZATION STREQUAL "ON")
 	list(APPEND TESSERACT_OPTIONS "ENABLE_LTO=ON")
 endif()
-if(FFMPEG_BUNDLED_TYPE STREQUAL "shared")
+if(OCR_BUNDLED_TYPE STREQUAL "shared")
 	list(APPEND TESSERACT_OPTIONS "-DBUILD_SHARED_LIBS=ON")
 else()
 	list(APPEND TESSERACT_OPTIONS "-DBUILD_SHARED_LIBS=OFF")
@@ -26,10 +30,9 @@ buildmaster_component(
 	"${TESSERACT_COMPONENT}"
 	"${TESSERACT_SRC_DIR}"
 	"${TESSERACT_OPTIONS}"
-	"${FFMPEG_BUNDLED_TYPE}"
+	"${OCR_BUNDLED_TYPE}"
 	"tesseract"
 	"GIT={RESET;PATCH={${TESSERACT_PATCHES}};TITLE=tesseract unversioned name}"
 )
-buildmaster_link(tesseract leptonica tiff jpeg-turbo png zlib)
-buildmaster_group_add(ff-deps tesseract)
-register_plugin(tesseract "libtesseract=enabled ocr_filter=enabled")
+buildmaster_link(tesseract leptonica)
+buildmaster_group_add(OCR tesseract)

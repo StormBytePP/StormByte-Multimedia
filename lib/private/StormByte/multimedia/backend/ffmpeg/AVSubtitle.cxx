@@ -81,7 +81,10 @@ std::int64_t FFmpeg::AVSubtitle::Pts() const noexcept {
 std::uint32_t FFmpeg::AVSubtitle::DisplayDurationMs() const noexcept {
 	if (m_sub.end_display_time < m_sub.start_display_time)
 		return 0;
-	return m_sub.end_display_time - m_sub.start_display_time;
+	const auto ms = m_sub.end_display_time - m_sub.start_display_time;
+	if (ms == 0 || ms > 600000)
+		return 0;
+	return ms;
 }
 
 std::string FFmpeg::AVSubtitle::Text() const noexcept {

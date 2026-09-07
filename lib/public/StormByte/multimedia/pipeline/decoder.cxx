@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/ocr/bitmap.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/decoder_impl.hxx>
 #include <StormByte/multimedia/pipeline/frame_impl.hxx>
@@ -46,6 +47,7 @@
 #include <StormByte/multimedia/property/point.hxx>
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 extern "C" {
@@ -181,6 +183,11 @@ namespace {
 		}
 		return std::nullopt;
 	}
+
+	void StampLanguage(Decoder& decoder, Frame& frame) noexcept {
+		if (decoder.Language())
+			frame.Language(*decoder.Language());
+	}
 }
 
 Decoder::Decoder(int stream_index, DecoderFlags flags) noexcept
@@ -204,6 +211,17 @@ const DecoderFlags& Decoder::Flags() const noexcept {
 
 void Decoder::Flags(DecoderFlags flags) noexcept {
 	m_flags = flags;
+}
+
+const std::optional<std::string>& Decoder::Language() const noexcept {
+	return m_language;
+}
+
+void Decoder::Language(std::string language) noexcept {
+	if (language.empty())
+		m_language.reset();
+	else
+		m_language = std::move(language);
 }
 
 const std::optional<std::string>& Decoder::Implementation() const noexcept {
@@ -343,10 +361,29 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		auto sub = std::move(*decoder.m_impl->m_pendingSub);
 		decoder.m_impl->m_pendingSub.reset();
 
-		const auto text = sub.Text();
-		StormByte::Buffer::DataType bytes(
-			reinterpret_cast<const std::byte*>(text.data()),
-			reinterpret_cast<const std::byte*>(text.data()) + text.size());
+		auto text = sub.Text();
+		StormByte::Buffer::DataType bytes;
+		if (!text.empty()) {
+			bytes.assign(
+				reinterpret_cast<const std::byte*>(text.data()),
+				reinterpret_cast<const std::byte*>(text.data()) + text.size());
+		}
+		else if (auto gray = StormByte::Multimedia::OCR::GrayFromSubtitle(sub)) {
+			const std::size_t bytesN = gray->pixels.size();
+			bytes.resize(12 + bytesN);
+			auto* p = reinterpret_cast<std::uint8_t*>(bytes.data());
+			p[0] = 'O'; p[1] = 'C'; p[2] = 'R'; p[3] = '1';
+			const auto put32 = [](std::uint8_t* d, std::int32_t v) {
+				d[0] = static_cast<std::uint8_t>(v);
+				d[1] = static_cast<std::uint8_t>(v >> 8);
+				d[2] = static_cast<std::uint8_t>(v >> 16);
+				d[3] = static_cast<std::uint8_t>(v >> 24);
+			};
+			put32(p + 4, gray->width);
+			put32(p + 8, gray->height);
+			if (bytesN > 0)
+				std::memcpy(p + 12, gray->pixels.data(), bytesN);
+		}
 
 		auto pts = TicksToPts(sub.Pts(), AVRational{1, AV_TIME_BASE});
 		if (!pts)
@@ -358,8 +395,10 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 				std::chrono::milliseconds{sub.DisplayDurationMs()}};
 		if (!duration)
 			duration = decoder.m_impl->m_packetDuration;
+		if (duration && duration->Nanoseconds().count() > 600000000000LL)
+			duration.reset();
 
-		frame = Frame(
+		Frame incoming(
 			decoder.m_index,
 			StormByte::Buffer::FIFO{std::move(bytes)},
 			std::move(pts),
@@ -367,6 +406,33 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 			std::nullopt,
 			{}
 		);
+		StampLanguage(decoder, incoming);
+
+		const bool hasCue = incoming.Payload().AvailableBytes() > 0;
+		if (decoder.m_impl->m_heldSubtitle) {
+			auto& held = *decoder.m_impl->m_heldSubtitle;
+			if (!held.Duration() && held.Pts() && incoming.Pts()) {
+				const auto delta = incoming.Pts()->Nanoseconds() - held.Pts()->Nanoseconds();
+				if (delta.count() > 0)
+					held.m_duration = StormByte::Multimedia::Property::Duration{delta};
+			}
+			frame = std::move(held);
+			decoder.m_impl->m_heldSubtitle.reset();
+			if (hasCue)
+				decoder.m_impl->m_heldSubtitle = std::move(incoming);
+			runPipe();
+			return decoder;
+		}
+
+		if (hasCue && !incoming.Duration()) {
+			decoder.m_impl->m_heldSubtitle = std::move(incoming);
+			return decoder;
+		}
+
+		if (!hasCue)
+			return decoder;
+
+		frame = std::move(incoming);
 		runPipe();
 		return decoder;
 	}
@@ -398,6 +464,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 		std::move(attachments),
 		decoder.m_impl->m_audio
 	);
+	StampLanguage(decoder, frame);
 	frame.Bind(std::move(holder));
 	runPipe();
 	return decoder;
