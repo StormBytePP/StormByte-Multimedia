@@ -36,47 +36,36 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/filters/resize.hxx>
-#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
-#include <StormByte/multimedia/property/video.hxx>
-#include <StormByte/multimedia/type.hxx>
+#include <StormByte/multimedia/pipeline/filters/video/resize.hxx>
 
 extern "C" {
 	#include <libavutil/frame.h>
-	#include <libavutil/imgutils.h>
+	#include <libavutil/pixfmt.h>
 	#include <libswscale/swscale.h>
 }
 
-using namespace StormByte::Multimedia::Pipeline::Filter;
-using StormByte::Multimedia::Type;
+using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 Resize::Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept
 : m_width(resolution.Width()), m_height(resolution.Height()) {}
 
 Resize::Resize(std::uint32_t width, std::uint32_t height) noexcept
-: Resize(StormByte::Multimedia::Property::Resolution{
-	width == 0 ? 1u : width,
-	height == 0 ? 1u : height}) {
-	m_width = width;
-	m_height = height;
+: m_width(width), m_height(height) {}
+
+StormByte::Multimedia::Type Resize::Media() const noexcept {
+	return StormByte::Multimedia::Type::Video;
 }
 
-std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
-	StormByte::Multimedia::Pipeline::Frame&& frame) noexcept {
-	if (Failed())
-		return std::nullopt;
-	if (frame.Type() != Type::Video || !frame.m_engine)
-		return std::move(frame);
-
-	::AVFrame* src = frame.m_engine->m_backend.Get();
+void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
+	::AVFrame* src = Native(frame);
 	if (!src || src->width <= 0 || src->height <= 0) {
 		Fail("resize: missing video buffer");
-		return std::nullopt;
+		return;
 	}
 
 	if (m_width == 0 && m_height == 0) {
 		Fail("resize: width and height are both 0");
-		return std::nullopt;
+		return;
 	}
 
 	std::uint32_t dstW = m_width;
@@ -89,28 +78,29 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
 			(static_cast<std::uint64_t>(src->height) * dstW + src->width / 2) / src->width);
 	if (dstW == 0 || dstH == 0) {
 		Fail("resize: computed destination is empty");
-		return std::nullopt;
+		return;
 	}
 
 	if (static_cast<int>(dstW) == src->width && static_cast<int>(dstH) == src->height)
-		return std::move(frame);
+		return;
 
-	StormByte::Multimedia::Backend::FFmpeg::AVFrame dst;
-	::AVFrame* out = dst.Get();
+	::AVFrame* out = av_frame_alloc();
 	if (!out) {
 		Fail("resize: out of memory");
-		return std::nullopt;
+		return;
 	}
 	if (av_frame_copy_props(out, src) < 0) {
+		av_frame_free(&out);
 		Fail("resize: failed to copy frame properties");
-		return std::nullopt;
+		return;
 	}
 	out->width = static_cast<int>(dstW);
 	out->height = static_cast<int>(dstH);
 	out->format = src->format;
 	if (av_frame_get_buffer(out, 0) < 0) {
+		av_frame_free(&out);
 		Fail("resize: failed to allocate destination");
-		return std::nullopt;
+		return;
 	}
 
 	SwsContext* sws = sws_getContext(
@@ -118,23 +108,18 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
 		out->width, out->height, static_cast<AVPixelFormat>(out->format),
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
 	if (!sws) {
+		av_frame_free(&out);
 		Fail("resize: swscale rejected this format");
-		return std::nullopt;
+		return;
 	}
 	const int scaled = sws_scale(sws, src->data, src->linesize, 0, src->height,
 		out->data, out->linesize);
 	sws_freeContext(sws);
 	if (scaled <= 0) {
+		av_frame_free(&out);
 		Fail("resize: swscale failed");
-		return std::nullopt;
+		return;
 	}
 
-	frame.m_engine->m_backend = std::move(dst);
-	frame.m_engine->m_payloadReady = false;
-	frame.m_payload = StormByte::Buffer::FIFO{};
-	frame.m_video = StormByte::Multimedia::Property::Video(
-		frame.Video()->Color(),
-		StormByte::Multimedia::Property::Resolution{dstW, dstH},
-		frame.Video()->HDR10());
-	return std::move(frame);
+	Replace(frame, out);
 }

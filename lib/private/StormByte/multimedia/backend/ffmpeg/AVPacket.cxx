@@ -49,15 +49,23 @@ using namespace StormByte::Multimedia::Backend;
 FFmpeg::AVPacket::AVPacket() noexcept:
 AVPointer(av_packet_alloc()) {}
 
+FFmpeg::AVPacket::AVPacket(const AVPacket& other) noexcept:
+AVPointer(other.m_ptr ? av_packet_clone(other.m_ptr) : av_packet_alloc()) {}
+
 FFmpeg::AVPacket::~AVPacket() noexcept {
 	Free();
 }
 
+FFmpeg::AVPacket& FFmpeg::AVPacket::operator=(const AVPacket& other) noexcept {
+	if (this == &other)
+		return *this;
+	Free();
+	m_ptr = other.m_ptr ? av_packet_clone(other.m_ptr) : av_packet_alloc();
+	return *this;
+}
+
 FFmpeg::AVPacket FFmpeg::AVPacket::Ref() const noexcept {
-	AVPacket copy;
-	if (m_ptr && copy.m_ptr)
-		av_packet_ref(copy.m_ptr, m_ptr);
-	return copy;
+	return AVPacket(*this);
 }
 
 void FFmpeg::AVPacket::Unref() noexcept {

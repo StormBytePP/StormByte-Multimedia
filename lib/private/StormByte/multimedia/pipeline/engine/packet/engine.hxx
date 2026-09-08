@@ -38,95 +38,78 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <optional>
-#include <string>
+namespace StormByte::Multimedia::Pipeline {
+	class Packet;
+}
 
 /**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Packet and frame steps. Bundled or user-supplied.
+ * @namespace StormByte::Multimedia::Pipeline::Engine::Packet
+ * @brief Compressed-AU backend behind the public Packet type.
+ *
+ * @ingroup multimedia_pipeline
  */
-namespace StormByte::Multimedia::Pipeline::Filter {
+namespace StormByte::Multimedia::Pipeline::Engine::Packet {
 	/**
-	 * @class Step
-	 * @brief One frame-to-frame step. Inherit and implement Push.
+	 * @class Engine
+	 * @brief Opaque @c AVPacket holder.
 	 *
-	 * Return the same or a new Pipeline::Frame. Return empty optional
-	 * to absorb it. On a hard error call Fail() and return empty.
-	 * Push must not throw. Audio and subtitle frames should pass through
-	 * unless the step knows how to handle them.
+	 * Copy clones the backend via the private
+	 * @ref StormByte::Multimedia::Backend::FFmpeg::AVPacket copy
+	 * (@c av_packet_clone). @ref BindProperties is the hook
+	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Replace
+	 * calls after taking a new @c AVPacket. Packet has no Video/Audio
+	 * bag; the method exists so frame and packet Replace share a shape.
+	 * Filters do not call this.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Step {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * @brief Empty backend holder.
 			 */
-			Step() noexcept = default;
+			Engine() noexcept = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Deep copy (cloned @c AVPacket).
+			 * @param other Source engine.
 			 */
-			Step(const Step&) = delete;
+			Engine(const Engine& other) noexcept = default;
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Engine to take.
 			 */
-			Step(Step&&) noexcept = default;
+			Engine(Engine&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Step() noexcept = default;
+			~Engine() noexcept = default;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Deep copy assignment (cloned @c AVPacket).
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Step& operator=(const Step&) = delete;
+			Engine& operator=(const Engine& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Step& operator=(Step&&) noexcept = default;
+			Engine& operator=(Engine&&) noexcept = default;
 
 			/**
-			 * @brief Runs this step on @p frame.
-			 * @param frame Incoming frame (moved in).
-			 * @return Outgoing frame, or empty if absorbed or failed.
+			 * @brief Hook after Replace. No high-level bag on Packet.
+			 * @param packet Pipeline unit that owns this engine.
 			 */
-			virtual std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept = 0;
+			void BindProperties(class StormByte::Multimedia::Pipeline::Packet& packet) noexcept;
 
-			/**
-			 * @brief Whether Push set a hard error.
-			 * @return true after Fail().
-			 */
-			bool Failed() const noexcept {
-				return m_failed;
-			}
-
-			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept {
-				return m_error;
-			}
-
-		protected:
-			/**
-			 * @brief Marks a hard error. Further Push calls should no-op.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept {
-				m_failed = true;
-				m_error = std::move(reason);
-			}
-
-		private:
-			bool m_failed = false;				///< Hard error
-			std::optional<std::string> m_error;		///< Failure text
+			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_backend;	///< FFmpeg packet
 	};
 }

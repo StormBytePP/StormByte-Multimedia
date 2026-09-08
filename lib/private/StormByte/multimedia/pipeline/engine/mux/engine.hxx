@@ -130,7 +130,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param packet Encoded or copied packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool Push(class Mux& owner, Packet& packet) noexcept = 0;
+			virtual bool Push(class Mux& owner, class Packet& packet) noexcept = 0;
 
 			/**
 			 * @brief Flushes reserved encoders, leftover packets and the trailer.

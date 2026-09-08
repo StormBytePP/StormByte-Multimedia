@@ -40,7 +40,7 @@
 
 #include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/features.hxx>
-#include <StormByte/multimedia/pipeline/filters/frame_pipe.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/process.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -142,7 +142,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
 
 	/**
-	 * @brief Receives one decoded frame after the frame pipe. Never throws.
+	 * @brief Receives one decoded frame after the process chain. Never throws.
 	 * @param decoder Source.
 	 * @param frame Replaced on success.
 	 * @return @p decoder.
@@ -165,8 +165,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
 	 * Failbit on open/decode errors. Copy is not a Decoder mode.
 	 *
-	 * Frame steps go in Pipe(). They run inside decoder >> frame.
-	 * An empty pipe is identity.
+	 * Process nodes go in Pipe() (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Process).
+	 * They run inside decoder >> frame. An empty chain is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -307,21 +307,21 @@ namespace StormByte::Multimedia::Pipeline {
 			/** @} */
 
 			/**
-			 * @defgroup decoder_pipe Frame pipe
+			 * @defgroup decoder_pipe Process chain
 			 * @{
 			 */
 
 			/**
-			 * @brief Frame filter pipe. Add bundled or custom steps before reading frames.
-			 * @return Pipe.
+			 * @brief Process chain. Add nodes before reading frames.
+			 * @return Chain.
 			 */
-			Filter::FramePipe& Pipe() noexcept;
+			Filter::Chain::Process& Pipe() noexcept;
 
 			/**
-			 * @brief Frame filter pipe.
-			 * @return Pipe.
+			 * @brief Process chain.
+			 * @return Chain.
 			 */
-			const Filter::FramePipe& Pipe() const noexcept;
+			const Filter::Chain::Process& Pipe() const noexcept;
 
 			/** @} */
 
@@ -374,7 +374,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> m_title;							///< Stream title from File metadata
 			Features m_require;											///< Extra required bits
 			Features m_capabilities;									///< Features of the opened row
-			Filter::FramePipe m_pipe;									///< Frame steps
+			Filter::Chain::Process m_pipe;								///< Process nodes
 			bool m_failed;												///< Hard error
 			std::optional<std::string> m_error;							///< Failure text
 

@@ -39,21 +39,20 @@
 #pragma once
 
 #include <StormByte/buffer/generic.hxx>
-#include <StormByte/multimedia/attachment.hxx>
-#include <StormByte/multimedia/pipeline/filters/frame.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/property/point.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <cstdint>
-#include <memory>
+#include <filesystem>
 #include <optional>
 #include <string>
 
 /**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Packet and frame steps. Bundled or user-supplied.
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Video
+ * @brief Video @ref StormByte::Multimedia::Pipeline::Filter::Process nodes.
  */
-namespace StormByte::Multimedia::Pipeline::Filter {
+namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @enum Anchor
 	 * @brief Logo placement relative to the frame.
@@ -64,39 +63,43 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 		TopRight,		///< Top right
 		CenterLeft,		///< Middle left
 		Center,			///< Center
-		CenterRight,		///< Middle right
+		CenterRight,	///< Middle right
 		BottomLeft,		///< Bottom left
-		BottomCenter,		///< Bottom center
+		BottomCenter,	///< Bottom center
 		BottomRight		///< Bottom right
 	};
 
 	/**
 	 * @class Watermark
-	 * @brief Overlays a still image. Audio and subtitles pass through.
+	 * @brief Overlays a still image from a file. Audio and subtitles
+	 *        are forwarded by
+	 *        @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Gate.
 	 *
-	 * Opacity 0 is a real no-op (no decode, no blend). The logo is never
-	 * cropped: if it does not fit, Push fails. Prefer Add(Watermark)
-	 * before Add(Resize) so the mark scales with the frame.
+	 * Opacity 0 is a no-op. The logo is never cropped: if it does not
+	 * fit, @ref FFmpeg::Fail runs. Prefer adding this node before
+	 * @ref Resize so the mark scales with the frame.
+	 * Talks to libav with raw @c AVFrame* from @ref FFmpeg::Native
+	 * and hands a new buffer to @ref FFmpeg::Replace.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
 			/**
 			 * @brief Logo at an anchor.
-			 * @param logo Still image attachment. Payload is peeked, the object is not copied.
+			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param anchor Placement.
 			 * @param opacity 0–100. 0 = no-op.
 			 * @param margin Pixels from the anchored edge.
 			 */
-			Watermark(const StormByte::Multimedia::Attachment& logo, Anchor anchor,
+			Watermark(const std::filesystem::path& logo, Anchor anchor,
 				unsigned opacity = 100, int margin = 0) noexcept;
 
 			/**
 			 * @brief Logo at an absolute top-left.
-			 * @param logo Still image attachment. Payload is peeked, the object is not copied.
+			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param position Top-left of the logo in frame pixels.
 			 * @param opacity 0–100. 0 = no-op.
 			 */
-			Watermark(const StormByte::Multimedia::Attachment& logo,
+			Watermark(const std::filesystem::path& logo,
 				StormByte::Multimedia::Property::Point position,
 				unsigned opacity = 100) noexcept;
 
@@ -108,12 +111,12 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Move constructor.
 			 */
-			Watermark(Watermark&&) noexcept;
+			Watermark(Watermark&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Watermark() noexcept override;
+			~Watermark() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -125,25 +128,44 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Watermark& operator=(Watermark&&) noexcept;
+			Watermark& operator=(Watermark&&) noexcept = default;
 
 			/**
-			 * @brief Overlays the logo on a video frame.
-			 * @param frame Incoming frame.
-			 * @return Frame with logo, or empty on failure.
+			 * @brief Media this filter handles.
+			 * @return @ref StormByte::Multimedia::Type::Video.
 			 */
-			std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept override;
+			StormByte::Multimedia::Type Media() const noexcept override;
+
+		protected:
+			/**
+			 * @brief Blends the logo onto @p frame, then @ref FFmpeg::Replace.
+			 * @param frame Video unit.
+			 */
+			void ProcessFrame(Pipeline::Frame& frame) noexcept override;
 
 		private:
-			class Impl;
+			/**
+			 * @brief Reads @ref m_path into @ref m_bytes.
+			 * @return false if @ref Fail was called.
+			 */
+			bool LoadFile() noexcept;
 
-			StormByte::Buffer::DataType m_bytes;					///< Logo file bytes
-			std::optional<std::string> m_mime;					///< Logo mime
-			std::optional<std::string> m_name;					///< Logo filename
-			std::optional<Anchor> m_anchor;						///< Relative placement
-			std::optional<StormByte::Multimedia::Property::Point> m_point;		///< Absolute placement
-			unsigned m_opacity;							///< 0–100
-			int m_margin;								///< Anchor margin
-			std::unique_ptr<Impl> m_impl;						///< Decoded logo
+			/**
+			 * @brief Decodes @ref m_bytes into @ref m_rgba on first use.
+			 * @return false if @ref Fail was called.
+			 */
+			bool DecodeLogo() noexcept;
+
+			std::filesystem::path m_path;									///< Logo file
+			std::optional<Anchor> m_anchor;									///< Relative placement
+			std::optional<StormByte::Multimedia::Property::Point> m_point;	///< Absolute placement
+			unsigned m_opacity;												///< 0–100
+			int m_margin;													///< Anchor margin
+			StormByte::Buffer::DataType m_bytes;							///< File bytes
+			int m_logoWidth = 0;											///< Decoded logo width
+			int m_logoHeight = 0;											///< Decoded logo height
+			StormByte::Buffer::DataType m_rgba;								///< Decoded RGBA8888
+			bool m_loaded = false;											///< File read attempted
+			bool m_decoded = false;											///< Decode attempted
 	};
 }

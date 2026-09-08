@@ -386,7 +386,7 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 
 	m_header = true;
 	while (!m_queue.empty()) {
-		Packet queued = std::move(m_queue.front());
+		class Packet queued = std::move(m_queue.front());
 		m_queue.pop_front();
 		if (!WritePacket(owner, queued))
 			return false;
@@ -394,7 +394,7 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 	return true;
 }
 
-bool Details::Container::WritePacket(class Mux& owner, Packet& packet) noexcept {
+bool Details::Container::WritePacket(class Mux& owner, class Packet& packet) noexcept {
 	if (owner.Failed() || !m_header)
 		return false;
 	int out = packet.StreamIndex();
@@ -445,7 +445,7 @@ bool Details::Container::WritePacket(class Mux& owner, Packet& packet) noexcept 
 	return true;
 }
 
-bool Details::Container::Push(class Mux& owner, Packet& packet) noexcept {
+bool Details::Container::Push(class Mux& owner, class Packet& packet) noexcept {
 	int out = packet.StreamIndex();
 	if (!m_tracks.contains(out)) {
 		const auto mapped = m_inToOut.find(out);
@@ -463,7 +463,7 @@ bool Details::Container::Push(class Mux& owner, Packet& packet) noexcept {
 		return false;
 	if (m_header) {
 		while (!m_queue.empty()) {
-			Packet leftover = std::move(m_queue.front());
+			class Packet leftover = std::move(m_queue.front());
 			m_queue.pop_front();
 			if (!WritePacket(owner, leftover))
 				return false;
@@ -489,7 +489,7 @@ void Details::Container::Flush(class Mux& owner) noexcept {
 		if (!track.encoder || !*track.encoder)
 			continue;
 		track.encoder->Flush();
-		Packet leftover;
+		class Packet leftover;
 		while (track.encoder->MuxTakePacket(leftover)) {
 			if (m_header) {
 				if (!WritePacket(owner, leftover))

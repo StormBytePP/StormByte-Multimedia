@@ -214,7 +214,7 @@ bool Details::Video::IsOpen() const noexcept {
 	return true;
 }
 
-bool Details::Video::Send(class Decoder& owner, Packet& packet) noexcept {
+bool Details::Video::Send(class Decoder& owner, class Packet& packet) noexcept {
 	FFmpeg::AVPacket raw;
 	StormByte::Buffer::DataType bytes;
 	const auto n = packet.Payload().AvailableBytes();
@@ -282,7 +282,9 @@ bool Details::Video::Receive(class Decoder& owner, class Frame& frame) noexcept 
 		std::nullopt
 	);
 	StampTags(owner, frame);
+	auto* engine = holder.get();
 	frame.Bind(std::move(holder));
+	engine->BindProperties(frame);
 	return true;
 }
 

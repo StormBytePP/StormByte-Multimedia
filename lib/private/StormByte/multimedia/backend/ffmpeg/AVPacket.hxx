@@ -47,19 +47,49 @@ extern "C" {
 }
 
 /**
+ * @namespace StormByte::Multimedia::Pipeline::Filter
+ * @brief Forward so this RAII type can friend the filter base
+ *        without including the generated public header.
+ */
+namespace StormByte::Multimedia::Pipeline::Filter {
+	class FFmpeg;
+}
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Engine::Packet
+ */
+namespace StormByte::Multimedia::Pipeline::Engine::Packet {
+	class Engine;
+}
+
+/**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
  * @brief Private RAII wrappers over libav*.
  */
 namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVBSF;
+	class AVDecoder;
+	class AVEncoder;
+	class AVFormatContext;
+
 	/**
 	 * @class AVPacket
-	 * @brief RAII wrapper for ::AVPacket.
+	 * @brief RAII owner of a libav @c AVPacket.
+	 *
+	 * Public API is move-only. There is no public @c Clone().
+	 * Copy constructor and copy assignment use @c av_packet_clone
+	 * and stay private for
+	 * @ref StormByte::Multimedia::Pipeline::Engine::Packet::Engine
+	 * and @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg.
+	 * Do not free @ref Get(); the destructor does.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPacket: public AVPointer<::AVPacket> {
 		friend class AVBSF;
 		friend class AVDecoder;
 		friend class AVEncoder;
 		friend class AVFormatContext;
+		friend class StormByte::Multimedia::Pipeline::Filter::FFmpeg;
+		friend class StormByte::Multimedia::Pipeline::Engine::Packet::Engine;
 		public:
 			/**
 			 * @brief Allocates an empty packet.
@@ -67,44 +97,31 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			AVPacket() noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
-			 * @param other Unused.
-			 */
-			AVPacket(const AVPacket& other) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Source packet.
+			 * @brief Move constructor. Transfers the libav pointer.
+			 * @param other Source packet; left empty.
 			 */
 			AVPacket(AVPacket&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. Unreferences buffers and frees the struct.
 			 */
 			~AVPacket() noexcept override;
 
 			/**
-			 * @brief Copy assignment (deleted).
-			 * @param other Unused.
-			 * @return *this.
-			 */
-			AVPacket& operator=(const AVPacket& other) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Source packet.
+			 * @brief Move assignment. Frees @c *this, then takes @p other.
+			 * @param other Source packet; left empty.
 			 * @return *this.
 			 */
 			AVPacket& operator=(AVPacket&& other) noexcept = default;
 
 			/**
-			 * @brief New packet referencing the same data (av_packet_ref).
+			 * @brief New packet referencing the same data (@c av_packet_ref).
 			 * @return Referenced packet.
 			 */
 			FFmpeg::AVPacket Ref() const noexcept;
 
 			/**
-			 * @brief Unreferences packet data (av_packet_unref).
+			 * @brief Unreferences packet data (@c av_packet_unref).
 			 */
 			void Unref() noexcept;
 
@@ -113,15 +130,15 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @param data Compressed bytes.
 			 * @param size Byte count.
 			 * @param stream_index Stream index.
-			 * @param key_frame Sets `AV_PKT_FLAG_KEY` when true.
+			 * @param key_frame Sets @c AV_PKT_FLAG_KEY when true.
 			 * @return false if allocation failed.
 			 */
 			bool Load(const std::uint8_t* data, int size, int stream_index, bool key_frame) noexcept;
 
 			/**
 			 * @brief Sets timestamps in stream time base.
-			 * @param pts Presentation timestamp, or `AV_NOPTS_VALUE`.
-			 * @param dts Decode timestamp, or `AV_NOPTS_VALUE`.
+			 * @param pts Presentation timestamp, or @c AV_NOPTS_VALUE.
+			 * @param dts Decode timestamp, or @c AV_NOPTS_VALUE.
 			 * @param duration Duration ticks, or 0.
 			 */
 			void Timestamps(std::int64_t pts, std::int64_t dts, std::int64_t duration) noexcept;
@@ -134,13 +151,13 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 
 			/**
 			 * @brief Presentation timestamp in stream time base.
-			 * @return PTS, or `AV_NOPTS_VALUE`.
+			 * @return PTS, or @c AV_NOPTS_VALUE.
 			 */
 			std::int64_t Pts() const noexcept;
 
 			/**
 			 * @brief Decode timestamp in stream time base.
-			 * @return DTS, or `AV_NOPTS_VALUE`.
+			 * @return DTS, or @c AV_NOPTS_VALUE.
 			 */
 			std::int64_t Dts() const noexcept;
 
@@ -151,26 +168,44 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			std::int64_t Duration() const noexcept;
 
 			/**
-			 * @brief Packet flags (`AV_PKT_FLAG_*`).
+			 * @brief Packet flags (@c AV_PKT_FLAG_*).
 			 * @return Flags, or 0 if empty.
 			 */
 			int Flags() const noexcept;
 
 			/**
 			 * @brief Compressed payload pointer.
-			 * @return `data`, or nullptr if empty.
+			 * @return @c data, or nullptr if empty.
 			 */
 			const std::uint8_t* Data() const noexcept;
 
 			/**
 			 * @brief Compressed payload size in bytes.
-			 * @return `size`, or 0 if empty.
+			 * @return @c size, or 0 if empty.
 			 */
 			int Size() const noexcept;
 
 		private:
 			/**
-			 * @brief Frees the packet (av_packet_free).
+			 * @brief Deep copy via @c av_packet_clone.
+			 * @param other Source packet.
+			 *
+			 * Private: a public copy would duplicate the compressed AU.
+			 * Only the packet engine and
+			 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
+			 * may clone.
+			 */
+			AVPacket(const AVPacket& other) noexcept;
+
+			/**
+			 * @brief Deep copy assignment via @c av_packet_clone.
+			 * @param other Source packet.
+			 * @return *this.
+			 */
+			AVPacket& operator=(const AVPacket& other) noexcept;
+
+			/**
+			 * @brief Frees the packet (@c av_packet_free).
 			 */
 			void Free() noexcept override;
 	};

@@ -38,94 +38,100 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/frame.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <concepts>
-#include <memory>
-#include <utility>
-#include <vector>
+#include <map>
+#include <string>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Packet and frame steps. Bundled or user-supplied.
+ * @brief Frame and packet steps attached to a job or a raw pipeline.
  */
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
-	 * @class FramePipe
-	 * @brief Ordered list of Filter::Step steps.
+	 * @class Report
+	 * @brief Optional measurement produced by a filter.
 	 *
-	 * Zero steps: Push returns the frame unchanged. An empty optional
-	 * from a step stops the chain. A step that Failed() fails the pipe.
-	 * Add steps before the first Push.
+	 * Status is measurement-only. Quality thresholds belong in
+	 * @c Transcode::OnReport and @c Transcode::ExtraData, not here.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC FramePipe: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Report {
 		public:
 			/**
-			 * @brief Empty pipe (identity).
+			 * @enum Status
+			 * @brief Whether this node produced usable data.
 			 */
-			FramePipe() noexcept = default;
+			enum class Status {
+				None,		///< Filter does not report
+				Ok,		///< Data() is usable
+				Failed		///< Measurement could not be taken
+			};
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Empty report (`None`).
 			 */
-			FramePipe(const FramePipe&) = delete;
+			Report() noexcept;
+
+			/**
+			 * @brief Report with a status and a dictionary.
+			 * @param status Measurement result.
+			 * @param data Key/value payload (owned).
+			 */
+			Report(Status status, std::map<std::string, std::string> data) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param other Source report.
+			 */
+			Report(const Report& other) noexcept = default;
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Source report.
 			 */
-			FramePipe(FramePipe&&) noexcept = default;
+			Report(Report&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~FramePipe() noexcept override = default;
+			~Report() noexcept = default;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source report.
 			 * @return *this.
 			 */
-			FramePipe& operator=(const FramePipe&) = delete;
+			Report& operator=(const Report& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Source report.
 			 * @return *this.
 			 */
-			FramePipe& operator=(FramePipe&&) noexcept = default;
+			Report& operator=(Report&& other) noexcept = default;
 
 			/**
-			 * @brief Appends a step. No-op if the pipe already failed.
-			 * @param step Owned step (must not be null).
+			 * @brief Measurement status.
+			 * @return Status value.
 			 */
-			void Add(std::unique_ptr<Step> step) noexcept;
+			Status Kind() const noexcept;
 
 			/**
-			 * @brief Constructs and appends a step.
-			 * @tparam FilterType Type derived from Filter::Step.
-			 * @param args Constructor arguments.
-			 * @return *this.
+			 * @brief Dictionary payload.
+			 * @return Owned key/value map (may be empty).
 			 */
-			template<typename FilterType, typename... Args>
-			requires std::derived_from<FilterType, Step>
-			FramePipe& Add(Args&&... args) noexcept {
-				Add(std::make_unique<FilterType>(std::forward<Args>(args)...));
-				return *this;
-			}
+			const std::map<std::string, std::string>& Data() const noexcept;
 
 			/**
-			 * @brief Number of steps.
-			 * @return Count.
+			 * @brief Single callable dump of status plus data.
+			 * @return Human-readable snapshot.
 			 */
-			std::size_t Size() const noexcept;
-
-			/**
-			 * @brief Runs every step in order.
-			 * @param frame Incoming frame (moved in).
-			 * @return Frame after the last step, or empty.
-			 */
-			std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept override;
+			std::string operator()() const noexcept;
 
 		private:
-			std::vector<std::unique_ptr<Step>> m_steps;	///< Steps in order
+			Status m_status;					///< Measurement status
+			std::map<std::string, std::string> m_data;	///< Payload
 	};
 }

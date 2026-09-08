@@ -38,30 +38,26 @@
 
 #pragma once
 
+#include <StormByte/multimedia/pipeline/filters/chain/generic.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <optional>
-#include <string>
-#include <utility>
-
 /**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief User-supplied packet steps run by Demux.
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Chain
  */
-namespace StormByte::Multimedia::Pipeline::Filter {
+namespace StormByte::Multimedia::Pipeline::Filter::Chain {
 	/**
 	 * @class Packet
-	 * @brief One packet-to-packet step. Inherit and implement Push.
+	 * @brief Bitstream @ref StormByte::Multimedia::Pipeline::Filter::Packet list.
 	 *
-	 * Return the same or a new Pipeline::Packet. Return empty optional
-	 * to absorb it. On a hard error call Fail() and return empty.
-	 * Push must not throw.
+	 * Owned by the pipeline. @ref Filter::Packet is the node facade;
+	 * clang will fail this header until that type exists on
+	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg's header.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Packet {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public Generic<Filter::Packet> {
 		public:
 			/**
-			 * @brief Default constructor.
+			 * @brief Empty chain.
 			 */
 			Packet() noexcept = default;
 
@@ -78,7 +74,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Packet() noexcept = default;
+			~Packet() noexcept = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -93,40 +89,10 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			Packet& operator=(Packet&&) noexcept = default;
 
 			/**
-			 * @brief Runs this step on @p packet.
-			 * @param packet Incoming access unit (moved in).
-			 * @return Outgoing access unit, or empty if absorbed or failed.
+			 * @brief Runs every node with @ref Role::Process.
+			 * @param packet Unit to mutate in place.
+			 * @return false if this chain @ref Failed.
 			 */
-			virtual std::optional<Pipeline::Packet> Push(Pipeline::Packet&& packet) noexcept = 0;
-
-			/**
-			 * @brief Whether Push set a hard error.
-			 * @return true after Fail().
-			 */
-			bool Failed() const noexcept {
-				return m_failed;
-			}
-
-			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept {
-				return m_error;
-			}
-
-		protected:
-			/**
-			 * @brief Marks a hard error. Further Push calls should no-op.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept {
-				m_failed = true;
-				m_error = std::move(reason);
-			}
-
-		private:
-			bool m_failed = false;				///< Hard error
-			std::optional<std::string> m_error;		///< Failure text
+			bool Push(Pipeline::Packet& packet) noexcept;
 	};
 }

@@ -109,11 +109,11 @@ const StormByte::Multimedia::Features& Decoder::Capabilities() const noexcept {
 	return m_capabilities;
 }
 
-Filter::FramePipe& Decoder::Pipe() noexcept {
+Filter::Chain::Process& Decoder::Pipe() noexcept {
 	return m_pipe;
 }
 
-const Filter::FramePipe& Decoder::Pipe() const noexcept {
+const Filter::Chain::Process& Decoder::Pipe() const noexcept {
 	return m_pipe;
 }
 
@@ -161,16 +161,10 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 	if (decoder.m_failed)
 		return decoder;
 
-	auto filtered = decoder.m_pipe.Push(std::move(frame));
-	if (decoder.m_pipe.Failed()) {
+	if (!decoder.m_pipe.Push(frame)) {
 		decoder.Fail(decoder.m_pipe.Error().value_or("frame filter failed"));
 		frame = Frame{};
 		return decoder;
 	}
-	if (!filtered.has_value()) {
-		frame = Frame{};
-		return decoder;
-	}
-	frame = std::move(*filtered);
 	return decoder;
 }

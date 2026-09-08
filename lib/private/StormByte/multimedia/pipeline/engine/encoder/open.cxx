@@ -485,7 +485,7 @@ Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(int in
 		}
 	}
 
-	return Packet{
+	return StormByte::Multimedia::Pipeline::Packet{
 		index,
 		StormByte::Buffer::FIFO{std::move(bytes)},
 		TicksToPts(raw.Pts(), timeBase),

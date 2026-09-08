@@ -42,10 +42,16 @@
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Multimedia::Type;
 
+/**
+ * @brief Empty frame.
+ */
 Frame::Frame() noexcept
 : m_type(Type::Unknown), m_streamIndex(-1) {}
 
-Frame::Frame(Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
+/**
+ * @brief Builds a frame without a backend buffer.
+ */
+Frame::Frame(enum Type type, int stream_index, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	std::optional<StormByte::Multimedia::Property::Video> video,
@@ -55,6 +61,50 @@ Frame::Frame(Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO pa
 m_pts(std::move(pts)), m_duration(std::move(duration)),
 m_video(std::move(video)), m_audio(std::move(audio)),
 m_attachments(std::move(attachments)) {}
+
+/**
+ * @brief Deep copy (metadata, FIFO and cloned AVFrame).
+ * @param other Source frame.
+ */
+Frame::Frame(const Frame& other) noexcept
+: m_type(other.m_type),
+m_streamIndex(other.m_streamIndex),
+m_payload(other.m_payload),
+m_pts(other.m_pts),
+m_duration(other.m_duration),
+m_video(other.m_video),
+m_audio(other.m_audio),
+m_language(other.m_language),
+m_title(other.m_title),
+m_attachments(other.m_attachments) {
+	if (other.m_engine)
+		m_engine = std::make_unique<Engine::Frame::Engine>(*other.m_engine);
+}
+
+/**
+ * @brief Deep copy assignment.
+ * @param other Source frame.
+ * @return *this.
+ */
+Frame& Frame::operator=(const Frame& other) noexcept {
+	if (this == &other)
+		return *this;
+	m_type = other.m_type;
+	m_streamIndex = other.m_streamIndex;
+	m_payload = other.m_payload;
+	m_pts = other.m_pts;
+	m_duration = other.m_duration;
+	m_video = other.m_video;
+	m_audio = other.m_audio;
+	m_language = other.m_language;
+	m_title = other.m_title;
+	m_attachments = other.m_attachments;
+	if (other.m_engine)
+		m_engine = std::make_unique<Engine::Frame::Engine>(*other.m_engine);
+	else
+		m_engine.reset();
+	return *this;
+}
 
 Frame::Frame(Frame&&) noexcept = default;
 Frame::~Frame() noexcept = default;

@@ -43,7 +43,6 @@
 
 #include <optional>
 #include <string>
-#include <utility>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -75,7 +74,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class SideData
-	 * @brief One side-data blob attached to a Frame.
+	 * @brief One side-data blob attached to a Frame or Packet.
+	 *
+	 * Copy duplicates the FIFO. That is cheap next to an @c AVFrame
+	 * plane clone; @ref StormByte::Multimedia::Pipeline::Frame needs it
+	 * for its private copy.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC SideData {
 		public:
@@ -94,9 +97,10 @@ namespace StormByte::Multimedia::Pipeline {
 			SideData(std::string name, StormByte::Buffer::FIFO payload) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source blob.
 			 */
-			SideData(const SideData&) = delete;
+			SideData(const SideData& other) noexcept = default;
 
 			/**
 			 * @brief Move constructor.
@@ -109,10 +113,10 @@ namespace StormByte::Multimedia::Pipeline {
 			~SideData() noexcept = default;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
 			 * @return *this.
 			 */
-			SideData& operator=(const SideData&) = delete;
+			SideData& operator=(const SideData& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
@@ -145,7 +149,7 @@ namespace StormByte::Multimedia::Pipeline {
 			StormByte::Buffer::FIFO& Payload() noexcept;
 
 		private:
-			SideDataKind m_kind;				///< Kind
+			SideDataKind m_kind;					///< Kind
 			std::optional<std::string> m_name;		///< Name if Other
 			StormByte::Buffer::FIFO m_payload;		///< Bytes
 	};

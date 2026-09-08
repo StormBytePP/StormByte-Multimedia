@@ -93,7 +93,7 @@ bool Details::Audio::IsOpen() const noexcept {
 	return true;
 }
 
-bool Details::Audio::Send(class Decoder& owner, Packet& packet) noexcept {
+bool Details::Audio::Send(class Decoder& owner, class Packet& packet) noexcept {
 	FFmpeg::AVPacket raw;
 	StormByte::Buffer::DataType bytes;
 	const auto n = packet.Payload().AvailableBytes();
@@ -152,7 +152,9 @@ bool Details::Audio::Receive(class Decoder& owner, class Frame& frame) noexcept 
 		m_audio
 	);
 	StampTags(owner, frame);
+	auto* engine = holder.get();
 	frame.Bind(std::move(holder));
+	engine->BindProperties(frame);
 	return true;
 }
 

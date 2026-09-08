@@ -222,3 +222,7 @@ else()
 endif()
 
 buildmaster_link(StormByte-Multimedia ffmpeg)
+
+include(${CMAKE_SOURCE_DIR}/cmake/ffmpeg.cmake)
+export_ffmpeg_version()
+prepare_ffmpeg_filter_header()

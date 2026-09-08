@@ -88,11 +88,11 @@ const std::optional<std::string>& Demux::Error() const noexcept {
 	return m_error;
 }
 
-Filter::Pipe& Demux::Pipe() noexcept {
+Filter::Chain::Packet& Demux::Pipe() noexcept {
 	return m_pipe;
 }
 
-const Filter::Pipe& Demux::Pipe() const noexcept {
+const Filter::Chain::Packet& Demux::Pipe() const noexcept {
 	return m_pipe;
 }
 
@@ -126,27 +126,21 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demu
 	return demux;
 }
 
-Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Packet& packet) noexcept {
+Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, class Packet& packet) noexcept {
 	if (demux.m_failed || demux.m_eof)
 		return demux;
 	if (!demux.m_engine) {
 		demux.Fail("demuxer is not open");
 		return demux;
 	}
-	for (;;) {
-		Packet raw;
-		if (!demux.m_engine->Read(demux, raw))
-			return demux;
-		auto filtered = demux.m_pipe.Push(std::move(raw));
-		if (demux.m_pipe.Failed()) {
-			demux.Fail(demux.m_pipe.Error().value_or("packet filter failed"));
-			return demux;
-		}
-		if (!filtered.has_value())
-			continue;
-		packet = std::move(*filtered);
+	if (!demux.m_engine->Read(demux, packet))
+		return demux;
+	if (!demux.m_pipe.Push(packet)) {
+		demux.Fail(demux.m_pipe.Error().value_or("packet filter failed"));
+		packet = Packet{};
 		return demux;
 	}
+	return demux;
 }
 
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {

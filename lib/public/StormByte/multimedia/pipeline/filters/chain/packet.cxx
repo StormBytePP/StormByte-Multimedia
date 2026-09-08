@@ -36,36 +36,17 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/filters/pipe.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/packet.hxx>
 
-using namespace StormByte::Multimedia::Pipeline::Filter;
+using StormByte::Multimedia::Pipeline::Filter::Chain::Packet;
+using StormByte::Multimedia::Pipeline::Filter::Role;
 
-void Pipe::Add(std::unique_ptr<Packet> step) noexcept {
-	if (Failed() || !step)
-		return;
-	m_steps.push_back(std::move(step));
-}
-
-std::size_t Pipe::Size() const noexcept {
-	return m_steps.size();
-}
-
-std::optional<StormByte::Multimedia::Pipeline::Packet> Pipe::Push(
-	StormByte::Multimedia::Pipeline::Packet&& packet) noexcept {
+bool Packet::Push(Pipeline::Packet& packet) noexcept {
 	if (Failed())
-		return std::nullopt;
-	if (m_steps.empty())
-		return std::move(packet);
-
-	std::optional<StormByte::Multimedia::Pipeline::Packet> current{std::move(packet)};
-	for (auto& step : m_steps) {
-		if (!current.has_value())
-			return std::nullopt;
-		current = step->Push(std::move(*current));
-		if (step->Failed()) {
-			Fail(step->Error().value_or("packet filter failed"));
-			return std::nullopt;
-		}
+		return false;
+	for (auto& node : m_nodes) {
+		if (!node->Push(packet, Role::Process))
+			return Fail(node->Error().value_or("filter failed"));
 	}
-	return current;
+	return true;
 }

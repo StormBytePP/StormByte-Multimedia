@@ -38,70 +38,61 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/generic.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-namespace StormByte::Multimedia::Pipeline {
-	class Frame;
-}
-
 /**
- * @namespace StormByte::Multimedia::Pipeline::Engine::Frame
- * @brief Decoded-frame backend behind the public Frame type.
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Chain
  */
-namespace StormByte::Multimedia::Pipeline::Engine::Frame {
+namespace StormByte::Multimedia::Pipeline::Filter::Chain {
 	/**
-	 * @class Engine
-	 * @brief Opaque AVFrame holder until Payload() materialises planes.
+	 * @class Process
+	 * @brief Decode-to-encode @ref StormByte::Multimedia::Pipeline::Filter::Process list.
 	 *
-	 * Copy clones the backend via @c av_frame_clone (Engine is friend
-	 * of @ref StormByte::Multimedia::Backend::FFmpeg::AVFrame).
+	 * Owned by the pipeline, not by Transcode. Zero nodes: Push is
+	 * identity. A node that fails stops the chain;
+	 * @ref Generic::Error is that node's message.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public Generic<Filter::Process> {
 		public:
 			/**
-			 * @brief Empty backend holder.
+			 * @brief Empty chain.
 			 */
-			Engine() noexcept = default;
+			Process() noexcept = default;
 
 			/**
-			 * @brief Deep copy (cloned @c AVFrame).
-			 * @param other Source engine.
+			 * @brief Copy constructor (deleted).
 			 */
-			Engine(const Engine& other) noexcept = default;
+			Process(const Process&) = delete;
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Engine to take.
 			 */
-			Engine(Engine&&) noexcept = default;
+			Process(Process&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Engine() noexcept = default;
+			~Process() noexcept = default;
 
 			/**
-			 * @brief Deep copy assignment.
-			 * @param other Source engine.
+			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			Engine& operator=(const Engine& other) noexcept = default;
+			Process& operator=(const Process&) = delete;
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&&) noexcept = default;
+			Process& operator=(Process&&) noexcept = default;
 
 			/**
-			 * @brief Rebuilds Video/Audio on @p frame from @ref m_backend.
-			 * @param frame Pipeline frame that owns this engine.
+			 * @brief Runs every node with @ref Role::Process.
+			 * @param frame Unit to mutate in place.
+			 * @return false if this chain @ref Failed.
 			 */
-			void BindProperties(class StormByte::Multimedia::Pipeline::Frame& frame) noexcept;
-
-			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_backend;	///< FFmpeg frame
-			bool m_payloadReady = false;								///< true after Payload() materialised planes
+			bool Push(Pipeline::Frame& frame) noexcept;
 	};
 }

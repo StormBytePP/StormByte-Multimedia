@@ -102,7 +102,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Open {
 	 * @param keepPacketHdrPlus false for HEVC (SEI already in payload).
 	 * @return Move-only packet.
 	 */
-	Packet MakePacket(int index, const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
+	class Packet MakePacket(int index, const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
 		AVRational timeBase, bool keepPacketHdrPlus = true) noexcept;
 
 	/**

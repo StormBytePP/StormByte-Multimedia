@@ -384,7 +384,7 @@ void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Flush(
 	m_flushed = true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::TakePacket(Packet& packet) noexcept {
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::TakePacket(class Packet& packet) noexcept {
 	if (!m_pending.empty()) {
 		packet = std::move(m_pending.front());
 		m_pending.pop_front();

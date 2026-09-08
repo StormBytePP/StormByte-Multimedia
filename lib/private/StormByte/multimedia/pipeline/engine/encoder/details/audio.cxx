@@ -383,7 +383,7 @@ void Details::Audio::Flush(class Encoder& owner) noexcept {
 	m_flushed = true;
 }
 
-bool Details::Audio::TakePacket(Packet& packet) noexcept {
+bool Details::Audio::TakePacket(class Packet& packet) noexcept {
 	if (!m_pending.empty()) {
 		packet = std::move(m_pending.front());
 		m_pending.pop_front();

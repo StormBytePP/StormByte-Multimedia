@@ -37,6 +37,7 @@
  */
 
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
@@ -52,6 +53,39 @@ Packet::Packet(int stream_index, StormByte::Buffer::FIFO payload,
 : m_streamIndex(stream_index), m_payload(std::move(payload)),
 m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
 m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
+
+Packet::Packet(const Packet& other) noexcept
+: m_streamIndex(other.m_streamIndex),
+m_payload(other.m_payload),
+m_pts(other.m_pts),
+m_dts(other.m_dts),
+m_duration(other.m_duration),
+m_keyFrame(other.m_keyFrame),
+m_attachments(other.m_attachments) {
+	if (other.m_engine)
+		m_engine = std::make_unique<Engine::Packet::Engine>(*other.m_engine);
+}
+
+Packet& Packet::operator=(const Packet& other) noexcept {
+	if (this == &other)
+		return *this;
+	m_streamIndex = other.m_streamIndex;
+	m_payload = other.m_payload;
+	m_pts = other.m_pts;
+	m_dts = other.m_dts;
+	m_duration = other.m_duration;
+	m_keyFrame = other.m_keyFrame;
+	m_attachments = other.m_attachments;
+	if (other.m_engine)
+		m_engine = std::make_unique<Engine::Packet::Engine>(*other.m_engine);
+	else
+		m_engine.reset();
+	return *this;
+}
+
+Packet::Packet(Packet&&) noexcept = default;
+Packet::~Packet() noexcept = default;
+Packet& Packet::operator=(Packet&&) noexcept = default;
 
 int Packet::StreamIndex() const noexcept {
 	return m_streamIndex;
@@ -87,4 +121,8 @@ const std::vector<SideData>& Packet::Attachments() const noexcept {
 
 std::vector<SideData>& Packet::Attachments() noexcept {
 	return m_attachments;
+}
+
+void Packet::Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept {
+	m_engine = std::move(engine);
 }

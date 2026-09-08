@@ -94,7 +94,7 @@ bool Details::Container::Adopt(class Demux& owner, FFmpeg::AVFormatContext ctx) 
 	return true;
 }
 
-bool Details::Container::Read(class Demux& owner, Packet& packet) noexcept {
+bool Details::Container::Read(class Demux& owner, class Packet& packet) noexcept {
 	if (!m_ctx) {
 		owner.Fail("demuxer is not open");
 		return false;
@@ -125,14 +125,14 @@ bool Details::Container::Read(class Demux& owner, Packet& packet) noexcept {
 			bytes.assign(raw, raw + size);
 		}
 
-		packet = Packet{
-			index,
-			StormByte::Buffer::FIFO{std::move(bytes)},
-			TicksToPts(m_scratch.Pts(), tb),
-			TicksToPts(m_scratch.Dts(), tb),
-			TicksToDuration(m_scratch.Duration(), tb),
-			(m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
-		};
+        packet = StormByte::Multimedia::Pipeline::Packet{
+            index,
+            StormByte::Buffer::FIFO{std::move(bytes)},
+            TicksToPts(m_scratch.Pts(), tb),
+            TicksToPts(m_scratch.Dts(), tb),
+            TicksToDuration(m_scratch.Duration(), tb),
+            (m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
+        };
 		m_scratch.Unref();
 		return true;
 	}

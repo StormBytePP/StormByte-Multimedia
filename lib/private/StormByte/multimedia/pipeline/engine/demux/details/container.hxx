@@ -128,7 +128,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			 * @param packet Replaced on success.
 			 * @return true if @p packet was filled.
 			 */
-			bool Read(class Demux& owner, Packet& packet) noexcept override;
+			bool Read(class Demux& owner, class Packet& packet) noexcept override;
 
 			/**
 			 * @brief Raw AVFormatContext pointer.

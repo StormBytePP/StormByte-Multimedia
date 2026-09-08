@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -51,35 +52,46 @@
  * @brief Demux / decode / filter / encode / mux types.
  */
 namespace StormByte::Multimedia::Pipeline {
+	namespace Filter {
+		class FFmpeg;	///< Sole filter friend of the private copy.
+	}
+
 	/**
-	 * @defgroup pipeline_packet Packet
-	 * @brief One compressed access unit plus optional side data.
-	 *
-	 * Payload is the coded AU. Attachments() is container/codec metadata
-	 * that must survive encode → mux (HDR10+ for VP9/AV1, captions, etc.).
-	 * Do not drop Attachments() when rebuilding a packet from bytes.
-	 * @{
+	 * @namespace Engine
+	 * @brief Private backends. Public headers only forward-declare them.
 	 */
+	namespace Engine {
+		/**
+		 * @namespace Packet
+		 * @brief Compressed-AU backend behind the public Packet type.
+		 */
+		namespace Packet {
+			class Engine;	///< Opaque holder of the backend @c AVPacket.
+		}
+	}
 
 	/**
 	 * @class Packet
 	 * @brief One compressed access unit: owned payload, timestamps and side data.
 	 *
-	 * Move-only. The payload FIFO is owned and not thread-safe.
-	 * Pts / Dts / Duration are nanoseconds on the stream clock, not FFmpeg ticks.
+	 * Public API is move-only. There is no public @c Clone().
+	 * Copy constructor and copy assignment stay private and clone
+	 * metadata, the payload FIFO and the backend @c AVPacket when
+	 * @ref StormByte::Multimedia::Pipeline::Engine::Packet::Engine
+	 * exists. @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Clone
+	 * is how a filter keeps a copy.
 	 *
-	 * Side data uses the same @ref SideData blobs as Frame. HDR10+ on VP9
-	 * (and later AV1/VVC-in-container) lives here as SideDataKind::HdrPlus,
-	 * matching AV_PKT_DATA_DYNAMIC_HDR10_PLUS. HEVC still also embeds ST 2094-40
-	 * as a prefix SEI in the payload; both paths can coexist.
+	 * Pts / Dts / Duration are nanoseconds on the stream clock, not
+	 * FFmpeg ticks. Side data uses the same @ref SideData blobs as
+	 * Frame. After
+	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Replace
+	 * the previous backend is released and the FIFO is cleared.
+	 *
+	 * Destructor and move are out of line so this header can forward-declare
+	 * @ref Engine::Packet::Engine. The .cxx includes the engine definition.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet {
 		public:
-			/**
-			 * @name Lifetime
-			 * @{
-			 */
-
 			/**
 			 * @brief Empty packet (no payload, index -1).
 			 */
@@ -103,38 +115,22 @@ namespace StormByte::Multimedia::Pipeline {
 				std::vector<SideData> attachments = {}) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Packet(const Packet&) = delete;
-
-			/**
 			 * @brief Move constructor.
+			 * @param other Packet to take.
 			 */
-			Packet(Packet&&) noexcept = default;
+			Packet(Packet&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Packet() noexcept = default;
-
-			/**
-			 * @brief Copy assignment (deleted).
-			 * @return *this.
-			 */
-			Packet& operator=(const Packet&) = delete;
+			~Packet() noexcept;
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Packet to take.
 			 * @return *this.
 			 */
-			Packet& operator=(Packet&&) noexcept = default;
-
-			/** @} */
-
-			/**
-			 * @name Accessors
-			 * @{
-			 */
+			Packet& operator=(Packet&& other) noexcept;
 
 			/**
 			 * @brief Container or mux stream index.
@@ -178,13 +174,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			StormByte::Buffer::FIFO& Payload() noexcept;
 
-			/** @} */
-
-			/**
-			 * @name Side data
-			 * @{
-			 */
-
 			/**
 			 * @brief Side-data blobs bound to this access unit.
 			 * @return Blobs (HdrPlus, captions, …). Empty when none.
@@ -197,9 +186,32 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			std::vector<SideData>& Attachments() noexcept;
 
-			/** @} */
+		friend class Filter::FFmpeg;
 
 		private:
+			/**
+			 * @brief Deep copy (metadata, FIFO and cloned @c AVPacket).
+			 * @param other Source packet.
+			 *
+			 * Private: a public copy would duplicate the compressed AU.
+			 * Only @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
+			 * may clone, via @ref Filter::FFmpeg::Clone.
+			 */
+			Packet(const Packet& other) noexcept;
+
+			/**
+			 * @brief Deep copy assignment.
+			 * @param other Source packet.
+			 * @return *this.
+			 */
+			Packet& operator=(const Packet& other) noexcept;
+
+			/**
+			 * @brief Adopts a backend packet.
+			 * @param engine Backend holder.
+			 */
+			void Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept;
+
 			int m_streamIndex;								///< Container or mux stream index
 			StormByte::Buffer::FIFO m_payload;				///< Compressed bytes
 			std::optional<Property::Duration> m_pts;		///< Presentation timestamp
@@ -207,7 +219,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Duration> m_duration;	///< Packet duration
 			bool m_keyFrame;								///< Key frame
 			std::vector<SideData> m_attachments;			///< Packet side data (HDR10+, …)
+			std::unique_ptr<Engine::Packet::Engine> m_engine;	///< Backend holder
 	};
-
-	/** @} */
 }

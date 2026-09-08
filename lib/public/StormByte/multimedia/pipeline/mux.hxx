@@ -41,7 +41,7 @@
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/filters/pipe.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/packet.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -90,11 +90,6 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @defgroup mux_ops Mux stream operators
-	 * @{
-	 */
-
-	/**
 	 * @brief Binds @p encoder's Index() as a mux track. Never throws.
 	 * @param encoder Source encoder (must outlive the mux until the header).
 	 * @param mux Destination.
@@ -119,12 +114,12 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
 
 	/**
-	 * @brief Writes @p packet after the packet pipe. Never throws.
+	 * @brief Writes @p packet after the packet chain. Never throws.
 	 * @param packet Encoded or copied packet.
 	 * @param mux Destination.
 	 * @return @p packet.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Packet& operator>>(Packet& packet, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC class Packet& operator>>(class Packet& packet, Mux& mux) noexcept;
 
 	/**
 	 * @brief Snapshots File::Attachments() onto @p mux. Never throws.
@@ -142,24 +137,18 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 
-	/** @} */
-
 	/**
 	 * @class Mux
 	 * @brief Writes interleaved compressed packets to a destination file.
 	 *
-	 * Public entry point. Work lives in Engine::Mux::Details::Container
-	 * and Details::Attachment. Fail() stays private; Details are friends.
+	 * Packet nodes go in Pipe()
+	 * (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Packet).
+	 * They run inside packet >> mux. An empty chain is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Mux {
 		public:
-			/**
-			 * @name Construction
-			 * @{
-			 */
-
 			/**
 			 * @brief Muxer for @p container. Does not open a file.
 			 * @param container Registry container. Must HasAccess(Write).
@@ -196,15 +185,6 @@ namespace StormByte::Multimedia::Pipeline {
 			Mux& operator=(Mux&& other) noexcept;
 
 			/**
-			 * @}
-			 */
-
-			/**
-			 * @name State
-			 * @{
-			 */
-
-			/**
 			 * @brief true if a destination is bound and not failed.
 			 */
 			explicit operator bool() const noexcept;
@@ -228,48 +208,26 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @}
+			 * @brief Packet filter chain. Add nodes before the first packet write.
+			 * @return Chain.
 			 */
+			Filter::Chain::Packet& Pipe() noexcept;
 
 			/**
-			 * @name Filters
-			 * @{
+			 * @brief Packet filter chain.
+			 * @return Chain.
 			 */
-
-			/**
-			 * @brief Packet filter pipe. Add steps before the first packet write.
-			 * @return Pipe.
-			 */
-			Filter::Pipe& Pipe() noexcept;
-
-			/**
-			 * @brief Packet filter pipe.
-			 * @return Pipe.
-			 */
-			const Filter::Pipe& Pipe() const noexcept;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @name Finish
-			 * @{
-			 */
+			const Filter::Chain::Packet& Pipe() const noexcept;
 
 			/**
 			 * @brief Flushes every reserved encoder and writes leftover packets.
 			 */
 			void Flush() noexcept;
 
-			/**
-			 * @}
-			 */
-
 			friend Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
 			friend Copy& operator>>(Copy& copy, Mux& mux) noexcept;
 			friend Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
-			friend Packet& operator>>(Packet& packet, Mux& mux) noexcept;
+			friend class Packet& operator>>(class Packet& packet, Mux& mux) noexcept;
 			friend Mux& operator>>(const File& file, Mux& mux) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 			friend class Copy;
@@ -279,7 +237,7 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			const Container* m_container;							///< Destination container
 			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Output format backend
-			Filter::Pipe m_pipe;									///< Packet steps
+			Filter::Chain::Packet m_pipe;							///< Packet nodes
 			bool m_failed;											///< Hard error
 			std::optional<std::string> m_error;						///< Failure text
 

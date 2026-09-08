@@ -121,7 +121,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder {
 			 * @param packet Replaced on success.
 			 * @return true if @p packet was filled.
 			 */
-			virtual bool TakePacket(Packet& packet) noexcept = 0;
+			virtual bool TakePacket(class Packet& packet) noexcept = 0;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.

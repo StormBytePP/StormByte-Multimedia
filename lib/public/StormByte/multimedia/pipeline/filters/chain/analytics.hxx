@@ -38,76 +38,63 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/frame.hxx>
-#include <StormByte/multimedia/property/resolution.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/generic.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <cstdint>
-
 /**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Packet and frame steps. Bundled or user-supplied.
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Chain
  */
-namespace StormByte::Multimedia::Pipeline::Filter {
+namespace StormByte::Multimedia::Pipeline::Filter::Chain {
 	/**
-	 * @class Resize
-	 * @brief Scales a video frame. Audio and subtitles pass through.
+	 * @class Analytics
+	 * @brief Measurement list. Does not sit in the Process chain.
 	 *
-	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
-	 * on the first video frame. Destination is applied with swscale
-	 * on the backend frame; Payload() is invalidated.
+	 * Owned by the pipeline. The driver calls Push with Reference
+	 * and/or Distorted. Needs friendship on
+	 * @ref StormByte::Multimedia::Pipeline::Filter::Analytics
+	 * to reach its private Push.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Analytics: public Generic<Filter::Analytics> {
 		public:
 			/**
-			 * @brief Exact destination size.
-			 * @param resolution Target resolution.
+			 * @brief Empty chain.
 			 */
-			explicit Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
-
-			/**
-			 * @brief Destination size. 0 on one axis keeps aspect ratio.
-			 * @param width Target width, or 0.
-			 * @param height Target height, or 0.
-			 */
-			Resize(std::uint32_t width, std::uint32_t height) noexcept;
+			Analytics() noexcept = default;
 
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
-			Resize(const Resize&) = delete;
+			Analytics(const Analytics&) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 */
-			Resize(Resize&&) noexcept = default;
+			Analytics(Analytics&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Resize() noexcept override = default;
+			~Analytics() noexcept = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			Resize& operator=(const Resize&) = delete;
+			Analytics& operator=(const Analytics&) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Resize& operator=(Resize&&) noexcept = default;
+			Analytics& operator=(Analytics&&) noexcept = default;
 
 			/**
-			 * @brief Scales a video frame, or returns @p frame unchanged.
-			 * @param frame Incoming frame.
-			 * @return Scaled frame, or empty on failure.
+			 * @brief Feeds every node that Accepts @p role.
+			 * @param frame Reference or distorted unit.
+			 * @param role @ref Role::Reference or @ref Role::Distorted.
+			 * @return false if this chain @ref Failed.
 			 */
-			std::optional<Pipeline::Frame> Push(Pipeline::Frame&& frame) noexcept override;
-
-		private:
-			std::uint32_t m_width;		///< Requested width, 0 = auto
-			std::uint32_t m_height;		///< Requested height, 0 = auto
+			bool Push(Pipeline::Frame& frame, Filter::Role role) noexcept;
 	};
 }

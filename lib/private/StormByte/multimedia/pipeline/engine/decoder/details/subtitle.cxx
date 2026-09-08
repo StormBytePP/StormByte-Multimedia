@@ -85,7 +85,7 @@ bool Details::Subtitle::IsOpen() const noexcept {
 	return true;
 }
 
-bool Details::Subtitle::Send(class Decoder& owner, Packet& packet) noexcept {
+bool Details::Subtitle::Send(class Decoder& owner, class Packet& packet) noexcept {
 	FFmpeg::AVPacket raw;
 	StormByte::Buffer::DataType bytes;
 	const auto n = packet.Payload().AvailableBytes();

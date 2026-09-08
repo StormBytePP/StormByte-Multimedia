@@ -61,8 +61,19 @@ namespace {
 FFmpeg::AVFrame::AVFrame() noexcept:
 AVPointer(av_frame_alloc()) {}
 
+FFmpeg::AVFrame::AVFrame(const AVFrame& other) noexcept:
+AVPointer(other.m_ptr ? av_frame_clone(other.m_ptr) : av_frame_alloc()) {}
+
 FFmpeg::AVFrame::~AVFrame() noexcept {
 	Free();
+}
+
+FFmpeg::AVFrame& FFmpeg::AVFrame::operator=(const AVFrame& other) noexcept {
+	if (this == &other)
+		return *this;
+	Free();
+	m_ptr = other.m_ptr ? av_frame_clone(other.m_ptr) : av_frame_alloc();
+	return *this;
 }
 
 void FFmpeg::AVFrame::Unref() noexcept {

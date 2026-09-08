@@ -204,7 +204,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param packet Encoded or copied packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Push(class Mux& owner, Packet& packet) noexcept override;
+			bool Push(class Mux& owner, class Packet& packet) noexcept override;
 
 			/**
 			 * @brief Flushes reserved encoders, leftover packets and the trailer.
@@ -222,7 +222,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			std::filesystem::path m_path;									///< Destination path
 			std::map<int, Track> m_tracks;									///< Output index → track
 			std::map<int, int> m_inToOut;									///< Demux index → output index (copy)
-			std::deque<StormByte::Multimedia::Pipeline::Packet> m_queue;	///< Packets waiting for header
+			std::deque<class Packet> m_queue;								///< Packets waiting for header
 			const StormByte::Multimedia::File* m_file = nullptr;			///< Source file (attachments)
 			bool m_header = false;											///< avformat_write_header done
 			bool m_trailer = false;											///< av_write_trailer done
@@ -240,6 +240,6 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param packet Source packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool WritePacket(class Mux& owner, Packet& packet) noexcept;
+			bool WritePacket(class Mux& owner, class Packet& packet) noexcept;
 	};
 }

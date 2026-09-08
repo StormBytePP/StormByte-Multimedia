@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/pipe.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain/packet.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -98,12 +98,12 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
 
 	/**
-	 * @brief Reads one packet into @p packet after the filter pipe. Never throws.
+	 * @brief Reads one packet into @p packet after the packet chain. Never throws.
 	 * @param demux Source demuxer.
 	 * @param packet Replaced on success.
 	 * @return @p demux.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(Demux& demux, Packet& packet) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(Demux& demux, class Packet& packet) noexcept;
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
@@ -134,17 +134,14 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
 	 * Public entry point. Open and Read live in Details::Container.
-	 * Fail() and ReachedEof() are private; Container is a friend.
+	 * Packet nodes go in Pipe()
+	 * (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Packet).
+	 * They run inside demux >> packet. An empty chain is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
 		public:
-			/**
-			 * @name Construction
-			 * @{
-			 */
-
 			/**
 			 * @brief Empty demuxer (not open).
 			 */
@@ -180,15 +177,6 @@ namespace StormByte::Multimedia::Pipeline {
 			Demux& operator=(Demux&& other) noexcept;
 
 			/**
-			 * @}
-			 */
-
-			/**
-			 * @name State
-			 * @{
-			 */
-
-			/**
 			 * @brief true if open, not failed and not at EOF.
 			 */
 			explicit operator bool() const noexcept;
@@ -212,32 +200,19 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @}
+			 * @brief Packet filter chain. Add nodes before the first packet read.
+			 * @return Chain.
 			 */
+			Filter::Chain::Packet& Pipe() noexcept;
 
 			/**
-			 * @name Filters
-			 * @{
+			 * @brief Packet filter chain.
+			 * @return Chain.
 			 */
-
-			/**
-			 * @brief Packet filter pipe. Add steps before the first packet read.
-			 * @return Pipe.
-			 */
-			Filter::Pipe& Pipe() noexcept;
-
-			/**
-			 * @brief Packet filter pipe.
-			 * @return Pipe.
-			 */
-			const Filter::Pipe& Pipe() const noexcept;
-
-			/**
-			 * @}
-			 */
+			const Filter::Chain::Packet& Pipe() const noexcept;
 
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
-			friend Demux& operator>>(Demux& demux, Packet& packet) noexcept;
+			friend Demux& operator>>(Demux& demux, class Packet& packet) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 			friend Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
@@ -246,7 +221,7 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
 			const File* m_file = nullptr;						///< Snapshot used at open
-			Filter::Pipe m_pipe;								///< Packet steps
+			Filter::Chain::Packet m_pipe;						///< Packet nodes
 			bool m_failed;										///< Hard error
 			bool m_eof;											///< End of source
 			std::optional<std::string> m_error;					///< Failure text

@@ -248,7 +248,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 		const auto started = std::chrono::steady_clock::now();
 		const auto duration = owner.m_file->Duration();
 
-		auto drainEncoder = [this, &owner](class Encoder& encoder, std::deque<Packet>& held) -> bool {
+		auto drainEncoder = [this, &owner](class Encoder& encoder, std::deque<class Packet>& held) -> bool {
 			while (!held.empty()) {
 				if (!muxQueue->TryPush(std::move(held.front())))
 					return true;
@@ -258,7 +258,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			for (;;) {
 				if (muxQueue->Full())
 					return true;
-				Packet encoded;
+				class Packet encoded;
 				encoder >> encoded;
 				if (encoder.Failed()) {
 					owner.Fail(encoder.Error().value_or("encoder failed"));
@@ -297,7 +297,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 		};
 
 		auto encodeOneFrame = [this, &owner, &drainEncoder](class Encoder& encoder, class Frame& frame,
-			int in, std::deque<Packet>& held) -> bool {
+			int in, std::deque<class Packet>& held) -> bool {
 			frame >> encoder;
 			if (encoder.Failed()) {
 				owner.Fail(encoder.Error().value_or("encoder failed"));
@@ -307,7 +307,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			return drainEncoder(encoder, held);
 		};
 
-		auto flushHeld = [this](std::deque<Packet>& held) {
+		auto flushHeld = [this](std::deque<class Packet>& held) {
 			while (!held.empty() && !cancel.load(std::memory_order_acquire)) {
 				muxQueue->Push(std::move(held.front()), cancel);
 				held.pop_front();
@@ -320,7 +320,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 				WaitIfPaused();
 				if (cancel.load(std::memory_order_acquire))
 					break;
-				std::optional<Packet> packet = muxQueue->TryPop();
+				std::optional<class Packet> packet = muxQueue->TryPop();
 				if (!packet)
 					packet = copyQueue->TryPop();
 				if (!packet) {
@@ -370,7 +370,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 					lane.frames->Close();
 				});
 				workers.emplace_back([this, &owner, &lane, &encodeOneFrame, &drainEncoder, &flushHeld]() {
-					std::deque<Packet> held;
+					std::deque<class Packet> held;
 					while (!cancel.load(std::memory_order_acquire)) {
 						WaitIfPaused();
 						if (cancel.load(std::memory_order_acquire))
@@ -395,7 +395,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			}
 			else {
 				workers.emplace_back([this, &owner, &lane, &drainEncoder, &flushHeld]() {
-					std::deque<Packet> held;
+					std::deque<class Packet> held;
 					auto pump = [&]() -> bool {
 						for (;;) {
 							class Frame frame;
@@ -452,7 +452,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 				WaitIfPaused();
 				if (cancel.load(std::memory_order_acquire))
 					break;
-				Packet packet;
+				class Packet packet;
 				demux >> packet;
 				if (demux.Failed()) {
 					owner.Fail(demux.Error().value_or("demux read failed"));

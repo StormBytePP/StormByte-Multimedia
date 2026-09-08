@@ -146,7 +146,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param packet Replaced on success.
 			 * @return true if @p packet was filled.
 			 */
-			bool TakePacket(Packet& packet) noexcept override;
+			bool TakePacket(class Packet& packet) noexcept override;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.
@@ -164,7 +164,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
 			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
 			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
-			std::deque<Packet> m_pending;												///< Packets waiting for Mux
+			std::deque<class Packet> m_pending;											///< Packets waiting for Mux
 			AVRational m_timeBase{0, 1};												///< Encoder time base
 			SwrContext* m_swr = nullptr;												///< Format / layout converter
 			AVAudioFifo* m_fifo = nullptr;												///< Samples waiting for frame_size

@@ -38,79 +38,85 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/packet.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/property/resolution.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <memory>
-#include <vector>
+#include <cstdint>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief User-supplied packet steps run by Demux.
+ * @brief Frame and packet steps attached to a job or a raw pipeline.
  */
-namespace StormByte::Multimedia::Pipeline::Filter {
+namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
-	 * @class Pipe
-	 * @brief Ordered list of Filter::Packet steps.
+	 * @class Resize
+	 * @brief Scales a video frame. Audio and subtitles are forwarded by
+	 *        @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Gate.
 	 *
-	 * Zero steps: Push returns the access unit unchanged. An empty
-	 * optional from a step stops the chain. A step that Failed()
-	 * fails the pipe. Add steps before the first Push.
+	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
+	 * on the first video frame. Talks to libav with raw @c AVFrame*
+	 * from @ref FFmpeg::Native and hands the result to
+	 * @ref FFmpeg::Replace. Does not use Multimedia RAII wrappers.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Pipe: public Packet {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Process {
 		public:
 			/**
-			 * @brief Empty pipe (identity).
+			 * @brief Exact destination size.
+			 * @param resolution Target resolution.
 			 */
-			Pipe() noexcept = default;
+			explicit Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
+
+			/**
+			 * @brief Destination size. 0 on one axis keeps aspect ratio.
+			 * @param width Target width, or 0.
+			 * @param height Target height, or 0.
+			 */
+			Resize(std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
-			Pipe(const Pipe&) = delete;
+			Resize(const Resize&) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 */
-			Pipe(Pipe&&) noexcept = default;
+			Resize(Resize&&) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Pipe() noexcept override = default;
+			~Resize() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
-			Pipe& operator=(const Pipe&) = delete;
+			Resize& operator=(const Resize&) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @return *this.
 			 */
-			Pipe& operator=(Pipe&&) noexcept = default;
+			Resize& operator=(Resize&&) noexcept = default;
 
 			/**
-			 * @brief Appends a step. No-op if the pipe already failed.
-			 * @param step Owned step (must not be null).
+			 * @brief Media this filter handles.
+			 * @return @ref StormByte::Multimedia::Type::Video.
 			 */
-			void Add(std::unique_ptr<Packet> step) noexcept;
+			StormByte::Multimedia::Type Media() const noexcept override;
 
+		protected:
 			/**
-			 * @brief Number of steps.
-			 * @return Count.
+			 * @brief Scales @p frame in place.
+			 * @param frame Video unit.
 			 */
-			std::size_t Size() const noexcept;
-
-			/**
-			 * @brief Runs every step in order.
-			 * @param packet Incoming access unit (moved in).
-			 * @return Access unit after the last step, or empty.
-			 */
-			std::optional<Pipeline::Packet> Push(Pipeline::Packet&& packet) noexcept override;
+			void ProcessFrame(Pipeline::Frame& frame) noexcept override;
 
 		private:
-			std::vector<std::unique_ptr<Packet>> m_steps;	///< Steps in order
+			std::uint32_t m_width;		///< Requested width, 0 = auto
+			std::uint32_t m_height;		///< Requested height, 0 = auto
 	};
 }

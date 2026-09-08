@@ -58,11 +58,19 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Decoder;
-	class Encoder;
+	class Decoder;	///< Packet-to-frame decode step.
+	class Encoder;	///< Frame-to-packet encode step.
+
+	/**
+	 * @namespace Filter
+	 * @brief Frame and packet steps attached to a job or a raw pipeline.
+	 *
+	 * Forward-declared so @ref Frame can friend
+	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
+	 * without including the generated filter header.
+	 */
 	namespace Filter {
-		class Resize;
-		class Watermark;
+		class FFmpeg;	///< Filter base; sole filter friend of the private copy.
 	}
 
 	/**
@@ -79,7 +87,7 @@ namespace StormByte::Multimedia::Pipeline {
 		 * @ingroup multimedia_pipeline
 		 */
 		namespace Frame {
-			class Engine;
+			class Engine;	///< Opaque holder of the backend @c AVFrame.
 		}
 		/**
 		 * @namespace Encoder
@@ -95,7 +103,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @ingroup multimedia_pipeline
 			 */
 			namespace Open {
-				struct Access;
+				struct Access;	///< Grants Encoder::Open access to @ref Frame internals.
 			}
 			/**
 			 * @namespace Details
@@ -134,19 +142,35 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Frame
 	 * @brief One decoded access unit.
 	 *
-	 * Move-only. @ref Media is the kind of this unit
+	 * Public API is move-only. There is no @c Clone().
+	 *
+	 * @ref Type is the kind of this unit
 	 * (@ref StormByte::Multimedia::Type::Video,
 	 * @ref StormByte::Multimedia::Type::Audio or
 	 * @ref StormByte::Multimedia::Type::Subtitle on a live frame;
-	 * @ref StormByte::Multimedia::Type::Unknown on an empty one).
+	 * @ref StormByte::Multimedia::Type::Unknown on the empty sentinel).
 	 * Do not infer the kind from whether @ref Video or @ref Audio
 	 * is populated.
 	 *
-	 * Planes stay in an opaque backend buffer until @ref Payload()
-	 * is called. @ref Attachments() is filled at receive time. Heuristics fill
-	 * @ref Video() HDR10 only, never the side-data bag.
-	 * @ref Audio() is set on audio frames; empty on video and subtitle frames.
-	 * @ref Language() and @ref Title() are stream tags copied by the decoder when known.
+	 * Copy constructor and copy assignment clone metadata, the payload
+	 * FIFO and the backend @c AVFrame and stay private. A public copy
+	 * would look cheap and duplicate every plane plus side data.
+	 * Analytics that must keep a reference or a distorted frame clone
+	 * through @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
+	 * (nested handle), not from user code.
+	 *
+	 * Planes stay in an opaque backend buffer until @ref Payload() is
+	 * called. @ref Attachments() is filled at receive time. Heuristics
+	 * fill @ref Video() HDR10 only, never the side-data bag.
+	 * @ref Audio() is set on audio frames; empty on video and subtitle
+	 * frames. @ref Language() and @ref Title() are stream tags copied
+	 * by the decoder when known. Those two tags, plus @ref Payload(),
+	 * are the only public mutators. Video, audio, pts and duration
+	 * change through the filter handle, not through setters here.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg
+	 * @see StormByte::Multimedia::Pipeline::Engine::Frame::Engine
+	 * @see StormByte::Multimedia::Backend::FFmpeg::AVFrame
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -160,7 +184,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Empty frame.
 			 *
-			 * @ref Media is @ref StormByte::Multimedia::Type::Unknown.
+			 * @ref Type is @ref StormByte::Multimedia::Type::Unknown.
 			 */
 			Frame() noexcept;
 
@@ -183,11 +207,6 @@ namespace StormByte::Multimedia::Pipeline {
 				std::optional<Property::Audio> audio = std::nullopt) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Frame(const Frame&) = delete;
-
-			/**
 			 * @brief Move constructor.
 			 * @param other Frame to take.
 			 */
@@ -197,12 +216,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Destructor.
 			 */
 			~Frame() noexcept;
-
-			/**
-			 * @brief Copy assignment (deleted).
-			 * @return *this.
-			 */
-			Frame& operator=(const Frame&) = delete;
 
 			/**
 			 * @brief Move assignment.
@@ -261,6 +274,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Sets the stream language tag.
 			 * @param language ISO code from File metadata (`spa`, `eng`, `es`, …).
+			 *        Empty clears it.
 			 */
 			void Language(std::string language) noexcept;
 
@@ -299,19 +313,32 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Raw side data captured at receive.
-			 * @return Blobs.
+			 * @return Blobs. MDM/CLL also appear in @ref Video() HDR10
+			 *         when the decoder could map them.
 			 */
 			const std::vector<class SideData>& Attachments() const noexcept;
 
 			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Payload
+			 * @{
+			 */
+
+			/**
 			 * @brief Payload. Materialises planes on first call if a backend frame is held.
 			 * @return FIFO.
+			 *
+			 * After materialisation the backend stays alive; a later
+			 * filter @c Adopt replaces it and this FIFO is cleared.
 			 */
 			StormByte::Buffer::FIFO& Payload() noexcept;
 
 			/**
-			 * @brief Payload.
-			 * @return FIFO. Empty until a non-const Payload() materialised it.
+			 * @brief Payload already materialised, or empty.
+			 * @return FIFO. Does not pull planes out of the backend.
 			 */
 			const StormByte::Buffer::FIFO& Payload() const noexcept;
 
@@ -319,21 +346,43 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			friend class Decoder;
-			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
-			friend class Encoder;
-			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
-			friend class Filter::Resize;
-			friend class Filter::Watermark;
-			friend struct Engine::Encoder::Open::Access;
-			friend class Engine::Encoder::Details::Video;
-			friend class Engine::Encoder::Details::Audio;
-			friend class Engine::Encoder::Details::Subtitle;
-			friend class Engine::Decoder::Details::Video;
-			friend class Engine::Decoder::Details::Audio;
-			friend class Engine::Decoder::Details::Subtitle;
+		friend class Decoder;
+		friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+		friend class Encoder;
+		friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
+		friend class Filter::FFmpeg;
+		friend struct Engine::Encoder::Open::Access;
+		friend class Engine::Encoder::Details::Video;
+		friend class Engine::Encoder::Details::Audio;
+		friend class Engine::Encoder::Details::Subtitle;
+		friend class Engine::Decoder::Details::Video;
+		friend class Engine::Decoder::Details::Audio;
+		friend class Engine::Decoder::Details::Subtitle;
+		friend class Engine::Frame::Engine;
 
 		private:
+			/**
+			 * @brief Deep copy (metadata, FIFO and cloned @c AVFrame).
+			 * @param other Source frame.
+			 *
+			 * Private on purpose: a public copy of a decoded unit
+			 * would silently duplicate every plane. Only
+			 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
+			 * (nested handle) and the codec friends may clone.
+			 * There is no public @c Clone().
+			 */
+			Frame(const Frame& other) noexcept;
+
+			/**
+			 * @brief Deep copy assignment (metadata, FIFO and cloned @c AVFrame).
+			 * @param other Source frame.
+			 * @return *this.
+			 *
+			 * Same restriction as the copy constructor: private so the
+			 * expensive clone cannot be invoked from pipeline user code.
+			 */
+			Frame& operator=(const Frame& other) noexcept;
+
 			StormByte::Multimedia::Type m_type;							///< Kind of this unit
 			int m_streamIndex;											///< Container stream index
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
@@ -347,7 +396,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Engine::Frame::Engine> m_engine;			///< Backend holder
 
 			/**
-			 * @brief Adopts a backend frame for lazy Payload().
+			 * @brief Adopts a backend frame for lazy @ref Payload().
 			 * @param engine Backend holder.
 			 */
 			void Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept;

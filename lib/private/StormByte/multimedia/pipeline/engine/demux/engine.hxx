@@ -97,7 +97,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			 * @param packet Replaced on success.
 			 * @return true if @p packet was filled. false on EOF or Fail.
 			 */
-			virtual bool Read(class Demux& owner, Packet& packet) noexcept = 0;
+			virtual bool Read(class Demux& owner, class Packet& packet) noexcept = 0;
 
 			/**
 			 * @brief Opened format context, if any. Used by demux >> decoder / copy.

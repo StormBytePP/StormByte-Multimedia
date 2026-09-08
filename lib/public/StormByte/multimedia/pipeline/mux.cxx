@@ -89,11 +89,11 @@ namespace StormByte::Multimedia::Pipeline {
 		return m_error;
 	}
 
-	Filter::Pipe& Mux::Pipe() noexcept {
+	Filter::Chain::Packet& Mux::Pipe() noexcept {
 		return m_pipe;
 	}
 
-	const Filter::Pipe& Mux::Pipe() const noexcept {
+	const Filter::Chain::Packet& Mux::Pipe() const noexcept {
 		return m_pipe;
 	}
 
@@ -161,21 +161,17 @@ namespace StormByte::Multimedia::Pipeline {
 		return operator>>(*demux.m_file, mux);
 	}
 
-	Packet& operator>>(Packet& packet, Mux& mux) noexcept {
+	class Packet& operator>>(class Packet& packet, Mux& mux) noexcept {
 		if (mux.m_failed)
 			return packet;
 		if (!mux.m_engine) {
 			mux.Fail("muxer has no backend");
 			return packet;
 		}
-		auto filtered = mux.m_pipe.Push(std::move(packet));
-		if (mux.m_pipe.Failed()) {
+		if (!mux.m_pipe.Push(packet)) {
 			mux.Fail(mux.m_pipe.Error().value_or("mux packet pipe failed"));
 			return packet;
 		}
-		if (!filtered)
-			return packet;
-		packet = std::move(*filtered);
 		mux.m_engine->Push(mux, packet);
 		return packet;
 	}

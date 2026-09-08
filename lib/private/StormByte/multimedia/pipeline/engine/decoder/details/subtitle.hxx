@@ -115,7 +115,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder::Details {
 			 * @param packet Compressed packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Send(class Decoder& owner, Packet& packet) noexcept override;
+			bool Send(class Decoder& owner, class Packet& packet) noexcept override;
 
 			/**
 			 * @brief Receives one subtitle frame (text or OCR-prefixed bitmap).

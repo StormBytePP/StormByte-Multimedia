@@ -89,7 +89,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder {
 			 * @param packet Compressed packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool Send(class Decoder& owner, Packet& packet) noexcept = 0;
+			virtual bool Send(class Decoder& owner, class Packet& packet) noexcept = 0;
 
 			/**
 			 * @brief Receives one decoded frame. No-op on TryAgain.
