@@ -117,6 +117,21 @@ bool Details::Container::Read(class Demux& owner, class Packet& packet) noexcept
 		if (const auto found = m_timeBase.find(index); found != m_timeBase.end())
 			tb = found->second;
 
+		StormByte::Multimedia::Type type = StormByte::Multimedia::Type::Unknown;
+		for (const auto& stream : m_ctx->Streams()) {
+			if (stream.Index() != index)
+				continue;
+			if ((stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0)
+				type = StormByte::Multimedia::Type::Attachment;
+			else switch (stream.Type()) {
+				case AVMEDIA_TYPE_VIDEO:	type = StormByte::Multimedia::Type::Video; break;
+				case AVMEDIA_TYPE_AUDIO:	type = StormByte::Multimedia::Type::Audio; break;
+				case AVMEDIA_TYPE_SUBTITLE:	type = StormByte::Multimedia::Type::Subtitle; break;
+				default:					type = StormByte::Multimedia::Type::Unknown; break;
+			}
+			break;
+		}
+
 		StormByte::Buffer::DataType bytes;
 		const auto* data = m_scratch.Data();
 		const int size = m_scratch.Size();
@@ -125,14 +140,15 @@ bool Details::Container::Read(class Demux& owner, class Packet& packet) noexcept
 			bytes.assign(raw, raw + size);
 		}
 
-        packet = StormByte::Multimedia::Pipeline::Packet{
-            index,
-            StormByte::Buffer::FIFO{std::move(bytes)},
-            TicksToPts(m_scratch.Pts(), tb),
-            TicksToPts(m_scratch.Dts(), tb),
-            TicksToDuration(m_scratch.Duration(), tb),
-            (m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
-        };
+		packet = StormByte::Multimedia::Pipeline::Packet{
+			type,
+			index,
+			StormByte::Buffer::FIFO{std::move(bytes)},
+			TicksToPts(m_scratch.Pts(), tb),
+			TicksToPts(m_scratch.Dts(), tb),
+			TicksToDuration(m_scratch.Duration(), tb),
+			(m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
+		};
 		m_scratch.Unref();
 		return true;
 	}

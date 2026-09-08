@@ -96,13 +96,15 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Open {
 
 	/**
 	 * @brief Builds a pipeline Packet from an encoded AVPacket.
+	 * @param type Kind of the encoded access unit (destination codec Type).
 	 * @param index Mux output index.
 	 * @param raw Encoder output.
 	 * @param timeBase Encoder time base.
 	 * @param keepPacketHdrPlus false for HEVC (SEI already in payload).
 	 * @return Move-only packet.
 	 */
-	class Packet MakePacket(int index, const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
+	class Packet MakePacket(enum Type type, int index,
+		const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
 		AVRational timeBase, bool keepPacketHdrPlus = true) noexcept;
 
 	/**

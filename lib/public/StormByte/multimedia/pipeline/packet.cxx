@@ -42,20 +42,21 @@
 using namespace StormByte::Multimedia::Pipeline;
 
 Packet::Packet() noexcept
-: m_streamIndex(-1), m_keyFrame(false) {}
+: m_type(StormByte::Multimedia::Type::Unknown), m_streamIndex(-1), m_keyFrame(false) {}
 
-Packet::Packet(int stream_index, StormByte::Buffer::FIFO payload,
+Packet::Packet(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> dts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	bool key_frame,
 	std::vector<SideData> attachments) noexcept
-: m_streamIndex(stream_index), m_payload(std::move(payload)),
+: m_type(type), m_streamIndex(stream_index), m_payload(std::move(payload)),
 m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
 m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
 
 Packet::Packet(const Packet& other) noexcept
-: m_streamIndex(other.m_streamIndex),
+: m_type(other.m_type),
+m_streamIndex(other.m_streamIndex),
 m_payload(other.m_payload),
 m_pts(other.m_pts),
 m_dts(other.m_dts),
@@ -69,6 +70,7 @@ m_attachments(other.m_attachments) {
 Packet& Packet::operator=(const Packet& other) noexcept {
 	if (this == &other)
 		return *this;
+	m_type = other.m_type;
 	m_streamIndex = other.m_streamIndex;
 	m_payload = other.m_payload;
 	m_pts = other.m_pts;
@@ -86,6 +88,10 @@ Packet& Packet::operator=(const Packet& other) noexcept {
 Packet::Packet(Packet&&) noexcept = default;
 Packet::~Packet() noexcept = default;
 Packet& Packet::operator=(Packet&&) noexcept = default;
+
+enum StormByte::Multimedia::Type Packet::Type() const noexcept {
+	return m_type;
+}
 
 int Packet::StreamIndex() const noexcept {
 	return m_streamIndex;

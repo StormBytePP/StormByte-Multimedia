@@ -140,7 +140,7 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::DrainOne(
 	}
 	const auto* ctx = m_encoder->Get();
 	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
-	m_pending.push_back(Open::MakePacket(owner.Index(), m_scratch, m_timeBase, keepPacketHdrPlus));
+	m_pending.push_back(Open::MakePacket(Type::Video, owner.Index(), m_scratch, m_timeBase, keepPacketHdrPlus));
 	m_scratch.Unref();
 	return true;
 }

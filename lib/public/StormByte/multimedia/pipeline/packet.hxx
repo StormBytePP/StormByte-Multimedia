@@ -41,6 +41,7 @@
 #include <StormByte/buffer/fifo.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <memory>
@@ -72,33 +73,36 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Packet
-	 * @brief One compressed access unit: owned payload, timestamps and side data.
+	 * @brief One compressed access unit: kind, owned payload, timestamps and side data.
 	 *
-	 * Public API is move-only. There is no public @c Clone().
-	 * Copy constructor and copy assignment stay private and clone
-	 * metadata, the payload FIFO and the backend @c AVPacket when
+	 * Public API is move-only. Copy constructor and copy assignment stay
+	 * private and clone metadata, the payload FIFO and the backend
+	 * @c AVPacket when
 	 * @ref StormByte::Multimedia::Pipeline::Engine::Packet::Engine
-	 * exists. @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Clone
-	 * is how a filter keeps a copy.
+	 * exists.
+	 *
+	 * @ref Type is the first constructor argument and is never inferred
+	 * from the payload. An empty packet is
+	 * @ref StormByte::Multimedia::Type::Unknown.
+	 * Do not stamp @ref StormByte::Multimedia::Type::Copy on a packet:
+	 * that value is a track mode, not a kind of access unit.
 	 *
 	 * Pts / Dts / Duration are nanoseconds on the stream clock, not
-	 * FFmpeg ticks. Side data uses the same @ref SideData blobs as
-	 * Frame. After
-	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Replace
-	 * the previous backend is released and the FIFO is cleared.
+	 * FFmpeg ticks. Side data uses the same @ref SideData blobs as Frame.
 	 *
-	 * Destructor and move are out of line so this header can forward-declare
-	 * @ref Engine::Packet::Engine. The .cxx includes the engine definition.
+	 * Destructor and move are out of line so this header can
+	 * forward-declare @ref Engine::Packet::Engine.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet {
 		public:
 			/**
-			 * @brief Empty packet (no payload, index -1).
+			 * @brief Empty packet (no payload, index -1, type Unknown).
 			 */
 			Packet() noexcept;
 
 			/**
 			 * @brief Builds a packet.
+			 * @param type Kind of this access unit. Not Copy.
 			 * @param stream_index Container or mux stream index.
 			 * @param payload Owned compressed bytes.
 			 * @param pts Presentation timestamp, if known.
@@ -107,7 +111,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param key_frame Whether this is a key frame.
 			 * @param attachments Side-data blobs that must reach the muxer.
 			 */
-			Packet(int stream_index, StormByte::Buffer::FIFO payload,
+			Packet(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> dts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
@@ -131,6 +135,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return *this.
 			 */
 			Packet& operator=(Packet&& other) noexcept;
+
+			/**
+			 * @brief Kind of this access unit.
+			 * @return Value passed at construction, or Unknown if empty.
+			 */
+			enum Type Type() const noexcept;
 
 			/**
 			 * @brief Container or mux stream index.
@@ -195,7 +205,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Private: a public copy would duplicate the compressed AU.
 			 * Only @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-			 * may clone, via @ref Filter::FFmpeg::Clone.
+			 * may clone.
 			 */
 			Packet(const Packet& other) noexcept;
 
@@ -212,13 +222,14 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept;
 
-			int m_streamIndex;								///< Container or mux stream index
-			StormByte::Buffer::FIFO m_payload;				///< Compressed bytes
-			std::optional<Property::Duration> m_pts;		///< Presentation timestamp
-			std::optional<Property::Duration> m_dts;		///< Decode timestamp
-			std::optional<Property::Duration> m_duration;	///< Packet duration
-			bool m_keyFrame;								///< Key frame
-			std::vector<SideData> m_attachments;			///< Packet side data (HDR10+, …)
+			enum Type m_type;									///< Kind set at construction
+			int m_streamIndex;									///< Container or mux stream index
+			StormByte::Buffer::FIFO m_payload;					///< Compressed bytes
+			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
+			std::optional<Property::Duration> m_dts;			///< Decode timestamp
+			std::optional<Property::Duration> m_duration;		///< Packet duration
+			bool m_keyFrame;									///< Key frame
+			std::vector<SideData> m_attachments;				///< Packet side data
 			std::unique_ptr<Engine::Packet::Engine> m_engine;	///< Backend holder
 	};
 }

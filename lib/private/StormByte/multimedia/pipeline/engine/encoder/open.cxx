@@ -441,7 +441,8 @@ std::int64_t StormByte::Multimedia::Pipeline::Engine::Encoder::Open::NsToTicks(s
 	return av_rescale_q(ns, NanoTimeBase, timeBase);
 }
 
-Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(int index, const FFmpeg::AVPacket& raw,
+class Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(
+	enum Type type, int index, const FFmpeg::AVPacket& raw,
 	AVRational timeBase, bool keepPacketHdrPlus) noexcept {
 	StormByte::Buffer::DataType bytes;
 	const auto* data = raw.Data();
@@ -486,6 +487,7 @@ Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(int in
 	}
 
 	return StormByte::Multimedia::Pipeline::Packet{
+		type,
 		index,
 		StormByte::Buffer::FIFO{std::move(bytes)},
 		TicksToPts(raw.Pts(), timeBase),

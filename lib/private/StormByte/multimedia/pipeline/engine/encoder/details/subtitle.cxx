@@ -357,7 +357,7 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Push(c
 			return false;
 		}
 		StampSubtitlePacket(m_scratch, pts, durationMs, tb);
-		m_pending.push_back(Open::MakePacket(owner.Index(), m_scratch, m_timeBase, true));
+		m_pending.push_back(Open::MakePacket(Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
 		m_scratch.Unref();
 		return true;
 	}
@@ -371,7 +371,7 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Push(c
 		owner.Fail("failed to encode subtitle");
 		return false;
 	}
-	m_pending.push_back(Open::MakePacket(owner.Index(), m_scratch, m_timeBase, true));
+	m_pending.push_back(Open::MakePacket(Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
 	m_scratch.Unref();
 	return true;
 }

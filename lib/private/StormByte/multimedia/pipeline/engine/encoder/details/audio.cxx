@@ -338,7 +338,7 @@ bool Details::Audio::DrainOne(class Encoder& owner) noexcept {
 		owner.Fail("failed to receive packet");
 		return false;
 	}
-	m_pending.push_back(Open::MakePacket(owner.Index(), m_scratch, m_timeBase, true));
+	m_pending.push_back(Open::MakePacket(Type::Audio, owner.Index(), m_scratch, m_timeBase, true));
 	m_scratch.Unref();
 	return true;
 }
