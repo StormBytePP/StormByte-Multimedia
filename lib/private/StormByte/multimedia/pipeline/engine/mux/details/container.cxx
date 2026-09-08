@@ -1,40 +1,40 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Multimedia.
- *
- * StormByte-Multimedia original source is dual-licensed:
- *
- * 1. GNU Lesser General Public License v3.0 (or later)
- *    You may redistribute and/or modify this file under the terms of the
- *    GNU Lesser General Public License as published by the Free Software
- *    Foundation, either version 3 of the License, or (at your option)
- *    any later version.
- *
- * 2. Commercial license
- *    Alternatively, this file may be used under the terms of a commercial
- *    license agreement with the copyright holder
- *    (David C. Manuelda <StormByte@gmail.com>).
- *
- * Both licenses apply only to original StormByte-Multimedia source in this
- * file. Third-party components — including FFmpeg and embedded trained data —
- * remain under their own licenses and are not covered by the commercial grant.
- *
- * Neither license grants any patent rights. Any patent licenses required
- * to use this software or third-party components must be obtained separately
- * from the patent holders.
- *
- * StormByte-Multimedia is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * version 3 along with StormByte-Multimedia. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- *
- * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Multimedia.
+*
+* StormByte-Multimedia original source is dual-licensed:
+*
+* 1. GNU Lesser General Public License v3.0 (or later)
+*    You may redistribute and/or modify this file under the terms of the
+*    GNU Lesser General Public License as published by the Free Software
+*    Foundation, either version 3 of the License, or (at your option)
+*    any later version.
+*
+* 2. Commercial license
+*    Alternatively, this file may be used under the terms of a commercial
+*    license agreement with the copyright holder
+*    (David C. Manuelda <StormByte@gmail.com>).
+*
+* Both licenses apply only to original StormByte-Multimedia source in this
+* file. Third-party components — including FFmpeg and embedded trained data —
+* remain under their own licenses and are not covered by the commercial grant.
+*
+* Neither license grants any patent rights. Any patent licenses required
+* to use this software or third-party components must be obtained separately
+* from the patent holders.
+*
+* StormByte-Multimedia is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* version 3 along with StormByte-Multimedia. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*
+* SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+*/
 
 #include <StormByte/multimedia/pipeline/copy.hxx>
 #include <StormByte/multimedia/pipeline/engine/copy/engine.hxx>
@@ -42,6 +42,10 @@
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/type.hxx>
+
+#ifdef WINDOWS
+#include <StormByte/string.hxx>
+#endif
 
 #include <cstdint>
 #include <cstring>
@@ -180,22 +184,34 @@ bool Details::Container::BindPath(class Mux& owner, const std::filesystem::path&
 		owner.Fail("mux destination path is empty");
 		return false;
 	}
+	std::string url;
+	try {
+#ifdef WINDOWS
+		url = StormByte::String::UTF8Encode(path.wstring());
+#else
+		url = path.string();
+#endif
+	}
+	catch (...) {
+		owner.Fail("could not convert destination path to UTF-8");
+		return false;
+	}
 	const auto ext = owner.Destination().Extension();
-	const std::string dummy = ext.empty() ? path.string() : ("out." + std::string(ext));
+	const std::string dummy = ext.empty() ? url : ("out." + std::string(ext));
 	const AVOutputFormat* oformat = av_guess_format(nullptr, dummy.c_str(), nullptr);
 	if (!oformat) {
 		owner.Fail("could not guess output format from container");
 		return false;
 	}
 	AVFormatContext* ctx = nullptr;
-	if (avformat_alloc_output_context2(&ctx, const_cast<AVOutputFormat*>(oformat), nullptr, path.c_str()) < 0 || !ctx) {
+	if (avformat_alloc_output_context2(&ctx, const_cast<AVOutputFormat*>(oformat), nullptr, url.c_str()) < 0 || !ctx) {
 		owner.Fail("avformat_alloc_output_context2 failed");
 		return false;
 	}
 	m_ctx = ctx;
 	m_path = path;
 	if (!(ctx->oformat->flags & AVFMT_NOFILE)) {
-		if (avio_open(&ctx->pb, path.c_str(), AVIO_FLAG_WRITE) < 0) {
+		if (avio_open(&ctx->pb, url.c_str(), AVIO_FLAG_WRITE) < 0) {
 			owner.Fail("avio_open failed");
 			return false;
 		}
