@@ -273,6 +273,10 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 		return true;
 	for (const auto& [index, track] : m_tracks) {
 		if (track.encoder) {
+			if (track.encoder->Failed()) {
+				owner.Fail(track.encoder->Error().value_or("encoder failed"));
+				return false;
+			}
 			if (!*track.encoder)
 				return true;
 			continue;
@@ -457,10 +461,16 @@ bool Details::Container::Push(class Mux& owner, Packet& packet) noexcept {
 void Details::Container::Flush(class Mux& owner) noexcept {
 	if (owner.Failed() || m_trailer)
 		return;
+	for (const auto& [index, track] : m_tracks) {
+		if (track.encoder && track.encoder->Failed()) {
+			owner.Fail(track.encoder->Error().value_or("encoder failed"));
+			return;
+		}
+	}
 	if (!WriteHeaderIfReady(owner))
 		return;
 	for (auto& [index, track] : m_tracks) {
-		if (!track.encoder)
+		if (!track.encoder || !*track.encoder)
 			continue;
 		track.encoder->Flush();
 		Packet leftover;
