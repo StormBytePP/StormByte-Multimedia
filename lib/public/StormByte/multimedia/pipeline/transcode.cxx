@@ -37,28 +37,15 @@
  */
 
 #include <StormByte/multimedia/pipeline/transcode.hxx>
+#include <StormByte/multimedia/pipeline/engine/transcode/engine.hxx>
 
 #include <StormByte/expected.hxx>
 #include <StormByte/logger/typedefs.hxx>
-#include <StormByte/multimedia/pipeline/copy.hxx>
-#include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/stream.hxx>
 
 #include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdio>
-#include <deque>
 #include <limits>
-#include <mutex>
-#include <set>
-#include <thread>
 #include <utility>
 
 using StormByte::Logger::Level;
@@ -84,228 +71,15 @@ namespace StormByte::Multimedia::Pipeline {
 		std::string KindName(Type type) noexcept {
 			return ToString(type);
 		}
-
-		std::string FormatElapsed(std::chrono::steady_clock::time_point start) noexcept {
-			const auto total = std::chrono::duration_cast<std::chrono::seconds>(
-				std::chrono::steady_clock::now() - start).count();
-			const auto hours = total / 3600;
-			const auto minutes = (total % 3600) / 60;
-			const auto seconds = total % 60;
-			char buffer[16];
-			if (hours > 0)
-				std::snprintf(buffer, sizeof(buffer), "%lld:%02lld:%02lld",
-					static_cast<long long>(hours),
-					static_cast<long long>(minutes),
-					static_cast<long long>(seconds));
-			else if (minutes > 0)
-				std::snprintf(buffer, sizeof(buffer), "%lld:%02lld",
-					static_cast<long long>(minutes),
-					static_cast<long long>(seconds));
-			else
-				std::snprintf(buffer, sizeof(buffer), "%lld",
-					static_cast<long long>(seconds));
-			return buffer;
-		}
-
-		std::size_t AtLeastOne(std::size_t value) noexcept {
-			return value == 0 ? 1 : value;
-		}
-
-		template<typename Item>
-		class BoundQueue {
-			public:
-				explicit BoundQueue(std::size_t ceiling) noexcept
-				: m_ceiling(AtLeastOne(ceiling)) {}
-
-				void Push(Item item, const std::atomic_bool& cancel) noexcept {
-					std::unique_lock lock(m_mutex);
-					m_cv.wait(lock, [&]() {
-						return cancel.load(std::memory_order_acquire)
-							|| m_closed
-							|| m_queue.size() < m_ceiling;
-					});
-					if (cancel.load(std::memory_order_acquire) || m_closed)
-						return;
-					m_queue.push_back(std::move(item));
-					lock.unlock();
-					m_cv.notify_one();
-				}
-
-				bool TryPush(Item item) noexcept {
-					std::lock_guard lock(m_mutex);
-					if (m_closed || m_queue.size() >= m_ceiling)
-						return false;
-					m_queue.push_back(std::move(item));
-					m_cv.notify_one();
-					return true;
-				}
-
-				std::optional<Item> Pop(const std::atomic_bool& cancel) noexcept {
-					std::unique_lock lock(m_mutex);
-					m_cv.wait(lock, [&]() {
-						return cancel.load(std::memory_order_acquire)
-							|| m_closed
-							|| !m_queue.empty();
-					});
-					if (cancel.load(std::memory_order_acquire))
-						return std::nullopt;
-					if (m_queue.empty())
-						return std::nullopt;
-					Item item = std::move(m_queue.front());
-					m_queue.pop_front();
-					lock.unlock();
-					m_cv.notify_all();
-					return item;
-				}
-
-				std::optional<Item> TryPop() noexcept {
-					std::lock_guard lock(m_mutex);
-					if (m_queue.empty())
-						return std::nullopt;
-					Item item = std::move(m_queue.front());
-					m_queue.pop_front();
-					m_cv.notify_all();
-					return item;
-				}
-
-				bool Empty() const noexcept {
-					std::lock_guard lock(m_mutex);
-					return m_queue.empty();
-				}
-
-				bool Full() const noexcept {
-					std::lock_guard lock(m_mutex);
-					return m_queue.size() >= m_ceiling;
-				}
-
-				bool Closed() const noexcept {
-					std::lock_guard lock(m_mutex);
-					return m_closed && m_queue.empty();
-				}
-
-				void Close() noexcept {
-					{
-						std::lock_guard lock(m_mutex);
-						m_closed = true;
-					}
-					m_cv.notify_all();
-				}
-
-				void Wake() noexcept {
-					m_cv.notify_all();
-				}
-
-			private:
-				std::size_t m_ceiling;
-				std::deque<Item> m_queue;
-				mutable std::mutex m_mutex;
-				std::condition_variable m_cv;
-				bool m_closed = false;
-		};
-
-		using PacketQueue = BoundQueue<Packet>;
-		using FrameQueue = BoundQueue<Frame>;
 	}
 
-	struct Transcode::Slot {
-		int in = -1;
-		int outKey = -1;
-		Type kind = Type::Video;
-		bool copy = false;
-		const Codec* codec = nullptr;
-		std::optional<std::string> implementation;
-		std::optional<int> crf;
-		std::optional<std::int64_t> bitRate;
-		std::optional<std::int64_t> maxBitRate;
-		std::optional<std::string> preset;
-		std::optional<std::string> tune;
-		std::map<std::string, std::string> fineTune;
-		std::optional<std::string> language;
-		std::optional<std::string> title;
-		std::optional<int> sampleFormat;
-		std::optional<int> encoderChannels;
-		std::optional<int> frameSize;
-		std::optional<int> settledRate;
-		bool settled = false;
-	};
+	TrackPlan::PointerType TrackPlan::Clone() const {
+		return MakePointer<TrackPlan>(*this);
+	}
 
-	class Transcode::Impl {
-		public:
-			Impl() noexcept = default;
-
-			~Impl() noexcept {
-				RequestCancel();
-				Join();
-			}
-
-			void NotifyIntake() noexcept {
-				m_intakeCv.notify_all();
-			}
-
-			void WaitForIntake() noexcept {
-				std::unique_lock lock(m_intakeMutex);
-				m_intakeCv.wait(lock, [&]() {
-					return m_cancel.load(std::memory_order_acquire)
-						|| (m_muxQueue && !m_muxQueue->Empty())
-						|| (m_copyQueue && !m_copyQueue->Empty())
-						|| ((m_muxQueue && m_muxQueue->Closed())
-							&& (m_copyQueue && m_copyQueue->Closed()));
-				});
-			}
-
-			void RequestCancel() noexcept {
-				m_cancel.store(true, std::memory_order_release);
-				m_paused.store(false, std::memory_order_release);
-				m_pauseCv.notify_all();
-				NotifyIntake();
-				if (m_muxQueue)
-					m_muxQueue->Wake();
-				if (m_copyQueue)
-					m_copyQueue->Wake();
-				for (auto& queue : m_encodeQueues) {
-					if (queue)
-						queue->Wake();
-				}
-				for (auto& queue : m_frameQueues) {
-					if (queue)
-						queue->Wake();
-				}
-			}
-
-			void Join() noexcept {
-				if (m_worker.joinable())
-					m_worker.join();
-			}
-
-			void WaitIfPaused() noexcept {
-				std::unique_lock lock(m_pauseMutex);
-				m_pauseCv.wait(lock, [&]() {
-					return m_cancel.load(std::memory_order_acquire)
-						|| !m_paused.load(std::memory_order_acquire);
-				});
-			}
-
-			mutable std::mutex m_lock;
-			std::mutex m_pauseMutex;
-			std::condition_variable m_pauseCv;
-			std::mutex m_intakeMutex;
-			std::condition_variable m_intakeCv;
-			std::atomic<enum Status> m_status { Status::Stopped };
-			std::atomic_bool m_cancel { false };
-			std::atomic_bool m_paused { false };
-			std::atomic<unsigned> m_progress { 0 };
-			std::atomic_bool m_hasProgress { false };
-			std::optional<std::string> m_error;
-			const Container* m_container = nullptr;
-			std::filesystem::path m_path;
-			std::vector<Slot> m_explicit;
-			std::set<int> m_ignore;
-			std::thread m_worker;
-			std::unique_ptr<PacketQueue> m_muxQueue;
-			std::unique_ptr<PacketQueue> m_copyQueue;
-			std::vector<std::unique_ptr<PacketQueue>> m_encodeQueues;
-			std::vector<std::unique_ptr<FrameQueue>> m_frameQueues;
-	};
+	TrackPlan::PointerType TrackPlan::Move() {
+		return MakePointer<TrackPlan>(std::move(*this));
+	}
 
 	std::string TrackPlan::ToString() const {
 		std::string text = "track in=" + std::to_string(in)
@@ -334,22 +108,44 @@ namespace StormByte::Multimedia::Pipeline {
 		return text;
 	}
 
-	std::unique_ptr<Plan> Plan::Clone() const {
-		auto out = std::make_unique<Plan>();
-		out->source = source;
-		out->container = container;
-		out->destination = destination;
-		out->ignored = ignored;
-		out->videoPacketCeiling = videoPacketCeiling;
-		out->muxPacketCeiling = muxPacketCeiling;
-		out->copyPacketCeiling = copyPacketCeiling;
-		out->videoFrameCeiling = videoFrameCeiling;
-		out->tracks.reserve(tracks.size());
-		for (const auto& track : tracks) {
+	Plan::Plan(const Plan& other)
+	: source(other.source), container(other.container), destination(other.destination),
+	ignored(other.ignored), videoPacketCeiling(other.videoPacketCeiling),
+	muxPacketCeiling(other.muxPacketCeiling), copyPacketCeiling(other.copyPacketCeiling),
+	videoFrameCeiling(other.videoFrameCeiling) {
+		tracks.reserve(other.tracks.size());
+		for (const auto& track : other.tracks) {
 			if (track)
-				out->tracks.push_back(track->Clone());
+				tracks.push_back(track->Clone());
 		}
-		return out;
+	}
+
+	Plan& Plan::operator=(const Plan& other) {
+		if (this == &other)
+			return *this;
+		source = other.source;
+		container = other.container;
+		destination = other.destination;
+		ignored = other.ignored;
+		videoPacketCeiling = other.videoPacketCeiling;
+		muxPacketCeiling = other.muxPacketCeiling;
+		copyPacketCeiling = other.copyPacketCeiling;
+		videoFrameCeiling = other.videoFrameCeiling;
+		tracks.clear();
+		tracks.reserve(other.tracks.size());
+		for (const auto& track : other.tracks) {
+			if (track)
+				tracks.push_back(track->Clone());
+		}
+		return *this;
+	}
+
+	Plan::PointerType Plan::Clone() const {
+		return MakePointer<Plan>(*this);
+	}
+
+	Plan::PointerType Plan::Move() {
+		return MakePointer<Plan>(std::move(*this));
 	}
 
 	std::string Plan::ToString() const {
@@ -372,7 +168,7 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::Track& Transcode::Track::Copy() noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		auto& slot = m_owner->m_impl->m_explicit[m_slot];
+		auto& slot = m_owner->m_engine->mapped[m_slot];
 		slot.copy = true;
 		slot.codec = nullptr;
 		*m_owner->m_logger << Level::Debug << "track " << slot.in << " marked copy" << std::endl;
@@ -382,7 +178,7 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::Track& Transcode::Track::Codec(const StormByte::Multimedia::Codec& codec) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		auto& slot = m_owner->m_impl->m_explicit[m_slot];
+		auto& slot = m_owner->m_engine->mapped[m_slot];
 		if (codec.Type() != slot.kind) {
 			m_owner->Fail("codec '" + std::string(codec.Name()) + "' is "
 				+ KindName(codec.Type()) + ", track " + std::to_string(slot.in)
@@ -399,14 +195,14 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::Track& Transcode::Track::Implementation(std::string name) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].implementation = std::move(name);
+		m_owner->m_engine->mapped[m_slot].implementation = std::move(name);
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::CRF(int value) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		auto& slot = m_owner->m_impl->m_explicit[m_slot];
+		auto& slot = m_owner->m_engine->mapped[m_slot];
 		slot.crf = value;
 		slot.bitRate.reset();
 		return *this;
@@ -415,7 +211,7 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::Track& Transcode::Track::BitRate(std::int64_t bits_per_second) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		auto& slot = m_owner->m_impl->m_explicit[m_slot];
+		auto& slot = m_owner->m_engine->mapped[m_slot];
 		slot.bitRate = bits_per_second;
 		slot.crf.reset();
 		return *this;
@@ -424,53 +220,54 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::Track& Transcode::Track::MaxBitRate(std::int64_t bits_per_second) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].maxBitRate = bits_per_second;
+		m_owner->m_engine->mapped[m_slot].maxBitRate = bits_per_second;
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::Preset(std::string name) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].preset = std::move(name);
+		m_owner->m_engine->mapped[m_slot].preset = std::move(name);
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::Tune(std::string name) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].tune = std::move(name);
+		m_owner->m_engine->mapped[m_slot].tune = std::move(name);
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::FineTune(std::map<std::string, std::string> options) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].fineTune = std::move(options);
+		m_owner->m_engine->mapped[m_slot].fineTune = std::move(options);
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::Language(std::string language) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].language = std::move(language);
+		m_owner->m_engine->mapped[m_slot].language = std::move(language);
 		return *this;
 	}
 
 	Transcode::Track& Transcode::Track::Title(std::string title) noexcept {
 		if (!m_owner || !m_owner->ValidSlot(m_slot))
 			return *this;
-		m_owner->m_impl->m_explicit[m_slot].title = std::move(title);
+		m_owner->m_engine->mapped[m_slot].title = std::move(title);
 		return *this;
 	}
 
 	Transcode::Transcode(std::shared_ptr<StormByte::Logger::Log> logger, File file) noexcept
 	: m_logger(std::move(logger)), m_file(std::make_unique<File>(std::move(file))),
-	m_impl(std::make_unique<Impl>()) {
+	m_engine(std::make_unique<Engine::Transcode::Engine>()) {
 		*m_logger << Level::LowLevel << "Transcode::Transcode" << std::endl;
 	}
 
 	Transcode::Transcode(Transcode&& other) noexcept
-	: m_logger(std::move(other.m_logger)), m_file(std::move(other.m_file)), m_impl(std::move(other.m_impl)) {
+	: m_logger(std::move(other.m_logger)), m_file(std::move(other.m_file)),
+	m_engine(std::move(other.m_engine)) {
 		if (m_logger)
 			*m_logger << Level::LowLevel << "Transcode::Transcode(move)" << std::endl;
 	}
@@ -478,44 +275,44 @@ namespace StormByte::Multimedia::Pipeline {
 	Transcode::~Transcode() noexcept {
 		if (m_logger)
 			*m_logger << Level::LowLevel << "Transcode::~Transcode" << std::endl;
-		if (!m_impl)
+		if (!m_engine)
 			return;
-		const auto status = m_impl->m_status.load(std::memory_order_acquire);
+		const auto status = m_engine->status.load(std::memory_order_acquire);
 		if (status == Status::Running || status == Status::Paused)
 			Cancel();
-		m_impl->Join();
+		m_engine->Join();
 	}
 
 	Transcode& Transcode::operator=(Transcode&& other) noexcept {
 		if (this == &other)
 			return *this;
-		if (m_impl) {
-			const auto status = m_impl->m_status.load(std::memory_order_acquire);
+		if (m_engine) {
+			const auto status = m_engine->status.load(std::memory_order_acquire);
 			if (status == Status::Running || status == Status::Paused)
 				Cancel();
-			m_impl->Join();
+			m_engine->Join();
 		}
 		m_logger = std::move(other.m_logger);
 		m_file = std::move(other.m_file);
-		m_impl = std::move(other.m_impl);
+		m_engine = std::move(other.m_engine);
 		return *this;
 	}
 
 	void Transcode::Fail(std::string reason) noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return;
-		std::lock_guard lock(m_impl->m_lock);
-		if (m_impl->m_status.load(std::memory_order_relaxed) == Status::Error)
+		std::lock_guard lock(m_engine->lock);
+		if (m_engine->status.load(std::memory_order_relaxed) == Status::Error)
 			return;
-		m_impl->m_error = std::move(reason);
-		m_impl->m_status.store(Status::Error, std::memory_order_release);
-		m_impl->RequestCancel();
+		m_engine->error = std::move(reason);
+		m_engine->status.store(Status::Error, std::memory_order_release);
+		m_engine->RequestCancel();
 		if (m_logger)
-			*m_logger << Level::Error << *m_impl->m_error << std::endl;
+			*m_logger << Level::Error << *m_engine->error << std::endl;
 	}
 
 	bool Transcode::ValidSlot(std::size_t slot) const noexcept {
-		return m_impl && slot < m_impl->m_explicit.size();
+		return m_engine && slot < m_engine->mapped.size();
 	}
 
 	ExpectedTranscode Transcode::BindLoggerAndFile(std::shared_ptr<StormByte::Logger::Log> logger,
@@ -588,7 +385,7 @@ namespace StormByte::Multimedia::Pipeline {
 				+ ", " + KindName(kind) + "() requires " + KindName(kind));
 			return Track(*this, InvalidSlot);
 		}
-		for (const auto& slot : m_impl->m_explicit) {
+		for (const auto& slot : m_engine->mapped) {
 			if (slot.outKey == out) {
 				Fail("destination order key " + std::to_string(out) + " is already used");
 				return Track(*this, InvalidSlot);
@@ -598,14 +395,14 @@ namespace StormByte::Multimedia::Pipeline {
 				return Track(*this, InvalidSlot);
 			}
 		}
-		Slot slot;
+		Engine::Transcode::Slot slot;
 		slot.in = in;
 		slot.outKey = out;
 		slot.kind = kind;
-		m_impl->m_explicit.push_back(std::move(slot));
-		m_impl->m_ignore.erase(in);
+		m_engine->mapped.push_back(std::move(slot));
+		m_engine->ignore.erase(in);
 		*m_logger << Level::Debug << "mapped " << KindName(kind) << " " << in << " -> key " << out << std::endl;
-		return Track(*this, m_impl->m_explicit.size() - 1);
+		return Track(*this, m_engine->mapped.size() - 1);
 	}
 
 	Transcode::Track Transcode::Video(int in, int out) noexcept {
@@ -626,9 +423,10 @@ namespace StormByte::Multimedia::Pipeline {
 			Fail("source stream " + std::to_string(in) + " does not exist");
 			return *this;
 		}
-		m_impl->m_explicit.erase(std::remove_if(m_impl->m_explicit.begin(), m_impl->m_explicit.end(),
-			[in](const Slot& slot) { return slot.in == in; }), m_impl->m_explicit.end());
-		m_impl->m_ignore.insert(in);
+		m_engine->mapped.erase(std::remove_if(m_engine->mapped.begin(), m_engine->mapped.end(),
+			[in](const Engine::Transcode::Slot& slot) { return slot.in == in; }),
+			m_engine->mapped.end());
+		m_engine->ignore.insert(in);
 		*m_logger << Level::Debug << "ignore stream " << in << std::endl;
 		return *this;
 	}
@@ -639,79 +437,79 @@ namespace StormByte::Multimedia::Pipeline {
 			Fail("container '" + std::string(container.Name()) + "' is not writable");
 			return *this;
 		}
-		m_impl->m_container = &container;
-		m_impl->m_path = std::move(path);
-		*m_logger << Level::Notice << "destination " << m_impl->m_path.string()
+		m_engine->container = &container;
+		m_engine->path = std::move(path);
+		*m_logger << Level::Notice << "destination " << m_engine->path.string()
 			<< " container " << std::string(container.Name()) << std::endl;
 		return *this;
 	}
 
 	void Transcode::Run() noexcept {
 		*m_logger << Level::LowLevel << "Transcode::Run" << std::endl;
-		if (!m_impl)
+		if (!m_engine)
 			return;
-		const auto status = m_impl->m_status.load(std::memory_order_acquire);
+		const auto status = m_engine->status.load(std::memory_order_acquire);
 		if (status == Status::Running || status == Status::Paused) {
 			Fail("transcode is already running");
 			return;
 		}
-		m_impl->Join();
-		m_impl->m_cancel.store(false, std::memory_order_release);
-		m_impl->m_paused.store(false, std::memory_order_release);
-		m_impl->m_muxQueue.reset();
-		m_impl->m_copyQueue.reset();
-		m_impl->m_encodeQueues.clear();
-		m_impl->m_frameQueues.clear();
+		m_engine->Join();
+		m_engine->cancel.store(false, std::memory_order_release);
+		m_engine->paused.store(false, std::memory_order_release);
+		m_engine->muxQueue.reset();
+		m_engine->copyQueue.reset();
+		m_engine->encodeQueues.clear();
+		m_engine->frameQueues.clear();
 		{
-			std::lock_guard lock(m_impl->m_lock);
-			m_impl->m_error.reset();
-			m_impl->m_progress.store(0, std::memory_order_relaxed);
-			m_impl->m_hasProgress.store(false, std::memory_order_relaxed);
-			m_impl->m_status.store(Status::Running, std::memory_order_release);
+			std::lock_guard lock(m_engine->lock);
+			m_engine->error.reset();
+			m_engine->progress.store(0, std::memory_order_relaxed);
+			m_engine->hasProgress.store(false, std::memory_order_relaxed);
+			m_engine->status.store(Status::Running, std::memory_order_release);
 		}
-		m_impl->m_worker = std::thread([this]() { Worker(); });
+		m_engine->worker = std::thread([this]() { m_engine->Run(*this); });
 	}
 
 	void Transcode::Cancel() noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return;
 		*m_logger << Level::LowLevel << "Transcode::Cancel" << std::endl;
-		const auto status = m_impl->m_status.load(std::memory_order_acquire);
+		const auto status = m_engine->status.load(std::memory_order_acquire);
 		if (status != Status::Running && status != Status::Paused)
 			return;
-		m_impl->RequestCancel();
+		m_engine->RequestCancel();
 		*m_logger << Level::Notice << "cancel requested" << std::endl;
 	}
 
 	void Transcode::Pause() noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return;
 		*m_logger << Level::LowLevel << "Transcode::Pause" << std::endl;
 		auto expected = Status::Running;
-		if (!m_impl->m_status.compare_exchange_strong(expected, Status::Paused,
+		if (!m_engine->status.compare_exchange_strong(expected, Status::Paused,
 			std::memory_order_acq_rel))
 			return;
-		m_impl->m_paused.store(true, std::memory_order_release);
+		m_engine->paused.store(true, std::memory_order_release);
 		*m_logger << Level::Notice << "paused" << std::endl;
 	}
 
 	void Transcode::Resume() noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return;
 		*m_logger << Level::LowLevel << "Transcode::Resume" << std::endl;
 		auto expected = Status::Paused;
-		if (!m_impl->m_status.compare_exchange_strong(expected, Status::Running,
+		if (!m_engine->status.compare_exchange_strong(expected, Status::Running,
 			std::memory_order_acq_rel))
 			return;
-		m_impl->m_paused.store(false, std::memory_order_release);
-		m_impl->m_pauseCv.notify_all();
+		m_engine->paused.store(false, std::memory_order_release);
+		m_engine->pauseCv.notify_all();
 		*m_logger << Level::Notice << "resumed" << std::endl;
 	}
 
 	Status Transcode::Status() const noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return Status::Error;
-		return m_impl->m_status.load(std::memory_order_acquire);
+		return m_engine->status.load(std::memory_order_acquire);
 	}
 
 	bool Transcode::Failed() const noexcept {
@@ -719,19 +517,19 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	std::optional<std::string> Transcode::Error() const noexcept {
-		if (!m_impl)
+		if (!m_engine)
 			return std::nullopt;
-		std::lock_guard lock(m_impl->m_lock);
-		return m_impl->m_error;
+		std::lock_guard lock(m_engine->lock);
+		return m_engine->error;
 	}
 
 	std::optional<unsigned> Transcode::Progress() const noexcept {
-		if (!m_impl || !m_impl->m_hasProgress.load(std::memory_order_acquire))
+		if (!m_engine || !m_engine->hasProgress.load(std::memory_order_acquire))
 			return std::nullopt;
 		const auto status = Status();
 		if (status == Status::Stopped)
 			return std::nullopt;
-		return m_impl->m_progress.load(std::memory_order_acquire);
+		return m_engine->progress.load(std::memory_order_acquire);
 	}
 
 	Transcode::operator bool() const noexcept {
@@ -741,11 +539,11 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	std::unique_ptr<Plan> Transcode::MakePlan() const noexcept {
-		return std::make_unique<Plan>();
+		return Plan::MakePointer<Plan>();
 	}
 
 	std::unique_ptr<TrackPlan> Transcode::MakeTrackPlan() const noexcept {
-		return std::make_unique<TrackPlan>();
+		return TrackPlan::MakePointer<TrackPlan>();
 	}
 
 	std::unique_ptr<Plan> Transcode::Configuration() const noexcept {
@@ -753,18 +551,18 @@ namespace StormByte::Multimedia::Pipeline {
 		if (!plan)
 			return nullptr;
 		plan->source = m_file.get();
-		if (m_impl) {
-			plan->container = m_impl->m_container;
-			plan->destination = m_impl->m_path;
-			plan->ignored.assign(m_impl->m_ignore.begin(), m_impl->m_ignore.end());
+		if (m_engine) {
+			plan->container = m_engine->container;
+			plan->destination = m_engine->path;
+			plan->ignored.assign(m_engine->ignore.begin(), m_engine->ignore.end());
 		}
 		plan->videoPacketCeiling = m_videoPacketCeiling;
 		plan->muxPacketCeiling = m_muxPacketCeiling;
 		plan->copyPacketCeiling = m_copyPacketCeiling;
 		plan->videoFrameCeiling = m_videoFrameCeiling;
-		if (!m_impl)
+		if (!m_engine)
 			return plan;
-		for (const auto& slot : m_impl->m_explicit) {
+		for (const auto& slot : m_engine->mapped) {
 			auto row = MakeTrackPlan();
 			if (!row)
 				continue;
@@ -805,9 +603,9 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	void Transcode::MarkSettled(int in, Encoder& encoder) noexcept {
-		if (!m_impl || !encoder.Opened())
+		if (!m_engine || !encoder.Opened())
 			return;
-		for (auto& slot : m_impl->m_explicit) {
+		for (auto& slot : m_engine->mapped) {
 			if (slot.in != in || slot.settled)
 				continue;
 			slot.implementation = encoder.Implementation();
@@ -857,437 +655,13 @@ namespace StormByte::Multimedia::Pipeline {
 	void Transcode::SetProgress(unsigned percent) noexcept {
 		if (percent > 100)
 			percent = 100;
-		m_impl->m_progress.store(percent, std::memory_order_release);
-		m_impl->m_hasProgress.store(true, std::memory_order_release);
+		m_engine->progress.store(percent, std::memory_order_release);
+		m_engine->hasProgress.store(true, std::memory_order_release);
 		OnProgress(percent);
 	}
 
 	void Transcode::Worker() noexcept {
-		*m_logger << Level::LowLevel << "Transcode::Worker enter" << std::endl;
-		OnConfigure();
-		if (m_impl->m_status.load(std::memory_order_acquire) == Status::Error) {
-			OnError(Error().value_or("configure failed"));
-			return;
-		}
-		if (m_impl->m_cancel.load(std::memory_order_acquire)) {
-			m_impl->m_status.store(Status::Aborted, std::memory_order_release);
-			OnAborted();
-			return;
-		}
-		if (!m_impl->m_container || m_impl->m_path.empty()) {
-			Fail("destination is not set");
-			OnError(Error().value_or("destination is not set"));
-			return;
-		}
-
-		if (auto snapshot = Configuration())
-			OnPlan(*snapshot);
-
-		std::vector<Slot> plan = m_impl->m_explicit;
-		for (const auto& slot : plan) {
-			if (!slot.copy && slot.codec == nullptr) {
-				Fail("stream " + std::to_string(slot.in) + " has no Codec() or Copy()");
-				OnError(Error().value_or("incomplete map"));
-				return;
-			}
-		}
-
-		std::set<int> used;
-		for (const auto& slot : plan)
-			used.insert(slot.in);
-		for (int in : m_impl->m_ignore)
-			used.insert(in);
-		for (const auto& stream : m_file->Streams()) {
-			if (used.contains(stream.Index()))
-				continue;
-			Slot implied;
-			implied.in = stream.Index();
-			implied.outKey = stream.Index();
-			implied.kind = stream.Type();
-			implied.copy = true;
-			plan.push_back(std::move(implied));
-		}
-
-		std::sort(plan.begin(), plan.end(), [](const Slot& a, const Slot& b) {
-			if (a.outKey != b.outKey)
-				return a.outKey < b.outKey;
-			return a.in < b.in;
-		});
-
-		const auto start = OnStart();
-		if (start != Status::Running) {
-			if (start == Status::Error) {
-				if (!Failed())
-					Fail("OnStart rejected the job");
-				OnError(Error().value_or("OnStart rejected the job"));
-			}
-			else if (start == Status::Aborted) {
-				m_impl->m_status.store(Status::Aborted, std::memory_order_release);
-				OnAborted();
-			}
-			else {
-				m_impl->m_status.store(Status::Stopped, std::memory_order_release);
-			}
-			return;
-		}
-
-		Demux demux;
-		*m_file >> demux;
-		if (demux.Failed()) {
-			Fail(demux.Error().value_or("demux open failed"));
-			OnError(Error().value_or("demux"));
-			return;
-		}
-
-		Mux mux(*m_impl->m_container);
-		mux >> m_impl->m_path;
-		*m_file >> mux;
-		if (mux.Failed()) {
-			Fail(mux.Error().value_or("mux open failed"));
-			OnError(Error().value_or("mux"));
-			return;
-		}
-
-		struct EncodeLane {
-			int in = -1;
-			Type kind = Type::Video;
-			std::unique_ptr<Decoder> decoder;
-			std::unique_ptr<Encoder> encoder;
-			PacketQueue* packets = nullptr;
-			FrameQueue* frames = nullptr;
-		};
-
-		std::vector<std::unique_ptr<Copy>> copies;
-		std::vector<EncodeLane> lanes;
-		std::map<int, PacketQueue*> encodeByIn;
-		std::set<int> copyIn;
-		m_impl->m_muxQueue = std::make_unique<PacketQueue>(m_muxPacketCeiling);
-		m_impl->m_copyQueue = std::make_unique<PacketQueue>(m_copyPacketCeiling);
-		m_impl->m_encodeQueues.clear();
-		m_impl->m_frameQueues.clear();
-
-		int muxIndex = 0;
-		for (auto& slot : plan) {
-			if (slot.copy) {
-				auto copy = std::make_unique<Copy>(muxIndex, slot.in);
-				demux >> *copy;
-				*copy >> mux;
-				copyIn.insert(slot.in);
-				copies.push_back(std::move(copy));
-			}
-			else {
-				auto decoder = std::make_unique<Decoder>(slot.in);
-				auto encoder = std::make_unique<Encoder>(muxIndex, *slot.codec);
-				if (slot.implementation)
-					encoder->Implementation(*slot.implementation);
-				if (slot.crf)
-					encoder->CRF(*slot.crf);
-				if (slot.bitRate)
-					encoder->BitRate(*slot.bitRate);
-				if (slot.maxBitRate)
-					encoder->MaxBitRate(*slot.maxBitRate);
-				if (slot.preset)
-					encoder->Preset(*slot.preset);
-				if (slot.tune)
-					encoder->Tune(*slot.tune);
-				if (!slot.fineTune.empty())
-					encoder->FineTune(slot.fineTune);
-				if (slot.language)
-					encoder->Language(*slot.language);
-				if (slot.title)
-					encoder->Title(*slot.title);
-				demux >> *decoder;
-				*encoder >> mux;
-				const auto ceiling = slot.kind == Type::Video ? m_videoPacketCeiling : m_packetCeiling;
-				m_impl->m_encodeQueues.push_back(std::make_unique<PacketQueue>(ceiling));
-				EncodeLane lane;
-				lane.in = slot.in;
-				lane.kind = slot.kind;
-				lane.decoder = std::move(decoder);
-				lane.encoder = std::move(encoder);
-				lane.packets = m_impl->m_encodeQueues.back().get();
-				if (slot.kind == Type::Video) {
-					m_impl->m_frameQueues.push_back(std::make_unique<FrameQueue>(m_videoFrameCeiling));
-					lane.frames = m_impl->m_frameQueues.back().get();
-				}
-				encodeByIn[slot.in] = lane.packets;
-				lanes.push_back(std::move(lane));
-			}
-			++muxIndex;
-		}
-
-		*m_logger << Level::Notice << "transcode running tracks=" << plan.size()
-			<< " encode-lanes=" << lanes.size()
-			<< " video-frames=" << m_videoFrameCeiling
-			<< " video-packets=" << m_videoPacketCeiling
-			<< " mux-packets=" << m_muxPacketCeiling
-			<< " copy-packets=" << m_copyPacketCeiling << std::endl;
-		const auto started = std::chrono::steady_clock::now();
-		const auto duration = m_file->Duration();
-
-		auto drainEncoder = [this](Encoder& encoder, std::deque<Packet>& held) -> bool {
-			while (!held.empty()) {
-				if (!m_impl->m_muxQueue->TryPush(std::move(held.front())))
-					return true;
-				held.pop_front();
-				m_impl->NotifyIntake();
-			}
-			for (;;) {
-				if (m_impl->m_muxQueue->Full())
-					return true;
-				Packet encoded;
-				encoder >> encoded;
-				if (encoder.Failed()) {
-					Fail(encoder.Error().value_or("encoder failed"));
-					return false;
-				}
-				if (encoded.StreamIndex() < 0)
-					break;
-				if (!m_impl->m_muxQueue->TryPush(std::move(encoded))) {
-					held.push_back(std::move(encoded));
-					return true;
-				}
-				m_impl->NotifyIntake();
-			}
-			return true;
-		};
-
-		auto drainDecoderToFrames = [this, duration](Decoder& decoder, FrameQueue& frames) -> bool {
-			for (;;) {
-				Frame frame;
-				decoder >> frame;
-				if (decoder.Failed()) {
-					Fail(decoder.Error().value_or("decoder failed"));
-					return false;
-				}
-				if (frame.StreamIndex() < 0)
-					break;
-				if (frame.Pts() && duration) {
-					const auto pts = frame.Pts()->Nanoseconds().count();
-					const auto total = duration->Nanoseconds().count();
-					if (total > 0)
-						SetProgress(static_cast<unsigned>((pts * 100) / total));
-				}
-				frames.Push(std::move(frame), m_impl->m_cancel);
-			}
-			return true;
-		};
-
-		auto encodeOneFrame = [this, &drainEncoder](Encoder& encoder, Frame& frame,
-			int in, std::deque<Packet>& held) -> bool {
-			frame >> encoder;
-			if (encoder.Failed()) {
-				Fail(encoder.Error().value_or("encoder failed"));
-				return false;
-			}
-			MarkSettled(in, encoder);
-			return drainEncoder(encoder, held);
-		};
-
-		auto flushHeld = [this](std::deque<Packet>& held) {
-			while (!held.empty() && !m_impl->m_cancel.load(std::memory_order_acquire)) {
-				m_impl->m_muxQueue->Push(std::move(held.front()), m_impl->m_cancel);
-				held.pop_front();
-				m_impl->NotifyIntake();
-			}
-		};
-
-		std::thread muxThread([this, &mux]() {
-			while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
-				m_impl->WaitIfPaused();
-				if (m_impl->m_cancel.load(std::memory_order_acquire))
-					break;
-				std::optional<Packet> packet = m_impl->m_muxQueue->TryPop();
-				if (!packet)
-					packet = m_impl->m_copyQueue->TryPop();
-				if (!packet) {
-					if (m_impl->m_muxQueue->Closed() && m_impl->m_copyQueue->Closed())
-						break;
-					m_impl->WaitForIntake();
-					continue;
-				}
-				if (packet->StreamIndex() < 0)
-					continue;
-				*packet >> mux;
-				if (mux.Failed()) {
-					Fail(mux.Error().value_or("mux write failed"));
-					break;
-				}
-			}
-		});
-
-		std::vector<std::thread> workers;
-		for (auto& lane : lanes) {
-			if (lane.frames) {
-				workers.emplace_back([this, &lane, &drainDecoderToFrames]() {
-					while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
-						m_impl->WaitIfPaused();
-						if (m_impl->m_cancel.load(std::memory_order_acquire))
-							break;
-						auto packet = lane.packets->Pop(m_impl->m_cancel);
-						if (!packet)
-							break;
-						if (packet->StreamIndex() < 0)
-							continue;
-						*packet >> *lane.decoder;
-						if (lane.decoder->Failed()) {
-							Fail(lane.decoder->Error().value_or("decoder failed"));
-							break;
-						}
-						if (!drainDecoderToFrames(*lane.decoder, *lane.frames))
-							break;
-					}
-					if (!Failed() && !m_impl->m_cancel.load(std::memory_order_acquire)) {
-						lane.decoder->Flush();
-						if (lane.decoder->Failed())
-							Fail(lane.decoder->Error().value_or("decoder flush failed"));
-						else
-							(void)drainDecoderToFrames(*lane.decoder, *lane.frames);
-					}
-					lane.frames->Close();
-				});
-				workers.emplace_back([this, &lane, &encodeOneFrame, &drainEncoder, &flushHeld]() {
-					std::deque<Packet> held;
-					while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
-						m_impl->WaitIfPaused();
-						if (m_impl->m_cancel.load(std::memory_order_acquire))
-							break;
-						auto frame = lane.frames->Pop(m_impl->m_cancel);
-						if (!frame)
-							break;
-						if (frame->StreamIndex() < 0)
-							continue;
-						if (!encodeOneFrame(*lane.encoder, *frame, lane.in, held))
-							break;
-					}
-					if (!Failed() && !m_impl->m_cancel.load(std::memory_order_acquire)) {
-						lane.encoder->Flush();
-						if (lane.encoder->Failed())
-							Fail(lane.encoder->Error().value_or("encoder flush failed"));
-						else
-							(void)drainEncoder(*lane.encoder, held);
-						flushHeld(held);
-					}
-				});
-			}
-			else {
-				workers.emplace_back([this, &lane, &drainEncoder, &flushHeld]() {
-					std::deque<Packet> held;
-					auto pump = [&]() -> bool {
-						for (;;) {
-							Frame frame;
-							*lane.decoder >> frame;
-							if (lane.decoder->Failed()) {
-								Fail(lane.decoder->Error().value_or("decoder failed"));
-								return false;
-							}
-							if (frame.StreamIndex() < 0)
-								break;
-							frame >> *lane.encoder;
-							if (lane.encoder->Failed()) {
-								Fail(lane.encoder->Error().value_or("encoder failed"));
-								return false;
-							}
-							MarkSettled(lane.in, *lane.encoder);
-							if (!drainEncoder(*lane.encoder, held))
-								return false;
-						}
-						return true;
-					};
-					while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
-						m_impl->WaitIfPaused();
-						if (m_impl->m_cancel.load(std::memory_order_acquire))
-							break;
-						auto packet = lane.packets->Pop(m_impl->m_cancel);
-						if (!packet)
-							break;
-						if (packet->StreamIndex() < 0)
-							continue;
-						*packet >> *lane.decoder;
-						if (lane.decoder->Failed()) {
-							Fail(lane.decoder->Error().value_or("decoder failed"));
-							break;
-						}
-						if (!pump())
-							break;
-					}
-					if (!Failed() && !m_impl->m_cancel.load(std::memory_order_acquire)) {
-						lane.decoder->Flush();
-						if (!lane.decoder->Failed())
-							(void)pump();
-						lane.encoder->Flush();
-						if (!lane.encoder->Failed())
-							(void)drainEncoder(*lane.encoder, held);
-						flushHeld(held);
-					}
-				});
-			}
-		}
-
-		std::thread demuxThread([this, &demux, &encodeByIn, &copyIn]() {
-			while (!m_impl->m_cancel.load(std::memory_order_acquire) && demux) {
-				m_impl->WaitIfPaused();
-				if (m_impl->m_cancel.load(std::memory_order_acquire))
-					break;
-				Packet packet;
-				demux >> packet;
-				if (demux.Failed()) {
-					Fail(demux.Error().value_or("demux read failed"));
-					break;
-				}
-				if (demux.Eof() || packet.StreamIndex() < 0)
-					break;
-				const int in = packet.StreamIndex();
-				if (m_impl->m_ignore.contains(in))
-					continue;
-				if (copyIn.contains(in)) {
-					m_impl->m_copyQueue->Push(std::move(packet), m_impl->m_cancel);
-					m_impl->NotifyIntake();
-					continue;
-				}
-				auto found = encodeByIn.find(in);
-				if (found == encodeByIn.end())
-					continue;
-				found->second->Push(std::move(packet), m_impl->m_cancel);
-			}
-			for (auto& queue : m_impl->m_encodeQueues)
-				queue->Close();
-			m_impl->m_copyQueue->Close();
-			m_impl->m_muxQueue->Close();
-			m_impl->NotifyIntake();
-		});
-
-		demuxThread.join();
-		for (auto& thread : workers)
-			thread.join();
-		m_impl->m_muxQueue->Close();
-		m_impl->m_copyQueue->Close();
-		m_impl->NotifyIntake();
-		muxThread.join();
-
-		if (m_impl->m_cancel.load(std::memory_order_acquire)
-			&& m_impl->m_status.load(std::memory_order_acquire) != Status::Error) {
-			m_impl->m_status.store(Status::Aborted, std::memory_order_release);
-			*m_logger << Level::Warning << "transcode aborted in "
-				<< FormatElapsed(started) << std::endl;
-			OnAborted();
-			return;
-		}
-
-		if (!Failed()) {
-			mux.Flush();
-			if (mux.Failed())
-				Fail(mux.Error().value_or("mux flush failed"));
-		}
-
-		if (Failed()) {
-			OnError(Error().value_or("transcode failed"));
-			return;
-		}
-
-		SetProgress(100);
-		m_impl->m_status.store(Status::Done, std::memory_order_release);
-		*m_logger << Level::Notice << "transcode done in " << FormatElapsed(started) << std::endl;
-		OnDone();
+		if (m_engine)
+			m_engine->Run(*this);
 	}
 }

@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/consumer.hxx>
+#include <StormByte/clonable.hxx>
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/container.hxx>
@@ -64,6 +65,20 @@ namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
 
 	/**
+	 * @namespace Engine
+	 * @brief Private backends behind the public pipeline types.
+	 */
+	namespace Engine {
+		/**
+		 * @namespace Transcode
+		 * @brief Job runtime (queues, worker, mapped tracks).
+		 */
+		namespace Transcode {
+			class Engine;
+		}
+	}
+
+	/**
 	 * @enum Status
 	 * @brief Lifecycle of a Transcode instance.
 	 */
@@ -80,12 +95,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class TrackPlan
 	 * @brief One mapped track as requested or after the encoder opened.
 	 *
-	 * Settled fields (sample format, channel counts, frame size) stay
-	 * empty until OnSettled.
+	 * Settled fields stay empty until OnSettled. Paid jobs derive this
+	 * and override Clone()/Move() via StormByte::Clonable.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC TrackPlan {
+	class STORMBYTE_MULTIMEDIA_PUBLIC TrackPlan:
+		public StormByte::Clonable<TrackPlan, std::unique_ptr<TrackPlan>> {
 		public:
 			int in = -1;											///< Source stream index
 			int out = -1;											///< Destination track index
@@ -104,22 +120,57 @@ namespace StormByte::Multimedia::Pipeline {
 			std::map<std::string, std::string> fineTune;			///< Vendor leftovers
 			std::optional<int> sampleFormat;						///< Encoder AVSampleFormat
 			std::optional<int> sourceChannels;						///< Decoded channel count
-			std::optional<int> encoderChannels;						///< Encoder channel count (6 after 7.1 downmix)
+			std::optional<int> encoderChannels;						///< Encoder channel count
 			std::optional<int> frameSize;							///< Encoder frame_size
 			std::optional<int> sampleRate;							///< Samples per second
 
 			/**
-			 * @brief Destructor.
+			 * @brief Default constructor.
 			 */
-			virtual ~TrackPlan() noexcept = default;
+			TrackPlan() noexcept = default;
 
 			/**
-			 * @brief Deep copy.
+			 * @brief Copy constructor.
+			 * @param other Source row.
+			 */
+			TrackPlan(const TrackPlan& other) = default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Source row.
+			 */
+			TrackPlan(TrackPlan&& other) noexcept = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param other Source row.
+			 * @return *this.
+			 */
+			TrackPlan& operator=(const TrackPlan& other) = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Source row.
+			 * @return *this.
+			 */
+			TrackPlan& operator=(TrackPlan&& other) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~TrackPlan() noexcept override = default;
+
+			/**
+			 * @brief Deep copy into a unique_ptr.
 			 * @return New track plan of the same dynamic type.
 			 */
-			virtual std::unique_ptr<TrackPlan> Clone() const {
-				return std::make_unique<TrackPlan>(*this);
-			}
+			PointerType Clone() const override;
+
+			/**
+			 * @brief Move this row into a unique_ptr.
+			 * @return Owning pointer to the moved instance.
+			 */
+			PointerType Move() override;
 
 			/**
 			 * @brief Human-readable line for logs.
@@ -134,7 +185,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Plan {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Plan:
+		public StormByte::Clonable<Plan, std::unique_ptr<Plan>> {
 		public:
 			const File* source = nullptr;							///< Opened source
 			const Container* container = nullptr;					///< Destination container
@@ -147,15 +199,52 @@ namespace StormByte::Multimedia::Pipeline {
 			std::size_t videoFrameCeiling = 0;						///< Decoded video frames
 
 			/**
-			 * @brief Destructor.
+			 * @brief Default constructor.
 			 */
-			virtual ~Plan() noexcept = default;
+			Plan() noexcept = default;
 
 			/**
-			 * @brief Deep copy, including track plans.
+			 * @brief Copy constructor. Deep-copies tracks.
+			 * @param other Source plan.
+			 */
+			Plan(const Plan& other);
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Source plan.
+			 */
+			Plan(Plan&& other) noexcept = default;
+
+			/**
+			 * @brief Copy assignment. Deep-copies tracks.
+			 * @param other Source plan.
+			 * @return *this.
+			 */
+			Plan& operator=(const Plan& other);
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Source plan.
+			 * @return *this.
+			 */
+			Plan& operator=(Plan&& other) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Plan() noexcept override = default;
+
+			/**
+			 * @brief Deep copy into a unique_ptr.
 			 * @return New plan of the same dynamic type.
 			 */
-			virtual std::unique_ptr<Plan> Clone() const;
+			PointerType Clone() const override;
+
+			/**
+			 * @brief Move this plan into a unique_ptr.
+			 * @return Owning pointer to the moved instance.
+			 */
+			PointerType Move() override;
 
 			/**
 			 * @brief Human-readable dump.
@@ -167,13 +256,6 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Transcode
 	 * @brief High-level job: map tracks, run demux/decode/encode/mux on workers.
-	 *
-	 * Queue ceilings are protected so a derived job can raise them in
-	 * OnConfigure() before workers start. Defaults keep a small working
-	 * set; bigger values hide decode jitter at the cost of RAM.
-	 *
-	 * Recode packets and bitstream-copy packets use separate mux queues
-	 * so a high-rate copy track (TrueHD) cannot stall x265.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -297,9 +379,9 @@ namespace StormByte::Multimedia::Pipeline {
 					friend class Transcode;
 
 					/**
-					 * @brief Binds this handle to a Slot.
+					 * @brief Binds this handle to a mapped slot.
 					 * @param owner Parent job.
-					 * @param slot Index into m_explicit.
+					 * @param slot Index into Engine::mapped.
 					 */
 					Track(Transcode& owner, std::size_t slot) noexcept;
 
@@ -504,8 +586,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Last chance to raise queue ceilings before workers start.
-			 *
-			 * Default does nothing.
 			 */
 			virtual void OnConfigure() noexcept;
 
@@ -518,87 +598,49 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Requested map, just before workers start.
 			 * @param plan Snapshot from Configuration().
-			 *
-			 * Default logs plan.ToString() at LowLevel.
 			 */
 			virtual void OnPlan(const Plan& plan) noexcept;
 
 			/**
 			 * @brief One recode track finished Encoder::Open.
-			 * @param track Settled row (layout, sample format, frame_size).
-			 *
-			 * Default logs track.ToString() at LowLevel.
+			 * @param track Settled row.
 			 */
 			virtual void OnSettled(const TrackPlan& track) noexcept;
 
 			/**
 			 * @brief Progress tick.
 			 * @param percent 0..100.
-			 *
-			 * Default does nothing.
 			 */
 			virtual void OnProgress(unsigned percent) noexcept;
 
 			/**
 			 * @brief Successful flush.
-			 *
-			 * Default does nothing.
 			 */
 			virtual void OnDone() noexcept;
 
 			/**
 			 * @brief Hard error.
 			 * @param message Error text.
-			 *
-			 * Default does nothing.
 			 */
 			virtual void OnError(const std::string& message) noexcept;
 
 			/**
 			 * @brief Cancel completed.
-			 *
-			 * Default does nothing.
 			 */
 			virtual void OnAborted() noexcept;
 
-			/**
-			 * @brief Compressed packets waiting to be decoded (video recode).
-			 * Default 16. Raise in OnConfigure() if decode bursts starve x265.
-			 */
-			std::size_t m_videoPacketCeiling = 16;
-
-			/**
-			 * @brief Compressed packets waiting to be decoded (audio/subtitle recode).
-			 * Default 32.
-			 */
-			std::size_t m_packetCeiling = 32;
-
-			/**
-			 * @brief Encoded recode packets waiting for the mux thread.
-			 * Default 64. Not used for bitstream copy.
-			 */
-			std::size_t m_muxPacketCeiling = 64;
-
-			/**
-			 * @brief Bitstream-copy packets waiting for the mux thread.
-			 * Default 8192. TrueHD emits thousands of small packets; a
-			 * shared mux queue would block demux and starve video.
-			 */
-			std::size_t m_copyPacketCeiling = 8192;
-
-			/**
-			 * @brief Decoded video frames waiting for the encoder thread.
-			 * Default 8. Each 4K 10-bit frame is tens of MiB.
-			 */
-			std::size_t m_videoFrameCeiling = 8;
+			std::size_t m_videoPacketCeiling = 16;					///< Video recode packet queue
+			std::size_t m_packetCeiling = 32;						///< Audio/subtitle recode packet queue
+			std::size_t m_muxPacketCeiling = 64;					///< Recode mux queue
+			std::size_t m_copyPacketCeiling = 8192;					///< Copy mux queue
+			std::size_t m_videoFrameCeiling = 8;					///< Decoded video frames
 
 		private:
-			struct Slot;											///< One mapped or implied track
-			class Impl;												///< Queues, worker, flags
+			friend class Engine::Transcode::Engine;
 
 			std::shared_ptr<StormByte::Logger::Log> m_logger;		///< Required logger
 			std::unique_ptr<File> m_file;							///< Opened source
-			std::unique_ptr<Impl> m_impl;							///< Runtime state
+			std::unique_ptr<Engine::Transcode::Engine> m_engine;	///< Queues and worker
 
 			/**
 			 * @brief Marks a hard error and cancels workers.
@@ -625,16 +667,14 @@ namespace StormByte::Multimedia::Pipeline {
 			Track AddTrack(int in, int out, Type kind) noexcept;
 
 			/**
-			 * @brief Worker thread body.
+			 * @brief Worker thread body. Forwards to Engine::Run.
 			 */
 			void Worker() noexcept;
 
 			/**
-			 * @brief Records encoder Open() into the matching Slot and fires OnSettled.
+			 * @brief Records encoder Open() into the matching slot and fires OnSettled.
 			 * @param in Source stream index of the lane.
 			 * @param encoder Encoder that just opened.
-			 *
-			 * No-op if the encoder is not Opened() or the slot is already settled.
 			 */
 			void MarkSettled(int in, Encoder& encoder) noexcept;
 
@@ -645,7 +685,7 @@ namespace StormByte::Multimedia::Pipeline {
 			void SetProgress(unsigned percent) noexcept;
 
 			/**
-			 * @brief Whether @p slot indexes m_explicit.
+			 * @brief Whether @p slot indexes Engine::mapped.
 			 * @param slot Slot index.
 			 * @return true if usable.
 			 */
