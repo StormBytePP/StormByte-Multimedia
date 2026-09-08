@@ -272,6 +272,7 @@ bool Details::Video::Receive(class Decoder& owner, class Frame& frame) noexcept 
 	}
 
 	frame = StormByte::Multimedia::Pipeline::Frame(
+		Multimedia::Type::Video,
 		owner.Index(),
 		StormByte::Buffer::FIFO{},
 		TicksToPts(holder->m_backend.Pts(), m_timeBase),

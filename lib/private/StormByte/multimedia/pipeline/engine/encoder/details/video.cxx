@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/video.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -47,6 +48,7 @@ extern "C" {
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Open = StormByte::Multimedia::Pipeline::Engine::Encoder::Open;
+using StormByte::Multimedia::Type;
 
 StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Video() noexcept = default;
 
@@ -65,7 +67,7 @@ AVRational StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Tim
 bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Open(class Encoder& owner, const class Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
-	if (!frame.Video()) {
+	if (frame.Type() != Type::Video) {
 		owner.Fail("encoder destination is video but frame is not");
 		return false;
 	}

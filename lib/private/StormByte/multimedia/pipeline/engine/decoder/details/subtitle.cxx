@@ -165,6 +165,7 @@ bool Details::Subtitle::Receive(class Decoder& owner, class Frame& frame) noexce
 		duration.reset();
 
 	class Frame incoming(
+		Multimedia::Type::Subtitle,
 		owner.Index(),
 		StormByte::Buffer::FIFO{std::move(bytes)},
 		std::move(pts),

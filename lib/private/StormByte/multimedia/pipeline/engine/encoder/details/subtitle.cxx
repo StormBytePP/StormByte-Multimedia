@@ -282,6 +282,10 @@ AVRational StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::
 bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Open(class Encoder& owner, const class Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
+	if (frame.Type() != StormByte::Multimedia::Type::Subtitle) {
+		owner.Fail("encoder destination is subtitle but frame is not");
+		return false;
+	}
 	auto opened = Open::OpenBackend(owner, frame);
 	if (!opened)
 		return false;

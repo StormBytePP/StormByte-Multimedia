@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/pipeline/filters/resize.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 extern "C" {
 	#include <libavutil/frame.h>
@@ -47,6 +48,7 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia::Pipeline::Filter;
+using StormByte::Multimedia::Type;
 
 Resize::Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept
 : m_width(resolution.Width()), m_height(resolution.Height()) {}
@@ -63,7 +65,7 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Resize::Push(
 	StormByte::Multimedia::Pipeline::Frame&& frame) noexcept {
 	if (Failed())
 		return std::nullopt;
-	if (!frame.Video() || !frame.m_engine)
+	if (frame.Type() != Type::Video || !frame.m_engine)
 		return std::move(frame);
 
 	::AVFrame* src = frame.m_engine->m_backend.Get();

@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <memory>
@@ -133,11 +134,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Frame
 	 * @brief One decoded access unit.
 	 *
-	 * Move-only. Planes stay in an opaque backend buffer until Payload()
-	 * is called. Attachments() is filled at receive time. Heuristics fill
-	 * Video().HDR10() only, never the side-data bag.
-	 * Audio() is set on audio frames; empty on video and subtitle frames.
-	 * Language() and Title() are stream tags copied by the decoder when known.
+	 * Move-only. @ref Media is the kind of this unit
+	 * (@ref StormByte::Multimedia::Type::Video,
+	 * @ref StormByte::Multimedia::Type::Audio or
+	 * @ref StormByte::Multimedia::Type::Subtitle on a live frame;
+	 * @ref StormByte::Multimedia::Type::Unknown on an empty one).
+	 * Do not infer the kind from whether @ref Video or @ref Audio
+	 * is populated.
+	 *
+	 * Planes stay in an opaque backend buffer until @ref Payload()
+	 * is called. @ref Attachments() is filled at receive time. Heuristics fill
+	 * @ref Video() HDR10 only, never the side-data bag.
+	 * @ref Audio() is set on audio frames; empty on video and subtitle frames.
+	 * @ref Language() and @ref Title() are stream tags copied by the decoder when known.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -150,11 +159,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Empty frame.
+			 *
+			 * @ref Media is @ref StormByte::Multimedia::Type::Unknown.
 			 */
 			Frame() noexcept;
 
 			/**
 			 * @brief Builds a frame without a backend buffer.
+			 * @param type Kind of this unit (Video, Audio or Subtitle).
 			 * @param stream_index Container stream index.
 			 * @param payload Owned sample / plane bytes.
 			 * @param pts Presentation timestamp, if known.
@@ -163,7 +175,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param attachments Raw side-data blobs.
 			 * @param audio Audio properties, if this is an audio frame.
 			 */
-			Frame(int stream_index, StormByte::Buffer::FIFO payload,
+			Frame(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
 				std::optional<Property::Video> video = std::nullopt,
@@ -207,6 +219,20 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @name Timing and identity
 			 * @{
 			 */
+
+			/**
+			 * @brief Kind of this unit.
+			 * @return @ref StormByte::Multimedia::Type::Video,
+			 *         @ref StormByte::Multimedia::Type::Audio or
+			 *         @ref StormByte::Multimedia::Type::Subtitle
+			 *         for a decoded frame;
+			 *         @ref StormByte::Multimedia::Type::Unknown
+			 *         for the empty sentinel.
+			 *
+			 * Fixed when the frame is built. Do not infer it from
+			 * @ref Video() or @ref Audio().
+			 */
+			enum Multimedia::Type Type() const noexcept;
 
 			/**
 			 * @brief Container stream index.
@@ -308,6 +334,7 @@ namespace StormByte::Multimedia::Pipeline {
 			friend class Engine::Decoder::Details::Subtitle;
 
 		private:
+			StormByte::Multimedia::Type m_type;							///< Kind of this unit
 			int m_streamIndex;											///< Container stream index
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
 			std::optional<Property::Duration> m_pts;					///< Presentation timestamp

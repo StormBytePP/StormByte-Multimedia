@@ -142,6 +142,7 @@ bool Details::Audio::Receive(class Decoder& owner, class Frame& frame) noexcept 
 	}
 
 	frame = StormByte::Multimedia::Pipeline::Frame(
+		Multimedia::Type::Audio,
 		owner.Index(),
 		StormByte::Buffer::FIFO{},
 		TicksToPts(holder->m_backend.Pts(), m_timeBase),

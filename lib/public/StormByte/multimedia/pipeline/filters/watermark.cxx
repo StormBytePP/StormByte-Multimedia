@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/pipeline/filters/watermark.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <algorithm>
 #include <cstdint>
@@ -51,6 +52,7 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia::Pipeline::Filter;
+using StormByte::Multimedia::Type;
 
 class Watermark::Impl {
 	public:
@@ -122,7 +124,7 @@ std::optional<StormByte::Multimedia::Pipeline::Frame> Watermark::Push(
 		return std::nullopt;
 	if (m_opacity == 0)
 		return std::move(frame);
-	if (!frame.Video() || !frame.m_engine)
+	if (frame.Type() != Type::Video || !frame.m_engine)
 		return std::move(frame);
 
 	::AVFrame* dst = frame.m_engine->m_backend.Get();

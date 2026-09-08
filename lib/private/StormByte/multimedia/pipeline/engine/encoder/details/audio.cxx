@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/audio.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -52,6 +53,7 @@ extern "C" {
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Open = StormByte::Multimedia::Pipeline::Engine::Encoder::Open;
 namespace Details = StormByte::Multimedia::Pipeline::Engine::Encoder::Details;
+using StormByte::Multimedia::Type;
 
 namespace {
 	bool SameLayout(const AVChannelLayout& a, const AVChannelLayout& b) noexcept {
@@ -274,7 +276,7 @@ bool Details::Audio::Emit(class Encoder& owner, bool last) noexcept {
 bool Details::Audio::Open(class Encoder& owner, const class Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
-	if (!frame.Audio()) {
+	if (frame.Type() != Type::Audio) {
 		owner.Fail("encoder destination is audio but frame is not");
 		return false;
 	}
