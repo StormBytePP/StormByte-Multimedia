@@ -50,11 +50,19 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Multimedia::Pipeline::Filter::Origin;
 
-Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec) noexcept
+namespace {
+	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
+		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
+	}
+}
+
+Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec,
+	std::shared_ptr<Filter::Chain> pipe) noexcept
 : m_index(output_index), m_codec(&codec),
-m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION),
-m_failed(false) {
+	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION),
+	m_pipe(std::move(pipe)), m_failed(false) {
 	switch (codec.Type()) {
 		case StormByte::Multimedia::Type::Video:
 			m_engine = std::make_unique<Engine::Encoder::Details::Video>();
@@ -70,6 +78,9 @@ m_failed(false) {
 			break;
 	}
 }
+
+Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec, Filter::Chain& pipe) noexcept
+: Encoder(output_index, codec, Alias(pipe)) {}
 
 Encoder::Encoder(Encoder&&) noexcept = default;
 Encoder::~Encoder() noexcept = default;
@@ -278,10 +289,31 @@ void Encoder::FineTune(std::map<std::string, std::string> options) noexcept {
 	m_fineTune = std::move(options);
 }
 
+std::shared_ptr<Filter::Chain>& Encoder::Pipe() noexcept {
+	return m_pipe;
+}
+
+const std::shared_ptr<Filter::Chain>& Encoder::Pipe() const noexcept {
+	return m_pipe;
+}
+
+void Encoder::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
+	m_pipe = std::move(pipe);
+}
+
+void Encoder::Pipe(Filter::Chain& pipe) noexcept {
+	m_pipe = Alias(pipe);
+}
+
 void Encoder::Flush() noexcept {
 	if (m_failed || !m_engine)
 		return;
 	m_engine->Flush(*this);
+	if (m_pipe) {
+		m_pipe->Eof(Origin::Encoder);
+		if (m_pipe->Failed())
+			Fail(m_pipe->ErrorStr());
+	}
 }
 
 void Encoder::Fail(std::string reason) noexcept {
@@ -326,6 +358,14 @@ Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encode
 		encoder.Language(*frame.Language());
 	if (frame.Title() && !encoder.m_title)
 		encoder.Title(*frame.Title());
+	if (encoder.m_pipe) {
+		// Distorted Call when a reconstructed frame exists:
+		// encoder.m_pipe->Call(reconstructed, Origin::Encoder);
+		// if (encoder.m_pipe->Failed()) {
+		//     encoder.Fail(encoder.m_pipe->ErrorStr());
+		//     return frame;
+		// }
+	}
 	(void)encoder.m_engine->Push(encoder, frame);
 	return frame;
 }

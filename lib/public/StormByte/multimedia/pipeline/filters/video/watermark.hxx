@@ -50,7 +50,7 @@
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
- * @brief Video @ref StormByte::Multimedia::Pipeline::Filter::Process nodes.
+ * @brief Video process filters.
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -71,9 +71,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 	/**
 	 * @class Watermark
-	 * @brief Overlays a still image from a file. Audio and subtitles
-	 *        are forwarded by
-	 *        @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Gate.
+	 * @brief Overlays a still image from a file on @ref Origin::Decoder.
 	 *
 	 * Opacity 0 is a no-op. The logo is never cropped: if it does not
 	 * fit, @ref FFmpeg::Fail runs. Prefer adding this node before
@@ -83,6 +81,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
+			/**
+			 * @name Lifetime
+			 * @{
+			 */
+
 			/**
 			 * @brief Logo at an anchor.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
@@ -110,8 +113,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Filter to take.
 			 */
-			Watermark(Watermark&&) noexcept = default;
+			Watermark(Watermark&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
@@ -126,22 +130,50 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Filter to take.
 			 * @return *this.
 			 */
-			Watermark& operator=(Watermark&&) noexcept = default;
+			Watermark& operator=(Watermark&& other) noexcept = default;
+
+			/** @} */
+
+			/**
+			 * @name Identity
+			 * @{
+			 */
 
 			/**
 			 * @brief Media this filter handles.
-			 * @return @ref StormByte::Multimedia::Type::Video.
+			 * @return Video.
 			 */
-			StormByte::Multimedia::Type Media() const noexcept override;
+			enum Type Media() const noexcept override;
+
+			/** @} */
 
 		protected:
 			/**
+			 * @name Run
+			 * @{
+			 */
+
+			/**
+			 * @brief Drops decoded logo state from a previous run.
+			 */
+			void Clean() noexcept override;
+
+			/**
+			 * @brief Reads the logo file for the coming run.
+			 */
+			void Setup() noexcept override;
+
+			/**
 			 * @brief Blends the logo onto @p frame, then @ref FFmpeg::Replace.
 			 * @param frame Video unit.
+			 * @param origin Stage that is calling.
 			 */
-			void ProcessFrame(Pipeline::Frame& frame) noexcept override;
+			void Process(Pipeline::Frame& frame, Origin origin) noexcept override;
+
+			/** @} */
 
 		private:
 			/**

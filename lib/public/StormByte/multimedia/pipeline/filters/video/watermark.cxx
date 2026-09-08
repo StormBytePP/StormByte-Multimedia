@@ -54,7 +54,7 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 namespace {
-	const AVCodec* CodecFromPath(const std::filesystem::path& path) noexcept {
+	const ::AVCodec* CodecFromPath(const std::filesystem::path& path) noexcept {
 		std::string ext = path.extension().string();
 		for (char& c : ext)
 			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -122,16 +122,31 @@ namespace {
 
 Watermark::Watermark(const std::filesystem::path& logo, Anchor anchor,
 	unsigned opacity, int margin) noexcept
-: m_path(logo), m_anchor(anchor),
-m_opacity(std::min(opacity, 100u)), m_margin(margin) {}
+: Filter::Process("watermark"), m_path(logo), m_anchor(anchor),
+	m_opacity(std::min(opacity, 100u)), m_margin(margin) {}
 
 Watermark::Watermark(const std::filesystem::path& logo,
 	StormByte::Multimedia::Property::Point position, unsigned opacity) noexcept
-: m_path(logo), m_point(position),
-m_opacity(std::min(opacity, 100u)), m_margin(0) {}
+: Filter::Process("watermark"), m_path(logo), m_point(position),
+	m_opacity(std::min(opacity, 100u)), m_margin(0) {}
 
-StormByte::Multimedia::Type Watermark::Media() const noexcept {
-	return StormByte::Multimedia::Type::Video;
+enum StormByte::Multimedia::Type Watermark::Media() const noexcept {
+	return Type::Video;
+}
+
+void Watermark::Clean() noexcept {
+	m_bytes.clear();
+	m_rgba.clear();
+	m_logoWidth = 0;
+	m_logoHeight = 0;
+	m_loaded = false;
+	m_decoded = false;
+}
+
+void Watermark::Setup() noexcept {
+	if (m_opacity == 0)
+		return;
+	(void)LoadFile();
 }
 
 bool Watermark::LoadFile() noexcept {
@@ -141,13 +156,13 @@ bool Watermark::LoadFile() noexcept {
 
 	std::ifstream in(m_path, std::ios::binary);
 	if (!in) {
-		Fail("watermark: cannot open " + m_path.string());
+		Fail("cannot open " + m_path.string());
 		return false;
 	}
 	in.seekg(0, std::ios::end);
 	const auto size = in.tellg();
 	if (size <= 0) {
-		Fail("watermark: empty logo");
+		Fail("empty logo");
 		return false;
 	}
 	in.seekg(0, std::ios::beg);
@@ -155,7 +170,7 @@ bool Watermark::LoadFile() noexcept {
 	in.read(reinterpret_cast<char*>(m_bytes.data()), size);
 	if (!in) {
 		m_bytes.clear();
-		Fail("watermark: failed to read " + m_path.string());
+		Fail("failed to read " + m_path.string());
 		return false;
 	}
 	return true;
@@ -168,32 +183,32 @@ bool Watermark::DecodeLogo() noexcept {
 	if (!LoadFile())
 		return false;
 
-	const AVCodec* codec = CodecFromPath(m_path);
+	const ::AVCodec* codec = CodecFromPath(m_path);
 	if (!codec) {
-		Fail("watermark: no decoder for logo");
+		Fail("no decoder for logo");
 		return false;
 	}
 
-	AVCodecContext* ctx = avcodec_alloc_context3(codec);
+	::AVCodecContext* ctx = avcodec_alloc_context3(codec);
 	if (!ctx || avcodec_open2(ctx, codec, nullptr) < 0) {
 		avcodec_free_context(&ctx);
-		Fail("watermark: failed to open logo decoder");
+		Fail("failed to open logo decoder");
 		return false;
 	}
 
-	AVPacket* pkt = av_packet_alloc();
-	AVFrame* decoded = av_frame_alloc();
+	::AVPacket* pkt = av_packet_alloc();
+	::AVFrame* decoded = av_frame_alloc();
 	if (!pkt || !decoded) {
 		av_packet_free(&pkt);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("watermark: out of memory");
+		Fail("out of memory");
 		return false;
 	}
 
 	pkt->data = reinterpret_cast<uint8_t*>(m_bytes.data());
 	pkt->size = static_cast<int>(m_bytes.size());
-	bool ok = avcodec_send_packet(ctx, pkt) >= 0 && avcodec_receive_frame(ctx, decoded) >= 0;
+	const bool ok = avcodec_send_packet(ctx, pkt) >= 0 && avcodec_receive_frame(ctx, decoded) >= 0;
 	pkt->data = nullptr;
 	pkt->size = 0;
 	av_packet_free(&pkt);
@@ -201,15 +216,15 @@ bool Watermark::DecodeLogo() noexcept {
 	if (!ok || decoded->width <= 0 || decoded->height <= 0) {
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("watermark: failed to decode logo");
+		Fail("failed to decode logo");
 		return false;
 	}
 
-	AVFrame* rgba = av_frame_alloc();
+	::AVFrame* rgba = av_frame_alloc();
 	if (!rgba) {
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("watermark: out of memory");
+		Fail("out of memory");
 		return false;
 	}
 	rgba->format = AV_PIX_FMT_RGBA;
@@ -219,11 +234,11 @@ bool Watermark::DecodeLogo() noexcept {
 		av_frame_free(&rgba);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("watermark: failed to allocate RGBA logo");
+		Fail("failed to allocate RGBA logo");
 		return false;
 	}
 
-	SwsContext* sws = sws_getContext(
+	::SwsContext* sws = sws_getContext(
 		decoded->width, decoded->height, static_cast<AVPixelFormat>(decoded->format),
 		rgba->width, rgba->height, AV_PIX_FMT_RGBA,
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
@@ -234,7 +249,7 @@ bool Watermark::DecodeLogo() noexcept {
 		av_frame_free(&rgba);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("watermark: failed to convert logo to RGBA");
+		Fail("failed to convert logo to RGBA");
 		return false;
 	}
 	sws_freeContext(sws);
@@ -255,7 +270,7 @@ bool Watermark::DecodeLogo() noexcept {
 	return true;
 }
 
-void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
+void Watermark::Process(Pipeline::Frame& frame, Origin) noexcept {
 	if (m_opacity == 0)
 		return;
 	if (!DecodeLogo())
@@ -263,25 +278,25 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 
 	::AVFrame* src = Native(frame);
 	if (!src || src->width <= 0 || src->height <= 0) {
-		Fail("watermark: missing video buffer");
+		Fail("missing video buffer");
 		return;
 	}
 
 	const auto [x, y] = Place(src->width, src->height, m_logoWidth, m_logoHeight,
 		m_anchor, m_point, m_margin);
 	if (x < 0 || y < 0 || x + m_logoWidth > src->width || y + m_logoHeight > src->height) {
-		Fail("watermark: logo does not fit in the frame");
+		Fail("logo does not fit in the frame");
 		return;
 	}
 
 	::AVFrame* out = av_frame_alloc();
 	if (!out) {
-		Fail("watermark: out of memory");
+		Fail("out of memory");
 		return;
 	}
 	if (av_frame_copy_props(out, src) < 0) {
 		av_frame_free(&out);
-		Fail("watermark: failed to copy frame properties");
+		Fail("failed to copy frame properties");
 		return;
 	}
 	out->width = src->width;
@@ -289,11 +304,11 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 	out->format = AV_PIX_FMT_RGBA;
 	if (av_frame_get_buffer(out, 0) < 0) {
 		av_frame_free(&out);
-		Fail("watermark: failed to allocate destination");
+		Fail("failed to allocate destination");
 		return;
 	}
 
-	SwsContext* toRgba = sws_getContext(
+	::SwsContext* toRgba = sws_getContext(
 		src->width, src->height, static_cast<AVPixelFormat>(src->format),
 		out->width, out->height, AV_PIX_FMT_RGBA,
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
@@ -302,7 +317,7 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 		if (toRgba)
 			sws_freeContext(toRgba);
 		av_frame_free(&out);
-		Fail("watermark: failed to convert frame to RGBA");
+		Fail("failed to convert frame to RGBA");
 		return;
 	}
 	sws_freeContext(toRgba);
@@ -315,13 +330,13 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 		::AVFrame* restored = av_frame_alloc();
 		if (!restored) {
 			av_frame_free(&out);
-			Fail("watermark: out of memory");
+			Fail("out of memory");
 			return;
 		}
 		if (av_frame_copy_props(restored, src) < 0) {
 			av_frame_free(&restored);
 			av_frame_free(&out);
-			Fail("watermark: failed to copy frame properties");
+			Fail("failed to copy frame properties");
 			return;
 		}
 		restored->width = src->width;
@@ -330,10 +345,10 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 		if (av_frame_get_buffer(restored, 0) < 0) {
 			av_frame_free(&restored);
 			av_frame_free(&out);
-			Fail("watermark: failed to allocate destination");
+			Fail("failed to allocate destination");
 			return;
 		}
-		SwsContext* fromRgba = sws_getContext(
+		::SwsContext* fromRgba = sws_getContext(
 			out->width, out->height, AV_PIX_FMT_RGBA,
 			restored->width, restored->height, static_cast<AVPixelFormat>(restored->format),
 			SWS_BILINEAR, nullptr, nullptr, nullptr);
@@ -343,7 +358,7 @@ void Watermark::ProcessFrame(Pipeline::Frame& frame) noexcept {
 				sws_freeContext(fromRgba);
 			av_frame_free(&restored);
 			av_frame_free(&out);
-			Fail("watermark: failed to convert frame back");
+			Fail("failed to convert frame back");
 			return;
 		}
 		sws_freeContext(fromRgba);

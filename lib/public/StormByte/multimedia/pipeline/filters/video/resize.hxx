@@ -46,22 +46,27 @@
 #include <cstdint>
 
 /**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Frame and packet steps attached to a job or a raw pipeline.
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Video
+ * @brief Video process filters.
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Resize
-	 * @brief Scales a video frame. Audio and subtitles are forwarded by
-	 *        @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg::Gate.
+	 * @brief Scales a decoded video frame on @ref Origin::Decoder.
 	 *
 	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
-	 * on the first video frame. Talks to libav with raw @c AVFrame*
-	 * from @ref FFmpeg::Native and hands the result to
-	 * @ref FFmpeg::Replace. Does not use Multimedia RAII wrappers.
+	 * on the first video frame. Destination is applied with swscale
+	 * on the backend frame; Payload() is invalidated.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Process {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Filter::Process {
 		public:
+			/**
+			 * @name Lifetime
+			 * @{
+			 */
+
 			/**
 			 * @brief Exact destination size.
 			 * @param resolution Target resolution.
@@ -82,8 +87,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Filter to take.
 			 */
-			Resize(Resize&&) noexcept = default;
+			Resize(Resize&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
@@ -98,22 +104,50 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Filter to take.
 			 * @return *this.
 			 */
-			Resize& operator=(Resize&&) noexcept = default;
+			Resize& operator=(Resize&& other) noexcept = default;
+
+			/** @} */
+
+			/**
+			 * @name Identity
+			 * @{
+			 */
 
 			/**
 			 * @brief Media this filter handles.
-			 * @return @ref StormByte::Multimedia::Type::Video.
+			 * @return Video.
 			 */
-			StormByte::Multimedia::Type Media() const noexcept override;
+			enum Type Media() const noexcept override;
+
+			/** @} */
 
 		protected:
 			/**
-			 * @brief Scales @p frame in place.
-			 * @param frame Video unit.
+			 * @name Run
+			 * @{
 			 */
-			void ProcessFrame(Pipeline::Frame& frame) noexcept override;
+
+			/**
+			 * @brief Nothing to drop on first run.
+			 */
+			void Clean() noexcept override;
+
+			/**
+			 * @brief Nothing to acquire beyond construction.
+			 */
+			void Setup() noexcept override;
+
+			/**
+			 * @brief Scales @p frame in place.
+			 * @param frame Video frame with a backend buffer.
+			 * @param origin Stage that is calling.
+			 */
+			void Process(Pipeline::Frame& frame, Origin origin) noexcept override;
+
+			/** @} */
 
 		private:
 			std::uint32_t m_width;		///< Requested width, 0 = auto

@@ -41,7 +41,7 @@
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/filters/chain/packet.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -114,7 +114,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
 
 	/**
-	 * @brief Writes @p packet after the packet chain. Never throws.
+	 * @brief Writes @p packet after the filter chain. Never throws.
 	 * @param packet Encoded or copied packet.
 	 * @param mux Destination.
 	 * @return @p packet.
@@ -141,19 +141,34 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Mux
 	 * @brief Writes interleaved compressed packets to a destination file.
 	 *
-	 * Packet nodes go in Pipe()
-	 * (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Packet).
-	 * They run inside packet >> mux. An empty chain is identity.
+	 * @ref Filter::Chain goes in Pipe(). @c packet >> mux calls
+	 * @ref Filter::Chain::Call with @ref Filter::Origin::Mux.
+	 * @ref Flush also @ref Filter::Chain::Eof that origin.
+	 * A null pipe is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Mux {
 		public:
 			/**
+			 * @name Lifetime
+			 * @{
+			 */
+
+			/**
 			 * @brief Muxer for @p container. Does not open a file.
 			 * @param container Registry container. Must HasAccess(Write).
+			 * @param pipe Shared filter list, or null.
 			 */
-			explicit Mux(const Container& container) noexcept;
+			explicit Mux(const Container& container,
+				std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+
+			/**
+			 * @brief Muxer bound to an existing chain (non-owning alias).
+			 * @param container Registry container. Must HasAccess(Write).
+			 * @param pipe Live chain.
+			 */
+			Mux(const Container& container, Filter::Chain& pipe) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -186,8 +201,16 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief true if a destination is bound and not failed.
+			 * @return Open and not @ref Failed.
 			 */
 			explicit operator bool() const noexcept;
+
+			/** @} */
+
+			/**
+			 * @name Bind
+			 * @{
+			 */
 
 			/**
 			 * @brief Destination container bound at construction.
@@ -195,9 +218,47 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Container& Destination() const noexcept;
 
+			/** @} */
+
+			/**
+			 * @name Pipe
+			 * @{
+			 */
+
+			/**
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
+
+			/**
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
+
+			/**
+			 * @brief Replaces the shared chain.
+			 * @param pipe New list, or null.
+			 */
+			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
+
+			/**
+			 * @brief Aliases a live chain (non-owning).
+			 * @param pipe Live list.
+			 */
+			void Pipe(Filter::Chain& pipe) noexcept;
+
+			/** @} */
+
+			/**
+			 * @name Status
+			 * @{
+			 */
+
 			/**
 			 * @brief Whether a hard error occurred.
-			 * @return true on open/write error.
+			 * @return true on open/write/filter error.
 			 */
 			bool Failed() const noexcept;
 
@@ -208,21 +269,11 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @brief Packet filter chain. Add nodes before the first packet write.
-			 * @return Chain.
-			 */
-			Filter::Chain::Packet& Pipe() noexcept;
-
-			/**
-			 * @brief Packet filter chain.
-			 * @return Chain.
-			 */
-			const Filter::Chain::Packet& Pipe() const noexcept;
-
-			/**
-			 * @brief Flushes every reserved encoder and writes leftover packets.
+			 * @brief Flushes every reserved encoder, leftover packets, and @ref Pipe Eof.
 			 */
 			void Flush() noexcept;
+
+			/** @} */
 
 			friend Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
 			friend Copy& operator>>(Copy& copy, Mux& mux) noexcept;
@@ -237,7 +288,7 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			const Container* m_container;							///< Destination container
 			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Output format backend
-			Filter::Chain::Packet m_pipe;							///< Packet nodes
+			std::shared_ptr<Filter::Chain> m_pipe;					///< Shared filter list
 			bool m_failed;											///< Hard error
 			std::optional<std::string> m_error;						///< Failure text
 

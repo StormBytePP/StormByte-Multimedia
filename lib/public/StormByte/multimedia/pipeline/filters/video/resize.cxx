@@ -47,24 +47,28 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 Resize::Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept
-: m_width(resolution.Width()), m_height(resolution.Height()) {}
+: Filter::Process("resize"), m_width(resolution.Width()), m_height(resolution.Height()) {}
 
 Resize::Resize(std::uint32_t width, std::uint32_t height) noexcept
-: m_width(width), m_height(height) {}
+: Filter::Process("resize"), m_width(width), m_height(height) {}
 
-StormByte::Multimedia::Type Resize::Media() const noexcept {
-	return StormByte::Multimedia::Type::Video;
+enum StormByte::Multimedia::Type Resize::Media() const noexcept {
+	return Type::Video;
 }
 
-void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
+void Resize::Clean() noexcept {}
+
+void Resize::Setup() noexcept {}
+
+void Resize::Process(Pipeline::Frame& frame, Origin) noexcept {
 	::AVFrame* src = Native(frame);
 	if (!src || src->width <= 0 || src->height <= 0) {
-		Fail("resize: missing video buffer");
+		Fail("missing video buffer");
 		return;
 	}
 
 	if (m_width == 0 && m_height == 0) {
-		Fail("resize: width and height are both 0");
+		Fail("width and height are both 0");
 		return;
 	}
 
@@ -77,7 +81,7 @@ void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
 		dstH = static_cast<std::uint32_t>(
 			(static_cast<std::uint64_t>(src->height) * dstW + src->width / 2) / src->width);
 	if (dstW == 0 || dstH == 0) {
-		Fail("resize: computed destination is empty");
+		Fail("computed destination is empty");
 		return;
 	}
 
@@ -86,12 +90,12 @@ void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
 
 	::AVFrame* out = av_frame_alloc();
 	if (!out) {
-		Fail("resize: out of memory");
+		Fail("out of memory");
 		return;
 	}
 	if (av_frame_copy_props(out, src) < 0) {
 		av_frame_free(&out);
-		Fail("resize: failed to copy frame properties");
+		Fail("failed to copy frame properties");
 		return;
 	}
 	out->width = static_cast<int>(dstW);
@@ -99,17 +103,17 @@ void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
 	out->format = src->format;
 	if (av_frame_get_buffer(out, 0) < 0) {
 		av_frame_free(&out);
-		Fail("resize: failed to allocate destination");
+		Fail("failed to allocate destination");
 		return;
 	}
 
-	SwsContext* sws = sws_getContext(
+	::SwsContext* sws = sws_getContext(
 		src->width, src->height, static_cast<AVPixelFormat>(src->format),
 		out->width, out->height, static_cast<AVPixelFormat>(out->format),
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
 	if (!sws) {
 		av_frame_free(&out);
-		Fail("resize: swscale rejected this format");
+		Fail("swscale rejected this format");
 		return;
 	}
 	const int scaled = sws_scale(sws, src->data, src->linesize, 0, src->height,
@@ -117,7 +121,7 @@ void Resize::ProcessFrame(Pipeline::Frame& frame) noexcept {
 	sws_freeContext(sws);
 	if (scaled <= 0) {
 		av_frame_free(&out);
-		Fail("resize: swscale failed");
+		Fail("swscale failed");
 		return;
 	}
 

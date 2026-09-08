@@ -44,6 +44,7 @@
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -55,6 +56,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 /**
@@ -256,6 +258,10 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Transcode
 	 * @brief High-level job: map tracks, run demux/decode/encode/mux on workers.
+	 *
+	 * Owns one @ref Filter::Chain. @ref Filter appends nodes before
+	 * @ref Run. The worker passes that same list to Demux, Decoder,
+	 * Encoder and Mux.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -509,6 +515,19 @@ namespace StormByte::Multimedia::Pipeline {
 				std::filesystem::path path) noexcept;
 
 			/**
+			 * @brief Appends a filter to the job chain. Call before @ref Run.
+			 * @tparam FilterType Child of Process, Analytics or Packet.
+			 * @param args Constructor arguments, forwarded.
+			 * @return *this.
+			 */
+			template<typename FilterType, typename... Args>
+			Transcode& Filter(Args&&... args) noexcept {
+				if (m_pipe)
+					m_pipe->Add<FilterType>(std::forward<Args>(args)...);
+				return *this;
+			}
+
+			/**
 			 * @brief Starts workers. Returns immediately.
 			 */
 			void Run() noexcept;
@@ -641,6 +660,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::shared_ptr<StormByte::Logger::Log> m_logger;		///< Required logger
 			std::unique_ptr<File> m_file;							///< Opened source
 			std::unique_ptr<Engine::Transcode::Engine> m_engine;	///< Queues and worker
+			std::shared_ptr<Filter::Chain> m_pipe;					///< Job filter list
 
 			/**
 			 * @brief Marks a hard error and cancels workers.

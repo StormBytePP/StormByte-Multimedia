@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/chain/packet.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -98,7 +98,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
 
 	/**
-	 * @brief Reads one packet into @p packet after the packet chain. Never throws.
+	 * @brief Reads one packet into @p packet after the filter chain. Never throws.
 	 * @param demux Source demuxer.
 	 * @param packet Replaced on success.
 	 * @return @p demux.
@@ -134,18 +134,31 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
 	 * Public entry point. Open and Read live in Details::Container.
-	 * Packet nodes go in Pipe()
-	 * (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Packet).
-	 * They run inside demux >> packet. An empty chain is identity.
+	 * @ref Filter::Chain goes in Pipe(). @c demux >> packet calls
+	 * @ref Filter::Chain::Call with @ref Filter::Origin::Demux.
+	 * @ref ReachedEof also @ref Filter::Chain::Eof that origin.
+	 * A null pipe is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
 		public:
 			/**
-			 * @brief Empty demuxer (not open).
+			 * @name Lifetime
+			 * @{
 			 */
-			Demux() noexcept;
+
+			/**
+			 * @brief Empty demuxer (not open).
+			 * @param pipe Shared filter list, or null.
+			 */
+			explicit Demux(std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+
+			/**
+			 * @brief Demuxer bound to an existing chain (non-owning alias).
+			 * @param pipe Live chain.
+			 */
+			explicit Demux(Filter::Chain& pipe) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -178,8 +191,16 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief true if open, not failed and not at EOF.
+			 * @return Open, not @ref Failed and not @ref Eof.
 			 */
 			explicit operator bool() const noexcept;
+
+			/** @} */
+
+			/**
+			 * @name Status
+			 * @{
+			 */
 
 			/**
 			 * @brief Whether a hard error occurred.
@@ -199,17 +220,38 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const std::optional<std::string>& Error() const noexcept;
 
-			/**
-			 * @brief Packet filter chain. Add nodes before the first packet read.
-			 * @return Chain.
-			 */
-			Filter::Chain::Packet& Pipe() noexcept;
+			/** @} */
 
 			/**
-			 * @brief Packet filter chain.
-			 * @return Chain.
+			 * @name Pipe
+			 * @{
 			 */
-			const Filter::Chain::Packet& Pipe() const noexcept;
+
+			/**
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
+
+			/**
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
+
+			/**
+			 * @brief Replaces the shared chain.
+			 * @param pipe New list, or null.
+			 */
+			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
+
+			/**
+			 * @brief Aliases a live chain (non-owning).
+			 * @param pipe Live list.
+			 */
+			void Pipe(Filter::Chain& pipe) noexcept;
+
+			/** @} */
 
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
 			friend Demux& operator>>(Demux& demux, class Packet& packet) noexcept;
@@ -221,7 +263,7 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
 			const File* m_file = nullptr;						///< Snapshot used at open
-			Filter::Chain::Packet m_pipe;						///< Packet nodes
+			std::shared_ptr<Filter::Chain> m_pipe;				///< Shared filter list
 			bool m_failed;										///< Hard error
 			bool m_eof;											///< End of source
 			std::optional<std::string> m_error;					///< Failure text
@@ -233,7 +275,7 @@ namespace StormByte::Multimedia::Pipeline {
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Marks end of source. Called by Details::Container on AVERROR_EOF.
+			 * @brief Marks end of source and @ref Filter::Chain::Eof Demux.
 			 */
 			void ReachedEof() noexcept;
 	};

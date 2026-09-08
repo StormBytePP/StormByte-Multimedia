@@ -41,18 +41,53 @@
 #include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <cassert>
+#include <utility>
+
 using StormByte::Multimedia::Pipeline::Filter::Analytics;
 using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
+using StormByte::Multimedia::Pipeline::Filter::Origin;
+using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
-using StormByte::Multimedia::Pipeline::Filter::Report;
-using StormByte::Multimedia::Pipeline::Filter::Role;
-using StormByte::Multimedia::Pipeline::Filter::Roles;
-using StormByte::Multimedia::Type;
-using FilterPacket = StormByte::Multimedia::Pipeline::Filter::Packet;
+using StormByte::Multimedia::ToString;
+
+FFmpeg::FFmpeg(std::string name) noexcept
+: m_name(std::move(name)) {}
 
 FFmpeg::~FFmpeg() noexcept = default;
 
-class Report FFmpeg::Report() const noexcept {
+std::string FFmpeg::Name() const noexcept {
+	return std::string(ToString(Media())) + "/" + m_name;
+}
+
+void FFmpeg::Reset() noexcept {
+	m_failed = false;
+	m_reason.clear();
+	Clean();
+	Setup();
+}
+
+void FFmpeg::Call(Pipeline::Frame& frame, Origin origin) noexcept {
+	if (Failed())
+		return;
+	if (frame.Type() != Media())
+		return;
+	Process(frame, origin);
+}
+
+void FFmpeg::Call(StormByte::Multimedia::Pipeline::Packet& packet, Origin origin) noexcept {
+	if (Failed())
+		return;
+	if (packet.Type() != Media())
+		return;
+	Process(packet, origin);
+}
+
+void FFmpeg::Eof(Origin) noexcept {}
+
+void FFmpeg::Flush(Origin) noexcept {}
+
+class StormByte::Multimedia::Pipeline::Filter::Report FFmpeg::Report() const noexcept {
 	return {};
 }
 
@@ -60,242 +95,84 @@ bool FFmpeg::Failed() const noexcept {
 	return m_failed;
 }
 
-const std::optional<std::string>& FFmpeg::Error() const noexcept {
-	return m_error;
+std::string FFmpeg::ErrorStr() const noexcept {
+	assert(Failed());
+	if (!Failed())
+		return {};
+	return "Plugin " + Name() + " failed: " + m_reason;
 }
 
 void FFmpeg::Fail(std::string reason) noexcept {
 	m_failed = true;
-	m_error = std::move(reason);
+	m_reason = std::move(reason);
 }
 
-bool FFmpeg::Gate(const StormByte::Multimedia::Pipeline::Frame& frame, Role role) const noexcept {
-	if (m_failed)
-		return false;
-	if (!Accepts().Has(role))
-		return false;
-	return frame.Type() == Media();
+void FFmpeg::Process(StormByte::Multimedia::Pipeline::Packet&, Origin) noexcept {}
+
+::AVFrame* FFmpeg::Native(Pipeline::Frame& frame) noexcept {
+	return frame.m_engine ? frame.m_engine->m_backend.Get() : nullptr;
 }
 
-bool FFmpeg::Gate(const class StormByte::Multimedia::Pipeline::Packet& packet, Role role) const noexcept {
-	if (m_failed)
-		return false;
-	if (!Accepts().Has(role))
-		return false;
-	return packet.Type() == Media();
+const ::AVFrame* FFmpeg::Native(const Pipeline::Frame& frame) noexcept {
+	return frame.m_engine ? frame.m_engine->m_backend.Get() : nullptr;
 }
 
-FFmpeg::Frame::Frame(StormByte::Multimedia::Pipeline::Frame& frame) noexcept
-: m_view(&frame) {}
-
-FFmpeg::Frame::Frame(std::unique_ptr<StormByte::Multimedia::Pipeline::Frame> frame) noexcept
-: m_owned(std::move(frame)) {}
-
-FFmpeg::Frame::Frame(Frame&& other) noexcept
-: m_view(other.m_view), m_owned(std::move(other.m_owned)) {
-	other.m_view = nullptr;
+::AVPacket* FFmpeg::Native(StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
+	return packet.m_engine ? packet.m_engine->m_backend.Get() : nullptr;
 }
 
-FFmpeg::Frame::~Frame() noexcept = default;
-
-FFmpeg::Frame& FFmpeg::Frame::operator=(Frame&& other) noexcept {
-	if (this == &other)
-		return *this;
-	m_view = other.m_view;
-	m_owned = std::move(other.m_owned);
-	other.m_view = nullptr;
-	return *this;
+const ::AVPacket* FFmpeg::Native(const StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
+	return packet.m_engine ? packet.m_engine->m_backend.Get() : nullptr;
 }
 
-StormByte::Multimedia::Pipeline::Frame& FFmpeg::Frame::Ref() noexcept {
-	return m_owned ? *m_owned : *m_view;
-}
-
-const StormByte::Multimedia::Pipeline::Frame& FFmpeg::Frame::Ref() const noexcept {
-	return m_owned ? *m_owned : *m_view;
-}
-
-int FFmpeg::Frame::StreamIndex() const noexcept {
-	return Ref().StreamIndex();
-}
-
-const std::optional<StormByte::Multimedia::Property::Duration>& FFmpeg::Frame::Pts() const noexcept {
-	return Ref().Pts();
-}
-
-void FFmpeg::Frame::Pts(std::optional<StormByte::Multimedia::Property::Duration> pts) noexcept {
-	FFmpeg::SetPts(Ref(), std::move(pts));
-}
-
-const std::optional<StormByte::Multimedia::Property::Duration>& FFmpeg::Frame::Duration() const noexcept {
-	return Ref().Duration();
-}
-
-void FFmpeg::Frame::Duration(std::optional<StormByte::Multimedia::Property::Duration> duration) noexcept {
-	FFmpeg::SetDuration(Ref(), std::move(duration));
-}
-
-const std::optional<std::string>& FFmpeg::Frame::Language() const noexcept {
-	return Ref().Language();
-}
-
-void FFmpeg::Frame::Language(std::string language) noexcept {
-	Ref().Language(std::move(language));
-}
-
-const std::optional<std::string>& FFmpeg::Frame::Title() const noexcept {
-	return Ref().Title();
-}
-
-void FFmpeg::Frame::Title(std::string title) noexcept {
-	Ref().Title(std::move(title));
-}
-
-const std::optional<StormByte::Multimedia::Property::Video>& FFmpeg::Frame::Video() const noexcept {
-	return Ref().Video();
-}
-
-void FFmpeg::Frame::Video(std::optional<StormByte::Multimedia::Property::Video> video) noexcept {
-	FFmpeg::SetVideo(Ref(), std::move(video));
-}
-
-const std::optional<StormByte::Multimedia::Property::Audio>& FFmpeg::Frame::Audio() const noexcept {
-	return Ref().Audio();
-}
-
-void FFmpeg::Frame::Audio(std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept {
-	FFmpeg::SetAudio(Ref(), std::move(audio));
-}
-
-const std::vector<class StormByte::Multimedia::Pipeline::SideData>& FFmpeg::Frame::Attachments() const noexcept {
-	return Ref().Attachments();
-}
-
-StormByte::Buffer::FIFO& FFmpeg::Frame::Payload() noexcept {
-	return Ref().Payload();
-}
-
-const StormByte::Buffer::FIFO& FFmpeg::Frame::Payload() const noexcept {
-	return Ref().Payload();
-}
-
-FFmpeg::Frame FFmpeg::Clone(const Frame& frame) noexcept {
-	return Frame(std::unique_ptr<StormByte::Multimedia::Pipeline::Frame>(
-		new StormByte::Multimedia::Pipeline::Frame(frame.Ref()))
-	);
-}
-
-::AVFrame* FFmpeg::Native(StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
+void FFmpeg::Replace(Pipeline::Frame& frame, ::AVFrame* raw) noexcept {
 	if (!frame.m_engine)
-		return nullptr;
-	return frame.m_engine->m_backend.Get();
-}
-
-const ::AVFrame* FFmpeg::Native(const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
-	if (!frame.m_engine)
-		return nullptr;
-	return frame.m_engine->m_backend.Get();
-}
-
-::AVFrame* FFmpeg::Native(Frame& frame) noexcept {
-	return Native(frame.Ref());
-}
-
-const ::AVFrame* FFmpeg::Native(const Frame& frame) noexcept {
-	return Native(frame.Ref());
-}
-
-::AVPacket* FFmpeg::Native(class StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
-	if (!packet.m_engine)
-		return nullptr;
-	return packet.m_engine->m_backend.Get();
-}
-
-const ::AVPacket* FFmpeg::Native(const class StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
-	if (!packet.m_engine)
-		return nullptr;
-	return packet.m_engine->m_backend.Get();
-}
-
-void FFmpeg::Replace(StormByte::Multimedia::Pipeline::Frame& frame, ::AVFrame* raw) noexcept {
-	if (!raw) {
-		Fail("replace: null AVFrame");
-		return;
-	}
-	if (!frame.m_engine)
-		frame.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Frame::Engine>();
+		frame.m_engine = std::make_unique<Pipeline::Engine::Frame::Engine>();
 	frame.m_engine->m_backend.Free();
 	frame.m_engine->m_backend.m_ptr = raw;
 	frame.m_engine->m_payloadReady = false;
-	frame.m_payload = StormByte::Buffer::FIFO{};
 	frame.m_engine->BindProperties(frame);
 }
 
-void FFmpeg::Replace(class StormByte::Multimedia::Pipeline::Packet& packet, ::AVPacket* raw) noexcept {
-	if (!raw) {
-		Fail("replace: null AVPacket");
-		return;
-	}
+void FFmpeg::Replace(StormByte::Multimedia::Pipeline::Packet& packet, ::AVPacket* raw) noexcept {
 	if (!packet.m_engine)
-		packet.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Packet::Engine>();
+		packet.m_engine = std::make_unique<Pipeline::Engine::Packet::Engine>();
 	packet.m_engine->m_backend.Free();
 	packet.m_engine->m_backend.m_ptr = raw;
 	packet.m_engine->BindProperties(packet);
 }
 
-void FFmpeg::SetVideo(StormByte::Multimedia::Pipeline::Frame& frame,
-	std::optional<StormByte::Multimedia::Property::Video> video) noexcept {
-	frame.m_video = std::move(video);
+Process::Process(std::string name) noexcept
+: FFmpeg(std::move(name)) {}
+
+void Process::Call(Pipeline::Frame& frame, Origin origin) noexcept {
+	if (origin != Origin::Decoder)
+		return;
+	FFmpeg::Call(frame, origin);
 }
 
-void FFmpeg::SetAudio(StormByte::Multimedia::Pipeline::Frame& frame,
-	std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept {
-	frame.m_audio = std::move(audio);
+void Process::Call(StormByte::Multimedia::Pipeline::Packet&, Origin) noexcept {}
+
+Packet::Packet(std::string name) noexcept
+: FFmpeg(std::move(name)) {}
+
+void Packet::Call(Pipeline::Frame&, Origin) noexcept {}
+
+void Packet::Call(StormByte::Multimedia::Pipeline::Packet& packet, Origin origin) noexcept {
+	if (origin != Origin::Demux && origin != Origin::Mux)
+		return;
+	FFmpeg::Call(packet, origin);
 }
 
-void FFmpeg::SetPts(StormByte::Multimedia::Pipeline::Frame& frame,
-	std::optional<StormByte::Multimedia::Property::Duration> pts) noexcept {
-	frame.m_pts = std::move(pts);
+void Packet::Process(Pipeline::Frame&, Origin) noexcept {}
+
+Analytics::Analytics(std::string name) noexcept
+: FFmpeg(std::move(name)) {}
+
+void Analytics::Call(Pipeline::Frame& frame, Origin origin) noexcept {
+	if (origin != Origin::Decoder && origin != Origin::Encoder)
+		return;
+	FFmpeg::Call(frame, origin);
 }
 
-void FFmpeg::SetDuration(StormByte::Multimedia::Pipeline::Frame& frame,
-	std::optional<StormByte::Multimedia::Property::Duration> duration) noexcept {
-	frame.m_duration = std::move(duration);
-}
-
-void FFmpeg::CopyFrame(StormByte::Multimedia::Pipeline::Frame& dst,
-	const StormByte::Multimedia::Pipeline::Frame& src) noexcept {
-	dst = src;
-}
-
-Roles Process::Accepts() const noexcept {
-	return Roles(Role::Process);
-}
-
-bool Process::Push(StormByte::Multimedia::Pipeline::Frame& frame, Role role) noexcept {
-	if (Failed())
-		return false;
-	if (Gate(frame, role))
-		ProcessFrame(frame);
-	return !Failed();
-}
-
-Roles FilterPacket::Accepts() const noexcept {
-	return Roles(Role::Process);
-}
-
-bool FilterPacket::Push(class StormByte::Multimedia::Pipeline::Packet& packet, Role role) noexcept {
-	if (Failed())
-		return false;
-	if (Gate(packet, role))
-		ProcessPacket(packet);
-	return !Failed();
-}
-
-bool Analytics::Push(StormByte::Multimedia::Pipeline::Frame& frame, Role role) noexcept {
-	if (Failed())
-		return false;
-	if (Gate(frame, role))
-		Analyze(frame, role);
-	return !Failed();
-}
+void Analytics::Call(StormByte::Multimedia::Pipeline::Packet&, Origin) noexcept {}

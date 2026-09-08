@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/pipeline/mux.hxx>
 #include <StormByte/multimedia/stream.hxx>
 
@@ -153,7 +154,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			return;
 		}
 
-		class Demux demux;
+		auto pipe = owner.m_pipe;
+		class Demux demux(pipe);
 		*owner.m_file >> demux;
 		if (demux.Failed()) {
 			owner.Fail(demux.Error().value_or("demux open failed"));
@@ -161,7 +163,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			return;
 		}
 
-		class Mux mux(*container);
+		class Mux mux(*container, pipe);
 		mux >> path;
 		*owner.m_file >> mux;
 		if (mux.Failed()) {
@@ -198,8 +200,12 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 				copies.push_back(std::move(copy));
 			}
 			else {
-				auto decoder = std::make_unique<class Decoder>(slot.in);
+				auto decoder = pipe
+					? std::make_unique<class Decoder>(slot.in, DecoderFlags{}, *pipe)
+					: std::make_unique<class Decoder>(slot.in);
 				auto encoder = std::make_unique<class Encoder>(muxIndex, *slot.codec);
+				if (pipe)
+					encoder->Pipe(pipe);
 				if (slot.implementation)
 					encoder->Implementation(*slot.implementation);
 				if (slot.crf)

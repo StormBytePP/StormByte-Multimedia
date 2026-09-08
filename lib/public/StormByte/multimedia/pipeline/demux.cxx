@@ -61,8 +61,17 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
-Demux::Demux() noexcept
-: m_failed(false), m_eof(false) {}
+namespace {
+	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
+		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
+	}
+}
+
+Demux::Demux(std::shared_ptr<Filter::Chain> pipe) noexcept
+: m_pipe(std::move(pipe)), m_failed(false), m_eof(false) {}
+
+Demux::Demux(Filter::Chain& pipe) noexcept
+: Demux(Alias(pipe)) {}
 
 Demux::Demux(Demux&&) noexcept = default;
 Demux::~Demux() noexcept = default;
@@ -82,18 +91,31 @@ bool Demux::Eof() const noexcept {
 
 void Demux::ReachedEof() noexcept {
 	m_eof = true;
+	if (m_pipe) {
+		m_pipe->Eof(Filter::Origin::Demux);
+		if (m_pipe->Failed())
+			Fail(m_pipe->ErrorStr());
+	}
 }
 
 const std::optional<std::string>& Demux::Error() const noexcept {
 	return m_error;
 }
 
-Filter::Chain::Packet& Demux::Pipe() noexcept {
+std::shared_ptr<Filter::Chain>& Demux::Pipe() noexcept {
 	return m_pipe;
 }
 
-const Filter::Chain::Packet& Demux::Pipe() const noexcept {
+const std::shared_ptr<Filter::Chain>& Demux::Pipe() const noexcept {
 	return m_pipe;
+}
+
+void Demux::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
+	m_pipe = std::move(pipe);
+}
+
+void Demux::Pipe(Filter::Chain& pipe) noexcept {
+	m_pipe = Alias(pipe);
 }
 
 void Demux::Fail(std::string reason) noexcept {
@@ -135,10 +157,15 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, class Packet& p
 	}
 	if (!demux.m_engine->Read(demux, packet))
 		return demux;
-	if (!demux.m_pipe.Push(packet)) {
-		demux.Fail(demux.m_pipe.Error().value_or("packet filter failed"));
-		packet = Packet{};
+	if (demux.m_failed || demux.m_eof)
 		return demux;
+	if (demux.m_pipe) {
+		demux.m_pipe->Call(packet, Filter::Origin::Demux);
+		if (demux.m_pipe->Failed()) {
+			demux.Fail(demux.m_pipe->ErrorStr());
+			packet = Packet{};
+			return demux;
+		}
 	}
 	return demux;
 }

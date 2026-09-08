@@ -261,13 +261,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 	Transcode::Transcode(std::shared_ptr<StormByte::Logger::Log> logger, File file) noexcept
 	: m_logger(std::move(logger)), m_file(std::make_unique<File>(std::move(file))),
-	m_engine(std::make_unique<Engine::Transcode::Engine>()) {
+	m_engine(std::make_unique<Engine::Transcode::Engine>()),
+	m_pipe(std::make_shared<Filter::Chain>()) {
 		*m_logger << Level::LowLevel << "Transcode::Transcode" << std::endl;
 	}
 
 	Transcode::Transcode(Transcode&& other) noexcept
 	: m_logger(std::move(other.m_logger)), m_file(std::move(other.m_file)),
-	m_engine(std::move(other.m_engine)) {
+	m_engine(std::move(other.m_engine)), m_pipe(std::move(other.m_pipe)) {
 		if (m_logger)
 			*m_logger << Level::LowLevel << "Transcode::Transcode(move)" << std::endl;
 	}
@@ -295,6 +296,7 @@ namespace StormByte::Multimedia::Pipeline {
 		m_logger = std::move(other.m_logger);
 		m_file = std::move(other.m_file);
 		m_engine = std::move(other.m_engine);
+		m_pipe = std::move(other.m_pipe);
 		return *this;
 	}
 
@@ -506,7 +508,7 @@ namespace StormByte::Multimedia::Pipeline {
 		*m_logger << Level::Notice << "resumed" << std::endl;
 	}
 
-	Status Transcode::Status() const noexcept {
+	enum Status Transcode::Status() const noexcept {
 		if (!m_engine)
 			return Status::Error;
 		return m_engine->status.load(std::memory_order_acquire);
@@ -633,7 +635,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 	void Transcode::OnConfigure() noexcept {}
 
-	Status Transcode::OnStart() noexcept {
+	enum Status Transcode::OnStart() noexcept {
 		return Status::Running;
 	}
 

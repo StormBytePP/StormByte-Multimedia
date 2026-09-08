@@ -43,136 +43,163 @@
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/mux.hxx>
 
-namespace StormByte::Multimedia::Pipeline {
-	Mux::Mux(const StormByte::Multimedia::Container& container) noexcept
-	: m_container(&container), m_engine(std::make_unique<Engine::Mux::Details::Container>()), m_failed(false) {
-		if (!container.HasAccess(Access{Operation::Write}))
-			Fail("container does not allow write");
-	}
+using namespace StormByte::Multimedia::Pipeline;
 
-	Mux::Mux(Mux&& other) noexcept
-	: m_container(other.m_container), m_engine(std::move(other.m_engine)), m_pipe(std::move(other.m_pipe)),
+namespace {
+	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
+		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
+	}
+}
+
+Mux::Mux(const StormByte::Multimedia::Container& container,
+	std::shared_ptr<Filter::Chain> pipe) noexcept
+: m_container(&container), m_engine(std::make_unique<Engine::Mux::Details::Container>()),
+	m_pipe(std::move(pipe)), m_failed(false) {
+	if (!container.HasAccess(Access{Operation::Write}))
+		Fail("container does not allow write");
+}
+
+Mux::Mux(const StormByte::Multimedia::Container& container, Filter::Chain& pipe) noexcept
+: Mux(container, Alias(pipe)) {}
+
+Mux::Mux(Mux&& other) noexcept
+: m_container(other.m_container), m_engine(std::move(other.m_engine)), m_pipe(std::move(other.m_pipe)),
 	m_failed(other.m_failed), m_error(std::move(other.m_error)) {
-		other.m_failed = true;
-	}
+	other.m_failed = true;
+}
 
-	Mux::~Mux() noexcept {
-		Finish();
-	}
+Mux::~Mux() noexcept {
+	Finish();
+}
 
-	Mux& Mux::operator=(Mux&& other) noexcept {
-		if (this == &other)
-			return *this;
-		Finish();
-		m_container = other.m_container;
-		m_engine = std::move(other.m_engine);
-		m_pipe = std::move(other.m_pipe);
-		m_failed = other.m_failed;
-		m_error = std::move(other.m_error);
-		other.m_failed = true;
+Mux& Mux::operator=(Mux&& other) noexcept {
+	if (this == &other)
 		return *this;
-	}
+	Finish();
+	m_container = other.m_container;
+	m_engine = std::move(other.m_engine);
+	m_pipe = std::move(other.m_pipe);
+	m_failed = other.m_failed;
+	m_error = std::move(other.m_error);
+	other.m_failed = true;
+	return *this;
+}
 
-	Mux::operator bool() const noexcept {
-		return !m_failed && m_engine && m_engine->IsOpen();
-	}
+Mux::operator bool() const noexcept {
+	return !m_failed && m_engine && m_engine->IsOpen();
+}
 
-	const StormByte::Multimedia::Container& Mux::Destination() const noexcept {
-		return *m_container;
-	}
+const StormByte::Multimedia::Container& Mux::Destination() const noexcept {
+	return *m_container;
+}
 
-	bool Mux::Failed() const noexcept {
-		return m_failed;
-	}
+std::shared_ptr<Filter::Chain>& Mux::Pipe() noexcept {
+	return m_pipe;
+}
 
-	const std::optional<std::string>& Mux::Error() const noexcept {
-		return m_error;
-	}
+const std::shared_ptr<Filter::Chain>& Mux::Pipe() const noexcept {
+	return m_pipe;
+}
 
-	Filter::Chain::Packet& Mux::Pipe() noexcept {
-		return m_pipe;
-	}
+void Mux::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
+	m_pipe = std::move(pipe);
+}
 
-	const Filter::Chain::Packet& Mux::Pipe() const noexcept {
-		return m_pipe;
-	}
+void Mux::Pipe(Filter::Chain& pipe) noexcept {
+	m_pipe = Alias(pipe);
+}
 
-	void Mux::Fail(std::string reason) noexcept {
-		m_failed = true;
-		m_error = std::move(reason);
-		if (m_engine)
-			m_engine->Close();
-	}
+bool Mux::Failed() const noexcept {
+	return m_failed;
+}
 
-	void Mux::Flush() noexcept {
-		if (m_failed || !m_engine)
-			return;
-		m_engine->Flush(*this);
-	}
+const std::optional<std::string>& Mux::Error() const noexcept {
+	return m_error;
+}
 
-	void Mux::Finish() noexcept {
-		if (!m_engine)
-			return;
-		if (!m_failed)
-			Flush();
+void Mux::Fail(std::string reason) noexcept {
+	m_failed = true;
+	m_error = std::move(reason);
+	if (m_engine)
 		m_engine->Close();
-	}
+}
 
-	Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept {
-		if (mux.m_failed || encoder.Failed())
-			return encoder;
-		if (!mux.m_engine) {
-			mux.Fail("muxer is not open");
-			return encoder;
-		}
-		mux.m_engine->ReserveEncoder(mux, encoder);
+void Mux::Flush() noexcept {
+	if (m_failed || !m_engine)
+		return;
+	m_engine->Flush(*this);
+	if (m_pipe) {
+		m_pipe->Eof(Filter::Origin::Mux);
+		if (m_pipe->Failed())
+			Fail(m_pipe->ErrorStr());
+	}
+}
+
+void Mux::Finish() noexcept {
+	if (!m_engine)
+		return;
+	if (!m_failed)
+		Flush();
+	m_engine->Close();
+}
+
+Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Mux& mux) noexcept {
+	if (mux.m_failed || encoder.Failed())
+		return encoder;
+	if (!mux.m_engine) {
+		mux.Fail("muxer is not open");
 		return encoder;
 	}
+	mux.m_engine->ReserveEncoder(mux, encoder);
+	return encoder;
+}
 
-	Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept {
-		if (mux.m_failed)
-			return mux;
-		if (!mux.m_engine) {
-			mux.Fail("muxer has no backend");
-			return mux;
-		}
-		mux.m_engine->BindPath(mux, path);
+Mux& StormByte::Multimedia::Pipeline::operator>>(Mux& mux, const std::filesystem::path& path) noexcept {
+	if (mux.m_failed)
+		return mux;
+	if (!mux.m_engine) {
+		mux.Fail("muxer has no backend");
 		return mux;
 	}
+	mux.m_engine->BindPath(mux, path);
+	return mux;
+}
 
-	Mux& operator>>(const StormByte::Multimedia::File& file, Mux& mux) noexcept {
-		if (mux.m_failed)
-			return mux;
-		if (!mux.m_engine) {
-			mux.Fail("muxer has no backend");
-			return mux;
-		}
-		mux.m_engine->BindAttachments(mux, file);
+Mux& StormByte::Multimedia::Pipeline::operator>>(const StormByte::Multimedia::File& file, Mux& mux) noexcept {
+	if (mux.m_failed)
+		return mux;
+	if (!mux.m_engine) {
+		mux.Fail("muxer has no backend");
 		return mux;
 	}
+	mux.m_engine->BindAttachments(mux, file);
+	return mux;
+}
 
-	Mux& operator>>(Demux& demux, Mux& mux) noexcept {
-		if (mux.m_failed)
-			return mux;
-		if (!demux.m_file) {
-			mux.Fail("demuxer has no source file for attachments");
-			return mux;
-		}
-		return operator>>(*demux.m_file, mux);
+Mux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Mux& mux) noexcept {
+	if (mux.m_failed)
+		return mux;
+	if (!demux.m_file) {
+		mux.Fail("demuxer has no source file for attachments");
+		return mux;
 	}
+	return operator>>(*demux.m_file, mux);
+}
 
-	class Packet& operator>>(class Packet& packet, Mux& mux) noexcept {
-		if (mux.m_failed)
-			return packet;
-		if (!mux.m_engine) {
-			mux.Fail("muxer has no backend");
-			return packet;
-		}
-		if (!mux.m_pipe.Push(packet)) {
-			mux.Fail(mux.m_pipe.Error().value_or("mux packet pipe failed"));
-			return packet;
-		}
-		mux.m_engine->Push(mux, packet);
+class Packet& StormByte::Multimedia::Pipeline::operator>>(class Packet& packet, Mux& mux) noexcept {
+	if (mux.m_failed)
+		return packet;
+	if (!mux.m_engine) {
+		mux.Fail("muxer has no backend");
 		return packet;
 	}
+	if (mux.m_pipe) {
+		mux.m_pipe->Call(packet, Filter::Origin::Mux);
+		if (mux.m_pipe->Failed()) {
+			mux.Fail(mux.m_pipe->ErrorStr());
+			return packet;
+		}
+	}
+	mux.m_engine->Push(mux, packet);
+	return packet;
 }

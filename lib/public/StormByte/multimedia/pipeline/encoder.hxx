@@ -40,6 +40,7 @@
 
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -129,6 +130,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * EncoderTag() overwrites stream metadata ENCODER on every encode.
 	 * Flush() signals EOF and drains the private engine.
 	 *
+	 * @ref Filter::Chain goes in Pipe(). Distorted @ref Filter::Chain::Call
+	 * with @ref Filter::Origin::Encoder waits on a reconstructed frame.
+	 * @ref Flush also @ref Filter::Chain::Eof that origin.
+	 * A null pipe is identity.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder {
@@ -142,8 +148,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Encoder for output track @p output_index and destination @p codec.
 			 * @param output_index Mux track index.
 			 * @param codec Registry codec. Must HasAccess(Write) at open.
+			 * @param pipe Shared filter list, or null.
 			 */
-			Encoder(int output_index, const Codec& codec) noexcept;
+			Encoder(int output_index, const Codec& codec,
+				std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+
+			/**
+			 * @brief Encoder bound to an existing chain (non-owning alias).
+			 * @param output_index Mux track index.
+			 * @param codec Registry codec.
+			 * @param pipe Live chain.
+			 */
+			Encoder(int output_index, const Codec& codec, Filter::Chain& pipe) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -183,6 +199,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief true if the engine is open and not failed.
+			 * @return Open and not @ref Failed.
 			 */
 			explicit operator bool() const noexcept;
 
@@ -200,7 +217,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether a hard error occurred.
-			 * @return true on open/encode error.
+			 * @return true on open/encode/filter error.
 			 */
 			bool Failed() const noexcept;
 
@@ -411,7 +428,31 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Signals EOF to the engine and drains remaining packets.
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
+
+			/**
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
+			 */
+			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
+
+			/**
+			 * @brief Replaces the shared chain.
+			 * @param pipe New list, or null.
+			 */
+			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
+
+			/**
+			 * @brief Aliases a live chain (non-owning).
+			 * @param pipe Live list.
+			 */
+			void Pipe(Filter::Chain& pipe) noexcept;
+
+			/**
+			 * @brief Signals EOF to the engine, the pipe, and drains remaining packets.
 			 *
 			 * Safe to call more than once. Mux::Flush() calls this on every
 			 * reserved encoder.
@@ -446,6 +487,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> m_tune;					///< Tune
 			std::map<std::string, std::string> m_fineTune;		///< Vendor leftovers
 			std::unique_ptr<Engine::Encoder::Engine> m_engine;	///< Video / audio / subtitle backend
+			std::shared_ptr<Filter::Chain> m_pipe;				///< Shared filter list
 			bool m_failed;										///< Hard error
 			std::optional<std::string> m_error;					///< Failure text
 

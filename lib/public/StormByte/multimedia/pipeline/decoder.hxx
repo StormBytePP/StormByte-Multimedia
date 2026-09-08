@@ -40,7 +40,7 @@
 
 #include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/features.hxx>
-#include <StormByte/multimedia/pipeline/filters/chain/process.hxx>
+#include <StormByte/multimedia/pipeline/filters/chain.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -142,7 +142,7 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
 
 	/**
-	 * @brief Receives one decoded frame after the process chain. Never throws.
+	 * @brief Receives one decoded frame after the filter chain. Never throws.
 	 * @param decoder Source.
 	 * @param frame Replaced on success.
 	 * @return @p decoder.
@@ -165,15 +165,17 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
 	 * Failbit on open/decode errors. Copy is not a Decoder mode.
 	 *
-	 * Process nodes go in Pipe() (@ref StormByte::Multimedia::Pipeline::Filter::Chain::Process).
-	 * They run inside decoder >> frame. An empty chain is identity.
+	 * @ref Filter::Chain goes in Pipe(). @c decoder >> frame calls
+	 * @ref Filter::Chain::Call with @ref Filter::Origin::Decoder.
+	 * @ref Flush also @ref Filter::Chain::Eof that origin.
+	 * A null pipe is identity.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder {
 		public:
 			/**
-			 * @defgroup decoder_lifetime Lifetime
+			 * @name Lifetime
 			 * @{
 			 */
 
@@ -181,8 +183,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Decoder for @p stream_index. Does not open the backend.
 			 * @param stream_index File stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
+			 * @param pipe Shared filter list, or null.
 			 */
-			explicit Decoder(int stream_index, DecoderFlags flags = DecoderFlags{}) noexcept;
+			explicit Decoder(int stream_index, DecoderFlags flags = DecoderFlags{},
+				std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+
+			/**
+			 * @brief Decoder bound to an existing chain (non-owning alias).
+			 * @param stream_index File stream index.
+			 * @param flags Heuristics / future bits.
+			 * @param pipe Live chain.
+			 */
+			Decoder(int stream_index, DecoderFlags flags, Filter::Chain& pipe) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -215,13 +227,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief true if open and not failed.
+			 * @return Open and not @ref Failed.
 			 */
 			explicit operator bool() const noexcept;
 
 			/** @} */
 
 			/**
-			 * @defgroup decoder_bind Bind
+			 * @name Bind
 			 * @{
 			 */
 
@@ -270,7 +283,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/** @} */
 
 			/**
-			 * @defgroup decoder_impl Implementation selection
+			 * @name Implementation selection
 			 * @{
 			 */
 
@@ -307,32 +320,44 @@ namespace StormByte::Multimedia::Pipeline {
 			/** @} */
 
 			/**
-			 * @defgroup decoder_pipe Process chain
+			 * @name Pipe
 			 * @{
 			 */
 
 			/**
-			 * @brief Process chain. Add nodes before reading frames.
-			 * @return Chain.
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
 			 */
-			Filter::Chain::Process& Pipe() noexcept;
+			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
 
 			/**
-			 * @brief Process chain.
-			 * @return Chain.
+			 * @brief Shared filter chain, or null.
+			 * @return Pipe.
 			 */
-			const Filter::Chain::Process& Pipe() const noexcept;
+			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
+
+			/**
+			 * @brief Replaces the shared chain.
+			 * @param pipe New list, or null.
+			 */
+			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
+
+			/**
+			 * @brief Aliases a live chain (non-owning).
+			 * @param pipe Live list.
+			 */
+			void Pipe(Filter::Chain& pipe) noexcept;
 
 			/** @} */
 
 			/**
-			 * @defgroup decoder_error Failure
+			 * @name Failure
 			 * @{
 			 */
 
 			/**
 			 * @brief Whether a hard error occurred.
-			 * @return true on open/decode error.
+			 * @return true on open/decode/filter error.
 			 */
 			bool Failed() const noexcept;
 
@@ -343,10 +368,10 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @brief Signals EOF to the backend. Drain with decoder >> frame afterwards.
+			 * @brief Signals EOF to the backend and to @ref Pipe.
 			 *
-			 * Required after the demuxer reaches EOF when frame threading
-			 * is enabled; otherwise delayed frames stay inside libavcodec.
+			 * Drain with decoder >> frame afterwards. Required after the
+			 * demuxer reaches EOF when frame threading is enabled.
 			 */
 			void Flush() noexcept;
 
@@ -374,7 +399,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> m_title;							///< Stream title from File metadata
 			Features m_require;											///< Extra required bits
 			Features m_capabilities;									///< Features of the opened row
-			Filter::Chain::Process m_pipe;								///< Process nodes
+			std::shared_ptr<Filter::Chain> m_pipe;						///< Shared filter list
 			bool m_failed;												///< Hard error
 			std::optional<std::string> m_error;							///< Failure text
 

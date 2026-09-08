@@ -40,9 +40,20 @@
 #include <StormByte/multimedia/pipeline/engine/decoder/engine.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Multimedia::Pipeline::Filter::Origin;
 
-Decoder::Decoder(int stream_index, DecoderFlags flags) noexcept
-: m_index(stream_index), m_flags(flags), m_failed(false) {}
+namespace {
+	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
+		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
+	}
+}
+
+Decoder::Decoder(int stream_index, DecoderFlags flags,
+	std::shared_ptr<Filter::Chain> pipe) noexcept
+: m_index(stream_index), m_flags(flags), m_pipe(std::move(pipe)), m_failed(false) {}
+
+Decoder::Decoder(int stream_index, DecoderFlags flags, Filter::Chain& pipe) noexcept
+: Decoder(stream_index, flags, Alias(pipe)) {}
 
 Decoder::Decoder(Decoder&&) noexcept = default;
 Decoder::~Decoder() noexcept = default;
@@ -109,12 +120,20 @@ const StormByte::Multimedia::Features& Decoder::Capabilities() const noexcept {
 	return m_capabilities;
 }
 
-Filter::Chain::Process& Decoder::Pipe() noexcept {
+std::shared_ptr<Filter::Chain>& Decoder::Pipe() noexcept {
 	return m_pipe;
 }
 
-const Filter::Chain::Process& Decoder::Pipe() const noexcept {
+const std::shared_ptr<Filter::Chain>& Decoder::Pipe() const noexcept {
 	return m_pipe;
+}
+
+void Decoder::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
+	m_pipe = std::move(pipe);
+}
+
+void Decoder::Pipe(Filter::Chain& pipe) noexcept {
+	m_pipe = Alias(pipe);
 }
 
 bool Decoder::Failed() const noexcept {
@@ -142,6 +161,11 @@ void Decoder::Flush() noexcept {
 	if (m_failed || !m_engine)
 		return;
 	m_engine->Flush(*this);
+	if (m_pipe) {
+		m_pipe->Eof(Origin::Decoder);
+		if (m_pipe->Failed())
+			Fail(m_pipe->ErrorStr());
+	}
 }
 
 Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& decoder) noexcept {
@@ -161,10 +185,13 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& fr
 	if (decoder.m_failed)
 		return decoder;
 
-	if (!decoder.m_pipe.Push(frame)) {
-		decoder.Fail(decoder.m_pipe.Error().value_or("frame filter failed"));
-		frame = Frame{};
-		return decoder;
+	if (decoder.m_pipe) {
+		decoder.m_pipe->Call(frame, Origin::Decoder);
+		if (decoder.m_pipe->Failed()) {
+			decoder.Fail(decoder.m_pipe->ErrorStr());
+			frame = Frame{};
+			return decoder;
+		}
 	}
 	return decoder;
 }

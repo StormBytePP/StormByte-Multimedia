@@ -36,16 +36,42 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/filters/chain/analytics.hxx>
+#pragma once
 
-using StormByte::Multimedia::Pipeline::Filter::Chain::Analytics;
+#include <StormByte/multimedia/visibility.h>
 
-bool Analytics::Push(Pipeline::Frame& frame, Filter::Role role) noexcept {
-	if (Failed())
-		return false;
-	for (auto& node : m_nodes) {
-		if (!node->Push(frame, role))
-			return Fail(node->Error().value_or("filter failed"));
-	}
-	return true;
+#include <cstddef>
+
+#if defined(__cpp_lib_reflection)
+#	include <meta>
+#endif
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Filter
+ * @brief Facades, chain and reports for pipeline filter plugins.
+ */
+namespace StormByte::Multimedia::Pipeline::Filter {
+	/**
+	 * @enum Origin
+	 * @brief Stage that is calling a filter.
+	 *
+	 * Powers of two, no holes, start at `1u << 0`. Used as flags and
+	 * as index (`countr_zero`) on @ref Chain.
+	 */
+	enum class Origin : unsigned short {
+		Demux   = 1u << 0,	///< Demuxer
+		Decoder = 1u << 1,	///< Decoder
+		Encoder = 1u << 2,	///< Encoder
+		Mux     = 1u << 3	///< Muxer
+	};
+
+	/**
+	 * @brief Number of @ref Origin enumerators.
+	 */
+#if defined(__cpp_lib_reflection)
+	inline constexpr std::size_t OriginCount =
+		std::meta::enumerators_of(^^Origin).size();
+#else
+	inline constexpr std::size_t OriginCount = 4;
+#endif
 }
