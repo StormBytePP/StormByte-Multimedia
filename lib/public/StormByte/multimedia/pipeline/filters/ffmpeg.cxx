@@ -52,7 +52,7 @@ using FilterPacket = StormByte::Multimedia::Pipeline::Filter::Packet;
 
 FFmpeg::~FFmpeg() noexcept = default;
 
-Report FFmpeg::Report() const noexcept {
+class Report FFmpeg::Report() const noexcept {
 	return {};
 }
 
@@ -75,6 +75,14 @@ bool FFmpeg::Gate(const StormByte::Multimedia::Pipeline::Frame& frame, Role role
 	if (!Accepts().Has(role))
 		return false;
 	return frame.Type() == Media();
+}
+
+bool FFmpeg::Gate(const class StormByte::Multimedia::Pipeline::Packet& packet, Role role) const noexcept {
+	if (m_failed)
+		return false;
+	if (!Accepts().Has(role))
+		return false;
+	return packet.Type() == Media();
 }
 
 FFmpeg::Frame::Frame(StormByte::Multimedia::Pipeline::Frame& frame) noexcept
@@ -209,6 +217,32 @@ const ::AVPacket* FFmpeg::Native(const class StormByte::Multimedia::Pipeline::Pa
 	return packet.m_engine->m_backend.Get();
 }
 
+void FFmpeg::Replace(StormByte::Multimedia::Pipeline::Frame& frame, ::AVFrame* raw) noexcept {
+	if (!raw) {
+		Fail("replace: null AVFrame");
+		return;
+	}
+	if (!frame.m_engine)
+		frame.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Frame::Engine>();
+	frame.m_engine->m_backend.Free();
+	frame.m_engine->m_backend.m_ptr = raw;
+	frame.m_engine->m_payloadReady = false;
+	frame.m_payload = StormByte::Buffer::FIFO{};
+	frame.m_engine->BindProperties(frame);
+}
+
+void FFmpeg::Replace(class StormByte::Multimedia::Pipeline::Packet& packet, ::AVPacket* raw) noexcept {
+	if (!raw) {
+		Fail("replace: null AVPacket");
+		return;
+	}
+	if (!packet.m_engine)
+		packet.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Packet::Engine>();
+	packet.m_engine->m_backend.Free();
+	packet.m_engine->m_backend.m_ptr = raw;
+	packet.m_engine->BindProperties(packet);
+}
+
 void FFmpeg::SetVideo(StormByte::Multimedia::Pipeline::Frame& frame,
 	std::optional<StormByte::Multimedia::Property::Video> video) noexcept {
 	frame.m_video = std::move(video);
@@ -253,9 +287,8 @@ Roles FilterPacket::Accepts() const noexcept {
 bool FilterPacket::Push(class StormByte::Multimedia::Pipeline::Packet& packet, Role role) noexcept {
 	if (Failed())
 		return false;
-	if (!Accepts().Has(role))
-		return true;
-	ProcessPacket(packet);
+	if (Gate(packet, role))
+		ProcessPacket(packet);
 	return !Failed();
 }
 
@@ -265,30 +298,4 @@ bool Analytics::Push(StormByte::Multimedia::Pipeline::Frame& frame, Role role) n
 	if (Gate(frame, role))
 		Analyze(frame, role);
 	return !Failed();
-}
-
-void FFmpeg::Replace(StormByte::Multimedia::Pipeline::Frame& frame, ::AVFrame* raw) noexcept {
-	if (!raw) {
-		Fail("replace: null AVFrame");
-		return;
-	}
-	if (!frame.m_engine)
-		frame.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Frame::Engine>();
-	frame.m_engine->m_backend.Free();
-	frame.m_engine->m_backend.m_ptr = raw;
-	frame.m_engine->m_payloadReady = false;
-	frame.m_payload = StormByte::Buffer::FIFO{};
-	frame.m_engine->BindProperties(frame);
-}
-
-void FFmpeg::Replace(class StormByte::Multimedia::Pipeline::Packet& packet, ::AVPacket* raw) noexcept {
-	if (!raw) {
-		Fail("replace: null AVPacket");
-		return;
-	}
-	if (!packet.m_engine)
-		packet.m_engine = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Packet::Engine>();
-	packet.m_engine->m_backend.Free();
-	packet.m_engine->m_backend.m_ptr = raw;
-	packet.m_engine->BindProperties(packet);
 }

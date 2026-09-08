@@ -51,6 +51,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 extern "C" {
 	struct AVFrame;
@@ -119,7 +120,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * AUs) or @ref Analytics (measurement). Do not inherit this type
 	 * directly. Publish @ref Media and @ref Accepts.
 	 * @ref Gate skips the body when the unit kind or role is not yours.
-	 * @ref Fail aborts the job.
+	 * No match is a forward, not a drop. @ref Fail aborts the job.
 	 *
 	 * Filters work with
 	 * @ref StormByte::Multimedia::Pipeline::Frame /
@@ -128,7 +129,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * Multimedia RAII wrappers. To change pixels or compressed bytes,
 	 * @ref Replace; Multimedia owns the previous and the new buffer.
 	 * Do not @c av_frame_free / @c av_packet_free after a successful
-	 * @ref Replace.
+	 * @ref Replace. Scratch you allocated and never passed to
+	 * @ref Replace is yours to free.
 	 *
 	 * Do not link libav next to StormByte-Multimedia. Include the
 	 * headers of the FFmpeg this library was built against
@@ -169,9 +171,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Media this filter handles.
-			 * @return Video, Audio or Subtitle.
+			 * @return Video, Audio, Subtitle or Attachment.
 			 */
-			virtual StormByte::Multimedia::Type Media() const noexcept = 0;
+			virtual enum Type Media() const noexcept = 0;
 
 			/**
 			 * @brief Roles this filter wants to see.
@@ -216,6 +218,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @return true when @ref Media equals @p frame Type and @ref Accepts has @p role.
 			 */
 			bool Gate(const Pipeline::Frame& frame, Role role) const noexcept;
+
+			/**
+			 * @brief Whether @p packet at @p role should reach the virtual body.
+			 * @param packet Incoming packet.
+			 * @param role Current job moment.
+			 * @return true when @ref Media equals @p packet Type and @ref Accepts has @p role.
+			 */
+			bool Gate(const class Pipeline::Packet& packet, Role role) const noexcept;
 
 			/**
 			 * @class Frame
@@ -401,6 +411,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @param frame Owner of the backend buffer.
 			 * @return ::AVFrame from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
 			 *
+			 * Do not free this pointer. Invalid when Push / Analyze returns.
+			 *
 			 * @see https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION_MAJOR@.@STORMBYTE_FFMPEG_VERSION_MINOR@/structAVFrame.html
 			 */
 			static ::AVFrame* Native(Pipeline::Frame& frame) noexcept;
@@ -437,6 +449,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @param packet Owner of the backend buffer.
 			 * @return ::AVPacket from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
 			 *
+			 * Do not free this pointer.
+			 *
 			 * @see https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION_MAJOR@.@STORMBYTE_FFMPEG_VERSION_MINOR@/structAVPacket.html
 			 */
 			static ::AVPacket* Native(class Pipeline::Packet& packet) noexcept;
@@ -452,13 +466,13 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Replaces the backend of @p frame with @p raw.
-			 * @param frame Pipeline unit. Stream index and tags are kept.
+			 * @param frame Pipeline unit. Stream index, Type and tags are kept.
 			 * @param raw Heap @c AVFrame from @c av_frame_alloc.
 			 *
 			 * Taken on success: the filter must not @c av_frame_free @p raw
 			 * after this returns without @ref Failed. On a null @p raw this
 			 * calls @ref Fail and returns. The previous backend is released
-			 * by Multimedia. @ref Frame::Payload is cleared.
+			 * by Multimedia. Payload is cleared.
 			 * @ref StormByte::Multimedia::Pipeline::Engine::Frame::Engine::BindProperties
 			 * updates Video/Audio from the new @c AVFrame.
 			 */
@@ -466,7 +480,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Replaces the backend of @p packet with @p raw.
-			 * @param packet Pipeline unit.
+			 * @param packet Pipeline unit. Type and index are kept.
 			 * @param raw Heap @c AVPacket from @c av_packet_alloc.
 			 *
 			 * Taken on success: the filter must not @c av_packet_free @p raw
@@ -529,11 +543,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
 		public:
 			/**
-			 * @brief Destructor.
-			 */
-			~Process() noexcept override = default;
-
-			/**
 			 * @brief Copy constructor (deleted).
 			 */
 			Process(const Process&) = delete;
@@ -542,6 +551,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Move constructor.
 			 */
 			Process(Process&&) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Process() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -588,14 +602,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * Same role stamp as @ref Process (@ref Role::Process). Implement
 	 * @ref ProcessPacket. @ref Chain::Packet owns these nodes.
+	 * @ref FFmpeg::Gate compares @ref Pipeline::Packet::Type to
+	 * @ref FFmpeg::Media. No match is a forward.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
-			/**
-			 * @brief Destructor.
-			 */
-			~Packet() noexcept override = default;
-
 			/**
 			 * @brief Copy constructor (deleted).
 			 */
@@ -605,6 +616,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Move constructor.
 			 */
 			Packet(Packet&&) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Packet() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
@@ -625,7 +641,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			Roles Accepts() const noexcept final;
 
 			/**
-			 * @brief Runs this step.
+			 * @brief Runs this step when @ref FFmpeg::Gate passes.
 			 * @param packet Unit to mutate in place.
 			 * @param role Job moment (must include @ref Role::Process).
 			 * @return false if @ref FFmpeg::Failed; true otherwise.
@@ -662,11 +678,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 		public:
 			/**
-			 * @brief Destructor.
-			 */
-			~Analytics() noexcept override = default;
-
-			/**
 			 * @brief Copy constructor (deleted).
 			 */
 			Analytics(const Analytics&) = delete;
@@ -675,6 +686,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Move constructor.
 			 */
 			Analytics(Analytics&&) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Analytics() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment (deleted).
