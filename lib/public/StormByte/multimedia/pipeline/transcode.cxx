@@ -131,7 +131,7 @@ namespace StormByte::Multimedia::Pipeline {
 					m_cv.notify_one();
 				}
 
-				bool TryPush(Item& item) noexcept {
+				bool TryPush(Item item) noexcept {
 					std::lock_guard lock(m_mutex);
 					if (m_closed || m_queue.size() >= m_ceiling)
 						return false;
@@ -178,11 +178,6 @@ namespace StormByte::Multimedia::Pipeline {
 					return m_queue.size() >= m_ceiling;
 				}
 
-				std::size_t Size() const noexcept {
-					std::lock_guard lock(m_mutex);
-					return m_queue.size();
-				}
-
 				bool Closed() const noexcept {
 					std::lock_guard lock(m_mutex);
 					return m_closed && m_queue.empty();
@@ -227,6 +222,11 @@ namespace StormByte::Multimedia::Pipeline {
 		std::map<std::string, std::string> fineTune;
 		std::optional<std::string> language;
 		std::optional<std::string> title;
+		std::optional<int> sampleFormat;
+		std::optional<int> encoderChannels;
+		std::optional<int> frameSize;
+		std::optional<int> settledRate;
+		bool settled = false;
 	};
 
 	class Transcode::Impl {
@@ -253,25 +253,11 @@ namespace StormByte::Multimedia::Pipeline {
 				});
 			}
 
-			void NotifySpace() noexcept {
-				m_spaceCv.notify_all();
-			}
-
-			void WaitForMuxSpace() noexcept {
-				std::unique_lock lock(m_spaceMutex);
-				m_spaceCv.wait(lock, [&]() {
-					return m_cancel.load(std::memory_order_acquire)
-						|| !m_muxQueue
-						|| !m_muxQueue->Full();
-				});
-			}
-
 			void RequestCancel() noexcept {
 				m_cancel.store(true, std::memory_order_release);
 				m_paused.store(false, std::memory_order_release);
 				m_pauseCv.notify_all();
 				NotifyIntake();
-				NotifySpace();
 				if (m_muxQueue)
 					m_muxQueue->Wake();
 				if (m_copyQueue)
@@ -304,18 +290,11 @@ namespace StormByte::Multimedia::Pipeline {
 			std::condition_variable m_pauseCv;
 			std::mutex m_intakeMutex;
 			std::condition_variable m_intakeCv;
-			std::mutex m_spaceMutex;
-			std::condition_variable m_spaceCv;
 			std::atomic<enum Status> m_status { Status::Stopped };
 			std::atomic_bool m_cancel { false };
 			std::atomic_bool m_paused { false };
 			std::atomic<unsigned> m_progress { 0 };
 			std::atomic_bool m_hasProgress { false };
-			std::atomic<std::size_t> m_heldSize { 0 };
-			std::atomic<std::size_t> m_sendFrames { 0 };
-			std::atomic<std::size_t> m_recvPackets { 0 };
-			std::atomic<std::size_t> m_muxBlocked { 0 };
-			std::atomic<std::size_t> m_copyBlocked { 0 };
 			std::optional<std::string> m_error;
 			const Container* m_container = nullptr;
 			std::filesystem::path m_path;
@@ -327,6 +306,65 @@ namespace StormByte::Multimedia::Pipeline {
 			std::vector<std::unique_ptr<PacketQueue>> m_encodeQueues;
 			std::vector<std::unique_ptr<FrameQueue>> m_frameQueues;
 	};
+
+	std::string TrackPlan::ToString() const {
+		std::string text = "track in=" + std::to_string(in)
+			+ " out=" + std::to_string(this->out);
+		text += copy ? " copy" : " recode";
+		if (source)
+			text += std::string(" src=") + std::string(source->Name());
+		if (destination)
+			text += std::string(" dst=") + std::string(destination->Name());
+		if (implementation)
+			text += " impl=" + *implementation;
+		if (language)
+			text += " lang=" + *language;
+		if (title)
+			text += " title=" + *title;
+		if (sourceChannels)
+			text += " ch_in=" + std::to_string(*sourceChannels);
+		if (encoderChannels)
+			text += " ch_out=" + std::to_string(*encoderChannels);
+		if (sampleFormat)
+			text += " fmt=" + std::to_string(*sampleFormat);
+		if (frameSize)
+			text += " frame_size=" + std::to_string(*frameSize);
+		if (sampleRate)
+			text += " rate=" + std::to_string(*sampleRate);
+		return text;
+	}
+
+	std::unique_ptr<Plan> Plan::Clone() const {
+		auto out = std::make_unique<Plan>();
+		out->source = source;
+		out->container = container;
+		out->destination = destination;
+		out->ignored = ignored;
+		out->videoPacketCeiling = videoPacketCeiling;
+		out->muxPacketCeiling = muxPacketCeiling;
+		out->copyPacketCeiling = copyPacketCeiling;
+		out->videoFrameCeiling = videoFrameCeiling;
+		out->tracks.reserve(tracks.size());
+		for (const auto& track : tracks) {
+			if (track)
+				out->tracks.push_back(track->Clone());
+		}
+		return out;
+	}
+
+	std::string Plan::ToString() const {
+		std::string text = "plan dest=" + destination.string();
+		if (container)
+			text += std::string(" container=") + std::string(container->Name());
+		text += " tracks=" + std::to_string(tracks.size());
+		text += " ignore=" + std::to_string(ignored.size());
+		text += "\n";
+		for (const auto& track : tracks) {
+			if (track)
+				text += "  " + track->ToString() + "\n";
+		}
+		return text;
+	}
 
 	Transcode::Track::Track(Transcode& owner, std::size_t slot) noexcept
 	: m_owner(&owner), m_slot(slot) {}
@@ -628,10 +666,9 @@ namespace StormByte::Multimedia::Pipeline {
 			std::lock_guard lock(m_impl->m_lock);
 			m_impl->m_error.reset();
 			m_impl->m_progress.store(0, std::memory_order_relaxed);
-			m_impl->m_hasProgress.store(true, std::memory_order_release);
+			m_impl->m_hasProgress.store(false, std::memory_order_relaxed);
 			m_impl->m_status.store(Status::Running, std::memory_order_release);
 		}
-		OnProgress(0);
 		m_impl->m_worker = std::thread([this]() { Worker(); });
 	}
 
@@ -703,8 +740,115 @@ namespace StormByte::Multimedia::Pipeline {
 			|| status == Status::Paused || status == Status::Done;
 	}
 
+	std::unique_ptr<Plan> Transcode::MakePlan() const noexcept {
+		return std::make_unique<Plan>();
+	}
+
+	std::unique_ptr<TrackPlan> Transcode::MakeTrackPlan() const noexcept {
+		return std::make_unique<TrackPlan>();
+	}
+
+	std::unique_ptr<Plan> Transcode::Configuration() const noexcept {
+		auto plan = MakePlan();
+		if (!plan)
+			return nullptr;
+		plan->source = m_file.get();
+		if (m_impl) {
+			plan->container = m_impl->m_container;
+			plan->destination = m_impl->m_path;
+			plan->ignored.assign(m_impl->m_ignore.begin(), m_impl->m_ignore.end());
+		}
+		plan->videoPacketCeiling = m_videoPacketCeiling;
+		plan->muxPacketCeiling = m_muxPacketCeiling;
+		plan->copyPacketCeiling = m_copyPacketCeiling;
+		plan->videoFrameCeiling = m_videoFrameCeiling;
+		if (!m_impl)
+			return plan;
+		for (const auto& slot : m_impl->m_explicit) {
+			auto row = MakeTrackPlan();
+			if (!row)
+				continue;
+			row->in = slot.in;
+			row->out = slot.outKey;
+			row->kind = slot.kind;
+			row->copy = slot.copy;
+			row->destination = slot.codec;
+			row->implementation = slot.implementation;
+			row->language = slot.language;
+			row->title = slot.title;
+			row->crf = slot.crf;
+			row->bitRate = slot.bitRate;
+			row->maxBitRate = slot.maxBitRate;
+			row->preset = slot.preset;
+			row->tune = slot.tune;
+			row->fineTune = slot.fineTune;
+			row->sampleFormat = slot.sampleFormat;
+			row->encoderChannels = slot.encoderChannels;
+			row->frameSize = slot.frameSize;
+			if (m_file) {
+				for (const auto& stream : m_file->Streams()) {
+					if (stream.Index() != slot.in)
+						continue;
+					row->source = &stream.Codec();
+					if (stream.Audio()) {
+						row->sourceChannels = static_cast<int>(stream.Audio()->Channels());
+						row->sampleRate = static_cast<int>(stream.Audio()->SampleRate());
+					}
+					break;
+				}
+			}
+			if (slot.settledRate)
+				row->sampleRate = slot.settledRate;
+			plan->tracks.push_back(std::move(row));
+		}
+		return plan;
+	}
+
+	void Transcode::MarkSettled(int in, Encoder& encoder) noexcept {
+		if (!m_impl || !encoder.Opened())
+			return;
+		for (auto& slot : m_impl->m_explicit) {
+			if (slot.in != in || slot.settled)
+				continue;
+			slot.implementation = encoder.Implementation();
+			slot.sampleFormat = encoder.AudioSampleFormat();
+			slot.encoderChannels = encoder.AudioChannels();
+			slot.frameSize = encoder.AudioFrameSize();
+			slot.settledRate = encoder.AudioSampleRate();
+			slot.settled = true;
+			if (auto row = MakeTrackPlan()) {
+				row->in = slot.in;
+				row->out = slot.outKey;
+				row->kind = slot.kind;
+				row->copy = false;
+				row->destination = slot.codec;
+				row->implementation = slot.implementation;
+				row->sampleFormat = slot.sampleFormat;
+				row->encoderChannels = slot.encoderChannels;
+				row->frameSize = slot.frameSize;
+				row->sampleRate = slot.settledRate;
+				OnSettled(*row);
+			}
+			break;
+		}
+	}
+
 	void Transcode::OnConfigure() noexcept {}
-	Status Transcode::OnStart() noexcept { return Status::Running; }
+
+	Status Transcode::OnStart() noexcept {
+		return Status::Running;
+	}
+
+	void Transcode::OnPlan(const Plan& plan) noexcept {
+		if (m_logger)
+			*m_logger << Level::LowLevel << plan.ToString() << std::endl;
+	}
+
+	void Transcode::OnSettled(const TrackPlan& track) noexcept {
+		if (m_logger)
+			*m_logger << Level::LowLevel << "settled " << track.ToString() << std::endl;
+	}
+
 	void Transcode::OnProgress(unsigned) noexcept {}
 	void Transcode::OnDone() noexcept {}
 	void Transcode::OnError(const std::string&) noexcept {}
@@ -735,6 +879,9 @@ namespace StormByte::Multimedia::Pipeline {
 			OnError(Error().value_or("destination is not set"));
 			return;
 		}
+
+		if (auto snapshot = Configuration())
+			OnPlan(*snapshot);
 
 		std::vector<Slot> plan = m_impl->m_explicit;
 		for (const auto& slot : plan) {
@@ -878,20 +1025,16 @@ namespace StormByte::Multimedia::Pipeline {
 		const auto started = std::chrono::steady_clock::now();
 		const auto duration = m_file->Duration();
 
-		auto pushHeld = [this](std::deque<Packet>& held) {
+		auto drainEncoder = [this](Encoder& encoder, std::deque<Packet>& held) -> bool {
 			while (!held.empty()) {
-				if (!m_impl->m_muxQueue->TryPush(held.front())) {
-					m_impl->m_muxBlocked.fetch_add(1, std::memory_order_relaxed);
-					return false;
-				}
+				if (!m_impl->m_muxQueue->TryPush(std::move(held.front())))
+					return true;
 				held.pop_front();
 				m_impl->NotifyIntake();
 			}
-			return true;
-		};
-
-		auto receiveAll = [this](Encoder& encoder, std::deque<Packet>& held) -> bool {
 			for (;;) {
+				if (m_impl->m_muxQueue->Full())
+					return true;
 				Packet encoded;
 				encoder >> encoded;
 				if (encoder.Failed()) {
@@ -900,22 +1043,16 @@ namespace StormByte::Multimedia::Pipeline {
 				}
 				if (encoded.StreamIndex() < 0)
 					break;
-				held.push_back(std::move(encoded));
-				m_impl->m_recvPackets.fetch_add(1, std::memory_order_relaxed);
+				if (!m_impl->m_muxQueue->TryPush(std::move(encoded))) {
+					held.push_back(std::move(encoded));
+					return true;
+				}
+				m_impl->NotifyIntake();
 			}
-			m_impl->m_heldSize.store(held.size(), std::memory_order_relaxed);
 			return true;
 		};
 
-		auto drainEncoder = [this, &pushHeld, &receiveAll](Encoder& encoder, std::deque<Packet>& held) -> bool {
-			if (!receiveAll(encoder, held))
-				return false;
-			(void)pushHeld(held);
-			m_impl->m_heldSize.store(held.size(), std::memory_order_relaxed);
-			return true;
-		};
-
-		auto drainDecoderToFrames = [this](Decoder& decoder, FrameQueue& frames) -> bool {
+		auto drainDecoderToFrames = [this, duration](Decoder& decoder, FrameQueue& frames) -> bool {
 			for (;;) {
 				Frame frame;
 				decoder >> frame;
@@ -925,18 +1062,25 @@ namespace StormByte::Multimedia::Pipeline {
 				}
 				if (frame.StreamIndex() < 0)
 					break;
+				if (frame.Pts() && duration) {
+					const auto pts = frame.Pts()->Nanoseconds().count();
+					const auto total = duration->Nanoseconds().count();
+					if (total > 0)
+						SetProgress(static_cast<unsigned>((pts * 100) / total));
+				}
 				frames.Push(std::move(frame), m_impl->m_cancel);
 			}
 			return true;
 		};
 
 		auto encodeOneFrame = [this, &drainEncoder](Encoder& encoder, Frame& frame,
-			std::deque<Packet>& held) -> bool {
+			int in, std::deque<Packet>& held) -> bool {
 			frame >> encoder;
 			if (encoder.Failed()) {
 				Fail(encoder.Error().value_or("encoder failed"));
 				return false;
 			}
+			MarkSettled(in, encoder);
 			return drainEncoder(encoder, held);
 		};
 
@@ -948,24 +1092,7 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 		};
 
-		auto noteVideoProgress = [this, duration](const Packet& packet) {
-			if (packet.StreamIndex() != 0)
-				return;
-			if (!packet.Pts() || !duration)
-				return;
-			const auto pts = packet.Pts()->Nanoseconds().count();
-			const auto total = duration->Nanoseconds().count();
-			if (total <= 0)
-				return;
-			unsigned next = static_cast<unsigned>((pts * 100) / total);
-			if (next > 100)
-				next = 100;
-			const unsigned prev = m_impl->m_progress.load(std::memory_order_relaxed);
-			if (!m_impl->m_hasProgress.load(std::memory_order_relaxed) || next > prev)
-				SetProgress(next);
-		};
-
-		std::thread muxThread([this, &mux, &noteVideoProgress]() {
+		std::thread muxThread([this, &mux]() {
 			while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
 				m_impl->WaitIfPaused();
 				if (m_impl->m_cancel.load(std::memory_order_acquire))
@@ -981,7 +1108,6 @@ namespace StormByte::Multimedia::Pipeline {
 				}
 				if (packet->StreamIndex() < 0)
 					continue;
-				noteVideoProgress(*packet);
 				*packet >> mux;
 				if (mux.Failed()) {
 					Fail(mux.Error().value_or("mux write failed"));
@@ -1020,33 +1146,18 @@ namespace StormByte::Multimedia::Pipeline {
 					}
 					lane.frames->Close();
 				});
-				workers.emplace_back([this, &lane, &encodeOneFrame, &drainEncoder, &flushHeld, &pushHeld]() {
+				workers.emplace_back([this, &lane, &encodeOneFrame, &drainEncoder, &flushHeld]() {
 					std::deque<Packet> held;
 					while (!m_impl->m_cancel.load(std::memory_order_acquire)) {
 						m_impl->WaitIfPaused();
 						if (m_impl->m_cancel.load(std::memory_order_acquire))
 							break;
-						if (!drainEncoder(*lane.encoder, held))
-							break;
-						if (auto frame = lane.frames->TryPop()) {
-							if (frame->StreamIndex() < 0)
-								continue;
-							if (!encodeOneFrame(*lane.encoder, *frame, held))
-								break;
-							continue;
-						}
-						if (lane.frames->Closed())
-							break;
-						if (!held.empty() && m_impl->m_muxQueue->Full()) {
-							m_impl->WaitForMuxSpace();
-							continue;
-						}
 						auto frame = lane.frames->Pop(m_impl->m_cancel);
 						if (!frame)
 							break;
 						if (frame->StreamIndex() < 0)
 							continue;
-						if (!encodeOneFrame(*lane.encoder, *frame, held))
+						if (!encodeOneFrame(*lane.encoder, *frame, lane.in, held))
 							break;
 					}
 					if (!Failed() && !m_impl->m_cancel.load(std::memory_order_acquire)) {
@@ -1057,8 +1168,6 @@ namespace StormByte::Multimedia::Pipeline {
 							(void)drainEncoder(*lane.encoder, held);
 						flushHeld(held);
 					}
-					else
-						(void)pushHeld(held);
 				});
 			}
 			else {
@@ -1079,6 +1188,7 @@ namespace StormByte::Multimedia::Pipeline {
 								Fail(lane.encoder->Error().value_or("encoder failed"));
 								return false;
 							}
+							MarkSettled(lane.in, *lane.encoder);
 							if (!drainEncoder(*lane.encoder, held))
 								return false;
 						}
@@ -1119,8 +1229,6 @@ namespace StormByte::Multimedia::Pipeline {
 				m_impl->WaitIfPaused();
 				if (m_impl->m_cancel.load(std::memory_order_acquire))
 					break;
-				if (m_impl->m_copyQueue && m_impl->m_copyQueue->Full())
-					m_impl->m_copyBlocked.fetch_add(1, std::memory_order_relaxed);
 				Packet packet;
 				demux >> packet;
 				if (demux.Failed()) {
@@ -1145,6 +1253,7 @@ namespace StormByte::Multimedia::Pipeline {
 			for (auto& queue : m_impl->m_encodeQueues)
 				queue->Close();
 			m_impl->m_copyQueue->Close();
+			m_impl->m_muxQueue->Close();
 			m_impl->NotifyIntake();
 		});
 
@@ -1154,7 +1263,6 @@ namespace StormByte::Multimedia::Pipeline {
 		m_impl->m_muxQueue->Close();
 		m_impl->m_copyQueue->Close();
 		m_impl->NotifyIntake();
-		m_impl->NotifySpace();
 		muxThread.join();
 
 		if (m_impl->m_cancel.load(std::memory_order_acquire)

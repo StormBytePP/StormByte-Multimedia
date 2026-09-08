@@ -46,6 +46,7 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavformat/avformat.h>
 	#include <libavutil/rational.h>
+	#include <libavutil/samplefmt.h>
 }
 
 using namespace StormByte::Multimedia::Pipeline;
@@ -92,6 +93,38 @@ bool Encoder::Failed() const noexcept {
 
 const std::optional<std::string>& Encoder::Error() const noexcept {
 	return m_error;
+}
+
+bool Encoder::Opened() const noexcept {
+	return !m_failed && m_engine && m_engine->IsOpen();
+}
+
+std::optional<int> Encoder::AudioChannels() const noexcept {
+	const auto* ctx = (m_engine && m_engine->IsOpen()) ? m_engine->Context() : nullptr;
+	if (!ctx || ctx->ch_layout.nb_channels <= 0)
+		return std::nullopt;
+	return ctx->ch_layout.nb_channels;
+}
+
+std::optional<int> Encoder::AudioSampleRate() const noexcept {
+	const auto* ctx = (m_engine && m_engine->IsOpen()) ? m_engine->Context() : nullptr;
+	if (!ctx || ctx->sample_rate <= 0)
+		return std::nullopt;
+	return ctx->sample_rate;
+}
+
+std::optional<int> Encoder::AudioFrameSize() const noexcept {
+	const auto* ctx = (m_engine && m_engine->IsOpen()) ? m_engine->Context() : nullptr;
+	if (!ctx || ctx->frame_size <= 0)
+		return std::nullopt;
+	return ctx->frame_size;
+}
+
+std::optional<int> Encoder::AudioSampleFormat() const noexcept {
+	const auto* ctx = (m_engine && m_engine->IsOpen()) ? m_engine->Context() : nullptr;
+	if (!ctx || ctx->sample_fmt == AV_SAMPLE_FMT_NONE)
+		return std::nullopt;
+	return static_cast<int>(ctx->sample_fmt);
 }
 
 const std::optional<std::string>& Encoder::Language() const noexcept {

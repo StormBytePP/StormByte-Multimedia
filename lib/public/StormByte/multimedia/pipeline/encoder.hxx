@@ -54,8 +54,6 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
- *
- * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
@@ -64,23 +62,17 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @namespace Engine
 	 * @brief Private backends behind the public pipeline types.
-	 *
-	 * @ingroup multimedia_pipeline
 	 */
 	namespace Engine {
 		/**
 		 * @namespace Encoder
 		 * @brief Encode backends selected by Codec::Type().
-		 *
-		 * @ingroup multimedia_pipeline
 		 */
 		namespace Encoder {
 			class Engine;
 			/**
 			 * @namespace Open
 			 * @brief Shared FFmpeg open + packet wrap.
-			 *
-			 * @ingroup multimedia_pipeline
 			 */
 			namespace Open {
 				struct Access;
@@ -88,8 +80,6 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @namespace Details
 			 * @brief Per-media encode engines.
-			 *
-			 * @ingroup multimedia_pipeline
 			 */
 			namespace Details {
 				class Video;
@@ -100,15 +90,11 @@ namespace StormByte::Multimedia::Pipeline {
 		/**
 		 * @namespace Mux
 		 * @brief Mux backends.
-		 *
-		 * @ingroup multimedia_pipeline
 		 */
 		namespace Mux {
 			/**
 			 * @namespace Details
-			 * @brief Container and attachment mux engines.
-			 *
-			 * @ingroup multimedia_pipeline
+			 * @brief Container / attachment writers.
 			 */
 			namespace Details {
 				class Container;
@@ -142,8 +128,6 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Language() and Title() are stamped from the first frame.
 	 * EncoderTag() overwrites stream metadata ENCODER on every encode.
 	 * Flush() signals EOF and drains the private engine.
-	 * Fail(), MuxBindStream() and MuxTakePacket() stay private.
-	 * Engine::Mux::Details::Container is a friend for the header/flush path.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -225,6 +209,36 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return Message, or empty.
 			 */
 			const std::optional<std::string>& Error() const noexcept;
+
+			/**
+			 * @brief Whether the backend finished Open().
+			 * @return false before the first frame or after Fail().
+			 */
+			bool Opened() const noexcept;
+
+			/**
+			 * @brief Encoder channel count after Open(), audio only.
+			 * @return Channels, or empty.
+			 */
+			std::optional<int> AudioChannels() const noexcept;
+
+			/**
+			 * @brief Encoder sample rate after Open(), audio only.
+			 * @return Hz, or empty.
+			 */
+			std::optional<int> AudioSampleRate() const noexcept;
+
+			/**
+			 * @brief Encoder frame_size after Open(), audio only.
+			 * @return Samples per packet, or empty.
+			 */
+			std::optional<int> AudioFrameSize() const noexcept;
+
+			/**
+			 * @brief Encoder sample format after Open(), audio only.
+			 * @return AVSampleFormat as int, or empty.
+			 */
+			std::optional<int> AudioSampleFormat() const noexcept;
 
 			/** @} */
 
@@ -409,12 +423,12 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 			friend Encoder& operator>>(Encoder& encoder, Packet& packet) noexcept;
 			friend class Mux;
-			friend class Engine::Mux::Details::Container;
 			friend struct Engine::Encoder::Open::Access;
 			friend class Engine::Encoder::Engine;
 			friend class Engine::Encoder::Details::Video;
 			friend class Engine::Encoder::Details::Audio;
 			friend class Engine::Encoder::Details::Subtitle;
+			friend class Engine::Mux::Details::Container;
 
 		private:
 			int m_index;										///< Mux output index

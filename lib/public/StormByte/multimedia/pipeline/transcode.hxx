@@ -61,10 +61,11 @@
  * @brief Demux / decode / filter / encode / mux types.
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Encoder;
+
 	/**
 	 * @enum Status
 	 * @brief Lifecycle of a Transcode instance.
-	 * @ingroup multimedia_pipeline
 	 */
 	enum class Status {
 		Stopped,	///< Open succeeded; Run has not started, or OnStart declined
@@ -73,6 +74,94 @@ namespace StormByte::Multimedia::Pipeline {
 		Done,		///< Finished and flushed
 		Error,		///< A stage failed; Error() has text
 		Aborted		///< Cancel() while Running/Paused, or OnStart returned Aborted
+	};
+
+	/**
+	 * @class TrackPlan
+	 * @brief One mapped track as requested or after the encoder opened.
+	 *
+	 * Settled fields (sample format, channel counts, frame size) stay
+	 * empty until OnSettled.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC TrackPlan {
+		public:
+			int in = -1;											///< Source stream index
+			int out = -1;											///< Destination track index
+			Type kind = Type::Video;								///< Video / audio / subtitle
+			bool copy = true;										///< Bitstream copy
+			const Codec* source = nullptr;							///< Source codec
+			const Codec* destination = nullptr;						///< Destination codec, or nullptr if copy
+			std::optional<std::string> implementation;				///< Pin (libx265, …)
+			std::optional<std::string> language;					///< Language tag
+			std::optional<std::string> title;						///< Track title
+			std::optional<int> crf;									///< CRF/CQ
+			std::optional<std::int64_t> bitRate;					///< Target bitrate
+			std::optional<std::int64_t> maxBitRate;					///< VBV ceiling
+			std::optional<std::string> preset;						///< Preset
+			std::optional<std::string> tune;						///< Tune
+			std::map<std::string, std::string> fineTune;			///< Vendor leftovers
+			std::optional<int> sampleFormat;						///< Encoder AVSampleFormat
+			std::optional<int> sourceChannels;						///< Decoded channel count
+			std::optional<int> encoderChannels;						///< Encoder channel count (6 after 7.1 downmix)
+			std::optional<int> frameSize;							///< Encoder frame_size
+			std::optional<int> sampleRate;							///< Samples per second
+
+			/**
+			 * @brief Destructor.
+			 */
+			virtual ~TrackPlan() noexcept = default;
+
+			/**
+			 * @brief Deep copy.
+			 * @return New track plan of the same dynamic type.
+			 */
+			virtual std::unique_ptr<TrackPlan> Clone() const {
+				return std::make_unique<TrackPlan>(*this);
+			}
+
+			/**
+			 * @brief Human-readable line for logs.
+			 * @return One or more lines, no trailing newline required.
+			 */
+			virtual std::string ToString() const;
+	};
+
+	/**
+	 * @class Plan
+	 * @brief Job snapshot. Paid apps derive this and return it from MakePlan().
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Plan {
+		public:
+			const File* source = nullptr;							///< Opened source
+			const Container* container = nullptr;					///< Destination container
+			std::filesystem::path destination;						///< Output path
+			std::vector<std::unique_ptr<TrackPlan>> tracks;			///< Mapped tracks, out order
+			std::vector<int> ignored;								///< Source indexes dropped
+			std::size_t videoPacketCeiling = 0;						///< Decode packet queue
+			std::size_t muxPacketCeiling = 0;						///< Recode mux queue
+			std::size_t copyPacketCeiling = 0;						///< Copy mux queue
+			std::size_t videoFrameCeiling = 0;						///< Decoded video frames
+
+			/**
+			 * @brief Destructor.
+			 */
+			virtual ~Plan() noexcept = default;
+
+			/**
+			 * @brief Deep copy, including track plans.
+			 * @return New plan of the same dynamic type.
+			 */
+			virtual std::unique_ptr<Plan> Clone() const;
+
+			/**
+			 * @brief Human-readable dump.
+			 * @return Multi-line text.
+			 */
+			virtual std::string ToString() const;
 	};
 
 	/**
@@ -85,9 +174,6 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Recode packets and bitstream-copy packets use separate mux queues
 	 * so a high-rate copy track (TrueHD) cannot stall x265.
-	 *
-	 * Progress is the last monotonic PTS of a muxed video packet over
-	 * File::Duration(). Copy tracks do not move the percentage.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -102,11 +188,13 @@ namespace StormByte::Multimedia::Pipeline {
 				public:
 					/**
 					 * @brief Copy constructor.
+					 * @param other Source handle.
 					 */
 					Track(const Track& other) noexcept = default;
 
 					/**
 					 * @brief Move constructor.
+					 * @param other Source handle.
 					 */
 					Track(Track&& other) noexcept = default;
 
@@ -117,88 +205,90 @@ namespace StormByte::Multimedia::Pipeline {
 
 					/**
 					 * @brief Copy assignment.
+					 * @param other Source handle.
 					 * @return *this.
 					 */
 					Track& operator=(const Track& other) noexcept = default;
 
 					/**
 					 * @brief Move assignment.
+					 * @param other Source handle.
 					 * @return *this.
 					 */
 					Track& operator=(Track&& other) noexcept = default;
 
 					/**
-					 * @brief Bitstream-copy this track. No decode/encode.
+					 * @brief Marks the track as bitstream copy.
 					 * @return *this.
 					 */
 					Track& Copy() noexcept;
 
 					/**
-					 * @brief Recode this track to @p codec.
-					 * @param codec Destination StormByte codec (e.g. HEVC).
+					 * @brief Recodes this track to @p codec.
+					 * @param codec Destination registry codec.
 					 * @return *this.
 					 */
 					Track& Codec(const StormByte::Multimedia::Codec& codec) noexcept;
 
 					/**
-					 * @brief Pin an encoder implementation name (e.g. "libx265").
-					 * @param name Encoder name as FFmpeg knows it. Empty clears the pin.
+					 * @brief Pins an FFmpeg encoder implementation name.
+					 * @param name avcodec_find_encoder_by_name key.
 					 * @return *this.
 					 */
 					Track& Implementation(std::string name) noexcept;
 
 					/**
-					 * @brief Constant rate factor.
-					 * @param value Encoder CRF.
+					 * @brief Sets CRF/CQ. Clears BitRate.
+					 * @param value Quality value.
 					 * @return *this.
 					 */
 					Track& CRF(int value) noexcept;
 
 					/**
-					 * @brief Target bitrate.
+					 * @brief Sets target bitrate. Clears CRF.
 					 * @param bits_per_second Bits per second.
 					 * @return *this.
 					 */
 					Track& BitRate(std::int64_t bits_per_second) noexcept;
 
 					/**
-					 * @brief VBV/HRD maximum bitrate.
+					 * @brief Sets VBV/max bitrate.
 					 * @param bits_per_second Bits per second.
 					 * @return *this.
 					 */
 					Track& MaxBitRate(std::int64_t bits_per_second) noexcept;
 
 					/**
-					 * @brief Encoder preset name.
-					 * @param name Preset string.
+					 * @brief Sets encoder preset.
+					 * @param name Preset name.
 					 * @return *this.
 					 */
 					Track& Preset(std::string name) noexcept;
 
 					/**
-					 * @brief Encoder tune name.
-					 * @param name Tune string.
+					 * @brief Sets encoder tune.
+					 * @param name Tune name.
 					 * @return *this.
 					 */
 					Track& Tune(std::string name) noexcept;
 
 					/**
-					 * @brief Extra encoder key/value pairs (x265-params, etc.).
-					 * @param options Map of option name to value.
+					 * @brief Replaces vendor leftovers.
+					 * @param options Key/value map.
 					 * @return *this.
 					 */
 					Track& FineTune(std::map<std::string, std::string> options) noexcept;
 
 					/**
-					 * @brief Output language tag.
-					 * @param language BCP-47 / ISO code.
+					 * @brief Overrides stream language.
+					 * @param language ISO tag.
 					 * @return *this.
 					 */
 					Track& Language(std::string language) noexcept;
 
 					/**
-					 * @brief Output track title.
-					 * @param title Title metadata.
+					 * @brief Overrides stream title.
+					 * @param title Title text.
 					 * @return *this.
 					 */
 					Track& Title(std::string title) noexcept;
@@ -207,128 +297,137 @@ namespace StormByte::Multimedia::Pipeline {
 					friend class Transcode;
 
 					/**
-					 * @brief Binds this handle to a slot in @p owner.
-					 * @param owner Job that owns the slot.
-					 * @param slot Index into the explicit map.
+					 * @brief Binds this handle to a Slot.
+					 * @param owner Parent job.
+					 * @param slot Index into m_explicit.
 					 */
 					Track(Transcode& owner, std::size_t slot) noexcept;
 
-					Transcode* m_owner;		///< Owning job
-					std::size_t m_slot;		///< Slot index
+					Transcode* m_owner;								///< Parent job
+					std::size_t m_slot;								///< Slot index
 			};
 
+			/**
+			 * @brief Copy constructor (deleted).
+			 */
 			Transcode(const Transcode&) = delete;
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Source job.
 			 */
 			Transcode(Transcode&& other) noexcept;
 
 			/**
-			 * @brief Joins workers if Run() is still alive.
+			 * @brief Destructor. Cancels and joins if still running.
 			 */
 			virtual ~Transcode() noexcept;
 
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @return *this.
+			 */
 			Transcode& operator=(const Transcode&) = delete;
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Source job.
 			 * @return *this.
 			 */
 			Transcode& operator=(Transcode&& other) noexcept;
 
 			/**
-			 * @brief Opens a file path. Duration comes from the container.
-			 * @param logger Required logger (ThreadedLog recommended).
-			 * @param path Source path.
-			 * @return Job, or an error.
+			 * @brief Opens a path.
+			 * @param logger Required logger.
+			 * @param path Source file.
+			 * @return Job, or unexpected.
 			 */
 			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
 				const std::filesystem::path& path) noexcept;
 
 			/**
-			 * @brief Opens a file path and overrides advertised duration.
+			 * @brief Opens a path with a known duration hint.
 			 * @param logger Required logger.
-			 * @param path Source path.
-			 * @param duration Duration used for Progress().
-			 * @return Job, or an error.
+			 * @param path Source file.
+			 * @param duration Hint used for Progress().
+			 * @return Job, or unexpected.
 			 */
 			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
 				const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept;
 
 			/**
-			 * @brief Opens a consumer buffer. Duration comes from the container.
+			 * @brief Opens a consumer buffer.
 			 * @param logger Required logger.
 			 * @param consumer Source bytes.
-			 * @return Job, or an error.
+			 * @return Job, or unexpected.
 			 */
 			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
 				StormByte::Buffer::Consumer consumer) noexcept;
 
 			/**
-			 * @brief Opens a consumer buffer and overrides advertised duration.
+			 * @brief Opens a consumer with a known duration hint.
 			 * @param logger Required logger.
 			 * @param consumer Source bytes.
-			 * @param duration Duration used for Progress().
-			 * @return Job, or an error.
+			 * @param duration Hint used for Progress().
+			 * @return Job, or unexpected.
 			 */
 			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
 				StormByte::Buffer::Consumer consumer, std::chrono::nanoseconds duration) noexcept;
 
 			/**
-			 * @brief Source file opened by Open().
-			 * @return Source file.
+			 * @brief Opened source file.
+			 * @return File snapshot.
 			 */
 			const File& Source() const noexcept;
 
 			/**
-			 * @brief Logger passed to Open().
-			 * @return Logger.
+			 * @brief Logger bound at Open.
+			 * @return Shared logger.
 			 */
 			const std::shared_ptr<StormByte::Logger::Log>& Logger() const noexcept;
 
 			/**
-			 * @brief Maps a video source stream to an output index.
-			 * @param in Source stream index.
-			 * @param out Output index (compacted by Destination).
-			 * @return Track handle for Copy() or Codec().
+			 * @brief Maps a video stream.
+			 * @param in Source index.
+			 * @param out Destination order key.
+			 * @return Fluent handle.
 			 */
 			Track Video(int in, int out) noexcept;
 
 			/**
-			 * @brief Maps an audio source stream to an output index.
-			 * @param in Source stream index.
-			 * @param out Output index.
-			 * @return Track handle.
+			 * @brief Maps an audio stream.
+			 * @param in Source index.
+			 * @param out Destination order key.
+			 * @return Fluent handle.
 			 */
 			Track Audio(int in, int out) noexcept;
 
 			/**
-			 * @brief Maps a subtitle source stream to an output index.
-			 * @param in Source stream index.
-			 * @param out Output index.
-			 * @return Track handle.
+			 * @brief Maps a subtitle stream.
+			 * @param in Source index.
+			 * @param out Destination order key.
+			 * @return Fluent handle.
 			 */
 			Track Subtitle(int in, int out) noexcept;
 
 			/**
 			 * @brief Drops a source stream from the job.
-			 * @param in Source stream index.
+			 * @param in Source index.
 			 * @return *this.
 			 */
 			Transcode& Ignore(int in) noexcept;
 
 			/**
-			 * @brief Sets the output container and path. Compacts mapped tracks.
-			 * @param container Destination container.
-			 * @param path Destination path.
+			 * @brief Sets destination container and path.
+			 * @param container Writable container.
+			 * @param path Output path.
 			 * @return *this.
 			 */
 			Transcode& Destination(const StormByte::Multimedia::Container& container,
 				std::filesystem::path path) noexcept;
 
 			/**
-			 * @brief Starts workers and returns immediately.
+			 * @brief Starts workers. Returns immediately.
 			 */
 			void Run() noexcept;
 
@@ -338,83 +437,127 @@ namespace StormByte::Multimedia::Pipeline {
 			void Cancel() noexcept;
 
 			/**
-			 * @brief Pauses workers between units of work. x265 may finish the in-flight frame.
+			 * @brief Pauses workers if Running.
 			 */
 			void Pause() noexcept;
 
 			/**
-			 * @brief Resumes after Pause().
+			 * @brief Resumes workers if Paused.
 			 */
 			void Resume() noexcept;
 
 			/**
-			 * @brief Current lifecycle value.
-			 * @return Status.
+			 * @brief Current lifecycle.
+			 * @return Status value.
 			 */
 			enum Status Status() const noexcept;
 
 			/**
-			 * @brief Whether Status() is Error.
-			 * @return true on Error.
+			 * @brief Whether Status is Error.
+			 * @return true after Fail().
 			 */
 			bool Failed() const noexcept;
 
 			/**
-			 * @brief Failure text when Failed().
+			 * @brief Failure text.
 			 * @return Message, or empty.
 			 */
 			std::optional<std::string> Error() const noexcept;
 
 			/**
-			 * @brief Muxed video progress in percent, if a duration is known.
-			 * @return 0–100, or empty when Stopped / no duration.
+			 * @brief Approximate percent, when known.
+			 * @return 0..100, or empty before the first update.
 			 */
 			std::optional<unsigned> Progress() const noexcept;
 
 			/**
-			 * @brief Whether the job is usable (not Error).
+			 * @brief true while the job is usable (not Error/Aborted).
+			 * @return false after a hard fail or cancel.
 			 */
 			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Current snapshot (requested map, plus settled fields when known).
+			 * @return Plan owned by the caller. Default builds a Plan via MakePlan().
+			 */
+			virtual std::unique_ptr<Plan> Configuration() const noexcept;
 
 		protected:
 			/**
 			 * @brief Constructs an empty job. Only Open / derived classes.
-			 * @param logger Logger retained for the job lifetime.
+			 * @param logger Required logger.
 			 * @param file Opened source.
 			 */
 			Transcode(std::shared_ptr<StormByte::Logger::Log> logger, File file) noexcept;
 
 			/**
-			 * @brief Called on the worker thread before stages open.
-			 * Raise queue ceilings here. Default does nothing.
+			 * @brief Allocates the snapshot type. Paid jobs return a derived Plan.
+			 * @return Empty plan of the desired dynamic type.
+			 */
+			virtual std::unique_ptr<Plan> MakePlan() const noexcept;
+
+			/**
+			 * @brief Allocates one track row. Paid jobs return a derived TrackPlan.
+			 * @return Empty track plan of the desired dynamic type.
+			 */
+			virtual std::unique_ptr<TrackPlan> MakeTrackPlan() const noexcept;
+
+			/**
+			 * @brief Last chance to raise queue ceilings before workers start.
+			 *
+			 * Default does nothing.
 			 */
 			virtual void OnConfigure() noexcept;
 
 			/**
-			 * @brief Called after the map is complete, before threads start.
-			 * @return Running to proceed, Stopped to skip, Aborted or Error to bail.
+			 * @brief Gate after the map is valid and Destination is set.
+			 * @return Running to proceed, Error/Aborted/Stopped to bail.
 			 */
 			virtual enum Status OnStart() noexcept;
 
 			/**
-			 * @brief Called when Progress() changes, including the initial 0.
-			 * @param percent New percent.
+			 * @brief Requested map, just before workers start.
+			 * @param plan Snapshot from Configuration().
+			 *
+			 * Default logs plan.ToString() at LowLevel.
+			 */
+			virtual void OnPlan(const Plan& plan) noexcept;
+
+			/**
+			 * @brief One recode track finished Encoder::Open.
+			 * @param track Settled row (layout, sample format, frame_size).
+			 *
+			 * Default logs track.ToString() at LowLevel.
+			 */
+			virtual void OnSettled(const TrackPlan& track) noexcept;
+
+			/**
+			 * @brief Progress tick.
+			 * @param percent 0..100.
+			 *
+			 * Default does nothing.
 			 */
 			virtual void OnProgress(unsigned percent) noexcept;
 
 			/**
-			 * @brief Called after a successful flush when Status becomes Done.
+			 * @brief Successful flush.
+			 *
+			 * Default does nothing.
 			 */
 			virtual void OnDone() noexcept;
 
 			/**
-			 * @brief Called when Status becomes Error.
+			 * @brief Hard error.
 			 * @param message Error text.
+			 *
+			 * Default does nothing.
 			 */
 			virtual void OnError(const std::string& message) noexcept;
 
 			/**
-			 * @brief Called when Status becomes Aborted.
+			 * @brief Cancel completed.
+			 *
+			 * Default does nothing.
 			 */
 			virtual void OnAborted() noexcept;
 
@@ -450,34 +593,34 @@ namespace StormByte::Multimedia::Pipeline {
 			std::size_t m_videoFrameCeiling = 8;
 
 		private:
-			struct Slot;
-			class Impl;
+			struct Slot;											///< One mapped or implied track
+			class Impl;												///< Queues, worker, flags
 
-			std::shared_ptr<StormByte::Logger::Log> m_logger;	///< Job logger
-			std::unique_ptr<File> m_file;						///< Source file
-			std::unique_ptr<Impl> m_impl;						///< Queues, status, worker
+			std::shared_ptr<StormByte::Logger::Log> m_logger;		///< Required logger
+			std::unique_ptr<File> m_file;							///< Opened source
+			std::unique_ptr<Impl> m_impl;							///< Runtime state
 
 			/**
-			 * @brief Marks the job Error and wakes workers.
+			 * @brief Marks a hard error and cancels workers.
 			 * @param reason Message stored in Error().
 			 */
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Shared Open() tail: logger + opened file.
+			 * @brief Opens a File and constructs Transcode.
 			 * @param logger Required logger.
-			 * @param opened File::Open result.
-			 * @return Job, or the file error.
+			 * @param opened File result.
+			 * @return Job, or unexpected.
 			 */
 			static ExpectedTranscode BindLoggerAndFile(std::shared_ptr<StormByte::Logger::Log> logger,
 				ExpectedFile opened) noexcept;
 
 			/**
-			 * @brief Inserts or updates an explicit map slot.
+			 * @brief Maps one source stream.
 			 * @param in Source index.
-			 * @param out Output key.
-			 * @param kind Video, Audio or Subtitle.
-			 * @return Track handle.
+			 * @param out Destination order key.
+			 * @param kind Expected type.
+			 * @return Fluent track handle.
 			 */
 			Track AddTrack(int in, int out, Type kind) noexcept;
 
@@ -487,13 +630,22 @@ namespace StormByte::Multimedia::Pipeline {
 			void Worker() noexcept;
 
 			/**
-			 * @brief Stores a monotonic percent and calls OnProgress().
-			 * @param percent Value clamped to 0–100.
+			 * @brief Records encoder Open() into the matching Slot and fires OnSettled.
+			 * @param in Source stream index of the lane.
+			 * @param encoder Encoder that just opened.
+			 *
+			 * No-op if the encoder is not Opened() or the slot is already settled.
+			 */
+			void MarkSettled(int in, Encoder& encoder) noexcept;
+
+			/**
+			 * @brief Publishes percent to Progress() and OnProgress.
+			 * @param percent 0..100.
 			 */
 			void SetProgress(unsigned percent) noexcept;
 
 			/**
-			 * @brief Whether @p slot is an explicit map entry.
+			 * @brief Whether @p slot indexes m_explicit.
 			 * @param slot Slot index.
 			 * @return true if usable.
 			 */
