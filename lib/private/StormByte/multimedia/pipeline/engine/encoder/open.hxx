@@ -44,7 +44,9 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/type.hxx>
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -65,7 +67,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Open {
 	 */
 	struct Backend {
 		StormByte::Multimedia::Backend::FFmpeg::AVEncoder encoder;	///< Opened encoder
-		AVRational timeBase{0, 1};									///< Encoder time base
+		AVRational timeBase;										///< Encoder time base
 		std::string implementation;									///< Selected row name
 		StormByte::Multimedia::Features capabilities;				///< Selected row features
 	};
@@ -101,9 +103,9 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Open {
 	 * @param raw Encoder output.
 	 * @param timeBase Encoder time base.
 	 * @param keepPacketHdrPlus false for HEVC (SEI already in payload).
-	 * @return Move-only packet.
+	 * @return shared Packet with @ref Producer::Encoder.
 	 */
-	class Packet MakePacket(enum Type type, int index,
+	std::shared_ptr<class Packet> MakePacket(enum StormByte::Multimedia::Type type, int index,
 		const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
 		AVRational timeBase, bool keepPacketHdrPlus = true) noexcept;
 

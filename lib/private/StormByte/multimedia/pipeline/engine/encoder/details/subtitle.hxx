@@ -43,10 +43,14 @@
 #include <StormByte/multimedia/ocr/engine.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <cstdint>
 #include <deque>
+#include <memory>
 #include <optional>
+#include <string>
 
 extern "C" {
 	#include <libavutil/avutil.h>
@@ -64,10 +68,19 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 	 * @class Subtitle
 	 * @brief Subtitle encode backend: text/ASS/OCR. No SendFrame.
 	 *
+	 * Bitmap sources (PGS) often arrive as show/hide pairs with no duration
+	 * on the packet. The engine holds the show cue until the next bitmap
+	 * (or Flush) supplies the end time.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Subtitle final: public Encoder::Engine {
 		public:
+			/**
+			 * @name Lifecycle
+			 * @{
+			 */
+
 			/**
 			 * @brief Default constructor.
 			 */
@@ -79,28 +92,34 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			~Subtitle() noexcept override = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Subtitle(const Subtitle&) = delete;
+			Subtitle(const Subtitle& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Subtitle& operator=(const Subtitle&) = delete;
+			Subtitle& operator=(const Subtitle& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Subtitle(Subtitle&&) noexcept = default;
+			Subtitle(Subtitle&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Subtitle& operator=(Subtitle&&) noexcept = default;
+			Subtitle& operator=(Subtitle&& other) noexcept = default;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Whether the FFmpeg encoder is open.
@@ -114,35 +133,37 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param frame First subtitle frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Open(class Encoder& owner, const class Frame& frame) noexcept override;
+			bool Open(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept override;
 
 			/**
 			 * @brief Encodes one subtitle cue. Opens lazily on first call.
+			 *
+			 * A PGS show packet with no duration is held until the next cue
+			 * (or Flush) so the SRT/ASS event gets a real end time.
+			 *
 			 * @param owner Public encoder.
 			 * @param frame Decoded subtitle frame.
-			 * @return false if owner.Fail() was called.
+			 * @return true if the cue was accepted (or skipped empty).
 			 */
-			bool Push(class Encoder& owner, class Frame& frame) noexcept override;
+			bool Push(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept override;
 
 			/**
-			 * @brief Subtitles do not drain from ReceivePacket.
-			 * @param owner Public encoder.
-			 * @return Always false.
-			 */
-			bool DrainOne(class Encoder& owner) noexcept override;
-
-			/**
-			 * @brief Marks flushed. Pending packets stay until TakePacket.
+			 * @brief Emits any held show packet, then marks flushed.
 			 * @param owner Public encoder.
 			 */
-			void Flush(class Encoder& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept override;
 
 			/**
-			 * @brief Pops one pending packet.
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled.
+			 * @brief Pops one encoded subtitle packet.
+			 *
+			 * Does not call avcodec_receive_packet: subtitle codecs write
+			 * through EncodeSubtitle / Load in Push.
+			 *
+			 * @return Packet with @ref Producer::Encoder, or empty if none ready.
 			 */
-			bool TakePacket(class Packet& packet) noexcept override;
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Take() noexcept override;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.
@@ -157,11 +178,23 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			AVRational TimeBase() const noexcept override;
 
 		private:
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Encode scratch
-			std::deque<class Packet> m_pending;											///< Packets waiting for Mux
-			AVRational m_timeBase{1, AV_TIME_BASE};										///< Encoder time base
-			StormByte::Multimedia::OCR::Engine m_ocr;									///< Bitmap OCR
-			bool m_flushed = false;														///< Flush already called
+			/**
+			 * @brief Writes the held show cue ending at @p endNs.
+			 * @param owner Public encoder.
+			 * @param endNs Cue end in nanoseconds.
+			 */
+			void EmitHeld(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				std::int64_t endNs) noexcept;
+
+			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;		///< Opened encoder
+			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;						///< Encode scratch
+			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
+			AVRational m_timeBase;															///< Encoder time base
+			StormByte::Multimedia::OCR::Engine m_ocr;										///< Bitmap OCR
+			int m_index;																	///< @ref Encoder::Index after Open
+			bool m_flushed;																	///< Flush already called
+			std::string m_heldText;															///< OCR/text of the open PGS show packet
+			std::int64_t m_heldStartNs;														///< Start of @ref m_heldText in nanoseconds
+			std::int64_t m_heldPts;															///< PTS ticks of @ref m_heldText in AV_TIME_BASE
 	};
 }

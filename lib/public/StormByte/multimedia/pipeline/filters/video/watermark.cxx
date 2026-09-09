@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/pipeline/filters/video/watermark.hxx>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <utility>
@@ -46,7 +47,7 @@
 extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavutil/frame.h>
-	#include <libavutil/imgutils.h>
+	#include <libavutil/pixdesc.h>
 	#include <libavutil/pixfmt.h>
 	#include <libswscale/swscale.h>
 }
@@ -69,25 +70,60 @@ namespace {
 		return avcodec_find_decoder(AV_CODEC_ID_MJPEG);
 	}
 
-	std::pair<int, int> Place(int frameW, int frameH, int logoW, int logoH,
+	int SampleY8(const ::AVFrame* src, int x, int y) noexcept {
+		if (!src->data[0] || x < 0 || y < 0 || x >= src->width || y >= src->height)
+			return 0;
+		return src->data[0][y * src->linesize[0] + x];
+	}
+
+	int RowMeanY8(const ::AVFrame* src, int row) noexcept {
+		unsigned sum = 0;
+		const int step = src->width > 64 ? src->width / 64 : 1;
+		int n = 0;
+		for (int x = 0; x < src->width; x += step) {
+			sum += static_cast<unsigned>(SampleY8(src, x, row));
+			++n;
+		}
+		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
+	}
+
+	int ColMeanY8(const ::AVFrame* src, int col) noexcept {
+		unsigned sum = 0;
+		const int step = src->height > 64 ? src->height / 64 : 1;
+		int n = 0;
+		for (int y = 0; y < src->height; y += step) {
+			sum += static_cast<unsigned>(SampleY8(src, col, y));
+			++n;
+		}
+		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
+	}
+
+	int ScanBar(int limit, int black, const auto& meanAt) noexcept {
+		int bar = 0;
+		while (bar < limit && meanAt(bar) <= black)
+			++bar;
+		return bar;
+	}
+
+	std::pair<int, int> Place(int logoW, int logoH,
 		const std::optional<Anchor>& anchor,
 		const std::optional<StormByte::Multimedia::Property::Point>& point,
-		int margin) noexcept {
+		int margin, int x0, int y0, int aw, int ah) noexcept {
 		if (point.has_value())
 			return {point->X(), point->Y()};
 		const Anchor a = anchor.value_or(Anchor::BottomRight);
-		int x = margin;
-		int y = margin;
+		int x = x0 + margin;
+		int y = y0 + margin;
 		switch (a) {
-			case Anchor::TopLeft:		x = margin; y = margin; break;
-			case Anchor::TopCenter:		x = (frameW - logoW) / 2; y = margin; break;
-			case Anchor::TopRight:		x = frameW - logoW - margin; y = margin; break;
-			case Anchor::CenterLeft:	x = margin; y = (frameH - logoH) / 2; break;
-			case Anchor::Center:		x = (frameW - logoW) / 2; y = (frameH - logoH) / 2; break;
-			case Anchor::CenterRight:	x = frameW - logoW - margin; y = (frameH - logoH) / 2; break;
-			case Anchor::BottomLeft:	x = margin; y = frameH - logoH - margin; break;
-			case Anchor::BottomCenter:	x = (frameW - logoW) / 2; y = frameH - logoH - margin; break;
-			case Anchor::BottomRight:	x = frameW - logoW - margin; y = frameH - logoH - margin; break;
+			case Anchor::TopLeft:		x = x0 + margin; y = y0 + margin; break;
+			case Anchor::TopCenter:		x = x0 + (aw - logoW) / 2; y = y0 + margin; break;
+			case Anchor::TopRight:		x = x0 + aw - logoW - margin; y = y0 + margin; break;
+			case Anchor::CenterLeft:	x = x0 + margin; y = y0 + (ah - logoH) / 2; break;
+			case Anchor::Center:		x = x0 + (aw - logoW) / 2; y = y0 + (ah - logoH) / 2; break;
+			case Anchor::CenterRight:	x = x0 + aw - logoW - margin; y = y0 + (ah - logoH) / 2; break;
+			case Anchor::BottomLeft:	x = x0 + margin; y = y0 + ah - logoH - margin; break;
+			case Anchor::BottomCenter:	x = x0 + (aw - logoW) / 2; y = y0 + ah - logoH - margin; break;
+			case Anchor::BottomRight:	x = x0 + aw - logoW - margin; y = y0 + ah - logoH - margin; break;
 		}
 		return {x, y};
 	}
@@ -123,15 +159,41 @@ namespace {
 Watermark::Watermark(const std::filesystem::path& logo, Anchor anchor,
 	unsigned opacity, int margin) noexcept
 : Filter::Process("watermark"), m_path(logo), m_anchor(anchor),
-	m_opacity(std::min(opacity, 100u)), m_margin(margin) {}
+	m_opacity(std::min(opacity, 100u)), m_margin(margin),
+	m_logoWidth(0), m_logoHeight(0), m_loaded(false), m_decoded(false),
+	m_released(false), m_barTop(0), m_barBottom(0), m_barLeft(0), m_barRight(0),
+	m_stable(0), m_lumaW(0), m_lumaH(0), m_lumaFmt(AV_PIX_FMT_NONE),
+	m_swsLuma(nullptr), m_luma(nullptr) {}
 
 Watermark::Watermark(const std::filesystem::path& logo,
 	StormByte::Multimedia::Property::Point position, unsigned opacity) noexcept
 : Filter::Process("watermark"), m_path(logo), m_point(position),
-	m_opacity(std::min(opacity, 100u)), m_margin(0) {}
+	m_opacity(std::min(opacity, 100u)), m_margin(0),
+	m_logoWidth(0), m_logoHeight(0), m_loaded(false), m_decoded(false),
+	m_released(false), m_barTop(0), m_barBottom(0), m_barLeft(0), m_barRight(0),
+	m_stable(0), m_lumaW(0), m_lumaH(0), m_lumaFmt(AV_PIX_FMT_NONE),
+	m_swsLuma(nullptr), m_luma(nullptr) {}
+
+Watermark::~Watermark() noexcept {
+	DropScale();
+}
 
 enum StormByte::Multimedia::Type Watermark::Media() const noexcept {
-	return Type::Video;
+	return StormByte::Multimedia::Type::Video;
+}
+
+void Watermark::DropScale() noexcept {
+	if (m_swsLuma) {
+		sws_freeContext(static_cast<::SwsContext*>(m_swsLuma));
+		m_swsLuma = nullptr;
+	}
+	if (m_luma) {
+		av_frame_free(&m_luma);
+		m_luma = nullptr;
+	}
+	m_lumaW = 0;
+	m_lumaH = 0;
+	m_lumaFmt = AV_PIX_FMT_NONE;
 }
 
 void Watermark::Clean() noexcept {
@@ -141,6 +203,13 @@ void Watermark::Clean() noexcept {
 	m_logoHeight = 0;
 	m_loaded = false;
 	m_decoded = false;
+	m_released = false;
+	m_barTop = 0;
+	m_barBottom = 0;
+	m_barLeft = 0;
+	m_barRight = 0;
+	m_stable = 0;
+	DropScale();
 }
 
 void Watermark::Setup() noexcept {
@@ -239,7 +308,7 @@ bool Watermark::DecodeLogo() noexcept {
 	}
 
 	::SwsContext* sws = sws_getContext(
-		decoded->width, decoded->height, static_cast<AVPixelFormat>(decoded->format),
+		decoded->width, decoded->height, static_cast<::AVPixelFormat>(decoded->format),
 		rgba->width, rgba->height, AV_PIX_FMT_RGBA,
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
 	if (!sws || sws_scale(sws, decoded->data, decoded->linesize, 0, decoded->height,
@@ -270,22 +339,205 @@ bool Watermark::DecodeLogo() noexcept {
 	return true;
 }
 
-void Watermark::Process(Pipeline::Frame& frame, Origin) noexcept {
+::AVFrame* Watermark::Luma(::AVFrame* src) noexcept {
+	if (!src || src->width <= 0 || src->height <= 0)
+		return nullptr;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<::AVPixelFormat>(src->format));
+	if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
+		Fail("watermark needs a software frame");
+		return nullptr;
+	}
+
+	if (m_luma && (m_lumaW != src->width || m_lumaH != src->height || m_lumaFmt != src->format))
+		DropScale();
+
+	if (!m_luma) {
+		m_luma = av_frame_alloc();
+		if (!m_luma) {
+			Fail("out of memory");
+			return nullptr;
+		}
+		m_luma->format = AV_PIX_FMT_GRAY8;
+		m_luma->width = src->width;
+		m_luma->height = src->height;
+		if (av_frame_get_buffer(m_luma, 0) < 0) {
+			DropScale();
+			Fail("failed to allocate luma probe");
+			return nullptr;
+		}
+		m_swsLuma = sws_getContext(
+			src->width, src->height, static_cast<::AVPixelFormat>(src->format),
+			m_luma->width, m_luma->height, AV_PIX_FMT_GRAY8,
+			SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+		if (!m_swsLuma) {
+			DropScale();
+			Fail("failed to convert frame to luma");
+			return nullptr;
+		}
+		m_lumaW = src->width;
+		m_lumaH = src->height;
+		m_lumaFmt = src->format;
+	}
+
+	if (sws_scale(static_cast<::SwsContext*>(m_swsLuma), src->data, src->linesize,
+			0, src->height, m_luma->data, m_luma->linesize) <= 0) {
+		Fail("failed to convert frame to luma");
+		return nullptr;
+	}
+	return m_luma;
+}
+
+bool Watermark::ProbeBars(::AVFrame* src) noexcept {
+	::AVFrame* gray = Luma(src);
+	if (!gray || gray->width < 16 || gray->height < 16) {
+		std::fprintf(stderr, "STMM-W probe skip luma=%p %dx%d\n",
+			static_cast<void*>(gray),
+			gray ? gray->width : 0,
+			gray ? gray->height : 0);
+		std::fflush(stderr);
+		return false;
+	}
+
+	constexpr int black = 12;
+	const int maxY = gray->height / 5;
+	const int maxX = gray->width / 8;
+	const int midY = RowMeanY8(gray, gray->height / 2);
+	const int midX = ColMeanY8(gray, gray->width / 2);
+	const int edgeTop = RowMeanY8(gray, 0);
+	const int edgeBot = RowMeanY8(gray, gray->height - 1);
+
+	if (midY < 8 && midX < 8 && edgeTop < 8 && edgeBot < 8) {
+		std::fprintf(stderr, "STMM-W slate midY=%d midX=%d edgeT=%d edgeB=%d\n",
+			midY, midX, edgeTop, edgeBot);
+		std::fflush(stderr);
+		return false;
+	}
+
+	const int top = ScanBar(maxY, black,
+		[&](int i) { return RowMeanY8(gray, i); });
+	const int bottom = ScanBar(maxY, black,
+		[&](int i) { return RowMeanY8(gray, gray->height - 1 - i); });
+	const int left = ScanBar(maxX, black,
+		[&](int i) { return ColMeanY8(gray, i); });
+	const int right = ScanBar(maxX, black,
+		[&](int i) { return ColMeanY8(gray, gray->width - 1 - i); });
+
+	int useTop = top;
+	int useBottom = bottom;
+	if (midY < black + 16) {
+		useTop = 0;
+		useBottom = 0;
+	}
+	else if (useTop > 8 && useBottom <= 8)
+		useBottom = useTop;
+	else if (useBottom > 8 && useTop <= 8)
+		useTop = useBottom;
+	else if (useTop > 8 && useBottom > 8) {
+		const int d = std::abs(useTop - useBottom);
+		if (d * 2 > std::max(useTop, useBottom))
+			useTop = useBottom = std::min(useTop, useBottom);
+	}
+	else {
+		useTop = 0;
+		useBottom = 0;
+	}
+
+	int useLeft = left;
+	int useRight = right;
+	if (useLeft <= 8 || useRight <= 8 || midX < black + 16) {
+		useLeft = 0;
+		useRight = 0;
+	}
+
+	const bool same = useTop <= m_barTop && useBottom <= m_barBottom
+		&& useLeft <= m_barLeft && useRight <= m_barRight;
+	m_barTop = std::max(m_barTop, useTop);
+	m_barBottom = std::max(m_barBottom, useBottom);
+	m_barLeft = std::max(m_barLeft, useLeft);
+	m_barRight = std::max(m_barRight, useRight);
+	if (useTop > 8 && useBottom > 8) {
+		if (same)
+			++m_stable;
+		else
+			m_stable = 0;
+	}
+
+	std::fprintf(stderr,
+		"STMM-W raw t=%d b=%d l=%d r=%d use t=%d b=%d l=%d r=%d "
+		"acc t=%d b=%d l=%d r=%d midY=%d midX=%d edgeT=%d edgeB=%d "
+		"stable=%d %dx%d\n",
+		top, bottom, left, right,
+		useTop, useBottom, useLeft, useRight,
+		m_barTop, m_barBottom, m_barLeft, m_barRight,
+		midY, midX, edgeTop, edgeBot,
+		m_stable, gray->width, gray->height);
+	std::fflush(stderr);
+	return true;
+}
+
+void Watermark::Process(const Pipeline::Frame&) noexcept {
 	if (m_opacity == 0)
 		return;
+
+	::AVFrame* src = AVFrame();
+	if (m_anchor && !m_point && !m_released) {
+		if (!Held())
+			Hold(ProbeMax);
+		const bool usable = ProbeBars(src);
+		const bool letterbox = m_barTop > 8 && m_barBottom > 8;
+		std::fprintf(stderr, "STMM-W hold held=%d/%d usable=%d letterbox=%d released=%d\n",
+			HeldFor(), ProbeMax, usable ? 1 : 0, letterbox ? 1 : 0, m_released ? 1 : 0);
+		std::fflush(stderr);
+		if (usable && letterbox && m_stable >= 8)
+			Release();
+		else if (HeldFor() >= ProbeMax) {
+			if (!letterbox) {
+				m_barTop = 0;
+				m_barBottom = 0;
+				m_barLeft = 0;
+				m_barRight = 0;
+			}
+			Release();
+		}
+		if (Held())
+			return;
+		m_released = true;
+		std::fprintf(stderr, "STMM-W release bars t=%d b=%d l=%d r=%d\n",
+			m_barTop, m_barBottom, m_barLeft, m_barRight);
+		std::fflush(stderr);
+	}
+
+	Paint();
+}
+
+void Watermark::Paint() noexcept {
 	if (!DecodeLogo())
 		return;
 
-	::AVFrame* src = Native(frame);
+	::AVFrame* src = AVFrame();
 	if (!src || src->width <= 0 || src->height <= 0) {
 		Fail("missing video buffer");
 		return;
 	}
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<::AVPixelFormat>(src->format));
+	if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
+		Fail("watermark needs a software frame");
+		return;
+	}
 
-	const auto [x, y] = Place(src->width, src->height, m_logoWidth, m_logoHeight,
-		m_anchor, m_point, m_margin);
-	if (x < 0 || y < 0 || x + m_logoWidth > src->width || y + m_logoHeight > src->height) {
-		Fail("logo does not fit in the frame");
+	const int x0 = m_point ? 0 : m_barLeft;
+	const int y0 = m_point ? 0 : m_barTop;
+	const int aw = m_point ? src->width : src->width - m_barLeft - m_barRight;
+	const int ah = m_point ? src->height : src->height - m_barTop - m_barBottom;
+	if (aw <= 0 || ah <= 0) {
+		Fail("active picture is empty");
+		return;
+	}
+
+	const auto [x, y] = Place(m_logoWidth, m_logoHeight, m_anchor, m_point,
+		m_margin, x0, y0, aw, ah);
+	if (x < x0 || y < y0 || x + m_logoWidth > x0 + aw || y + m_logoHeight > y0 + ah) {
+		Fail("logo does not fit in the active picture");
 		return;
 	}
 
@@ -309,7 +561,7 @@ void Watermark::Process(Pipeline::Frame& frame, Origin) noexcept {
 	}
 
 	::SwsContext* toRgba = sws_getContext(
-		src->width, src->height, static_cast<AVPixelFormat>(src->format),
+		src->width, src->height, static_cast<::AVPixelFormat>(src->format),
 		out->width, out->height, AV_PIX_FMT_RGBA,
 		SWS_BILINEAR, nullptr, nullptr, nullptr);
 	if (!toRgba || sws_scale(toRgba, src->data, src->linesize, 0, src->height,
@@ -350,7 +602,7 @@ void Watermark::Process(Pipeline::Frame& frame, Origin) noexcept {
 		}
 		::SwsContext* fromRgba = sws_getContext(
 			out->width, out->height, AV_PIX_FMT_RGBA,
-			restored->width, restored->height, static_cast<AVPixelFormat>(restored->format),
+			restored->width, restored->height, static_cast<::AVPixelFormat>(restored->format),
 			SWS_BILINEAR, nullptr, nullptr, nullptr);
 		if (!fromRgba || sws_scale(fromRgba, out->data, out->linesize, 0, out->height,
 				restored->data, restored->linesize) <= 0) {
@@ -366,5 +618,5 @@ void Watermark::Process(Pipeline::Frame& frame, Origin) noexcept {
 		out = restored;
 	}
 
-	Replace(frame, out);
+	Save(out);
 }

@@ -38,20 +38,19 @@
 
 #pragma once
 
+#include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
-#include <StormByte/multimedia/pipeline/filters/typedefs.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
-#include <StormByte/multimedia/property/audio.hxx>
-#include <StormByte/multimedia/property/duration.hxx>
-#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
+#include <deque>
 #include <memory>
-#include <optional>
 #include <string>
-#include <vector>
 
 extern "C" {
 	struct AVFrame;
@@ -59,424 +58,521 @@ extern "C" {
 }
 
 /**
-* @namespace StormByte::Multimedia::Pipeline::Filter
-* @brief Facades, chain and reports for pipeline filter plugins.
-*/
+ * @namespace StormByte::Multimedia::Pipeline
+ * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Pipeline {
+	class Route;
+}
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Filter
+ * @brief Facades and reports for pipeline filter plugins.
+ */
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
-	* @class FFmpeg
-	* @brief Abstract base for every StormByte Multimedia filter.
-	*
-	* Do not inherit this type directly. Inherit @ref Process,
-	* @ref Packet or @ref Analytics. Construct with a short name
-	* (`resize`). @ref Name is `Media()/name`.
-	*
-	* @par Lifecycle
-	* The constructor only stores the name. @ref Reset (called by
-	* @ref Chain on the first unit of a run) clears Fail flags,
-	* then @ref Clean, then @ref Setup. @ref Flush runs during the
-	* run and once after @ref Eof. The destructor must not Flush.
-	* Plugins must be restartable. Everything is noexcept; errors
-	* go through @ref Fail. No exceptions.
-	*
-	* @par Dispatch
-	* @ref Chain calls @ref Call. Call checks @ref Media and
-	* forwards to @ref Process. Facades also gate by @ref Origin.
-	* A leaf implements one Process overload; the others stay
-	* the empty FFmpeg default.
-	*
-	* @par Native
-	* @ref Native / @ref Replace talk to libav of FFmpeg
-	* @STORMBYTE_FFMPEG_VERSION@. Do not free the pointer
-	* @ref Native returns. Do not link libav next to Multimedia.
-	*/
-	class STORMBYTE_MULTIMEDIA_PUBLIC FFmpeg {
+	 * @class Accepts
+	 * @brief Bitmask of @ref StormByte::Multimedia::Pipeline::Kind.
+	 *
+	 * Static on each facade. @ref StormByte::Multimedia::Pipeline::Route::Add
+	 * reads the instance mask.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Accepts: public StormByte::Bitmask<Accepts, Pipeline::Kind> {
 		public:
 			/**
-			* @name Lifetime
-			* @{
-			*/
+			 * @brief Empty mask.
+			 */
+			constexpr Accepts() noexcept
+			: StormByte::Bitmask<Accepts, Pipeline::Kind>() {}
 
 			/**
-			* @brief Copy constructor (deleted).
-			*/
-			FFmpeg(const FFmpeg&) = delete;
+			 * @brief Mask from one kind.
+			 * @param kind Frame or Packet.
+			 */
+			constexpr Accepts(Pipeline::Kind kind) noexcept
+			: StormByte::Bitmask<Accepts, Pipeline::Kind>(kind) {}
 
 			/**
-			* @brief Move constructor.
-			* @param other Filter to take.
-			*/
-			FFmpeg(FFmpeg&& other) noexcept = default;
+			 * @brief Copy constructor.
+			 * @param accepts Source mask.
+			 */
+			constexpr Accepts(const Accepts& accepts) noexcept = default;
 
 			/**
-			* @brief Destructor.
-			*/
-			virtual ~FFmpeg() noexcept;
+			 * @brief Move constructor.
+			 * @param accepts Source mask.
+			 */
+			constexpr Accepts(Accepts&& accepts) noexcept = default;
 
 			/**
-			* @brief Copy assignment (deleted).
-			* @return *this.
-			*/
-			FFmpeg& operator=(const FFmpeg&) = delete;
+			 * @brief Destructor.
+			 */
+			constexpr ~Accepts() noexcept = default;
 
 			/**
-			* @brief Move assignment.
-			* @param other Filter to take.
-			* @return *this.
-			*/
-			FFmpeg& operator=(FFmpeg&& other) noexcept = default;
-
-			/** @} */
+			 * @brief Copy assignment.
+			 * @param accepts Source mask.
+			 * @return *this.
+			 */
+			constexpr Accepts& operator=(const Accepts& accepts) noexcept = default;
 
 			/**
-			* @name Identity
-			* @{
-			*/
+			 * @brief Move assignment.
+			 * @param accepts Source mask.
+			 * @return *this.
+			 */
+			constexpr Accepts& operator=(Accepts&& accepts) noexcept = default;
 
 			/**
-			* @brief Media this filter handles.
-			* @return Video, Audio or Subtitle.
-			*/
-			virtual enum Type Media() const noexcept = 0;
-
-			/**
-			* @brief `Media()/name` computed on each call.
-			* @return Identity string.
-			*/
-			std::string Name() const noexcept;
-
-			/** @} */
-
-			/**
-			* @name Run
-			* @{
-			*/
-
-			/**
-			* @brief Clears Fail, then @ref Clean, then @ref Setup.
-			*/
-			void Reset() noexcept;
-
-			/**
-			* @brief Entry from @ref Chain for a frame.
-			* @param frame Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			virtual void Call(Pipeline::Frame& frame, Origin origin) noexcept;
-
-			/**
-			* @brief Entry from @ref Chain for a packet.
-			* @param packet Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			virtual void Call(class Pipeline::Packet& packet, Origin origin) noexcept;
-
-			/**
-			* @brief End of @p origin. Default no-op.
-			* @param origin Stage that ended.
-			*/
-			virtual void Eof(Origin origin) noexcept;
-
-			/**
-			* @brief Periodic / final drain. Default no-op.
-			* @param origin Stage that is draining.
-			*/
-			virtual void Flush(Origin origin) noexcept;
-
-			/**
-			* @brief Measurement, if any.
-			* @return None and an empty map by default.
-			*/
-			virtual class Report Report() const noexcept;
-
-			/** @} */
-
-			/**
-			* @name Status
-			* @{
-			*/
-
-			/**
-			* @brief Whether @ref Fail was called since the last @ref Reset.
-			* @return true after a hard error.
-			*/
-			bool Failed() const noexcept;
-
-			/**
-			* @brief `Plugin Name() failed: reason`.
-			* @return Formatted text.
-			*
-			* @pre @ref Failed is true. Debug asserts; release returns empty.
-			*/
-			std::string ErrorStr() const noexcept;
-
-			/** @} */
-
-		protected:
-			/**
-			* @brief Named plugin. There is no empty constructor.
-			* @param name Short leaf name (`resize`).
-			*/
-			explicit FFmpeg(std::string name) noexcept;
-
-			/**
-			* @brief Drops per-run state. First-run no-op is allowed.
-			*/
-			virtual void Clean() noexcept = 0;
-
-			/**
-			* @brief Acquires per-run state. Must be callable again after @ref Clean.
-			*/
-			virtual void Setup() noexcept = 0;
-
-			/**
-			* @brief Frame body. Pure on @ref FFmpeg so a leaf of @ref Process / @ref Analytics implements it.
-			* @param frame Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			virtual void Process(Pipeline::Frame& frame, Origin origin) noexcept = 0;
-
-			/**
-			* @brief Packet body. Empty default so @ref Process / @ref Analytics are not forced to name this method.
-			* @param packet Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			virtual void Process(class Pipeline::Packet& packet, Origin origin) noexcept;
-
-			/**
-			* @brief Marks a hard error. The job must stop.
-			* @param reason Bare message; @ref ErrorStr prepends the plugin name.
-			*/
-			void Fail(std::string reason) noexcept;
-
-			/**
-			* @brief Borrowed libav frame owned by @p frame, or nullptr.
-			* @param frame Owner of the backend buffer.
-			* @return ::AVFrame from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
-			*/
-			static ::AVFrame* Native(Pipeline::Frame& frame) noexcept;
-
-			/**
-			* @brief Borrowed libav frame owned by @p frame, or nullptr.
-			* @param frame Owner of the backend buffer.
-			* @return ::AVFrame from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
-			*/
-			static const ::AVFrame* Native(const Pipeline::Frame& frame) noexcept;
-
-			/**
-			* @brief Borrowed libav packet owned by @p packet, or nullptr.
-			* @param packet Owner of the backend buffer.
-			* @return ::AVPacket from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
-			*/
-			static ::AVPacket* Native(class Pipeline::Packet& packet) noexcept;
-
-			/**
-			* @brief Borrowed libav packet owned by @p packet, or nullptr.
-			* @param packet Owner of the backend buffer.
-			* @return ::AVPacket from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
-			*/
-			static const ::AVPacket* Native(const class Pipeline::Packet& packet) noexcept;
-
-			/**
-			* @brief Replaces the backend of @p frame with @p raw (takes ownership).
-			* @param frame Pipeline frame.
-			* @param raw libav frame allocated by the plugin.
-			*/
-			static void Replace(Pipeline::Frame& frame, ::AVFrame* raw) noexcept;
-
-			/**
-			* @brief Replaces the backend of @p packet with @p raw (takes ownership).
-			* @param packet Pipeline packet.
-			* @param raw libav packet allocated by the plugin.
-			*/
-			static void Replace(class Pipeline::Packet& packet, ::AVPacket* raw) noexcept;
-
-		private:
-			std::string m_name;				///< Leaf name
-			bool m_failed = false;			///< Hard error
-			std::string m_reason;			///< Bare Fail text
+			 * @brief Whether @p kind is set.
+			 * @param kind Frame or Packet.
+			 * @return true if present.
+			 */
+			constexpr bool Has(Pipeline::Kind kind) const noexcept {
+				return (*this & Accepts(kind)) != Accepts{};
+			}
 	};
 
 	/**
-	* @class Process
-	* @brief Mutates decoded frames on @ref Origin::Decoder.
-	*
-	* Do not declare a method named Process on this class: that is
-	* a constructor. The leaf (`Resize`) implements
-	* @ref FFmpeg::Process (Frame). Packet Process stays the empty
-	* FFmpeg default.
-	*/
-	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
+	 * @class FFmpeg
+	 * @brief Abstract base for every StormByte Multimedia filter.
+	 *
+	 * Do not inherit this type directly. Inherit @ref Process,
+	 * @ref Packet or @ref Analytics. Construct with a short name
+	 * (`resize`). @ref Name is `Media()/name`.
+	 *
+	 * Inherits @ref StormByte::Multimedia::Pipeline::Step as
+	 * protected: one pair of Sink objects, one CV, one thread.
+	 * The worker launches in the constructor. The plugin public
+	 * surface is @ref Media, @ref Accepts, @ref Clean, @ref Setup
+	 * and the @ref Process overload that @ref Accepts requires.
+	 * Protected: @ref AVFrame, @ref AVPacket, @ref Save, @ref Hold,
+	 * @ref Release, @ref Fail, @ref Held, @ref HeldFor, @ref Eof.
+	 * The plugin does not see Sink, Hopper, Bind, Route or Router.
+	 * It does not link libav.
+	 *
+	 * @ref AVFrame / @ref AVPacket / @ref Save talk to libav of
+	 * FFmpeg @STORMBYTE_FFMPEG_VERSION@ (libavcodec major
+	 * @STORMBYTE_LIBAVCODEC_MAJOR@). Do not free the pointer
+	 * @ref AVFrame or @ref AVPacket returns.
+	 *
+	 * @ref Hold takes a plugin-chosen maximum (@c 0 means 255).
+	 * That ceiling is not a guaranteed wait: @ref Release may run
+	 * earlier. Exactly @p n units may sit on the queue. Parking
+	 * one more without @ref Release is @ref Fail. Hold plus EoF
+	 * without @ref Release is @ref Fail. A second @ref Hold
+	 * while @ref Held is @ref Fail.
+	 *
+	 * Effect of a mutation is @ref Save inside @ref Work.
+	 * Analytics deletes @ref Save.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC FFmpeg: protected Pipeline::Step {
+		friend class StormByte::Multimedia::Pipeline::Route;
+
 		public:
 			/**
-			* @brief Copy constructor (deleted).
-			*/
-			Process(const Process&) = delete;
+			 * @name Lifecycle
+			 * @{
+			 */
 
 			/**
-			* @brief Move constructor.
-			* @param other Filter to take.
-			*/
-			Process(Process&& other) noexcept = default;
+			 * @brief Copy constructor.
+			 * @param other Source filter.
+			 */
+			FFmpeg(const FFmpeg& other) = delete;
 
 			/**
-			* @brief Destructor.
-			*/
-			~Process() noexcept override = default;
+			 * @brief Move constructor.
+			 * @param other Filter to take.
+			 */
+			FFmpeg(FFmpeg&& other) noexcept = delete;
 
 			/**
-			* @brief Copy assignment (deleted).
-			* @return *this.
-			*/
-			Process& operator=(const Process&) = delete;
+			 * @brief Destructor.
+			 */
+			~FFmpeg() noexcept override;
 
 			/**
-			* @brief Move assignment.
-			* @param other Filter to take.
-			* @return *this.
-			*/
-			Process& operator=(Process&& other) noexcept = default;
+			 * @brief Copy assignment.
+			 * @param other Source filter.
+			 * @return *this.
+			 */
+			FFmpeg& operator=(const FFmpeg& other) = delete;
 
 			/**
-			* @brief Decoder frames only.
-			* @param frame Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			void Call(Pipeline::Frame& frame, Origin origin) noexcept override;
+			 * @brief Move assignment.
+			 * @param other Filter to take.
+			 * @return *this.
+			 */
+			FFmpeg& operator=(FFmpeg&& other) noexcept = delete;
 
 			/**
-			* @brief Packets are ignored.
-			* @param packet Unused.
-			* @param origin Unused.
-			*/
-			void Call(class Pipeline::Packet& packet, Origin origin) noexcept override;
+			 * @}
+			 */
+
+			/**
+			 * @name Identity
+			 * @{
+			 */
+
+			/**
+			 * @brief Media this filter handles.
+			 * @return Video, Audio or Subtitle.
+			 */
+			virtual enum StormByte::Multimedia::Type Media() const noexcept = 0;
+
+			/**
+			 * @brief Kinds this filter accepts.
+			 * @return Frame and/or Packet mask.
+			 */
+			virtual class Accepts Accepts() const noexcept = 0;
+
+			/**
+			 * @brief `Media()/name` computed on each call.
+			 * @return Identity string.
+			 */
+			std::string Name() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Run
+			 * @{
+			 */
+
+			/**
+			 * @brief Drops per-run state. First-run no-op is allowed.
+			 */
+			virtual void Clean() noexcept = 0;
+
+			/**
+			 * @brief Acquires per-run state. Must be callable again after @ref Clean.
+			 */
+			virtual void Setup() noexcept = 0;
+
+			/**
+			 * @brief Frame body. Default no-op.
+			 * @param frame Unit in the tube. Never null.
+			 */
+			virtual void Process(const Pipeline::Frame& frame) noexcept;
+
+			/**
+			 * @brief Packet body. Default no-op.
+			 * @param packet Unit in the tube. Never null.
+			 */
+			virtual void Process(const Pipeline::Packet& packet) noexcept;
+
+			/**
+			 * @brief Measurement, if any.
+			 * @return None and an empty map by default.
+			 */
+			virtual class Report Report() const noexcept;
+
+			using Pipeline::Step::Failed;
+			using Pipeline::Step::Error;
+
+			/**
+			 * @}
+			 */
 
 		protected:
 			/**
-			* @brief Named process node.
-			* @param name Short leaf name (`resize`).
-			*/
+			 * @name Construction
+			 * @{
+			 */
+
+			/**
+			 * @brief Named plugin. Launches the worker. There is no empty constructor.
+			 * @param name Short leaf name (`resize`).
+			 */
+			explicit FFmpeg(std::string name) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @brief Marks a hard error and wakes the step. The job stops.
+			 * @param reason Bare message.
+			 */
+			void Fail(std::string reason) noexcept;
+
+			/**
+			 * @brief Starts a Hold of at most @p n units.
+			 *
+			 * @p n of 0 means 255. A second Hold while @ref Held is
+			 * @ref Fail. Parks the current unit. Later units while
+			 * Held are parked by @ref Work. @ref Release may run
+			 * before the ceiling. @ref HeldFor equal to @p n is
+			 * still valid; the next park is @ref Fail.
+			 *
+			 * @param n Maximum units for this Hold.
+			 */
+			void Hold(std::uint8_t n) noexcept;
+
+			/**
+			 * @brief Ends the Hold and pushes parked units to the output sink.
+			 *
+			 * No-op if not @ref Held.
+			 */
+			void Release() noexcept;
+
+			/**
+			 * @brief Whether this filter is inside a Hold.
+			 * @return true after @ref Hold and before @ref Release.
+			 */
+			bool Held() const noexcept;
+
+			/**
+			 * @brief Units currently parked in the Hold queue.
+			 * @return Count, or 0 if not Held.
+			 */
+			std::uint8_t HeldFor() const noexcept;
+
+			/**
+			 * @brief Plugin-visible end-of-input hook. Default no-op.
+			 */
+			virtual void Eof() noexcept;
+
+			/**
+			 * @brief Borrowed libav frame of the current unit, or nullptr.
+			 * @return ::AVFrame from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
+			 */
+			::AVFrame* AVFrame() noexcept;
+
+			/**
+			 * @brief Borrowed libav packet of the current unit, or nullptr.
+			 * @return ::AVPacket from FFmpeg @STORMBYTE_FFMPEG_VERSION@.
+			 */
+			::AVPacket* AVPacket() noexcept;
+
+			/**
+			 * @brief Replaces the backend of the current frame. Takes ownership of @p raw.
+			 * @param raw libav frame allocated by the plugin against
+			 *        FFmpeg @STORMBYTE_FFMPEG_VERSION@ (libavcodec major
+			 *        @STORMBYTE_LIBAVCODEC_MAJOR@).
+			 */
+			void Save(::AVFrame* raw) noexcept;
+
+			/**
+			 * @brief Replaces the backend of the current packet. Takes ownership of @p raw.
+			 * @param raw libav packet allocated by the plugin against
+			 *        FFmpeg @STORMBYTE_FFMPEG_VERSION@ (libavcodec major
+			 *        @STORMBYTE_LIBAVCODEC_MAJOR@).
+			 */
+			void Save(::AVPacket* raw) noexcept;
+
+		private:
+			/**
+			 * @brief Clean + Setup once before the first unit.
+			 */
+			void Open() noexcept override;
+
+			/**
+			 * @brief Process one unit. Save or passthrough. Park if Held.
+			 * @param item Never empty.
+			 */
+			void Work(std::shared_ptr<Pipeline::Item> item) noexcept override;
+
+			/**
+			 * @brief Hold plus EoF without Release is Fail. Then @ref Eof.
+			 */
+			void Finish() noexcept override;
+
+			/**
+			 * @brief Parks @ref m_current if it is not already the tail.
+			 *
+			 * Fails if the queue already holds the ceiling.
+			 */
+			void Park() noexcept;
+
+			std::string m_name;											///< Leaf name
+			std::shared_ptr<Pipeline::Item> m_current;					///< Unit of this Work call
+			std::deque<std::shared_ptr<Pipeline::Item>> m_queue;			///< Thread-local Hold
+			std::uint8_t m_hold;										///< Ceiling; 0 = not Held
+			std::uint8_t m_heldFor;										///< Parked count
+	};
+
+	/**
+	 * @class Process
+	 * @brief Mutates decoded frames.
+	 *
+	 * Accept mask is @ref StormByte::Multimedia::Pipeline::Kind::Frame.
+	 * The leaf implements @ref FFmpeg::Process(const Pipeline::Frame&).
+	 * Do not declare a method named Process on this class: that is a
+	 * constructor.
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
+		public:
+			/**
+			 * @brief Copy constructor.
+			 * @param other Source filter.
+			 */
+			Process(const Process& other) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Filter to take.
+			 */
+			Process(Process&& other) noexcept = delete;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Process() noexcept override = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param other Source filter.
+			 * @return *this.
+			 */
+			Process& operator=(const Process& other) = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Filter to take.
+			 * @return *this.
+			 */
+			Process& operator=(Process&& other) noexcept = delete;
+
+			/**
+			 * @brief Frame only.
+			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Frame.
+			 */
+			class Accepts Accepts() const noexcept override;
+
+		protected:
+			/**
+			 * @brief Named process node.
+			 * @param name Short leaf name (`resize`).
+			 */
 			explicit Process(std::string name) noexcept;
 	};
 
 	/**
-	* @class Packet
-	* @brief Mutates compressed packets on @ref Origin::Demux / @ref Origin::Mux.
-	*/
+	 * @class Packet
+	 * @brief Mutates compressed packets.
+	 *
+	 * Accept mask is @ref StormByte::Multimedia::Pipeline::Kind::Packet.
+	 * The leaf implements @ref FFmpeg::Process(const Pipeline::Packet&).
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
 			/**
-			* @brief Copy constructor (deleted).
-			*/
-			Packet(const Packet&) = delete;
+			 * @brief Copy constructor.
+			 * @param other Source filter.
+			 */
+			Packet(const Packet& other) = delete;
 
 			/**
-			* @brief Move constructor.
-			* @param other Filter to take.
-			*/
-			Packet(Packet&& other) noexcept = default;
+			 * @brief Move constructor.
+			 * @param other Filter to take.
+			 */
+			Packet(Packet&& other) noexcept = delete;
 
 			/**
-			* @brief Destructor.
-			*/
+			 * @brief Destructor.
+			 */
 			~Packet() noexcept override = default;
 
 			/**
-			* @brief Copy assignment (deleted).
-			* @return *this.
-			*/
-			Packet& operator=(const Packet&) = delete;
+			 * @brief Copy assignment.
+			 * @param other Source filter.
+			 * @return *this.
+			 */
+			Packet& operator=(const Packet& other) = delete;
 
 			/**
-			* @brief Move assignment.
-			* @param other Filter to take.
-			* @return *this.
-			*/
-			Packet& operator=(Packet&& other) noexcept = default;
+			 * @brief Move assignment.
+			 * @param other Filter to take.
+			 * @return *this.
+			 */
+			Packet& operator=(Packet&& other) noexcept = delete;
 
 			/**
-			* @brief Frames are ignored.
-			* @param frame Unused.
-			* @param origin Unused.
-			*/
-			void Call(Pipeline::Frame& frame, Origin origin) noexcept override;
-
-			/**
-			* @brief Demux / mux packets.
-			* @param packet Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			void Call(class Pipeline::Packet& packet, Origin origin) noexcept override;
-
-			/**
-			* @brief Packet leaves do not implement the frame body.
-			* @param frame Unused.
-			* @param origin Unused.
-			*/
-			void Process(Pipeline::Frame& frame, Origin origin) noexcept final;
+			 * @brief Packet only.
+			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Packet.
+			 */
+			class Accepts Accepts() const noexcept override;
 
 		protected:
 			/**
-			* @brief Named packet node.
-			* @param name Short leaf name.
-			*/
+			 * @brief Named packet node.
+			 * @param name Short leaf name.
+			 */
 			explicit Packet(std::string name) noexcept;
 	};
 
 	/**
-	* @class Analytics
-	* @brief Measures frames on @ref Origin::Decoder and @ref Origin::Encoder.
-	*/
+	 * @class Analytics
+	 * @brief Measures units. Last node of its Kind stretch. @ref Save is deleted.
+	 *
+	 * Route detects this type with @c dynamic_cast at wiring time.
+	 * There is no method named Analytics on this class: that would be
+	 * a constructor.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Analytics: public FFmpeg {
 		public:
 			/**
-			* @brief Copy constructor (deleted).
-			*/
-			Analytics(const Analytics&) = delete;
+			 * @brief Copy constructor.
+			 * @param other Source filter.
+			 */
+			Analytics(const Analytics& other) = delete;
 
 			/**
-			* @brief Move constructor.
-			* @param other Filter to take.
-			*/
-			Analytics(Analytics&& other) noexcept = default;
+			 * @brief Move constructor.
+			 * @param other Filter to take.
+			 */
+			Analytics(Analytics&& other) noexcept = delete;
 
 			/**
-			* @brief Destructor.
-			*/
+			 * @brief Destructor.
+			 */
 			~Analytics() noexcept override = default;
 
 			/**
-			* @brief Copy assignment (deleted).
-			* @return *this.
-			*/
-			Analytics& operator=(const Analytics&) = delete;
+			 * @brief Copy assignment.
+			 * @param other Source filter.
+			 * @return *this.
+			 */
+			Analytics& operator=(const Analytics& other) = delete;
 
 			/**
-			* @brief Move assignment.
-			* @param other Filter to take.
-			* @return *this.
-			*/
-			Analytics& operator=(Analytics&& other) noexcept = default;
+			 * @brief Move assignment.
+			 * @param other Filter to take.
+			 * @return *this.
+			 */
+			Analytics& operator=(Analytics&& other) noexcept = delete;
 
 			/**
-			* @brief Decoder / encoder frames.
-			* @param frame Unit in the pipe.
-			* @param origin Stage that is calling.
-			*/
-			void Call(Pipeline::Frame& frame, Origin origin) noexcept override;
-
-			/**
-			* @brief Packets are ignored.
-			* @param packet Unused.
-			* @param origin Unused.
-			*/
-			void Call(class Pipeline::Packet& packet, Origin origin) noexcept override;
+			 * @brief Frame by default. Override if the leaf measures packets.
+			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Frame.
+			 */
+			class Accepts Accepts() const noexcept override;
 
 		protected:
 			/**
-			* @brief Named analytics node.
-			* @param name Short leaf name (`vmaf`).
-			*/
+			 * @brief Named analytics node.
+			 * @param name Short leaf name.
+			 */
 			explicit Analytics(std::string name) noexcept;
+
+			/**
+			 * @brief Deleted. Analytics does not mutate the backend.
+			 * @param raw Unused.
+			 */
+			void Save(::AVFrame* raw) noexcept = delete;
+
+			/**
+			 * @brief Deleted. Analytics does not mutate the backend.
+			 * @param raw Unused.
+			 */
+			void Save(::AVPacket* raw) noexcept = delete;
 	};
 }

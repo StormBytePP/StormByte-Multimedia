@@ -43,6 +43,8 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <memory>
+
 /**
  * @namespace StormByte::Multimedia::Pipeline::Engine::Demux
  * @brief Private demux backends behind the public Demux type.
@@ -54,8 +56,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 	 * @class Engine
 	 * @brief Abstract demux backend. One instance per public Demux.
 	 *
-	 * The public Demux is the entry point. Open and Read live here.
-	 * Details::Container implements this. Per-media decode is Decoder::Details.
+	 * Errors go through @p owner.Fail. @ref Read returns an empty
+	 * pointer at EoF.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -67,19 +69,21 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			virtual ~Engine() noexcept = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Engine(const Engine&) = delete;
+			Engine(const Engine& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Engine& operator=(const Engine&) = delete;
+			Engine& operator=(const Engine& other) = delete;
 
 			/**
 			 * @brief Whether the format context is open.
-			 * @return true after a successful Open().
+			 * @return true after a successful open.
 			 */
 			virtual bool IsOpen() const noexcept = 0;
 
@@ -89,18 +93,19 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			 * @param file Probed snapshot.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool Open(class Demux& owner, const File& file) noexcept = 0;
+			virtual bool Open(class StormByte::Multimedia::Pipeline::Demux& owner,
+				const File& file) noexcept = 0;
 
 			/**
-			 * @brief Reads one compressed packet. TryAgain loops inside.
+			 * @brief Reads one compressed packet.
 			 * @param owner Public demuxer (Fail, Eof).
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled. false on EOF or Fail.
+			 * @return Packet with @ref Producer::Demux, or empty at EoF.
 			 */
-			virtual bool Read(class Demux& owner, class Packet& packet) noexcept = 0;
+			virtual std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Read(
+				class StormByte::Multimedia::Pipeline::Demux& owner) noexcept = 0;
 
 			/**
-			 * @brief Opened format context, if any. Used by demux >> decoder / copy.
+			 * @brief Opened format context, if any.
 			 * @return Context pointer, or nullptr.
 			 */
 			virtual void* Context() noexcept = 0;
@@ -115,13 +120,13 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Engine(Engine&&) noexcept = default;
+			Engine(Engine&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&&) noexcept = default;
+			Engine& operator=(Engine&& other) noexcept = default;
 	};
 }

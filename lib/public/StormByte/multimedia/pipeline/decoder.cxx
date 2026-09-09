@@ -38,29 +38,24 @@
 
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+
+#include <StormByte/multimedia/name_thread.hxx>
+
+#include <utility>
 
 using namespace StormByte::Multimedia::Pipeline;
-using StormByte::Multimedia::Pipeline::Filter::Origin;
 
-namespace {
-	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
-		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
-	}
+Decoder::Decoder(int track, DecoderFlags flags) noexcept
+: m_index(track), m_flags(flags) {
+	Launch();
 }
 
-Decoder::Decoder(int stream_index, DecoderFlags flags,
-	std::shared_ptr<Filter::Chain> pipe) noexcept
-: m_index(stream_index), m_flags(flags), m_pipe(std::move(pipe)), m_failed(false) {}
-
-Decoder::Decoder(int stream_index, DecoderFlags flags, Filter::Chain& pipe) noexcept
-: Decoder(stream_index, flags, Alias(pipe)) {}
-
-Decoder::Decoder(Decoder&&) noexcept = default;
 Decoder::~Decoder() noexcept = default;
-Decoder& Decoder::operator=(Decoder&&) noexcept = default;
 
 Decoder::operator bool() const noexcept {
-	return !m_failed && m_engine && m_engine->IsOpen();
+	return !Failed() && m_engine && m_engine->IsOpen();
 }
 
 int Decoder::Index() const noexcept {
@@ -120,78 +115,68 @@ const StormByte::Multimedia::Features& Decoder::Capabilities() const noexcept {
 	return m_capabilities;
 }
 
-std::shared_ptr<Filter::Chain>& Decoder::Pipe() noexcept {
-	return m_pipe;
-}
-
-const std::shared_ptr<Filter::Chain>& Decoder::Pipe() const noexcept {
-	return m_pipe;
-}
-
-void Decoder::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
-	m_pipe = std::move(pipe);
-}
-
-void Decoder::Pipe(Filter::Chain& pipe) noexcept {
-	m_pipe = Alias(pipe);
-}
-
-bool Decoder::Failed() const noexcept {
-	return m_failed;
-}
-
-const std::optional<std::string>& Decoder::Error() const noexcept {
-	return m_error;
-}
-
 void Decoder::Fail(std::string reason) noexcept {
-	m_failed = true;
-	m_error = std::move(reason);
 	m_capabilities = StormByte::Multimedia::Features{};
-	m_engine.reset();
+	// m_engine.reset();
+	Step::Fail(std::move(reason));
 }
 
 void Decoder::Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept {
 	m_engine = std::move(engine);
-	m_failed = false;
-	m_error.reset();
+	m_capabilities = StormByte::Multimedia::Features{};
 }
 
-void Decoder::Flush() noexcept {
-	if (m_failed || !m_engine)
+void Decoder::Open() noexcept {}
+
+void Decoder::Work(std::shared_ptr<Item> item) noexcept {
+	NameThread("STMM:Decode:" + std::to_string(m_index));
+	if (Failed())
+		return;
+	if (!m_engine) {
+		Fail("decoder is not open");
+		return;
+	}
+	auto packet = std::dynamic_pointer_cast<Packet>(item);
+	if (!packet) {
+		Fail("decoder expected a packet");
+		return;
+	}
+	if (packet->Track() != m_index)
+		return;
+
+	while (!m_engine->Send(*this, packet)) {
+		if (Failed())
+			return;
+		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		if (Failed())
+			return;
+		if (!frame) {
+			Wait();
+			continue;
+		}
+		m_out.Push(frame);
+	}
+
+	for (;;) {
+		if (Failed())
+			return;
+		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		if (!frame)
+			break;
+		m_out.Push(frame);
+	}
+}
+
+void Decoder::Finish() noexcept {
+	if (Failed() || !m_engine)
 		return;
 	m_engine->Flush(*this);
-	if (m_pipe) {
-		m_pipe->Eof(Origin::Decoder);
-		if (m_pipe->Failed())
-			Fail(m_pipe->ErrorStr());
+	for (;;) {
+		if (Failed())
+			return;
+		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		if (!frame)
+			return;
+		m_out.Push(frame);
 	}
-}
-
-Packet& StormByte::Multimedia::Pipeline::operator>>(Packet& packet, Decoder& decoder) noexcept {
-	if (decoder.m_failed || !decoder.m_engine)
-		return packet;
-	if (packet.StreamIndex() != decoder.m_index)
-		return packet;
-	decoder.m_engine->Send(decoder, packet);
-	return packet;
-}
-
-Decoder& StormByte::Multimedia::Pipeline::operator>>(Decoder& decoder, Frame& frame) noexcept {
-	if (decoder.m_failed || !decoder.m_engine)
-		return decoder;
-	if (!decoder.m_engine->Receive(decoder, frame))
-		return decoder;
-	if (decoder.m_failed)
-		return decoder;
-
-	if (decoder.m_pipe) {
-		decoder.m_pipe->Call(frame, Origin::Decoder);
-		if (decoder.m_pipe->Failed()) {
-			decoder.Fail(decoder.m_pipe->ErrorStr());
-			frame = Frame{};
-			return decoder;
-		}
-	}
-	return decoder;
 }

@@ -36,10 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/video.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/type.hxx>
+
+#include <cstdint>
+#include <cstdio>
+#include <memory>
+#include <utility>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -50,7 +56,8 @@ namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Open = StormByte::Multimedia::Pipeline::Engine::Encoder::Open;
 using StormByte::Multimedia::Type;
 
-StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Video() noexcept = default;
+StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Video() noexcept
+: m_timeBase{0, 1}, m_index(0), m_flushed(false), m_tsOffset(0), m_tsOffsetSet(false) {}
 
 bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::IsOpen() const noexcept {
 	return m_encoder.has_value();
@@ -64,7 +71,54 @@ AVRational StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Tim
 	return m_timeBase;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Open(class Encoder& owner, const class Frame& frame) noexcept {
+void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::StampOutgoing() noexcept {
+	std::int64_t pts = m_scratch.Pts();
+	std::int64_t dts = m_scratch.Dts();
+	std::int64_t dur = m_scratch.Duration();
+
+	if (!m_tsOffsetSet) {
+		std::int64_t lowest = INT64_MAX;
+		if (pts != AV_NOPTS_VALUE)
+			lowest = pts;
+		if (dts != AV_NOPTS_VALUE && dts < lowest)
+			lowest = dts;
+		m_tsOffset = (lowest != INT64_MAX && lowest < 0) ? -lowest : 0;
+		m_tsOffsetSet = true;
+		std::fprintf(stderr, "STMM-V offset=%lld\n", static_cast<long long>(m_tsOffset));
+		std::fflush(stderr);
+	}
+
+	if (pts != AV_NOPTS_VALUE)
+		pts += m_tsOffset;
+	if (dts != AV_NOPTS_VALUE)
+		dts += m_tsOffset;
+
+	if (dts == AV_NOPTS_VALUE)
+		dts = (pts != AV_NOPTS_VALUE) ? pts : 0;
+	if (pts == AV_NOPTS_VALUE)
+		pts = dts;
+	if (pts < dts)
+		pts = dts;
+	if (dur <= 0)
+		dur = 1;
+	m_scratch.Timestamps(pts, dts, dur);
+
+	static int n = 0;
+	if (n < 12) {
+		std::fprintf(stderr, "STMM-V stamped n=%d pts=%lld dts=%lld dur=%lld key=%d\n",
+			n,
+			static_cast<long long>(pts),
+			static_cast<long long>(dts),
+			static_cast<long long>(dur),
+			(m_scratch.Flags() & AV_PKT_FLAG_KEY) ? 1 : 0);
+		std::fflush(stderr);
+		++n;
+	}
+}
+
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Open(
+	class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
 	if (frame.Type() != Type::Video) {
@@ -81,46 +135,46 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Open(clas
 		owner.Implementation(opened->implementation);
 	owner.m_capabilities = opened->capabilities;
 	m_encoder = std::move(opened->encoder);
+	m_index = owner.Index();
 	return true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Push(class Encoder& owner, class Frame& frame) noexcept {
-	if (!m_encoder && !Open(owner, frame))
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Push(
+	class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept {
+	if (!frame) {
+		owner.Fail("empty frame");
+		return false;
+	}
+	if (!m_encoder && !Open(owner, *frame))
 		return false;
 	if (!m_encoder)
 		return false;
-	if (!frame.m_engine || !frame.m_engine->m_backend.Get()) {
+	if (!frame->m_engine || !frame->m_engine->m_backend.Get()) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
 
-	if (frame.Video() && frame.Video()->HDR10())
-		frame.m_engine->m_backend.WriteHdr10(*frame.Video()->HDR10());
-	frame.m_engine->m_backend.WriteSideData(frame.Attachments());
+	if (frame->Video() && frame->Video()->HDR10())
+		frame->m_engine->m_backend.WriteHdr10(*frame->Video()->HDR10());
+	frame->m_engine->m_backend.WriteSideData(frame->Attachments());
 
-	auto* raw = frame.m_engine->m_backend.Get();
-	if (frame.Pts())
-		raw->pts = Open::NsToTicks(frame.Pts()->Nanoseconds().count(), m_timeBase);
+	auto* raw = frame->m_engine->m_backend.Get();
+	if (frame->Pts())
+		raw->pts = Open::NsToTicks(frame->Pts()->Nanoseconds().count(), m_timeBase);
 	else
 		raw->pts = AV_NOPTS_VALUE;
-	if (frame.Duration()) {
-		raw->duration = Open::NsToTicks(frame.Duration()->Nanoseconds().count(), m_timeBase);
+	if (frame->Duration()) {
+		raw->duration = Open::NsToTicks(frame->Duration()->Nanoseconds().count(), m_timeBase);
 		if (raw->duration <= 0)
 			raw->duration = 1;
 	}
 	else
 		raw->duration = 1;
 
-	auto result = m_encoder->SendFrame(frame.m_engine->m_backend);
-	while (result == FFmpeg::OperationResult::TryAgain) {
-		if (!DrainOne(owner)) {
-			if (owner.Failed())
-				return false;
-			owner.Fail("encoder stalled");
-			return false;
-		}
-		result = m_encoder->SendFrame(frame.m_engine->m_backend);
-	}
+	const auto result = m_encoder->SendFrame(frame->m_engine->m_backend);
+	if (result == FFmpeg::OperationResult::TryAgain)
+		return false;
 	if (result == FFmpeg::OperationResult::Error) {
 		owner.Fail("failed to send frame");
 		return false;
@@ -128,7 +182,8 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Push(clas
 	return true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::DrainOne(class Encoder& owner) noexcept {
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::DrainOne(
+	class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder)
 		return false;
 	const auto result = m_encoder->ReceivePacket(m_scratch);
@@ -138,6 +193,7 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::DrainOne(
 		owner.Fail("failed to receive packet");
 		return false;
 	}
+	StampOutgoing();
 	const auto* ctx = m_encoder->Get();
 	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
 	m_pending.push_back(Open::MakePacket(Type::Video, owner.Index(), m_scratch, m_timeBase, keepPacketHdrPlus));
@@ -145,7 +201,8 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::DrainOne(
 	return true;
 }
 
-void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Flush(class Encoder& owner) noexcept {
+void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Flush(
+	class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder || m_flushed)
 		return;
 	for (;;) {
@@ -165,11 +222,21 @@ void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Flush(cla
 	m_flushed = true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::TakePacket(class Packet& packet) noexcept {
-	if (!m_pending.empty()) {
-		packet = std::move(m_pending.front());
-		m_pending.pop_front();
-		return true;
+std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>
+StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Take() noexcept {
+	if (m_pending.empty() && m_encoder) {
+		const auto result = m_encoder->ReceivePacket(m_scratch);
+		if (result == FFmpeg::OperationResult::Success) {
+			StampOutgoing();
+			const auto* ctx = m_encoder->Get();
+			const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
+			m_pending.push_back(Open::MakePacket(Type::Video, m_index, m_scratch, m_timeBase, keepPacketHdrPlus));
+			m_scratch.Unref();
+		}
 	}
-	return false;
+	if (m_pending.empty())
+		return {};
+	auto packet = std::move(m_pending.front());
+	m_pending.pop_front();
+	return packet;
 }

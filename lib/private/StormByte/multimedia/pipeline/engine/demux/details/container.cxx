@@ -37,9 +37,18 @@
  */
 
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
+#include <memory>
+#include <variant>
 
 extern "C" {
 	#include <libavcodec/packet.h>
@@ -50,6 +59,7 @@ extern "C" {
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Details = StormByte::Multimedia::Pipeline::Engine::Demux::Details;
+using StormByte::Multimedia::Pipeline::Producer;
 
 namespace {
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
@@ -69,6 +79,32 @@ namespace {
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
+
+	bool KnownByFile(const StormByte::Multimedia::File* file, int index) noexcept {
+		if (!file)
+			return false;
+		for (const auto& stream : file->Streams()) {
+			if (stream.Index() == index)
+				return true;
+		}
+		return false;
+	}
+}
+
+namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
+	enum StormByte::Multimedia::Type KindOf(FFmpeg::AVFormatContext& ctx, int index) noexcept {
+		for (const auto& stream : ctx.Streams()) {
+			if (stream.Index() != index)
+				continue;
+			const auto mapped = FFmpeg::MapProperties(stream);
+			if (std::holds_alternative<StormByte::Multimedia::Property::Video>(mapped))
+				return StormByte::Multimedia::Type::Video;
+			if (std::holds_alternative<StormByte::Multimedia::Property::Audio>(mapped))
+				return StormByte::Multimedia::Type::Audio;
+			return StormByte::Multimedia::Type::Subtitle;
+		}
+		return StormByte::Multimedia::Type::Unknown;
+	}
 }
 
 Details::Container::Container() noexcept = default;
@@ -77,12 +113,12 @@ bool Details::Container::IsOpen() const noexcept {
 	return m_ctx.has_value();
 }
 
-bool Details::Container::Open(class Demux& owner, const File&) noexcept {
+bool Details::Container::Open(class StormByte::Multimedia::Pipeline::Demux& owner, const File&) noexcept {
 	owner.Fail("use file >> demux");
 	return false;
 }
 
-bool Details::Container::Adopt(class Demux& owner, FFmpeg::AVFormatContext ctx) noexcept {
+bool Details::Container::Adopt(class StormByte::Multimedia::Pipeline::Demux& owner, FFmpeg::AVFormatContext ctx) noexcept {
 	m_ctx = std::move(ctx);
 	m_timeBase.clear();
 	if (!m_ctx) {
@@ -94,43 +130,35 @@ bool Details::Container::Adopt(class Demux& owner, FFmpeg::AVFormatContext ctx) 
 	return true;
 }
 
-bool Details::Container::Read(class Demux& owner, class Packet& packet) noexcept {
+std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Details::Container::Read(
+	class StormByte::Multimedia::Pipeline::Demux& owner) noexcept {
 	if (!m_ctx) {
 		owner.Fail("demuxer is not open");
-		return false;
+		return {};
 	}
+
 	for (;;) {
 		const auto result = m_ctx->ReadPacket(m_scratch);
 		if (result == FFmpeg::OperationResult::EndOfFile) {
 			owner.ReachedEof();
-			return false;
+			return {};
 		}
 		if (result == FFmpeg::OperationResult::TryAgain)
 			continue;
 		if (result != FFmpeg::OperationResult::Success) {
 			owner.Fail("failed to read packet");
-			return false;
+			return {};
 		}
 
 		const int index = m_scratch.StreamIndex();
+		if (!KnownByFile(owner.m_file, index)) {
+			m_scratch.Unref();
+			continue;
+		}
+
 		AVRational tb{0, 1};
 		if (const auto found = m_timeBase.find(index); found != m_timeBase.end())
 			tb = found->second;
-
-		StormByte::Multimedia::Type type = StormByte::Multimedia::Type::Unknown;
-		for (const auto& stream : m_ctx->Streams()) {
-			if (stream.Index() != index)
-				continue;
-			if ((stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0)
-				type = StormByte::Multimedia::Type::Attachment;
-			else switch (stream.Type()) {
-				case AVMEDIA_TYPE_VIDEO:	type = StormByte::Multimedia::Type::Video; break;
-				case AVMEDIA_TYPE_AUDIO:	type = StormByte::Multimedia::Type::Audio; break;
-				case AVMEDIA_TYPE_SUBTITLE:	type = StormByte::Multimedia::Type::Subtitle; break;
-				default:					type = StormByte::Multimedia::Type::Unknown; break;
-			}
-			break;
-		}
 
 		StormByte::Buffer::DataType bytes;
 		const auto* data = m_scratch.Data();
@@ -140,17 +168,18 @@ bool Details::Container::Read(class Demux& owner, class Packet& packet) noexcept
 			bytes.assign(raw, raw + size);
 		}
 
-		packet = StormByte::Multimedia::Pipeline::Packet{
-			type,
+		auto packet = std::make_shared<StormByte::Multimedia::Pipeline::Packet>(
 			index,
+			KindOf(*m_ctx, index),
+			Producer::Demux,
 			StormByte::Buffer::FIFO{std::move(bytes)},
 			TicksToPts(m_scratch.Pts(), tb),
 			TicksToPts(m_scratch.Dts(), tb),
 			TicksToDuration(m_scratch.Duration(), tb),
 			(m_scratch.Flags() & AV_PKT_FLAG_KEY) != 0
-		};
+		);
 		m_scratch.Unref();
-		return true;
+		return packet;
 	}
 }
 

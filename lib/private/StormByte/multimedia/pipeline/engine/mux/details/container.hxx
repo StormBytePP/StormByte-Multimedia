@@ -47,16 +47,14 @@
 #include <deque>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 
 extern "C" {
+	#include <libavcodec/codec_par.h>
 	#include <libavformat/avformat.h>
 	#include <libavutil/rational.h>
-}
-
-namespace StormByte::Multimedia::Pipeline {
-	class Copy;
 }
 
 /**
@@ -76,23 +74,28 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 		public:
 			/**
 			 * @class Track
-			 * @brief Reserved output slot: encoder remux or bitstream copy.
+			 * @brief Reserved output slot for an encoder or a remux copy.
 			 */
 			struct Track {
 				/**
-				 * @brief Live encoder. Null on a copy track.
+				 * @brief Live encoder. Null on a remux slot.
 				 */
 				StormByte::Multimedia::Pipeline::Encoder* encoder = nullptr;
 
 				/**
-				 * @brief Live copy handle. Null on an encoder track.
-				 */
-				const StormByte::Multimedia::Pipeline::Copy* copy = nullptr;
-
-				/**
-				 * @brief Demux stream index for a copy track. -1 on encode.
+				 * @brief Source stream index when this slot is remux. -1 if recode.
 				 */
 				int inIndex = -1;
+
+				/**
+				 * @brief Cloned source codecpar for remux. Owned.
+				 */
+				::AVCodecParameters* params = nullptr;
+
+				/**
+				 * @brief Source time base for remux.
+				 */
+				AVRational srcTb{0, 1};
 
 				/**
 				 * @brief Index in AVFormatContext after the header.
@@ -131,28 +134,30 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			~Container() noexcept override;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Container(const Container&) = delete;
+			Container(const Container& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Container& operator=(const Container&) = delete;
+			Container& operator=(const Container& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Container(Container&&) noexcept = default;
+			Container(Container&& other) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Container& operator=(Container&&) noexcept = default;
+			Container& operator=(Container&& other) noexcept = delete;
 
 			/**
 			 * @brief Whether a destination file is bound.
@@ -172,7 +177,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param path Output file.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool BindPath(class Mux& owner, const std::filesystem::path& path) noexcept override;
+			bool BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const std::filesystem::path& path) noexcept override;
 
 			/**
 			 * @brief Reserves an encode track.
@@ -180,15 +186,19 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param encoder Live encoder.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool ReserveEncoder(class Mux& owner, class Encoder& encoder) noexcept override;
+			bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept override;
 
 			/**
-			 * @brief Reserves a copy track.
+			 * @brief Reserves a remux track from an open demuxer.
 			 * @param owner Public muxer.
-			 * @param copy Bound copy handle.
+			 * @param demux Open demuxer.
+			 * @param in Source stream index.
+			 * @param out Destination order key.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool ReserveCopy(class Mux& owner, const class Copy& copy) noexcept override;
+			bool Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept override;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -196,21 +206,23 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param file Source file.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool BindAttachments(class Mux& owner, const File& file) noexcept override;
+			bool BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const File& file) noexcept override;
 
 			/**
 			 * @brief Queues or writes one packet.
 			 * @param owner Public muxer.
 			 * @param packet Encoded or copied packet.
-			 * @return false if owner.Fail() was called.
+			 * @return true if the packet was accepted.
 			 */
-			bool Push(class Mux& owner, class Packet& packet) noexcept override;
+			bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept override;
 
 			/**
-			 * @brief Flushes reserved encoders, leftover packets and the trailer.
+			 * @brief Writes leftover packets and the trailer.
 			 * @param owner Public muxer.
 			 */
-			void Flush(class Mux& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept override;
 
 			/**
 			 * @brief Writes trailer if needed and frees AVIO + context.
@@ -218,21 +230,19 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			void Close() noexcept override;
 
 		private:
-			::AVFormatContext* m_ctx = nullptr;								///< Output format context
-			std::filesystem::path m_path;									///< Destination path
-			std::map<int, Track> m_tracks;									///< Output index → track
-			std::map<int, int> m_inToOut;									///< Demux index → output index (copy)
-			std::deque<class Packet> m_queue;								///< Packets waiting for header
-			const StormByte::Multimedia::File* m_file = nullptr;			///< Source file (attachments)
-			bool m_header = false;											///< avformat_write_header done
-			bool m_trailer = false;											///< av_write_trailer done
+			/**
+			 * @brief Maps a packet track (source or dest) onto an output slot.
+			 * @param track Packet::Track().
+			 * @return Output key, or -1.
+			 */
+			int Resolve(int track) const noexcept;
 
 			/**
 			 * @brief Writes header when every reserved encoder is open.
 			 * @param owner Public muxer.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool WriteHeaderIfReady(class Mux& owner) noexcept;
+			bool WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept;
 
 			/**
 			 * @brief Writes one packet after the header.
@@ -240,6 +250,21 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param packet Source packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool WritePacket(class Mux& owner, class Packet& packet) noexcept;
+			bool WritePacket(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Packet& packet) noexcept;
+
+			/**
+			 * @brief Frees cloned remux codecpar.
+			 */
+			void FreeParams() noexcept;
+
+			::AVFormatContext* m_ctx;									///< Output format context
+			std::filesystem::path m_path;								///< Destination path
+			std::map<int, Track> m_tracks;								///< Output index → track
+			std::map<int, int> m_inToOut;								///< Source index → output index
+			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_queue;	///< Packets waiting for header
+			const StormByte::Multimedia::File* m_file;					///< Source file (attachments)
+			bool m_header;												///< avformat_write_header done
+			bool m_trailer;												///< av_write_trailer done
 	};
 }

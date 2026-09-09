@@ -38,9 +38,10 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/ocr/engine.hxx>
-#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <cctype>
 #include <cstdint>
@@ -49,6 +50,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -60,10 +62,12 @@ extern "C" {
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Open = StormByte::Multimedia::Pipeline::Engine::Encoder::Open;
+using StormByte::Multimedia::Type;
 
 namespace {
 	constexpr std::size_t DialogueFieldsBeforeText = 9;
 	constexpr std::size_t PackedAssFieldsBeforeText = 8;
+	constexpr std::int64_t FallbackCueNs = 2000000000; // 2 s if Flush with no hide packet
 
 	struct GrayBitmap {
 		int width = 0;
@@ -263,9 +267,30 @@ namespace {
 			: av_rescale_q(pts, AVRational{1, AV_TIME_BASE}, tb);
 		pkt.Timestamps(scaled, scaled, duration);
 	}
+
+	void DbgSub(const char* what, std::int64_t startNs, std::uint32_t durMs, const std::string& text) noexcept {
+		std::string one = text;
+		for (char& c : one) {
+			if (c == '\n' || c == '\r')
+				c = ' ';
+		}
+		if (one.size() > 80)
+			one.resize(80);
+		std::fprintf(stderr, "STMM-S %s start_ns=%lld dur_ms=%u ocr=\"%s\"\n",
+			what,
+			static_cast<long long>(startNs),
+			durMs,
+			one.c_str());
+		std::fflush(stderr);
+	}
 }
 
-StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Subtitle() noexcept = default;
+StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Subtitle() noexcept
+: m_timeBase{1, AV_TIME_BASE},
+m_index(0),
+m_flushed(false),
+m_heldStartNs(0),
+m_heldPts(AV_NOPTS_VALUE) {}
 
 bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::IsOpen() const noexcept {
 	return m_encoder.has_value();
@@ -279,7 +304,9 @@ AVRational StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::
 	return m_timeBase;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Open(class Encoder& owner, const class Frame& frame) noexcept {
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Open(
+	class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
 	if (frame.Type() != StormByte::Multimedia::Type::Subtitle) {
@@ -296,56 +323,27 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Open(c
 		owner.Implementation(opened->implementation);
 	owner.m_capabilities = opened->capabilities;
 	m_encoder = std::move(opened->encoder);
+	m_index = owner.Index();
 	return true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Push(class Encoder& owner, class Frame& frame) noexcept {
-	if (!m_encoder && !Open(owner, frame))
-		return false;
-	if (!m_encoder)
-		return false;
+void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::EmitHeld(
+	class StormByte::Multimedia::Pipeline::Encoder& owner,
+	std::int64_t endNs) noexcept {
+	if (m_heldText.empty() || m_heldPts == AV_NOPTS_VALUE)
+		return;
 
-	auto text = DialogueBody(ReadCue(frame));
-	if (text.empty()) {
-		auto bitmap = ReadOcrBitmap(frame);
-		if (!bitmap)
-			return true;
-		if (frame.Language())
-			m_ocr.Language(TessLanguage(*frame.Language()));
-		else
-			m_ocr.Language({});
-		auto recognized = m_ocr.Recognize(
-			std::span<const std::uint8_t>(bitmap->pixels.data(), bitmap->pixels.size()),
-			bitmap->width,
-			bitmap->height,
-			bitmap->stride);
-		if (!recognized.has_value()) {
-			owner.Fail(recognized.error()->what());
-			return false;
-		}
-		text = std::move(recognized.value());
-		if (text.empty())
-			return true;
-	}
+	std::int64_t durationNs = (endNs > m_heldStartNs) ? (endNs - m_heldStartNs) : 0;
+	if (durationNs <= 0)
+		durationNs = FallbackCueNs;
+	auto durationMs = static_cast<std::uint32_t>(durationNs / 1000000);
+	if (durationMs == 0)
+		durationMs = 1;
 
-	const auto impl = owner.Implementation() ? *owner.Implementation() : std::string{};
-	const std::int64_t startNs = frame.Pts() ? frame.Pts()->Nanoseconds().count() : 0;
-	std::int64_t durationNs = 0;
-	if (frame.Duration())
-		durationNs = frame.Duration()->Nanoseconds().count();
-	if (durationNs < 0)
-		durationNs = 0;
-	const std::int64_t endNs = startNs + durationNs;
-	const std::int64_t pts = frame.Pts()
-		? Open::NsToTicks(startNs, AVRational{1, AV_TIME_BASE})
-		: AV_NOPTS_VALUE;
-	std::uint32_t durationMs = 0;
-	if (durationNs > 0) {
-		const auto ms = durationNs / 1000000;
-		if (ms > 0)
-			durationMs = static_cast<std::uint32_t>(ms);
-	}
 	const AVRational tb = (m_timeBase.num > 0) ? m_timeBase : AVRational{1, AV_TIME_BASE};
+	const auto impl = owner.Implementation() ? *owner.Implementation() : std::string{};
+	std::string text = m_heldText;
+	DbgSub("emit", m_heldStartNs, durationMs, text);
 
 	if (PlainTextDest(impl)) {
 		text = NewlinesFromAss(StripAssTags(text));
@@ -354,41 +352,105 @@ bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Push(c
 				static_cast<int>(text.size()),
 				owner.Index(), true)) {
 			owner.Fail("failed to encode subtitle");
-			return false;
+			m_heldText.clear();
+			m_heldPts = AV_NOPTS_VALUE;
+			return;
 		}
-		StampSubtitlePacket(m_scratch, pts, durationMs, tb);
+		StampSubtitlePacket(m_scratch, m_heldPts, durationMs, tb);
 		m_pending.push_back(Open::MakePacket(Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
 		m_scratch.Unref();
-		return true;
+	}
+	else {
+		if (WantsAssRect(impl))
+			text = WrapAss(std::move(text), m_heldStartNs, m_heldStartNs + durationNs);
+		FFmpeg::AVSubtitle sub;
+		sub.FillText(std::move(text), m_heldPts, durationMs, WantsAssRect(impl));
+		if (!m_encoder || m_encoder->EncodeSubtitle(sub, m_scratch) != FFmpeg::OperationResult::Success) {
+			owner.Fail("failed to encode subtitle");
+			m_heldText.clear();
+			m_heldPts = AV_NOPTS_VALUE;
+			return;
+		}
+		m_pending.push_back(Open::MakePacket(Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
+		m_scratch.Unref();
 	}
 
-	if (WantsAssRect(impl))
-		text = WrapAss(std::move(text), startNs, endNs);
-	FFmpeg::AVSubtitle sub;
-	sub.FillText(std::move(text), pts, durationMs, WantsAssRect(impl));
-	const auto result = m_encoder->EncodeSubtitle(sub, m_scratch);
-	if (result != FFmpeg::OperationResult::Success) {
-		owner.Fail("failed to encode subtitle");
+	m_heldText.clear();
+	m_heldPts = AV_NOPTS_VALUE;
+}
+
+bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Push(
+	class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept {
+	if (!frame) {
+		owner.Fail("empty frame");
 		return false;
 	}
-	m_pending.push_back(Open::MakePacket(Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
-	m_scratch.Unref();
-	return true;
+	if (!m_encoder && !Open(owner, *frame))
+		return false;
+	if (!m_encoder)
+		return false;
+
+	auto text = DialogueBody(ReadCue(*frame));
+	if (text.empty()) {
+		auto bitmap = ReadOcrBitmap(*frame);
+		if (!bitmap)
+			return true;
+		if (frame->Language())
+			m_ocr.Language(TessLanguage(*frame->Language()));
+		else
+			m_ocr.Language({});
+		auto recognized = m_ocr.Recognize(
+			std::span<const std::uint8_t>(bitmap->pixels.data(), bitmap->pixels.size()),
+			bitmap->width,
+			bitmap->height,
+			bitmap->stride);
+		if (!recognized.has_value()) {
+			owner.Fail(recognized.error() ? recognized.error()->what() : "OCR failed");
+			return false;
+		}
+		text = std::move(recognized.value());
+		if (text.empty())
+			return true;
+	}
+
+	const std::int64_t startNs = frame->Pts() ? frame->Pts()->Nanoseconds().count() : 0;
+	std::int64_t durationNs = 0;
+	if (frame->Duration())
+		durationNs = frame->Duration()->Nanoseconds().count();
+	if (durationNs < 0)
+		durationNs = 0;
+	const std::int64_t pts = frame->Pts()
+		? Open::NsToTicks(startNs, AVRational{1, AV_TIME_BASE})
+		: AV_NOPTS_VALUE;
+
+	DbgSub("in", startNs, static_cast<std::uint32_t>(durationNs / 1000000), text);
+
+	if (!m_heldText.empty())
+		EmitHeld(owner, startNs);
+	if (owner.Failed())
+		return false;
+
+	m_heldText = std::move(text);
+	m_heldStartNs = startNs;
+	m_heldPts = pts;
+	if (durationNs > 0)
+		EmitHeld(owner, startNs + durationNs);
+	return !owner.Failed();
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::DrainOne(class Encoder&) noexcept {
-	return false;
-}
-
-void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Flush(class Encoder&) noexcept {
+void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Flush(
+	class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
+	if (!m_heldText.empty())
+		EmitHeld(owner, m_heldStartNs + FallbackCueNs);
 	m_flushed = true;
 }
 
-bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::TakePacket(class Packet& packet) noexcept {
-	if (!m_pending.empty()) {
-		packet = std::move(m_pending.front());
-		m_pending.pop_front();
-		return true;
-	}
-	return false;
+std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>
+StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Subtitle::Take() noexcept {
+	if (m_pending.empty())
+		return {};
+	auto packet = std::move(m_pending.front());
+	m_pending.pop_front();
+	return packet;
 }

@@ -42,9 +42,12 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 
+#include <memory>
 #include <optional>
 
 extern "C" {
@@ -82,28 +85,30 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder::Details {
 			~Audio() noexcept override = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Audio(const Audio&) = delete;
+			Audio(const Audio& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Audio& operator=(const Audio&) = delete;
+			Audio& operator=(const Audio& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Audio(Audio&&) noexcept = default;
+			Audio(Audio&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Audio& operator=(Audio&&) noexcept = default;
+			Audio& operator=(Audio&& other) noexcept = default;
 
 			/**
 			 * @brief Whether the FFmpeg decoder is open.
@@ -115,31 +120,30 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder::Details {
 			 * @brief Sends one audio packet.
 			 * @param owner Public decoder.
 			 * @param packet Compressed packet.
-			 * @return false if owner.Fail() was called.
+			 * @return true if libav accepted it.
 			 */
-			bool Send(class Decoder& owner, class Packet& packet) noexcept override;
+			bool Send(class StormByte::Multimedia::Pipeline::Decoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept override;
 
 			/**
 			 * @brief Receives one audio frame.
 			 * @param owner Public decoder.
-			 * @param frame Replaced on success.
-			 * @return true if @p frame was filled.
+			 * @return Frame with @ref Producer::Decoder, or empty if none ready.
 			 */
-			bool Receive(class Decoder& owner, class Frame& frame) noexcept override;
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Frame> Receive(
+				class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
 
 			/**
 			 * @brief Signals EOF and keeps delayed frames available to Receive.
 			 * @param owner Public decoder.
 			 */
-			void Flush(class Decoder& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
 
 		private:
 			StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;					///< Opened decoder
 			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;						///< Receive scratch
-			std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;			///< Last packet PTS
-			std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;		///< Last packet duration
 			std::optional<StormByte::Multimedia::Property::Audio> m_audio;					///< Stream audio properties
-			AVRational m_timeBase{0, 1};													///< Stream time base
-			bool m_flushed = false;															///< EOF already signalled
+			AVRational m_timeBase;															///< Stream time base
+			bool m_flushed;																	///< EOF already signalled
 	};
 }

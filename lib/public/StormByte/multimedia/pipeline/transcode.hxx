@@ -44,7 +44,7 @@
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/filters/chain.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -62,6 +62,8 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
@@ -69,11 +71,15 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @namespace Engine
 	 * @brief Private backends behind the public pipeline types.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	namespace Engine {
 		/**
 		 * @namespace Transcode
-		 * @brief Job runtime (queues, worker, mapped tracks).
+		 * @brief Job map and lifecycle flags. No BoundQueue workers.
+		 *
+		 * @ingroup multimedia_pipeline
 		 */
 		namespace Transcode {
 			class Engine;
@@ -86,8 +92,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	enum class Status {
 		Stopped,	///< Open succeeded; Run has not started, or OnStart declined
-		Running,	///< Workers are alive and not paused
-		Paused,		///< Pause(); workers block until Resume or Cancel
+		Running,	///< Coordinator is alive and not paused
+		Paused,		///< Pause(); coordinator blocks until Resume or Cancel
 		Done,		///< Finished and flushed
 		Error,		///< A stage failed; Error() has text
 		Aborted		///< Cancel() while Running/Paused, or OnStart returned Aborted
@@ -105,31 +111,36 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC TrackPlan:
 		public StormByte::Clonable<TrackPlan, std::unique_ptr<TrackPlan>> {
 		public:
-			int in = -1;											///< Source stream index
-			int out = -1;											///< Destination track index
-			Type kind = Type::Video;								///< Video / audio / subtitle
-			bool copy = true;										///< Bitstream copy
-			const Codec* source = nullptr;							///< Source codec
-			const Codec* destination = nullptr;						///< Destination codec, or nullptr if copy
-			std::optional<std::string> implementation;				///< Pin (libx265, …)
-			std::optional<std::string> language;					///< Language tag
-			std::optional<std::string> title;						///< Track title
-			std::optional<int> crf;									///< CRF/CQ
-			std::optional<std::int64_t> bitRate;					///< Target bitrate
-			std::optional<std::int64_t> maxBitRate;					///< VBV ceiling
-			std::optional<std::string> preset;						///< Preset
-			std::optional<std::string> tune;						///< Tune
-			std::map<std::string, std::string> fineTune;			///< Vendor leftovers
-			std::optional<int> sampleFormat;						///< Encoder AVSampleFormat
-			std::optional<int> sourceChannels;						///< Decoded channel count
-			std::optional<int> encoderChannels;						///< Encoder channel count
-			std::optional<int> frameSize;							///< Encoder frame_size
-			std::optional<int> sampleRate;							///< Samples per second
+			int in;														///< Source stream index
+			int out;													///< Destination order key
+			Type kind;													///< Video / audio / subtitle
+			bool copy;													///< Bitstream copy
+			const Codec* source;										///< Source codec
+			const Codec* destination;									///< Destination codec, or nullptr if copy
+			std::optional<std::string> implementation;					///< Pin (libx265, …)
+			std::optional<std::string> language;						///< Language tag
+			std::optional<std::string> title;							///< Track title
+			std::optional<int> crf;										///< CRF/CQ
+			std::optional<std::int64_t> bitRate;						///< Target bitrate
+			std::optional<std::int64_t> maxBitRate;						///< VBV ceiling
+			std::optional<std::string> preset;							///< Preset
+			std::optional<std::string> tune;							///< Tune
+			std::map<std::string, std::string> fineTune;				///< Vendor leftovers
+			std::optional<int> sampleFormat;							///< Encoder AVSampleFormat
+			std::optional<int> sourceChannels;							///< Decoded channel count
+			std::optional<int> encoderChannels;							///< Encoder channel count
+			std::optional<int> frameSize;								///< Encoder frame_size
+			std::optional<int> sampleRate;								///< Samples per second
+
+			/**
+			 * @name Lifecycle
+			 * @{
+			 */
 
 			/**
 			 * @brief Default constructor.
 			 */
-			TrackPlan() noexcept = default;
+			TrackPlan() noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -142,6 +153,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param other Source row.
 			 */
 			TrackPlan(TrackPlan&& other) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~TrackPlan() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment.
@@ -158,9 +174,8 @@ namespace StormByte::Multimedia::Pipeline {
 			TrackPlan& operator=(TrackPlan&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * @}
 			 */
-			~TrackPlan() noexcept override = default;
 
 			/**
 			 * @brief Deep copy into a unique_ptr.
@@ -190,20 +205,21 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Plan:
 		public StormByte::Clonable<Plan, std::unique_ptr<Plan>> {
 		public:
-			const File* source = nullptr;							///< Opened source
-			const Container* container = nullptr;					///< Destination container
-			std::filesystem::path destination;						///< Output path
-			std::vector<std::unique_ptr<TrackPlan>> tracks;			///< Mapped tracks, out order
-			std::vector<int> ignored;								///< Source indexes dropped
-			std::size_t videoPacketCeiling = 0;						///< Decode packet queue
-			std::size_t muxPacketCeiling = 0;						///< Recode mux queue
-			std::size_t copyPacketCeiling = 0;						///< Copy mux queue
-			std::size_t videoFrameCeiling = 0;						///< Decoded video frames
+			const File* source;											///< Opened source
+			const Container* container;									///< Destination container
+			std::filesystem::path destination;							///< Output path
+			std::vector<std::unique_ptr<TrackPlan>> tracks;				///< Mapped tracks, out order
+			std::vector<int> ignored;									///< Source indexes dropped
+
+			/**
+			 * @name Lifecycle
+			 * @{
+			 */
 
 			/**
 			 * @brief Default constructor.
 			 */
-			Plan() noexcept = default;
+			Plan() noexcept;
 
 			/**
 			 * @brief Copy constructor. Deep-copies tracks.
@@ -216,6 +232,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param other Source plan.
 			 */
 			Plan(Plan&& other) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Plan() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment. Deep-copies tracks.
@@ -232,9 +253,8 @@ namespace StormByte::Multimedia::Pipeline {
 			Plan& operator=(Plan&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * @}
 			 */
-			~Plan() noexcept override = default;
 
 			/**
 			 * @brief Deep copy into a unique_ptr.
@@ -257,11 +277,12 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Transcode
-	 * @brief High-level job: map tracks, run demux/decode/encode/mux on workers.
+	 * @brief High-level job: map tracks, wire Demux / Route / Encoder / Mux.
 	 *
-	 * Owns one @ref Filter::Chain. @ref Filter appends nodes before
-	 * @ref Run. The worker passes that same list to Demux, Decoder,
-	 * Encoder and Mux.
+	 * @ref Run starts a coordinator thread and returns at once. Each
+	 * @ref Step uses @ref Step::Work. Filters attach with
+	 * @ref Filter by source track index. Copy tracks use @ref Route
+	 * (copy=true) and @ref Mux::Remux (V1).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -270,10 +291,16 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @class Track
 			 * @brief Fluent configuration for one mapped source track.
+			 *
 			 * @ingroup multimedia_pipeline
 			 */
 			class STORMBYTE_MULTIMEDIA_PUBLIC Track {
 				public:
+					/**
+					 * @name Lifecycle
+					 * @{
+					 */
+
 					/**
 					 * @brief Copy constructor.
 					 * @param other Source handle.
@@ -304,6 +331,10 @@ namespace StormByte::Multimedia::Pipeline {
 					 * @return *this.
 					 */
 					Track& operator=(Track&& other) noexcept = default;
+
+					/**
+					 * @}
+					 */
 
 					/**
 					 * @brief Marks the track as bitstream copy.
@@ -391,14 +422,20 @@ namespace StormByte::Multimedia::Pipeline {
 					 */
 					Track(Transcode& owner, std::size_t slot) noexcept;
 
-					Transcode* m_owner;								///< Parent job
-					std::size_t m_slot;								///< Slot index
+					Transcode* m_owner;									///< Parent job
+					std::size_t m_slot;									///< Slot index
 			};
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @name Lifecycle
+			 * @{
 			 */
-			Transcode(const Transcode&) = delete;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param other Source job.
+			 */
+			Transcode(const Transcode& other) = delete;
 
 			/**
 			 * @brief Move constructor.
@@ -412,10 +449,11 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual ~Transcode() noexcept;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source job.
 			 * @return *this.
 			 */
-			Transcode& operator=(const Transcode&) = delete;
+			Transcode& operator=(const Transcode& other) = delete;
 
 			/**
 			 * @brief Move assignment.
@@ -423,6 +461,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return *this.
 			 */
 			Transcode& operator=(Transcode&& other) noexcept;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Opens a path.
@@ -506,6 +548,23 @@ namespace StormByte::Multimedia::Pipeline {
 			Transcode& Ignore(int in) noexcept;
 
 			/**
+			 * @brief Appends a filter to the mapped source track @p in.
+			 * @tparam FilterType Child of Process, Analytics or Packet.
+			 * @param in Source stream index already passed to Video/Audio/Subtitle.
+			 * @param args Constructor arguments, forwarded.
+			 * @return *this.
+			 *
+			 * Call before @ref Run. Frame filters on a copy track are
+			 * ignored by @ref Route.
+			 */
+			template<typename FilterType, typename... Args>
+			Transcode& Filter(int in, Args&&... args) noexcept {
+				AttachFilterByTrack(in,
+					std::make_shared<FilterType>(std::forward<Args>(args)...));
+				return *this;
+			}
+
+			/**
 			 * @brief Sets destination container and path.
 			 * @param container Writable container.
 			 * @param path Output path.
@@ -515,35 +574,22 @@ namespace StormByte::Multimedia::Pipeline {
 				std::filesystem::path path) noexcept;
 
 			/**
-			 * @brief Appends a filter to the job chain. Call before @ref Run.
-			 * @tparam FilterType Child of Process, Analytics or Packet.
-			 * @param args Constructor arguments, forwarded.
-			 * @return *this.
-			 */
-			template<typename FilterType, typename... Args>
-			Transcode& Filter(Args&&... args) noexcept {
-				if (m_pipe)
-					m_pipe->Add<FilterType>(std::forward<Args>(args)...);
-				return *this;
-			}
-
-			/**
-			 * @brief Starts workers. Returns immediately.
+			 * @brief Starts the coordinator. Returns immediately.
 			 */
 			void Run() noexcept;
 
 			/**
-			 * @brief Requests abort. Status becomes Aborted after joins.
+			 * @brief Requests abort. Status becomes Aborted after join.
 			 */
 			void Cancel() noexcept;
 
 			/**
-			 * @brief Pauses workers if Running.
+			 * @brief Pauses the coordinator if Running.
 			 */
 			void Pause() noexcept;
 
 			/**
-			 * @brief Resumes workers if Paused.
+			 * @brief Resumes the coordinator if Paused.
 			 */
 			void Resume() noexcept;
 
@@ -579,7 +625,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Current snapshot (requested map, plus settled fields when known).
-			 * @return Plan owned by the caller. Default builds a Plan via MakePlan().
+			 * @return Plan owned by the caller.
 			 */
 			virtual std::unique_ptr<Plan> Configuration() const noexcept;
 
@@ -604,7 +650,7 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual std::unique_ptr<TrackPlan> MakeTrackPlan() const noexcept;
 
 			/**
-			 * @brief Last chance to raise queue ceilings before workers start.
+			 * @brief Last chance to raise ceilings before steps start.
 			 */
 			virtual void OnConfigure() noexcept;
 
@@ -615,13 +661,13 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual enum Status OnStart() noexcept;
 
 			/**
-			 * @brief Requested map, just before workers start.
+			 * @brief Requested map, just before steps start.
 			 * @param plan Snapshot from Configuration().
 			 */
 			virtual void OnPlan(const Plan& plan) noexcept;
 
 			/**
-			 * @brief One recode track finished Encoder::Open.
+			 * @brief One recode track finished Encoder open.
 			 * @param track Settled row.
 			 */
 			virtual void OnSettled(const TrackPlan& track) noexcept;
@@ -648,22 +694,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			virtual void OnAborted() noexcept;
 
-			std::size_t m_videoPacketCeiling = 16;					///< Video recode packet queue
-			std::size_t m_packetCeiling = 32;						///< Audio/subtitle recode packet queue
-			std::size_t m_muxPacketCeiling = 64;					///< Recode mux queue
-			std::size_t m_copyPacketCeiling = 8192;					///< Copy mux queue
-			std::size_t m_videoFrameCeiling = 8;					///< Decoded video frames
-
 		private:
 			friend class Engine::Transcode::Engine;
+			friend class Track;
 
-			std::shared_ptr<StormByte::Logger::Log> m_logger;		///< Required logger
-			std::unique_ptr<File> m_file;							///< Opened source
-			std::unique_ptr<Engine::Transcode::Engine> m_engine;	///< Queues and worker
-			std::shared_ptr<Filter::Chain> m_pipe;					///< Job filter list
+			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Required logger
+			std::unique_ptr<File> m_file;								///< Opened source
+			std::unique_ptr<Engine::Transcode::Engine> m_engine;		///< Map and coordinator thread
 
 			/**
-			 * @brief Marks a hard error and cancels workers.
+			 * @brief Marks a hard error and cancels the coordinator.
 			 * @param reason Message stored in Error().
 			 */
 			void Fail(std::string reason) noexcept;
@@ -687,12 +727,12 @@ namespace StormByte::Multimedia::Pipeline {
 			Track AddTrack(int in, int out, Type kind) noexcept;
 
 			/**
-			 * @brief Worker thread body. Forwards to Engine::Run.
+			 * @brief Coordinator thread body. Wires steps and waits.
 			 */
 			void Worker() noexcept;
 
 			/**
-			 * @brief Records encoder Open() into the matching slot and fires OnSettled.
+			 * @brief Records encoder open into the matching slot and fires OnSettled.
 			 * @param in Source stream index of the lane.
 			 * @param encoder Encoder that just opened.
 			 */
@@ -710,5 +750,22 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return true if usable.
 			 */
 			bool ValidSlot(std::size_t slot) const noexcept;
+
+			/**
+			 * @brief Appends a filter to mapped[@p slot]. Defined in the cxx
+			 *        because Engine is incomplete here.
+			 * @param slot Index into Engine::mapped.
+			 * @param filter Owned filter node.
+			 */
+			void AttachFilter(std::size_t slot,
+				std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+
+			/**
+			 * @brief Appends a filter to the slot whose source index is @p in.
+			 * @param in Source stream index.
+			 * @param filter Owned filter node.
+			 */
+			void AttachFilterByTrack(int in,
+				std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 	};
 }

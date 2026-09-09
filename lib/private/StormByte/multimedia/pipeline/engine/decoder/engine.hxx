@@ -43,6 +43,8 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <memory>
+
 /**
  * @namespace StormByte::Multimedia::Pipeline::Engine::Decoder
  * @brief Private decode backends selected by stream type.
@@ -54,8 +56,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder {
 	 * @class Engine
 	 * @brief Abstract decode backend. One instance per public Decoder.
 	 *
-	 * The public Decoder is the entry point. Open, Send, Receive and Flush live here.
-	 * Details::Video / Details::Audio / Details::Subtitle implement this.
+	 * Send / Receive use shared_ptr. Errors are owner.Fail.
+	 * Receive empty means no frame ready (or drain finished after Flush).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -67,43 +69,46 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder {
 			virtual ~Engine() noexcept = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Engine(const Engine&) = delete;
+			Engine(const Engine& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Engine& operator=(const Engine&) = delete;
+			Engine& operator=(const Engine& other) = delete;
 
 			/**
 			 * @brief Whether the FFmpeg decoder is open.
-			 * @return true after a successful Open().
+			 * @return true after a successful open.
 			 */
 			virtual bool IsOpen() const noexcept = 0;
 
 			/**
-			 * @brief Sends one compressed packet. Ignores other stream indexes.
-			 * @param owner Public decoder (Fail, Index, tags).
-			 * @param packet Compressed packet.
-			 * @return false if owner.Fail() was called.
+			 * @brief Sends one compressed packet.
+			 * @param owner Public decoder.
+			 * @param packet Compressed packet. Not empty.
+			 * @return true if libav accepted it. false if the codec is full.
 			 */
-			virtual bool Send(class Decoder& owner, class Packet& packet) noexcept = 0;
+			virtual bool Send(class StormByte::Multimedia::Pipeline::Decoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept = 0;
 
 			/**
-			 * @brief Receives one decoded frame. No-op on TryAgain.
+			 * @brief Receives one decoded frame.
 			 * @param owner Public decoder.
-			 * @param frame Replaced on success.
-			 * @return true if @p frame was filled.
+			 * @return Frame with @ref Producer::Decoder, or empty if none ready.
 			 */
-			virtual bool Receive(class Decoder& owner, class Frame& frame) noexcept = 0;
+			virtual std::shared_ptr<StormByte::Multimedia::Pipeline::Frame> Receive(
+				class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept = 0;
 
 			/**
 			 * @brief Signals EOF to libavcodec. Drain with Receive afterwards.
 			 * @param owner Public decoder.
 			 */
-			virtual void Flush(class Decoder& owner) noexcept = 0;
+			virtual void Flush(class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept = 0;
 
 		protected:
 			/**
@@ -115,13 +120,13 @@ namespace StormByte::Multimedia::Pipeline::Engine::Decoder {
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Engine(Engine&&) noexcept = default;
+			Engine(Engine&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&&) noexcept = default;
+			Engine& operator=(Engine&& other) noexcept = default;
 	};
 }

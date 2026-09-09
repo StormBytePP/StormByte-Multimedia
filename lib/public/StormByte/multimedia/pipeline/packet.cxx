@@ -36,42 +36,58 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+
+#include <utility>
 
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Multimedia::Type;
 
 Packet::Packet() noexcept
-: m_type(StormByte::Multimedia::Type::Unknown), m_streamIndex(-1), m_keyFrame(false) {}
+: Item(-1, Type::Unknown, Kind::Packet, Producer::Demux), m_keyFrame(false) {}
 
-Packet::Packet(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
+Packet::Packet(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> dts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	bool key_frame,
 	std::vector<SideData> attachments) noexcept
-: m_type(type), m_streamIndex(stream_index), m_payload(std::move(payload)),
-m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
-m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
+: Item(track, type, Kind::Packet, producer),
+	m_payload(std::move(payload)),
+	m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
+	m_keyFrame(key_frame), m_attachments(std::move(attachments)) {}
 
 Packet::Packet(const Packet& other) noexcept
-: m_type(other.m_type),
-m_streamIndex(other.m_streamIndex),
-m_payload(other.m_payload),
-m_pts(other.m_pts),
-m_dts(other.m_dts),
-m_duration(other.m_duration),
-m_keyFrame(other.m_keyFrame),
-m_attachments(other.m_attachments) {
+: Item(other),
+	m_payload(other.m_payload),
+	m_pts(other.m_pts),
+	m_dts(other.m_dts),
+	m_duration(other.m_duration),
+	m_keyFrame(other.m_keyFrame),
+	m_attachments(other.m_attachments) {
 	if (other.m_engine)
 		m_engine = std::make_unique<Engine::Packet::Engine>(*other.m_engine);
 }
 
+Packet::Packet(Packet&& other) noexcept
+: Item(std::move(other)),
+	m_payload(std::move(other.m_payload)),
+	m_pts(std::move(other.m_pts)),
+	m_dts(std::move(other.m_dts)),
+	m_duration(std::move(other.m_duration)),
+	m_keyFrame(other.m_keyFrame),
+	m_attachments(std::move(other.m_attachments)),
+	m_engine(std::move(other.m_engine)) {
+	other.BecomeEmpty();
+}
+
+Packet::~Packet() noexcept = default;
+
 Packet& Packet::operator=(const Packet& other) noexcept {
 	if (this == &other)
 		return *this;
-	m_type = other.m_type;
-	m_streamIndex = other.m_streamIndex;
+	Item::operator=(other);
 	m_payload = other.m_payload;
 	m_pts = other.m_pts;
 	m_dts = other.m_dts;
@@ -85,16 +101,31 @@ Packet& Packet::operator=(const Packet& other) noexcept {
 	return *this;
 }
 
-Packet::Packet(Packet&&) noexcept = default;
-Packet::~Packet() noexcept = default;
-Packet& Packet::operator=(Packet&&) noexcept = default;
-
-enum StormByte::Multimedia::Type Packet::Type() const noexcept {
-	return m_type;
+Packet& Packet::operator=(Packet&& other) noexcept {
+	if (this == &other)
+		return *this;
+	Item::operator=(std::move(other));
+	m_payload = std::move(other.m_payload);
+	m_pts = std::move(other.m_pts);
+	m_dts = std::move(other.m_dts);
+	m_duration = std::move(other.m_duration);
+	m_keyFrame = other.m_keyFrame;
+	m_attachments = std::move(other.m_attachments);
+	m_engine = std::move(other.m_engine);
+	other.BecomeEmpty();
+	return *this;
 }
 
-int Packet::StreamIndex() const noexcept {
-	return m_streamIndex;
+void Packet::BecomeEmpty() noexcept {
+	Item::operator=(Item(-1, Type::Unknown, Kind::Packet, Producer::Demux));
+	m_payload = StormByte::Buffer::FIFO{};
+	m_pts.reset();
+	m_dts.reset();
+	m_duration.reset();
+	m_keyFrame = false;
+	m_attachments.clear();
+	m_attachments.shrink_to_fit();
+	m_engine.reset();
 }
 
 const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Pts() const noexcept {

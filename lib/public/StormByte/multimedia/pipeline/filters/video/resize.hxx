@@ -52,7 +52,7 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Resize
-	 * @brief Scales a decoded video frame on @ref Origin::Decoder.
+	 * @brief Scales a decoded video frame.
 	 *
 	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
 	 * on the first video frame. Destination is applied with swscale
@@ -63,7 +63,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Filter::Process {
 		public:
 			/**
-			 * @name Lifetime
+			 * @name Lifecycle
 			 * @{
 			 */
 
@@ -81,15 +81,16 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			Resize(std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source filter.
 			 */
-			Resize(const Resize&) = delete;
+			Resize(const Resize& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Filter to take.
 			 */
-			Resize(Resize&& other) noexcept = default;
+			Resize(Resize&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
@@ -97,19 +98,22 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			~Resize() noexcept override = default;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source filter.
 			 * @return *this.
 			 */
-			Resize& operator=(const Resize&) = delete;
+			Resize& operator=(const Resize& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Filter to take.
 			 * @return *this.
 			 */
-			Resize& operator=(Resize&& other) noexcept = default;
+			Resize& operator=(Resize&& other) noexcept = delete;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @name Identity
@@ -120,9 +124,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @brief Media this filter handles.
 			 * @return Video.
 			 */
-			enum Type Media() const noexcept override;
+			enum StormByte::Multimedia::Type Media() const noexcept override;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 		protected:
 			/**
@@ -141,13 +147,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Scales @p frame in place.
+			 * @brief Scales the current video unit and @ref FFmpeg::Save.
 			 * @param frame Video frame with a backend buffer.
-			 * @param origin Stage that is calling.
 			 */
-			void Process(Pipeline::Frame& frame, Origin origin) noexcept override;
+			void Process(const Pipeline::Frame& frame) noexcept override;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 		private:
 			std::uint32_t m_width;		///< Requested width, 0 = auto

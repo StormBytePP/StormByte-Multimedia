@@ -42,9 +42,12 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <cstdint>
 #include <deque>
+#include <memory>
 #include <optional>
 
 extern "C" {
@@ -67,6 +70,11 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 	class STORMBYTE_MULTIMEDIA_PRIVATE Video final: public Encoder::Engine {
 		public:
 			/**
+			 * @name Lifecycle
+			 * @{
+			 */
+
+			/**
 			 * @brief Default constructor.
 			 */
 			Video() noexcept;
@@ -77,28 +85,34 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			~Video() noexcept override = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Video(const Video&) = delete;
+			Video(const Video& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Video& operator=(const Video&) = delete;
+			Video& operator=(const Video& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Video(Video&&) noexcept = default;
+			Video(Video&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Video& operator=(Video&&) noexcept = default;
+			Video& operator=(Video&& other) noexcept = default;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Whether the FFmpeg encoder is open.
@@ -112,35 +126,29 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param frame First video frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Open(class Encoder& owner, const class Frame& frame) noexcept override;
+			bool Open(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept override;
 
 			/**
 			 * @brief Encodes one video frame. Opens lazily on first call.
 			 * @param owner Public encoder.
 			 * @param frame Decoded video frame.
-			 * @return false if owner.Fail() was called.
+			 * @return true if libav accepted it.
 			 */
-			bool Push(class Encoder& owner, class Frame& frame) noexcept override;
-
-			/**
-			 * @brief Receives one backend packet into the pending queue.
-			 * @param owner Public encoder.
-			 * @return true if a packet was queued.
-			 */
-			bool DrainOne(class Encoder& owner) noexcept override;
+			bool Push(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept override;
 
 			/**
 			 * @brief Signals EOF and drains. No-op if already flushed.
 			 * @param owner Public encoder.
 			 */
-			void Flush(class Encoder& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept override;
 
 			/**
-			 * @brief Pops one pending packet.
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled.
+			 * @brief Receives one packet from libav if needed, then pops the queue.
+			 * @return Packet with @ref Producer::Encoder, or empty if none ready.
 			 */
-			bool TakePacket(class Packet& packet) noexcept override;
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Take() noexcept override;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.
@@ -155,10 +163,25 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			AVRational TimeBase() const noexcept override;
 
 		private:
+			/**
+			 * @brief Receives one backend packet into @ref m_pending.
+			 * @param owner Public encoder.
+			 * @return true if a packet was queued.
+			 */
+			bool DrainOne(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept;
+
+			/**
+			 * @brief Shifts pts/dts so the first DTS is 0 and fills duration.
+			 */
+			void StampOutgoing() noexcept;
+
 			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
 			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
-			std::deque<class Packet> m_pending;											///< Packets waiting for Mux
-			AVRational m_timeBase{0, 1};												///< Encoder time base
-			bool m_flushed = false;														///< EOF already signalled
+			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
+			AVRational m_timeBase;														///< Encoder time base
+			int m_index;																///< @ref Encoder::Index after Open
+			bool m_flushed;																///< EOF already signalled
+			std::int64_t m_tsOffset;													///< Added to pts/dts so the first DTS is 0
+			bool m_tsOffsetSet;															///< Offset taken from the first packet
 	};
 }

@@ -36,10 +36,13 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/audio.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/type.hxx>
+
+#include <cstdio>
+#include <utility>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -61,7 +64,10 @@ namespace {
 	}
 }
 
-Details::Audio::Audio() noexcept = default;
+Details::Audio::Audio() noexcept
+: m_timeBase{0, 1}, m_swr(nullptr), m_fifo(nullptr),
+	m_inFormat(-1), m_outFormat(-1), m_frameSize(0), m_channels(0),
+	m_index(0), m_nextPts(0), m_flushed(false) {}
 
 Details::Audio::~Audio() noexcept {
 	swr_free(&m_swr);
@@ -71,11 +77,12 @@ Details::Audio::~Audio() noexcept {
 
 Details::Audio::Audio(Audio&& other) noexcept
 : m_encoder(std::move(other.m_encoder)), m_scratch(std::move(other.m_scratch)),
-m_converted(std::move(other.m_converted)), m_pending(std::move(other.m_pending)),
-m_timeBase(other.m_timeBase), m_swr(other.m_swr), m_fifo(other.m_fifo),
-m_inFormat(other.m_inFormat), m_outFormat(other.m_outFormat),
-m_frameSize(other.m_frameSize), m_channels(other.m_channels),
-m_nextPts(other.m_nextPts), m_flushed(other.m_flushed) {
+	m_converted(std::move(other.m_converted)), m_pending(std::move(other.m_pending)),
+	m_timeBase(other.m_timeBase), m_swr(other.m_swr), m_fifo(other.m_fifo),
+	m_inFormat(other.m_inFormat), m_outFormat(other.m_outFormat),
+	m_frameSize(other.m_frameSize), m_channels(other.m_channels),
+	m_index(other.m_index), m_nextPts(other.m_nextPts), m_flushed(other.m_flushed),
+	m_pktPts(other.m_pktPts) {
 	other.m_swr = nullptr;
 	other.m_fifo = nullptr;
 }
@@ -99,8 +106,10 @@ Details::Audio& Details::Audio::operator=(Audio&& other) noexcept {
 	m_outFormat = other.m_outFormat;
 	m_frameSize = other.m_frameSize;
 	m_channels = other.m_channels;
+	m_index = other.m_index;
 	m_nextPts = other.m_nextPts;
 	m_flushed = other.m_flushed;
+	m_pktPts = other.m_pktPts;
 	return *this;
 }
 
@@ -116,7 +125,8 @@ AVRational Details::Audio::TimeBase() const noexcept {
 	return m_timeBase;
 }
 
-bool Details::Audio::PrepareConvert(class Encoder& owner, const ::AVFrame* src, const AVCodecContext* ctx) noexcept {
+bool Details::Audio::PrepareConvert(class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const ::AVFrame* src, const AVCodecContext* ctx) noexcept {
 	if (!src || !ctx) {
 		owner.Fail("audio convert missing source or encoder context");
 		return false;
@@ -165,7 +175,7 @@ bool Details::Audio::PrepareConvert(class Encoder& owner, const ::AVFrame* src, 
 	return true;
 }
 
-bool Details::Audio::Ingest(class Encoder& owner, ::AVFrame* src) noexcept {
+bool Details::Audio::Ingest(class StormByte::Multimedia::Pipeline::Encoder& owner, ::AVFrame* src) noexcept {
 	if (!src || !m_fifo || !m_encoder) {
 		owner.Fail("audio ingest missing source or fifo");
 		return false;
@@ -213,7 +223,7 @@ bool Details::Audio::Ingest(class Encoder& owner, ::AVFrame* src) noexcept {
 	return true;
 }
 
-bool Details::Audio::Emit(class Encoder& owner, bool last) noexcept {
+bool Details::Audio::Emit(class StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noexcept {
 	if (!m_encoder || !m_fifo)
 		return true;
 	const auto* ctx = m_encoder->Get();
@@ -273,7 +283,8 @@ bool Details::Audio::Emit(class Encoder& owner, bool last) noexcept {
 	}
 }
 
-bool Details::Audio::Open(class Encoder& owner, const class Frame& frame) noexcept {
+bool Details::Audio::Open(class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 	if (m_encoder)
 		return true;
 	if (frame.Type() != Type::Audio) {
@@ -292,31 +303,37 @@ bool Details::Audio::Open(class Encoder& owner, const class Frame& frame) noexce
 		owner.Implementation(opened->implementation);
 	owner.m_capabilities = opened->capabilities;
 	m_encoder = std::move(opened->encoder);
+	m_index = owner.Index();
 
 	const auto* src = (frame.m_engine && frame.m_engine->m_backend.Get())
 		? frame.m_engine->m_backend.Get() : nullptr;
 	return PrepareConvert(owner, src, m_encoder->Get());
 }
 
-bool Details::Audio::Push(class Encoder& owner, class Frame& frame) noexcept {
-	if (!m_encoder && !Open(owner, frame))
+bool Details::Audio::Push(class StormByte::Multimedia::Pipeline::Encoder& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept {
+	if (!frame) {
+		owner.Fail("empty frame");
+		return false;
+	}
+	if (!m_encoder && !Open(owner, *frame))
 		return false;
 	if (!m_encoder)
 		return false;
-	if (!frame.m_engine || !frame.m_engine->m_backend.Get()) {
+	if (!frame->m_engine || !frame->m_engine->m_backend.Get()) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
 
-	frame.m_engine->m_backend.WriteSideData(frame.Attachments());
+	frame->m_engine->m_backend.WriteSideData(frame->Attachments());
 
-	auto* raw = frame.m_engine->m_backend.Get();
-	if (frame.Pts())
-		raw->pts = Open::NsToTicks(frame.Pts()->Nanoseconds().count(), m_timeBase);
+	auto* raw = frame->m_engine->m_backend.Get();
+	if (frame->Pts())
+		raw->pts = Open::NsToTicks(frame->Pts()->Nanoseconds().count(), m_timeBase);
 	else
 		raw->pts = AV_NOPTS_VALUE;
-	if (frame.Duration()) {
-		raw->duration = Open::NsToTicks(frame.Duration()->Nanoseconds().count(), m_timeBase);
+	if (frame->Duration()) {
+		raw->duration = Open::NsToTicks(frame->Duration()->Nanoseconds().count(), m_timeBase);
 		if (raw->duration <= 0)
 			raw->duration = 1;
 	}
@@ -325,10 +342,12 @@ bool Details::Audio::Push(class Encoder& owner, class Frame& frame) noexcept {
 
 	if (!Ingest(owner, raw))
 		return false;
-	return Emit(owner, false);
+	if (!Emit(owner, false))
+		return false;
+	return true;
 }
 
-bool Details::Audio::DrainOne(class Encoder& owner) noexcept {
+bool Details::Audio::DrainOne(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder)
 		return false;
 	const auto result = m_encoder->ReceivePacket(m_scratch);
@@ -338,12 +357,13 @@ bool Details::Audio::DrainOne(class Encoder& owner) noexcept {
 		owner.Fail("failed to receive packet");
 		return false;
 	}
+	StampOutgoing();
 	m_pending.push_back(Open::MakePacket(Type::Audio, owner.Index(), m_scratch, m_timeBase, true));
 	m_scratch.Unref();
 	return true;
 }
 
-void Details::Audio::Flush(class Encoder& owner) noexcept {
+void Details::Audio::Flush(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder || m_flushed)
 		return;
 	if (m_swr) {
@@ -383,11 +403,50 @@ void Details::Audio::Flush(class Encoder& owner) noexcept {
 	m_flushed = true;
 }
 
-bool Details::Audio::TakePacket(class Packet& packet) noexcept {
-	if (!m_pending.empty()) {
-		packet = std::move(m_pending.front());
-		m_pending.pop_front();
-		return true;
+std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Details::Audio::Take() noexcept {
+	if (m_pending.empty() && m_encoder) {
+		const auto result = m_encoder->ReceivePacket(m_scratch);
+		if (result == FFmpeg::OperationResult::Success) {
+			StampOutgoing();
+			m_pending.push_back(Open::MakePacket(Type::Audio, m_index, m_scratch, m_timeBase, true));
+			m_scratch.Unref();
+		}
 	}
-	return false;
+	if (m_pending.empty())
+		return {};
+	auto packet = std::move(m_pending.front());
+	m_pending.pop_front();
+	return packet;
+}
+
+void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Audio::StampOutgoing() noexcept {
+	std::int64_t pts = m_scratch.Pts();
+	std::int64_t dts = m_scratch.Dts();
+	std::int64_t dur = m_scratch.Duration();
+
+	if (dur <= 0)
+		dur = m_frameSize > 0 ? m_frameSize : 1;
+
+	if (pts == AV_NOPTS_VALUE)
+		pts = m_pktPts;
+	if (dts == AV_NOPTS_VALUE)
+		dts = pts;
+	if (pts < 0)
+		pts = m_pktPts;
+	if (dts < 0)
+		dts = pts;
+
+	m_pktPts = pts + dur;
+	m_scratch.Timestamps(pts, dts, dur);
+
+	static int n = 0;
+	if (n < 8) {
+		std::fprintf(stderr, "STMM-A stamped n=%d pts=%lld dts=%lld dur=%lld\n",
+			n,
+			static_cast<long long>(pts),
+			static_cast<long long>(dts),
+			static_cast<long long>(dur));
+		std::fflush(stderr);
+		++n;
+	}
 }

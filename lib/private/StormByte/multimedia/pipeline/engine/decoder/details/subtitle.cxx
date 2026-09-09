@@ -40,9 +40,14 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/ocr/bitmap.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/side_data.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
 #include <cstring>
+#include <memory>
+#include <vector>
 
 extern "C" {
 	#include <libavutil/avutil.h>
@@ -52,6 +57,7 @@ extern "C" {
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Details = StormByte::Multimedia::Pipeline::Engine::Decoder::Details;
+using StormByte::Multimedia::Pipeline::Producer;
 
 namespace {
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
@@ -79,50 +85,59 @@ namespace {
 }
 
 Details::Subtitle::Subtitle(FFmpeg::AVDecoder decoder, AVRational timeBase) noexcept
-: m_decoder(std::move(decoder)), m_timeBase(timeBase) {}
+: m_decoder(std::move(decoder)), m_timeBase(timeBase), m_flushed(false) {}
 
 bool Details::Subtitle::IsOpen() const noexcept {
 	return true;
 }
 
-bool Details::Subtitle::Send(class Decoder& owner, class Packet& packet) noexcept {
+bool Details::Subtitle::Send(class StormByte::Multimedia::Pipeline::Decoder& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept {
+	if (!packet) {
+		owner.Fail("empty packet");
+		return false;
+	}
+
 	FFmpeg::AVPacket raw;
 	StormByte::Buffer::DataType bytes;
-	const auto n = packet.Payload().AvailableBytes();
+	const auto n = packet->Payload().AvailableBytes();
 	const std::uint8_t* data = nullptr;
 	if (n > 0) {
-		if (!packet.Payload().Extract(n, bytes) || bytes.size() != n) {
+		if (!packet->Payload().Extract(n, bytes) || bytes.size() != n) {
 			owner.Fail("failed to extract packet payload");
 			return false;
 		}
 		data = reinterpret_cast<const std::uint8_t*>(bytes.data());
 	}
-	if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet.KeyFrame())) {
+	if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet->KeyFrame())) {
 		owner.Fail("out of memory copying packet");
 		return false;
 	}
 
-	const std::int64_t duration = packet.Duration()
-		? av_rescale_q(packet.Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
+	const std::int64_t duration = packet->Duration()
+		? av_rescale_q(packet->Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
 		: 0;
-	raw.Timestamps(NsToTicks(packet.Pts(), m_timeBase), NsToTicks(packet.Dts(), m_timeBase), duration);
+	raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
-	m_packetPts = packet.Pts();
-	m_packetDuration = packet.Duration();
+	m_packetPts = packet->Pts();
+	m_packetDuration = packet->Duration();
 	FFmpeg::AVSubtitle sub;
 	const auto result = m_decoder.DecodeSubtitle(raw, sub);
 	if (result == FFmpeg::OperationResult::Error) {
 		owner.Fail("failed to decode subtitle");
 		return false;
 	}
+	if (result == FFmpeg::OperationResult::TryAgain)
+		return false;
 	if (result == FFmpeg::OperationResult::Success)
 		m_pendingSub = std::move(sub);
 	return true;
 }
 
-bool Details::Subtitle::Receive(class Decoder& owner, class Frame& frame) noexcept {
+std::shared_ptr<StormByte::Multimedia::Pipeline::Frame> Details::Subtitle::Receive(
+	class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
 	if (!m_pendingSub.has_value())
-		return false;
+		return {};
 
 	auto sub = std::move(*m_pendingSub);
 	m_pendingSub.reset();
@@ -164,44 +179,40 @@ bool Details::Subtitle::Receive(class Decoder& owner, class Frame& frame) noexce
 	if (duration && duration->Nanoseconds().count() > 600000000000LL)
 		duration.reset();
 
-	class Frame incoming(
-		Multimedia::Type::Subtitle,
+	auto incoming = std::make_shared<StormByte::Multimedia::Pipeline::Frame>(
 		owner.Index(),
+		StormByte::Multimedia::Type::Subtitle,
+		Producer::Decoder,
 		StormByte::Buffer::FIFO{std::move(bytes)},
 		std::move(pts),
 		std::move(duration),
 		std::nullopt,
-		{}
+		std::vector<StormByte::Multimedia::Pipeline::SideData>{}
 	);
-	StampTags(owner, incoming);
+	StampTags(owner, *incoming);
 
-	const bool hasCue = incoming.Payload().AvailableBytes() > 0;
+	const bool hasCue = incoming->Payload().AvailableBytes() > 0;
 	if (m_heldSubtitle) {
-		auto& held = *m_heldSubtitle;
-		if (!held.Duration() && held.Pts() && incoming.Pts()) {
-			const auto delta = incoming.Pts()->Nanoseconds() - held.Pts()->Nanoseconds();
+		if (!m_heldSubtitle->Duration() && m_heldSubtitle->Pts() && incoming->Pts()) {
+			const auto delta = incoming->Pts()->Nanoseconds() - m_heldSubtitle->Pts()->Nanoseconds();
 			if (delta.count() > 0)
-				held.m_duration = StormByte::Multimedia::Property::Duration{delta};
+				m_heldSubtitle->m_duration = StormByte::Multimedia::Property::Duration{delta};
 		}
-		frame = std::move(held);
-		m_heldSubtitle.reset();
+		auto out = std::move(m_heldSubtitle);
 		if (hasCue)
 			m_heldSubtitle = std::move(incoming);
-		return true;
+		return out;
 	}
 
-	if (hasCue && !incoming.Duration()) {
+	if (hasCue && !incoming->Duration()) {
 		m_heldSubtitle = std::move(incoming);
-		return false;
+		return {};
 	}
-
 	if (!hasCue)
-		return false;
-
-	frame = std::move(incoming);
-	return true;
+		return {};
+	return incoming;
 }
 
-void Details::Subtitle::Flush(class Decoder&) noexcept {
+void Details::Subtitle::Flush(class StormByte::Multimedia::Pipeline::Decoder&) noexcept {
 	m_flushed = true;
 }

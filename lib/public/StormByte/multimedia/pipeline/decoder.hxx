@@ -40,9 +40,7 @@
 
 #include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/features.hxx>
-#include <StormByte/multimedia/pipeline/filters/chain.hxx>
-#include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
@@ -59,6 +57,7 @@
 namespace StormByte::Multimedia::Pipeline {
 	class Demux;
 	class Decoder;
+	class Transcode;
 
 	/**
 	 * @namespace Engine
@@ -90,11 +89,6 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @defgroup decoder_flags Decoder flags
-	 * @{
-	 */
-
-	/**
 	 * @enum DecoderFlag
 	 * @brief Decoder behaviour bits. Empty mask is passthrough.
 	 */
@@ -113,17 +107,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @brief All current heuristic bits.
-	 *
-	 * Extend this value when adding flags.
 	 */
 	inline const DecoderFlags Heuristics{DecoderFlag::HeuristicsHDR10};
-
-	/** @} */
-
-	/**
-	 * @defgroup decoder_ops Decoder stream operators
-	 * @{
-	 */
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
@@ -134,96 +119,62 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 
 	/**
-	 * @brief Sends @p packet if its stream index matches. Never throws.
-	 * @param packet Compressed packet.
-	 * @param decoder Destination.
-	 * @return @p packet.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
-
-	/**
-	 * @brief Receives one decoded frame after the filter chain. Never throws.
-	 * @param decoder Source.
-	 * @param frame Replaced on success.
-	 * @return @p decoder.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
-
-	/** @} */
-
-	/**
 	 * @class Decoder
-	 * @brief Decodes packets of one demuxed stream into Frame.
+	 * @brief Decodes packets of one origin track into frames.
 	 *
-	 * Public entry point. Work lives in Engine::Decoder::Details::{Video,Audio,Subtitle}.
-	 * Construct with a stream index. Implementation() pins an FFmpeg decoder
-	 * name from the handcrafted table. Empty pin picks the lowest preference
-	 * row that covers Require() plus stream HDR10 / HDR10Plus. demux >> decoder
-	 * opens the backend and copies stream language and title from File metadata.
-	 * packet >> decoder ignores other indexes.
-	 * decoder >> frame is a no-op on TryAgain. After the demuxer hits EOF,
-	 * Flush() then drain with decoder >> frame until StreamIndex() is -1.
-	 * Failbit on open/decode errors. Copy is not a Decoder mode.
-	 *
-	 * @ref Filter::Chain goes in Pipe(). @c decoder >> frame calls
-	 * @ref Filter::Chain::Call with @ref Filter::Origin::Decoder.
-	 * @ref Flush also @ref Filter::Chain::Eof that origin.
-	 * A null pipe is identity.
+	 * A @ref Step, @c final. Launches in the constructor.
+	 * @c demux >> decoder only attaches the backend. @ref Work
+	 * sends one packet and drains frames to @ref m_out.
+	 * @ref Finish flushes the codec. Errors are @ref Step::Fail.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
 		public:
 			/**
-			 * @name Lifetime
+			 * @name Lifecycle
 			 * @{
 			 */
 
 			/**
-			 * @brief Decoder for @p stream_index. Does not open the backend.
-			 * @param stream_index File stream index.
+			 * @brief Decoder for one origin track. Launches the worker.
+			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
-			 * @param pipe Shared filter list, or null.
+			 *
+			 * The backend is attached later by @c demux >> decoder.
 			 */
-			explicit Decoder(int stream_index, DecoderFlags flags = DecoderFlags{},
-				std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+			explicit Decoder(int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
 			/**
-			 * @brief Decoder bound to an existing chain (non-owning alias).
-			 * @param stream_index File stream index.
-			 * @param flags Heuristics / future bits.
-			 * @param pipe Live chain.
+			 * @brief Copy constructor.
+			 * @param other Source decoder.
 			 */
-			Decoder(int stream_index, DecoderFlags flags, Filter::Chain& pipe) noexcept;
-
-			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Decoder(const Decoder&) = delete;
+			Decoder(const Decoder& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Decoder to take.
 			 */
-			Decoder(Decoder&& other) noexcept;
+			Decoder(Decoder&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Decoder() noexcept;
+			~Decoder() noexcept override;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source decoder.
 			 * @return *this.
 			 */
-			Decoder& operator=(const Decoder&) = delete;
+			Decoder& operator=(const Decoder& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Decoder to take.
 			 * @return *this.
 			 */
-			Decoder& operator=(Decoder&& other) noexcept;
+			Decoder& operator=(Decoder&& other) noexcept = delete;
 
 			/**
 			 * @brief true if open and not failed.
@@ -231,7 +182,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			explicit operator bool() const noexcept;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @name Bind
@@ -239,8 +192,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Bound stream index.
-			 * @return Index.
+			 * @brief Bound origin track.
+			 * @return Track.
 			 */
 			int Index() const noexcept;
 
@@ -257,30 +210,32 @@ namespace StormByte::Multimedia::Pipeline {
 			void Flags(DecoderFlags flags) noexcept;
 
 			/**
-			 * @brief Stream language tag copied from File metadata.
-			 * @return Language, or empty if the stream had none.
+			 * @brief Stream language tag.
+			 * @return Language, or empty.
 			 */
 			const std::optional<std::string>& Language() const noexcept;
 
 			/**
-			 * @brief Sets the stream language tag (used before demux >> decoder if needed).
-			 * @param language ISO code (`spa`, `eng`, `es`, …). Empty clears it.
+			 * @brief Sets the stream language tag.
+			 * @param language ISO code. Empty clears it.
 			 */
 			void Language(std::string language) noexcept;
 
 			/**
-			 * @brief Stream title tag copied from File metadata.
-			 * @return Title, or empty if the stream had none.
+			 * @brief Stream title tag.
+			 * @return Title, or empty.
 			 */
 			const std::optional<std::string>& Title() const noexcept;
 
 			/**
-			 * @brief Sets the stream title tag (used before demux >> decoder if needed).
-			 * @param title Title from File metadata. Empty clears it.
+			 * @brief Sets the stream title tag.
+			 * @param title Title. Empty clears it.
 			 */
 			void Title(std::string title) noexcept;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @name Implementation selection
@@ -295,118 +250,75 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Pins an FFmpeg decoder name (before demux >> decoder).
-			 * @param name Table `name` (`hevc`, `hevc_cuvid`, …). Empty clears the pin.
+			 * @param name Table name. Empty clears the pin.
 			 */
 			void Implementation(std::string name) noexcept;
 
 			/**
-			 * @brief Extra required Feature bits (before demux >> decoder).
-			 * @return Mask. Empty = only stream-derived HDR bits.
+			 * @brief Extra required Feature bits.
+			 * @return Mask.
 			 */
 			const Features& Require() const noexcept;
 
 			/**
-			 * @brief Replaces extra required Feature bits (before demux >> decoder).
+			 * @brief Replaces extra required Feature bits.
 			 * @param features Bits the chosen table row must have.
 			 */
 			void Require(Features features) noexcept;
 
 			/**
 			 * @brief Features of the opened implementation.
-			 * @return Mask. Empty if not open or fallback without a table row.
+			 * @return Mask.
 			 */
 			const Features& Capabilities() const noexcept;
 
-			/** @} */
-
 			/**
-			 * @name Pipe
-			 * @{
+			 * @}
 			 */
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
-
-			/**
-			 * @brief Replaces the shared chain.
-			 * @param pipe New list, or null.
-			 */
-			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
-
-			/**
-			 * @brief Aliases a live chain (non-owning).
-			 * @param pipe Live list.
-			 */
-			void Pipe(Filter::Chain& pipe) noexcept;
-
-			/** @} */
-
-			/**
-			 * @name Failure
-			 * @{
-			 */
-
-			/**
-			 * @brief Whether a hard error occurred.
-			 * @return true on open/decode/filter error.
-			 */
-			bool Failed() const noexcept;
-
-			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept;
-
-			/**
-			 * @brief Signals EOF to the backend and to @ref Pipe.
-			 *
-			 * Drain with decoder >> frame afterwards. Required after the
-			 * demuxer reaches EOF when frame threading is enabled.
-			 */
-			void Flush() noexcept;
-
-			/**
-			 * @brief Marks a hard error.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept;
-
-			/** @} */
 
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-			friend Packet& operator>>(Packet& packet, Decoder& decoder) noexcept;
-			friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+			friend class Transcode;
 			friend class Engine::Decoder::Details::Video;
 			friend class Engine::Decoder::Details::Audio;
 			friend class Engine::Decoder::Details::Subtitle;
 
-		private:
-			int m_index;												///< Stream index
-			std::unique_ptr<Engine::Decoder::Engine> m_engine;			///< Opened backend
-			DecoderFlags m_flags;										///< Heuristics / future bits
-			std::optional<std::string> m_implementation;				///< Pinned or selected FFmpeg name
-			std::optional<std::string> m_language;						///< Stream language from File metadata
-			std::optional<std::string> m_title;							///< Stream title from File metadata
-			Features m_require;											///< Extra required bits
-			Features m_capabilities;									///< Features of the opened row
-			std::shared_ptr<Filter::Chain> m_pipe;						///< Shared filter list
-			bool m_failed;												///< Hard error
-			std::optional<std::string> m_error;							///< Failure text
+		protected:
+			/**
+			 * @brief Prepare-once. Does not Fail if the backend is still unbound.
+			 */
+			void Open() noexcept override;
 
 			/**
-			 * @brief Adopts backend state built by demux >> decoder.
-			 * @param engine Opened implementation.
+			 * @brief Decodes one packet and pushes frames to @ref m_out.
+			 * @param item Incoming packet.
+			 */
+			void Work(std::shared_ptr<Item> item) noexcept override;
+
+			/**
+			 * @brief Flushes the codec after input EoF.
+			 */
+			void Finish() noexcept override;
+
+		private:
+			/**
+			 * @brief Marks a hard error and drops the backend.
+			 * @param reason Message.
+			 */
+			void Fail(std::string reason) noexcept;
+
+			/**
+			 * @brief Pins the opened backend. Called from demux >> decoder.
+			 * @param engine Opened engine.
 			 */
 			void Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept;
+
+			int m_index;											///< Origin track
+			DecoderFlags m_flags;									///< Heuristics
+			std::optional<std::string> m_language;					///< Language tag
+			std::optional<std::string> m_title;						///< Title tag
+			std::optional<std::string> m_implementation;			///< Pinned decoder name
+			Features m_require;										///< Extra required bits
+			Features m_capabilities;								///< Opened capabilities
+			std::unique_ptr<Engine::Decoder::Engine> m_engine;		///< Decode backend
 	};
 }

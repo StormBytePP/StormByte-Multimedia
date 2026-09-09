@@ -40,7 +40,15 @@
 #include <StormByte/multimedia/pipeline/engine/encoder/details/audio.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/video.hxx>
+#include <StormByte/multimedia/pipeline/engine/encoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
+
+#include <StormByte/multimedia/name_thread.hxx>
+
+#include <thread>
+#include <utility>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -50,19 +58,10 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia::Pipeline;
-using StormByte::Multimedia::Pipeline::Filter::Origin;
 
-namespace {
-	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
-		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
-	}
-}
-
-Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec,
-	std::shared_ptr<Filter::Chain> pipe) noexcept
+Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec) noexcept
 : m_index(output_index), m_codec(&codec),
-	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION),
-	m_pipe(std::move(pipe)), m_failed(false) {
+	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION) {
 	switch (codec.Type()) {
 		case StormByte::Multimedia::Type::Video:
 			m_engine = std::make_unique<Engine::Encoder::Details::Video>();
@@ -75,19 +74,15 @@ Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec,
 			break;
 		default:
 			Fail("encoder destination type is not video, audio or subtitle");
-			break;
+			return;
 	}
+	Launch();
 }
 
-Encoder::Encoder(int output_index, const StormByte::Multimedia::Codec& codec, Filter::Chain& pipe) noexcept
-: Encoder(output_index, codec, Alias(pipe)) {}
-
-Encoder::Encoder(Encoder&&) noexcept = default;
 Encoder::~Encoder() noexcept = default;
-Encoder& Encoder::operator=(Encoder&&) noexcept = default;
 
 Encoder::operator bool() const noexcept {
-	return !m_failed && m_engine && m_engine->IsOpen();
+	return !Failed() && m_engine && m_engine->IsOpen();
 }
 
 int Encoder::Index() const noexcept {
@@ -98,16 +93,8 @@ const StormByte::Multimedia::Codec& Encoder::Destination() const noexcept {
 	return *m_codec;
 }
 
-bool Encoder::Failed() const noexcept {
-	return m_failed;
-}
-
-const std::optional<std::string>& Encoder::Error() const noexcept {
-	return m_error;
-}
-
 bool Encoder::Opened() const noexcept {
-	return !m_failed && m_engine && m_engine->IsOpen();
+	return !Failed() && m_engine && m_engine->IsOpen();
 }
 
 std::optional<int> Encoder::AudioChannels() const noexcept {
@@ -188,7 +175,7 @@ const StormByte::Multimedia::Features& Encoder::Capabilities() const noexcept {
 }
 
 void Encoder::CRF(int value) noexcept {
-	if (m_failed)
+	if (Failed())
 		return;
 	if (m_codec->Type() != StormByte::Multimedia::Type::Video) {
 		Fail("CRF is not valid for this codec");
@@ -206,7 +193,7 @@ const std::optional<int>& Encoder::CRF() const noexcept {
 }
 
 void Encoder::BitRate(std::int64_t bits_per_second) noexcept {
-	if (m_failed)
+	if (Failed())
 		return;
 	if (bits_per_second <= 0) {
 		Fail("BitRate must be positive");
@@ -228,7 +215,7 @@ const std::optional<std::int64_t>& Encoder::BitRate() const noexcept {
 }
 
 void Encoder::MaxBitRate(std::int64_t bits_per_second) noexcept {
-	if (m_failed)
+	if (Failed())
 		return;
 	if (m_codec->Type() != StormByte::Multimedia::Type::Video) {
 		Fail("MaxBitRate is not valid for this codec");
@@ -250,7 +237,7 @@ const std::optional<std::int64_t>& Encoder::MaxBitRate() const noexcept {
 }
 
 void Encoder::Preset(std::string name) noexcept {
-	if (m_failed)
+	if (Failed())
 		return;
 	if (name.empty()) {
 		m_preset.reset();
@@ -264,7 +251,7 @@ const std::optional<std::string>& Encoder::Preset() const noexcept {
 }
 
 void Encoder::Tune(std::string name) noexcept {
-	if (m_failed)
+	if (Failed())
 		return;
 	if (m_codec->Type() != StormByte::Multimedia::Type::Video) {
 		Fail("Tune is not valid for this codec");
@@ -289,38 +276,10 @@ void Encoder::FineTune(std::map<std::string, std::string> options) noexcept {
 	m_fineTune = std::move(options);
 }
 
-std::shared_ptr<Filter::Chain>& Encoder::Pipe() noexcept {
-	return m_pipe;
-}
-
-const std::shared_ptr<Filter::Chain>& Encoder::Pipe() const noexcept {
-	return m_pipe;
-}
-
-void Encoder::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
-	m_pipe = std::move(pipe);
-}
-
-void Encoder::Pipe(Filter::Chain& pipe) noexcept {
-	m_pipe = Alias(pipe);
-}
-
-void Encoder::Flush() noexcept {
-	if (m_failed || !m_engine)
-		return;
-	m_engine->Flush(*this);
-	if (m_pipe) {
-		m_pipe->Eof(Origin::Encoder);
-		if (m_pipe->Failed())
-			Fail(m_pipe->ErrorStr());
-	}
-}
-
 void Encoder::Fail(std::string reason) noexcept {
-	m_failed = true;
-	m_error = std::move(reason);
 	m_capabilities = StormByte::Multimedia::Features{};
-	m_engine.reset();
+	// m_engine.reset();
+	Step::Fail(std::move(reason));
 }
 
 bool Encoder::MuxBindStream(void* avStream) noexcept {
@@ -338,45 +297,73 @@ bool Encoder::MuxBindStream(void* avStream) noexcept {
 	if (tb.num <= 0 || tb.den <= 0)
 		tb = AVRational{1, 1000};
 	stream->time_base = tb;
+	if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+		if (ctx->framerate.num > 0 && ctx->framerate.den > 0) {
+			stream->avg_frame_rate = ctx->framerate;
+			stream->r_frame_rate = ctx->framerate;
+		}
+		else if (tb.num > 0 && tb.den > 0) {
+			stream->avg_frame_rate = AVRational{tb.den, tb.num};
+			stream->r_frame_rate = stream->avg_frame_rate;
+		}
+		int delay = ctx->has_b_frames;
+		if (delay <= 0 && (ctx->codec_id == AV_CODEC_ID_HEVC || ctx->codec_id == AV_CODEC_ID_H264))
+			delay = 2;
+		if (delay > 0)
+			stream->codecpar->video_delay = delay;
+	}
 	return true;
 }
 
-bool Encoder::MuxTakePacket(Packet& packet) noexcept {
-	if (!m_engine)
-		return false;
-	if (m_engine->TakePacket(packet))
-		return true;
-	if (!m_engine->DrainOne(*this))
-		return false;
-	return m_engine->TakePacket(packet);
-}
+void Encoder::Open() noexcept {}
 
-Frame& StormByte::Multimedia::Pipeline::operator>>(Frame& frame, Encoder& encoder) noexcept {
-	if (encoder.m_failed || !encoder.m_engine)
-		return frame;
-	if (frame.Language() && !encoder.m_language)
-		encoder.Language(*frame.Language());
-	if (frame.Title() && !encoder.m_title)
-		encoder.Title(*frame.Title());
-	if (encoder.m_pipe) {
-		// Distorted Call when a reconstructed frame exists:
-		// encoder.m_pipe->Call(reconstructed, Origin::Encoder);
-		// if (encoder.m_pipe->Failed()) {
-		//     encoder.Fail(encoder.m_pipe->ErrorStr());
-		//     return frame;
-		// }
+void Encoder::Work(std::shared_ptr<Item> item) noexcept {
+	NameThread("STMM:Encode:" + std::to_string(m_index));
+	if (Failed() || !m_engine)
+		return;
+	auto frame = std::dynamic_pointer_cast<Frame>(item);
+	if (!frame) {
+		Fail("encoder expected a frame");
+		return;
 	}
-	(void)encoder.m_engine->Push(encoder, frame);
-	return frame;
+	if (frame->Language() && !m_language)
+		Language(*frame->Language());
+	if (frame->Title() && !m_title)
+		Title(*frame->Title());
+	if (!m_engine->IsOpen() && !m_engine->Open(*this, *frame))
+		return;
+
+	while (!m_engine->Push(*this, frame)) {
+		if (Failed())
+			return;
+		std::shared_ptr<Packet> packet = m_engine->Take();
+		if (!packet) {
+			std::this_thread::yield();
+			continue;
+		}
+		m_out.Push(packet);
+	}
+
+	for (;;) {
+		if (Failed())
+			return;
+		std::shared_ptr<Packet> packet = m_engine->Take();
+		if (!packet)
+			break;
+		m_out.Push(packet);
+	}
 }
 
-Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Packet& packet) noexcept {
-	if (encoder.m_failed || !encoder.m_engine)
-		return encoder;
-	if (encoder.m_engine->TakePacket(packet))
-		return encoder;
-	if (!encoder.m_engine->DrainOne(encoder))
-		return encoder;
-	(void)encoder.m_engine->TakePacket(packet);
-	return encoder;
+void Encoder::Finish() noexcept {
+	if (Failed() || !m_engine)
+		return;
+	m_engine->Flush(*this);
+	for (;;) {
+		if (Failed())
+			return;
+		std::shared_ptr<Packet> packet = m_engine->Take();
+		if (!packet)
+			return;
+		m_out.Push(packet);
+	}
 }

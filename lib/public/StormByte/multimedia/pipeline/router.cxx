@@ -36,72 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/pipeline/router.hxx>
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/visibility.h>
+using namespace StormByte::Multimedia::Pipeline;
 
-#include <optional>
-#include <string>
-
-extern "C" {
-	#include <libavutil/rational.h>
+void Router::Bind(Step& from, Step& to) noexcept {
+	to.m_in.Wake(to.Wake());
+	from.m_out.Bind(to.m_in);
 }
 
-/**
- * @namespace StormByte::Multimedia::Pipeline::Engine::Copy
- * @brief Bitstream-copy backend behind the public Copy type.
- *
- * @ingroup multimedia_pipeline
- */
-namespace StormByte::Multimedia::Pipeline::Engine::Copy {
-	/**
-	 * @class Engine
-	 * @brief Snapshotted codecpar, time base and tags from the demux stream.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
-		public:
-			/**
-			 * @brief Empty parameters (not bound).
-			 */
-			Engine() noexcept
-			: params(nullptr), bound(false) {}
-
-			/**
-			 * @brief Destructor.
-			 */
-			~Engine() noexcept = default;
-
-			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Engine(const Engine&) = delete;
-
-			/**
-			 * @brief Copy assignment (deleted).
-			 * @return *this.
-			 */
-			Engine& operator=(const Engine&) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Engine to take.
-			 */
-			Engine(Engine&&) noexcept = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Engine to take.
-			 * @return *this.
-			 */
-			Engine& operator=(Engine&&) noexcept = default;
-
-			Backend::FFmpeg::AVCodecParameters params;	///< Demux codecpar snapshot
-			AVRational timeBase{0, 1};					///< Demux stream time base
-			std::optional<std::string> language;		///< language tag
-			std::optional<std::string> title;			///< title tag
-			bool bound;									///< true after demux >> copy
-	};
+void Router::Bind(int track, Step& from, Step& to) noexcept {
+	to.m_in.Wake(to.Wake());
+	from.m_out.Bind(track, to.m_in);
 }

@@ -39,9 +39,9 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
-#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <memory>
@@ -51,29 +51,13 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	namespace Filter {
-		class FFmpeg;	///< Sole filter friend of the private copy.
-	}
-
-	/**
-	 * @namespace Engine
-	 * @brief Private backends. Public headers only forward-declare them.
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Packet
-		 * @brief Compressed-AU backend behind the public Packet type.
-		 */
-		namespace Packet {
-			class Engine;	///< Opaque holder of the backend @c AVPacket.
-		}
-	}
-
 	/**
 	 * @class Packet
-	 * @brief One compressed access unit: kind, owned payload, timestamps and side data.
+	 * @brief One compressed access unit: identity, owned payload, timestamps and side data.
 	 *
 	 * Public API is move-only. Copy constructor and copy assignment stay
 	 * private and clone metadata, the payload FIFO and the backend
@@ -81,29 +65,45 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref StormByte::Multimedia::Pipeline::Engine::Packet::Engine
 	 * exists.
 	 *
-	 * @ref Type is the first constructor argument and is never inferred
-	 * from the payload. An empty packet is
-	 * @ref StormByte::Multimedia::Type::Unknown.
-	 * Do not stamp @ref StormByte::Multimedia::Type::Copy on a packet:
+	 * Identity lives on @ref Item. @ref Item::Kind is always
+	 * @ref Kind::Packet. Construction is
+	 * @c (track, type, producer, …). Do not stamp
+	 * @ref StormByte::Multimedia::Type::Copy on a packet:
 	 * that value is a track mode, not a kind of access unit.
+	 * An empty packet is @ref StormByte::Multimedia::Type::Unknown
+	 * with track -1.
+	 *
+	 * @ref Item::Producer is set at construction. Passthrough and
+	 * @c Save do not overwrite it. @ref Item::Track is the origin
+	 * stream index; the muxer does not stamp a new one.
 	 *
 	 * Pts / Dts / Duration are nanoseconds on the stream clock, not
 	 * FFmpeg ticks. Side data uses the same @ref SideData blobs as Frame.
 	 *
 	 * Destructor and move are out of line so this header can
 	 * forward-declare @ref Engine::Packet::Engine.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Item
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Packet {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public Item {
 		public:
 			/**
-			 * @brief Empty packet (no payload, index -1, type Unknown).
+			 * @name Construction
+			 * @{
+			 */
+
+			/**
+			 * @brief Empty packet (no payload, track -1, type Unknown).
 			 */
 			Packet() noexcept;
 
 			/**
 			 * @brief Builds a packet.
-			 * @param type Kind of this access unit. Not Copy.
-			 * @param stream_index Container or mux stream index.
+			 * @param track Origin container stream index.
+			 * @param type Media of this access unit. Not Copy.
+			 * @param producer Step that created this unit.
 			 * @param payload Owned compressed bytes.
 			 * @param pts Presentation timestamp, if known.
 			 * @param dts Decode timestamp, if known.
@@ -111,7 +111,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param key_frame Whether this is a key frame.
 			 * @param attachments Side-data blobs that must reach the muxer.
 			 */
-			Packet(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
+			Packet(int track, enum StormByte::Multimedia::Type type, enum Producer producer,
+				StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> dts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
@@ -127,7 +128,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Destructor.
 			 */
-			~Packet() noexcept;
+			~Packet() noexcept override;
 
 			/**
 			 * @brief Move assignment.
@@ -137,16 +138,13 @@ namespace StormByte::Multimedia::Pipeline {
 			Packet& operator=(Packet&& other) noexcept;
 
 			/**
-			 * @brief Kind of this access unit.
-			 * @return Value passed at construction, or Unknown if empty.
+			 * @}
 			 */
-			enum Type Type() const noexcept;
 
 			/**
-			 * @brief Container or mux stream index.
-			 * @return Index.
+			 * @name Timing
+			 * @{
 			 */
-			int StreamIndex() const noexcept;
 
 			/**
 			 * @brief Presentation timestamp.
@@ -173,6 +171,15 @@ namespace StormByte::Multimedia::Pipeline {
 			bool KeyFrame() const noexcept;
 
 			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Payload
+			 * @{
+			 */
+
+			/**
 			 * @brief Owned compressed payload.
 			 * @return FIFO (not thread-safe).
 			 */
@@ -196,16 +203,30 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			std::vector<SideData>& Attachments() noexcept;
 
+			/**
+			 * @}
+			 */
+
 		friend class Filter::FFmpeg;
+		friend class Demux;
+		friend class Mux;
+		friend class Decoder;
+		friend class Encoder;
+		friend class Engine::Packet::Engine;
 
 		private:
+			/**
+			 * @name Construction
+			 * @{
+			 */
+
 			/**
 			 * @brief Deep copy (metadata, FIFO and cloned @c AVPacket).
 			 * @param other Source packet.
 			 *
 			 * Private: a public copy would duplicate the compressed AU.
 			 * Only @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-			 * may clone.
+			 * and the producing steps may clone.
 			 */
 			Packet(const Packet& other) noexcept;
 
@@ -217,13 +238,20 @@ namespace StormByte::Multimedia::Pipeline {
 			Packet& operator=(const Packet& other) noexcept;
 
 			/**
+			 * @}
+			 */
+
+			/**
 			 * @brief Adopts a backend packet.
 			 * @param engine Backend holder.
 			 */
 			void Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept;
 
-			enum Type m_type;									///< Kind set at construction
-			int m_streamIndex;									///< Container or mux stream index
+			/**
+			 * @brief Turns this unit into the empty sentinel.
+			 */
+			void BecomeEmpty() noexcept;
+
 			StormByte::Buffer::FIFO m_payload;					///< Compressed bytes
 			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
 			std::optional<Property::Duration> m_dts;			///< Decode timestamp

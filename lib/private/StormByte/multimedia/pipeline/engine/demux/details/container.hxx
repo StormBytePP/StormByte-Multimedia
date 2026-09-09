@@ -44,6 +44,7 @@
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <memory>
 #include <optional>
 #include <unordered_map>
 
@@ -77,42 +78,45 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			~Container() noexcept override = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source container.
 			 */
-			Container(const Container&) = delete;
+			Container(const Container& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source container.
 			 * @return *this.
 			 */
-			Container& operator=(const Container&) = delete;
+			Container& operator=(const Container& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Container(Container&&) noexcept = default;
+			Container(Container&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Container& operator=(Container&&) noexcept = default;
+			Container& operator=(Container&& other) noexcept = default;
 
 			/**
 			 * @brief Whether the format context is open.
-			 * @return true after a successful Open().
+			 * @return true after a successful Adopt.
 			 */
 			bool IsOpen() const noexcept override;
 
 			/**
-			 * @brief Adopts an already opened format context.
+			 * @brief Not used. file >> demux calls Adopt.
 			 * @param owner Public demuxer.
-			 * @param file Unused. Signature matches Engine::Open; the context is passed via Adopt().
-			 * @return false. Use Adopt() from file >> demux.
+			 * @param file Unused.
+			 * @return false.
 			 */
-			bool Open(class Demux& owner, const File& file) noexcept override;
+			bool Open(class StormByte::Multimedia::Pipeline::Demux& owner,
+				const File& file) noexcept override;
 
 			/**
 			 * @brief Adopts an opened format context and caches time bases.
@@ -120,15 +124,16 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			 * @param ctx Opened AVFormatContext.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Adopt(class Demux& owner, StormByte::Multimedia::Backend::FFmpeg::AVFormatContext ctx) noexcept;
+			bool Adopt(class StormByte::Multimedia::Pipeline::Demux& owner,
+				StormByte::Multimedia::Backend::FFmpeg::AVFormatContext ctx) noexcept;
 
 			/**
 			 * @brief Reads one compressed packet.
 			 * @param owner Public demuxer.
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled.
+			 * @return New shared Packet, or empty at EoF.
 			 */
-			bool Read(class Demux& owner, class Packet& packet) noexcept override;
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Read(
+				class StormByte::Multimedia::Pipeline::Demux& owner) noexcept override;
 
 			/**
 			 * @brief Raw AVFormatContext pointer.

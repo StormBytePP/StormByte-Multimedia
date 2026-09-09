@@ -49,9 +49,13 @@
 #include <StormByte/multimedia/pipeline/engine/decoder/details/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/video.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 
+#include <StormByte/multimedia/name_thread.hxx>
+
+#include <memory>
 #include <variant>
 
 extern "C" {
@@ -61,72 +65,78 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
-namespace {
-	std::shared_ptr<Filter::Chain> Alias(Filter::Chain& pipe) noexcept {
-		return std::shared_ptr<Filter::Chain>(&pipe, [](Filter::Chain*) {});
-	}
-}
+Demux::Demux() noexcept
+: m_file(nullptr), m_eof(false), m_positionNs(-1) {}
 
-Demux::Demux(std::shared_ptr<Filter::Chain> pipe) noexcept
-: m_pipe(std::move(pipe)), m_failed(false), m_eof(false) {}
-
-Demux::Demux(Filter::Chain& pipe) noexcept
-: Demux(Alias(pipe)) {}
-
-Demux::Demux(Demux&&) noexcept = default;
 Demux::~Demux() noexcept = default;
-Demux& Demux::operator=(Demux&&) noexcept = default;
+
+void Demux::Launch() noexcept {
+	Step::Launch();
+}
 
 Demux::operator bool() const noexcept {
-	return !m_failed && !m_eof && m_engine && m_engine->IsOpen();
-}
-
-bool Demux::Failed() const noexcept {
-	return m_failed;
+	return !Failed() && !m_eof && m_engine && m_engine->IsOpen();
 }
 
 bool Demux::Eof() const noexcept {
 	return m_eof;
 }
 
+std::optional<StormByte::Multimedia::Property::Duration> Demux::Position() const noexcept {
+	const std::int64_t ns = m_positionNs.load(std::memory_order_acquire);
+	if (ns < 0)
+		return std::nullopt;
+	return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+}
+
 void Demux::ReachedEof() noexcept {
 	m_eof = true;
-	if (m_pipe) {
-		m_pipe->Eof(Filter::Origin::Demux);
-		if (m_pipe->Failed())
-			Fail(m_pipe->ErrorStr());
-	}
-}
-
-const std::optional<std::string>& Demux::Error() const noexcept {
-	return m_error;
-}
-
-std::shared_ptr<Filter::Chain>& Demux::Pipe() noexcept {
-	return m_pipe;
-}
-
-const std::shared_ptr<Filter::Chain>& Demux::Pipe() const noexcept {
-	return m_pipe;
-}
-
-void Demux::Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept {
-	m_pipe = std::move(pipe);
-}
-
-void Demux::Pipe(Filter::Chain& pipe) noexcept {
-	m_pipe = Alias(pipe);
 }
 
 void Demux::Fail(std::string reason) noexcept {
-	m_failed = true;
-	m_error = std::move(reason);
-	m_engine.reset();
-	m_file = nullptr;
+	{
+		std::lock_guard lock(m_readyMutex);
+		// m_engine.reset();
+		m_file = nullptr;
+	}
+	m_ready.notify_all();
+	Step::Fail(std::move(reason));
+}
+
+void Demux::Open() noexcept {}
+
+void Demux::Pump() noexcept {
+	NameThread("STMM:Demux");
+	{
+		std::unique_lock lock(m_readyMutex);
+		m_ready.wait(lock, [this]() {
+			return Failed() || static_cast<bool>(m_engine);
+		});
+	}
+	if (Failed() || !m_engine)
+		return;
+	for (;;) {
+		if (Failed())
+			return;
+		std::shared_ptr<Packet> packet = m_engine->Read(*this);
+		if (Failed())
+			return;
+		if (!packet) {
+			ReachedEof();
+			return;
+		}
+		if (const auto& pts = packet->Pts(); pts)
+			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
+		m_out.Push(packet);
+	}
+}
+
+void Demux::Finish() noexcept {
+	ReachedEof();
 }
 
 Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demux) noexcept {
-	if (demux.m_failed)
+	if (demux.Failed())
 		return demux;
 
 	auto opened = file.m_origin->Visit([](auto&& held) {
@@ -140,41 +150,22 @@ Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demu
 	auto engine = std::make_unique<Engine::Demux::Details::Container>();
 	if (!engine->Adopt(demux, std::move(opened.value())))
 		return demux;
-	demux.m_engine = std::move(engine);
-	demux.m_file = &file;
-	demux.m_failed = false;
-	demux.m_eof = false;
-	demux.m_error.reset();
-	return demux;
-}
-
-Demux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, class Packet& packet) noexcept {
-	if (demux.m_failed || demux.m_eof)
-		return demux;
-	if (!demux.m_engine) {
-		demux.Fail("demuxer is not open");
-		return demux;
+	{
+		std::lock_guard lock(demux.m_readyMutex);
+		demux.m_engine = std::move(engine);
+		demux.m_file = &file;
+		demux.m_eof = false;
+		demux.m_positionNs.store(-1, std::memory_order_release);
 	}
-	if (!demux.m_engine->Read(demux, packet))
-		return demux;
-	if (demux.m_failed || demux.m_eof)
-		return demux;
-	if (demux.m_pipe) {
-		demux.m_pipe->Call(packet, Filter::Origin::Demux);
-		if (demux.m_pipe->Failed()) {
-			demux.Fail(demux.m_pipe->ErrorStr());
-			packet = Packet{};
-			return demux;
-		}
-	}
+	demux.m_ready.notify_all();
 	return demux;
 }
 
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {
 	if (decoder.Failed())
 		return decoder;
-	if (demux.m_failed || !demux.m_engine) {
-		decoder.Fail(demux.m_error.value_or("demuxer is not open"));
+	if (demux.Failed() || !demux.m_engine) {
+		decoder.Fail(demux.Error().value_or("demuxer is not open"));
 		return decoder;
 	}
 	auto* container = static_cast<Engine::Demux::Details::Container*>(demux.m_engine.get());
@@ -238,5 +229,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 			std::move(backend.value()), timeBase);
 	}
 	decoder.Bind(std::move(engine));
+	decoder.m_in.Wake(decoder.Wake());
+	demux.m_out.Bind(decoder.Index(), decoder.m_in);
 	return decoder;
 }

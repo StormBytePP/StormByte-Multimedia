@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/open.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/channel_layout.hxx>
 #include <StormByte/multimedia/property/color.hxx>
@@ -48,6 +49,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -72,6 +74,7 @@ namespace Prop = StormByte::Multimedia::Property;
 using StormByte::Multimedia::Pipeline::Encoder;
 using StormByte::Multimedia::Pipeline::Frame;
 using StormByte::Multimedia::Pipeline::Packet;
+using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Pipeline::SideDataKind;
 
@@ -170,7 +173,7 @@ namespace {
 	}
 
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
+		if (ticks == AV_NOPTS_VALUE || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
 		const std::int64_t ns = av_rescale_q(ticks, timeBase, NanoTimeBase);
 		if (ns < 0)
@@ -441,8 +444,8 @@ std::int64_t StormByte::Multimedia::Pipeline::Engine::Encoder::Open::NsToTicks(s
 	return av_rescale_q(ns, NanoTimeBase, timeBase);
 }
 
-class Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(
-	enum Type type, int index, const FFmpeg::AVPacket& raw,
+std::shared_ptr<Packet> StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(
+	enum StormByte::Multimedia::Type type, int index, const FFmpeg::AVPacket& raw,
 	AVRational timeBase, bool keepPacketHdrPlus) noexcept {
 	StormByte::Buffer::DataType bytes;
 	const auto* data = raw.Data();
@@ -486,16 +489,17 @@ class Packet StormByte::Multimedia::Pipeline::Engine::Encoder::Open::MakePacket(
 		}
 	}
 
-	return StormByte::Multimedia::Pipeline::Packet{
-		type,
+	return std::make_shared<class Packet>(
 		index,
+		type,
+		Producer::Encoder,
 		StormByte::Buffer::FIFO{std::move(bytes)},
 		TicksToPts(raw.Pts(), timeBase),
 		TicksToPts(raw.Dts(), timeBase),
 		TicksToDuration(raw.Duration(), timeBase),
 		(raw.Flags() & AV_PKT_FLAG_KEY) != 0,
 		std::move(attachments)
-	};
+	);
 }
 
 std::optional<StormByte::Multimedia::Pipeline::Engine::Encoder::Open::Backend>

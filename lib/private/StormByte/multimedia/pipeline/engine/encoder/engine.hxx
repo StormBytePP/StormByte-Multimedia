@@ -41,6 +41,9 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/visibility.h>
+
+#include <memory>
 
 extern "C" {
 	struct AVCodecContext;
@@ -58,8 +61,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder {
 	 * @class Engine
 	 * @brief Abstract encode backend. One instance per public Encoder.
 	 *
-	 * The public Encoder is the entry point. Open, Push, drain and flush live here.
-	 * Details::Video / Details::Audio / Details::Subtitle implement this.
+	 * Push / Take use shared_ptr. Errors are owner.Fail.
+	 * Take empty means no packet ready (or drain finished after Flush).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -71,15 +74,17 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder {
 			virtual ~Engine() noexcept = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Engine(const Engine&) = delete;
+			Engine(const Engine& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Engine& operator=(const Engine&) = delete;
+			Engine& operator=(const Engine& other) = delete;
 
 			/**
 			 * @brief Whether the FFmpeg encoder is open.
@@ -93,35 +98,29 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder {
 			 * @param frame First frame (resolution, HDR, layout, sample fmt).
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool Open(class Encoder& owner, const class Frame& frame) noexcept = 0;
+			virtual bool Open(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept = 0;
 
 			/**
-			 * @brief Encodes one frame. Opens lazily on first call.
+			 * @brief Encodes one frame. Opens lazily on first call if needed.
 			 * @param owner Public encoder.
 			 * @param frame Decoded frame.
-			 * @return false if owner.Fail() was called.
+			 * @return true if libav accepted it.
 			 */
-			virtual bool Push(class Encoder& owner, class Frame& frame) noexcept = 0;
-
-			/**
-			 * @brief Receives one backend packet into the pending queue.
-			 * @param owner Public encoder.
-			 * @return true if a packet was queued.
-			 */
-			virtual bool DrainOne(class Encoder& owner) noexcept = 0;
+			virtual bool Push(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept = 0;
 
 			/**
 			 * @brief Signals EOF and drains. No-op if already flushed.
 			 * @param owner Public encoder.
 			 */
-			virtual void Flush(class Encoder& owner) noexcept = 0;
+			virtual void Flush(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept = 0;
 
 			/**
-			 * @brief Pops one pending packet.
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled.
+			 * @brief Pops one pending encoded packet.
+			 * @return Packet with @ref Producer::Encoder, or empty if none ready.
 			 */
-			virtual bool TakePacket(class Packet& packet) noexcept = 0;
+			virtual std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Take() noexcept = 0;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.
@@ -145,13 +144,13 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder {
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Engine(Engine&&) noexcept = default;
+			Engine(Engine&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&&) noexcept = default;
+			Engine& operator=(Engine&& other) noexcept = default;
 	};
 }

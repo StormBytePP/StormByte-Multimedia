@@ -44,9 +44,9 @@
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
-#include <string>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
@@ -55,49 +55,63 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @enum Anchor
-	 * @brief Logo placement relative to the frame.
+	 * @brief Logo placement relative to the active picture.
+	 *
+	 * Top / Bottom / Left / Right are edges of the measured
+	 * letterbox / pillarbox rectangle, not of the full @c AVFrame.
 	 */
-	enum class Anchor {
-		TopLeft,		///< Top left
-		TopCenter,		///< Top center
-		TopRight,		///< Top right
-		CenterLeft,		///< Middle left
-		Center,			///< Center
-		CenterRight,	///< Middle right
-		BottomLeft,		///< Bottom left
-		BottomCenter,	///< Bottom center
-		BottomRight		///< Bottom right
+	enum class STORMBYTE_MULTIMEDIA_PUBLIC Anchor {
+		TopLeft,		///< Top left of the active picture
+		TopCenter,		///< Top center of the active picture
+		TopRight,		///< Top right of the active picture
+		CenterLeft,		///< Middle left of the active picture
+		Center,			///< Center of the active picture
+		CenterRight,	///< Middle right of the active picture
+		BottomLeft,		///< Bottom left of the active picture
+		BottomCenter,	///< Bottom center of the active picture
+		BottomRight		///< Bottom right of the active picture
 	};
 
 	/**
 	 * @class Watermark
-	 * @brief Overlays a still image from a file on @ref Origin::Decoder.
+	 * @brief Overlays a still image from a file on decoded video.
 	 *
 	 * Opacity 0 is a no-op. The logo is never cropped: if it does not
-	 * fit, @ref FFmpeg::Fail runs. Prefer adding this node before
-	 * @ref Resize so the mark scales with the frame.
-	 * Talks to libav with raw @c AVFrame* from @ref FFmpeg::Native
-	 * and hands a new buffer to @ref FFmpeg::Replace.
+	 * fit the active picture, @ref FFmpeg::Fail runs.
+	 *
+	 * Works on every software pixel format the decoder emits. Bars
+	 * are measured on a luma plane produced by libswscale, not by
+	 * reading @c data[0] of the source. Overlay converts to RGBA and
+	 * back to the source format.
+	 *
+	 * With an @ref Anchor the first run opens @ref FFmpeg::Hold with a
+	 * plugin-chosen maximum. Near-black slates do not update the
+	 * rectangle. Bar widths accumulate (max). @ref FFmpeg::Release may
+	 * run before the ceiling when the rectangle stops changing. An
+	 * absolute @ref StormByte::Multimedia::Property::Point does not Hold.
+	 *
+	 * Talks to libav with raw @c AVFrame* from @ref FFmpeg::AVFrame
+	 * and @ref FFmpeg::Save.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
 			/**
-			 * @name Lifetime
+			 * @name Lifecycle
 			 * @{
 			 */
 
 			/**
-			 * @brief Logo at an anchor.
+			 * @brief Logo at an anchor on the active picture.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param anchor Placement.
 			 * @param opacity 0–100. 0 = no-op.
-			 * @param margin Pixels from the anchored edge.
+			 * @param margin Pixels from the anchored active edge.
 			 */
 			Watermark(const std::filesystem::path& logo, Anchor anchor,
 				unsigned opacity = 100, int margin = 0) noexcept;
 
 			/**
-			 * @brief Logo at an absolute top-left.
+			 * @brief Logo at an absolute top-left. No Hold.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param position Top-left of the logo in frame pixels.
 			 * @param opacity 0–100. 0 = no-op.
@@ -107,35 +121,39 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 				unsigned opacity = 100) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source filter.
 			 */
-			Watermark(const Watermark&) = delete;
+			Watermark(const Watermark& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Filter to take.
 			 */
-			Watermark(Watermark&& other) noexcept = default;
+			Watermark(Watermark&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Watermark() noexcept override = default;
+			~Watermark() noexcept override;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source filter.
 			 * @return *this.
 			 */
-			Watermark& operator=(const Watermark&) = delete;
+			Watermark& operator=(const Watermark& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Filter to take.
 			 * @return *this.
 			 */
-			Watermark& operator=(Watermark&& other) noexcept = default;
+			Watermark& operator=(Watermark&& other) noexcept = delete;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @name Identity
@@ -146,9 +164,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @brief Media this filter handles.
 			 * @return Video.
 			 */
-			enum Type Media() const noexcept override;
+			enum StormByte::Multimedia::Type Media() const noexcept override;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 		protected:
 			/**
@@ -157,7 +177,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 
 			/**
-			 * @brief Drops decoded logo state from a previous run.
+			 * @brief Drops decoded logo and bar state from a previous run.
 			 */
 			void Clean() noexcept override;
 
@@ -167,15 +187,18 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Blends the logo onto @p frame, then @ref FFmpeg::Replace.
+			 * @brief Holds to measure bars when needed, blends, @ref FFmpeg::Save.
 			 * @param frame Video unit.
-			 * @param origin Stage that is calling.
 			 */
-			void Process(Pipeline::Frame& frame, Origin origin) noexcept override;
+			void Process(const Pipeline::Frame& frame) noexcept override;
 
-			/** @} */
+			/**
+			 * @}
+			 */
 
 		private:
+			static constexpr std::uint8_t ProbeMax = 200;	///< Plugin Hold ceiling
+
 			/**
 			 * @brief Reads @ref m_path into @ref m_bytes.
 			 * @return false if @ref Fail was called.
@@ -188,16 +211,51 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 			bool DecodeLogo() noexcept;
 
+			/**
+			 * @brief Builds an 8-bit luma view of @p src for bar sampling.
+			 * @param src Live libav frame.
+			 * @return Luma frame, or nullptr on Fail.
+			 */
+			::AVFrame* Luma(::AVFrame* src) noexcept;
+
+			/**
+			 * @brief Samples letterbox / pillarbox on the luma view of @p src.
+			 * @param src Live libav frame.
+			 * @return true if this frame updated or confirmed the rectangle.
+			 */
+			bool ProbeBars(::AVFrame* src) noexcept;
+
+			/**
+			 * @brief Paints the logo and @ref FFmpeg::Save.
+			 */
+			void Paint() noexcept;
+
+			/**
+			 * @brief Frees cached scale contexts and luma buffer.
+			 */
+			void DropScale() noexcept;
+
 			std::filesystem::path m_path;									///< Logo file
 			std::optional<Anchor> m_anchor;									///< Relative placement
 			std::optional<StormByte::Multimedia::Property::Point> m_point;	///< Absolute placement
 			unsigned m_opacity;												///< 0–100
 			int m_margin;													///< Anchor margin
 			StormByte::Buffer::DataType m_bytes;							///< File bytes
-			int m_logoWidth = 0;											///< Decoded logo width
-			int m_logoHeight = 0;											///< Decoded logo height
+			int m_logoWidth;												///< Decoded logo width
+			int m_logoHeight;												///< Decoded logo height
 			StormByte::Buffer::DataType m_rgba;								///< Decoded RGBA8888
-			bool m_loaded = false;											///< File read attempted
-			bool m_decoded = false;											///< Decode attempted
+			bool m_loaded;													///< File read attempted
+			bool m_decoded;													///< Decode attempted
+			bool m_released;												///< Hold finished for this run
+			int m_barTop;													///< Letterbox top
+			int m_barBottom;												///< Letterbox bottom
+			int m_barLeft;													///< Pillarbox left
+			int m_barRight;													///< Pillarbox right
+			int m_stable;													///< Consecutive unchanged probes
+			int m_lumaW;													///< Cached luma width
+			int m_lumaH;													///< Cached luma height
+			int m_lumaFmt;													///< Cached source pixel format
+			void* m_swsLuma;												///< Cached src → gray SwsContext
+			::AVFrame* m_luma;												///< Cached GRAY8 view
 	};
 }

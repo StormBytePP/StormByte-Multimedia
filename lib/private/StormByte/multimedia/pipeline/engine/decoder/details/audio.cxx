@@ -39,8 +39,13 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/audio.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/side_data.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 extern "C" {
 	#include <libavutil/avutil.h>
@@ -50,6 +55,7 @@ extern "C" {
 
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Details = StormByte::Multimedia::Pipeline::Engine::Decoder::Details;
+using StormByte::Multimedia::Pipeline::Producer;
 
 namespace {
 	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
@@ -87,78 +93,78 @@ namespace {
 
 Details::Audio::Audio(FFmpeg::AVDecoder decoder, AVRational timeBase,
 	std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept
-: m_decoder(std::move(decoder)), m_audio(std::move(audio)), m_timeBase(timeBase) {}
+: m_decoder(std::move(decoder)), m_audio(std::move(audio)), m_timeBase(timeBase), m_flushed(false) {}
 
 bool Details::Audio::IsOpen() const noexcept {
 	return true;
 }
 
-bool Details::Audio::Send(class Decoder& owner, class Packet& packet) noexcept {
+bool Details::Audio::Send(class StormByte::Multimedia::Pipeline::Decoder& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept {
+	if (!packet) {
+		owner.Fail("empty packet");
+		return false;
+	}
+
 	FFmpeg::AVPacket raw;
 	StormByte::Buffer::DataType bytes;
-	const auto n = packet.Payload().AvailableBytes();
+	const auto n = packet->Payload().AvailableBytes();
 	const std::uint8_t* data = nullptr;
 	if (n > 0) {
-		if (!packet.Payload().Extract(n, bytes) || bytes.size() != n) {
+		if (!packet->Payload().Extract(n, bytes) || bytes.size() != n) {
 			owner.Fail("failed to extract packet payload");
 			return false;
 		}
 		data = reinterpret_cast<const std::uint8_t*>(bytes.data());
 	}
-	if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet.KeyFrame())) {
+	if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet->KeyFrame())) {
 		owner.Fail("out of memory copying packet");
 		return false;
 	}
 
-	const std::int64_t duration = packet.Duration()
-		? av_rescale_q(packet.Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
+	const std::int64_t duration = packet->Duration()
+		? av_rescale_q(packet->Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
 		: 0;
-	raw.Timestamps(NsToTicks(packet.Pts(), m_timeBase), NsToTicks(packet.Dts(), m_timeBase), duration);
+	raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
-	auto result = m_decoder.SendPacket(raw);
-	while (result == FFmpeg::OperationResult::TryAgain) {
-		StormByte::Multimedia::Pipeline::Frame ignored;
-		if (!Receive(owner, ignored))
-			break;
-		if (owner.Failed())
-			return false;
-		result = m_decoder.SendPacket(raw);
-	}
+	const auto result = m_decoder.SendPacket(raw);
 	if (result == FFmpeg::OperationResult::Error) {
 		owner.Fail("failed to send packet");
 		return false;
 	}
+	if (result == FFmpeg::OperationResult::TryAgain)
+		return false;
 	return true;
 }
 
-bool Details::Audio::Receive(class Decoder& owner, class Frame& frame) noexcept {
+std::shared_ptr<StormByte::Multimedia::Pipeline::Frame> Details::Audio::Receive(
+	class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
 	auto holder = std::make_unique<StormByte::Multimedia::Pipeline::Engine::Frame::Engine>();
 	const auto result = m_decoder.ReceiveFrame(holder->m_backend);
 	if (result == FFmpeg::OperationResult::TryAgain || result == FFmpeg::OperationResult::EndOfFile)
-		return false;
+		return {};
 	if (result != FFmpeg::OperationResult::Success) {
 		owner.Fail("failed to receive frame");
-		return false;
+		return {};
 	}
 
-	frame = StormByte::Multimedia::Pipeline::Frame(
-		Multimedia::Type::Audio,
+	auto frame = std::make_shared<StormByte::Multimedia::Pipeline::Frame>(
 		owner.Index(),
+		StormByte::Multimedia::Type::Audio,
+		Producer::Decoder,
 		StormByte::Buffer::FIFO{},
 		TicksToPts(holder->m_backend.Pts(), m_timeBase),
 		TicksToDuration(holder->m_backend.DurationTicks(), m_timeBase),
 		std::nullopt,
-		{},
+		std::vector<StormByte::Multimedia::Pipeline::SideData>{},
 		m_audio
 	);
-	StampTags(owner, frame);
-	auto* engine = holder.get();
-	frame.Bind(std::move(holder));
-	engine->BindProperties(frame);
-	return true;
+	StampTags(owner, *frame);
+	frame->Bind(std::move(holder));
+	return frame;
 }
 
-void Details::Audio::Flush(class Decoder& owner) noexcept {
+void Details::Audio::Flush(class StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
 	if (owner.Failed() || m_flushed)
 		return;
 	for (;;) {

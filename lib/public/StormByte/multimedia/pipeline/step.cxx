@@ -36,42 +36,76 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/pipeline/step.hxx>
 
-#include <StormByte/multimedia/visibility.h>
+using namespace StormByte::Multimedia::Pipeline;
 
-#include <cstddef>
+Step::Step() noexcept
+: m_failed(false) {}
 
-#if defined(__cpp_lib_reflection)
-#	include <meta>
-#endif
+Step::~Step() noexcept {
+	if (m_worker.joinable())
+		m_worker.request_stop();
+}
 
-/**
- * @namespace StormByte::Multimedia::Pipeline::Filter
- * @brief Facades, chain and reports for pipeline filter plugins.
- */
-namespace StormByte::Multimedia::Pipeline::Filter {
-	/**
-	 * @enum Origin
-	 * @brief Stage that is calling a filter.
-	 *
-	 * Powers of two, no holes, start at `1u << 0`. Used as flags and
-	 * as index (`countr_zero`) on @ref Chain.
-	 */
-	enum class Origin : unsigned short {
-		Demux   = 1u << 0,	///< Demuxer
-		Decoder = 1u << 1,	///< Decoder
-		Encoder = 1u << 2,	///< Encoder
-		Mux     = 1u << 3	///< Muxer
-	};
+void Step::Fail(std::string reason) noexcept {
+	m_error = std::move(reason);
+	m_failed.store(true, std::memory_order_release);
+	m_in.Eof();
+	m_out.Eof();
+	m_wake.notify_all();
+}
 
-	/**
-	 * @brief Number of @ref Origin enumerators.
-	 */
-#if defined(__cpp_lib_reflection)
-	inline constexpr std::size_t OriginCount =
-		std::meta::enumerators_of(^^Origin).size();
-#else
-	inline constexpr std::size_t OriginCount = 4;
-#endif
+bool Step::Failed() const noexcept {
+	return m_failed.load(std::memory_order_acquire);
+}
+
+const std::optional<std::string>& Step::Error() const noexcept {
+	return m_error;
+}
+
+std::condition_variable& Step::Wake() noexcept {
+	return m_wake;
+}
+
+void Step::Wait() noexcept {
+	std::unique_lock lock(m_wait);
+	m_wake.wait(lock, [this] {
+		return Failed() || m_in.Ready();
+	});
+}
+
+void Step::Open() noexcept {}
+
+void Step::Work(std::shared_ptr<Item>) noexcept {}
+
+void Step::Finish() noexcept {}
+
+void Step::Pump() noexcept {
+	for (;;) {
+		if (Failed())
+			break;
+		std::shared_ptr<Item> item = m_in.Pop();
+		if (!item) {
+			if (!m_in.EoF()) {
+				Wait();
+				continue;
+			}
+			Finish();
+			break;
+		}
+		Work(std::move(item));
+	}
+	m_out.Eof();
+}
+
+void Step::Launch() noexcept {
+	if (m_worker.joinable())
+		return;
+	m_in.Wake(m_wake);
+	m_worker = std::jthread([this]() {
+		Open();
+		Pump();
+		m_out.Eof();
+	});
 }

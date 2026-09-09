@@ -39,11 +39,11 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/property/video.hxx>
-#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <memory>
@@ -58,106 +58,33 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Decoder;	///< Packet-to-frame decode step.
-	class Encoder;	///< Frame-to-packet encode step.
-
-	/**
-	 * @namespace Filter
-	 * @brief Frame and packet steps attached to a job or a raw pipeline.
-	 *
-	 * Forward-declared so @ref Frame can friend
-	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-	 * without including the generated filter header.
-	 */
-	namespace Filter {
-		class FFmpeg;	///< Filter base; sole filter friend of the private copy.
-	}
-
-	/**
-	 * @namespace Engine
-	 * @brief Private backends. Public headers only forward-declare them.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Frame
-		 * @brief Decoded-frame backend. The tag `class Frame` still names this type.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Frame {
-			class Engine;	///< Opaque holder of the backend @c AVFrame.
-		}
-		/**
-		 * @namespace Encoder
-		 * @brief Encode backends.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Encoder {
-			/**
-			 * @namespace Open
-			 * @brief Shared encoder open helper.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Open {
-				struct Access;	///< Grants Encoder::Open access to @ref Frame internals.
-			}
-			/**
-			 * @namespace Details
-			 * @brief Per-media encode engines.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Video;
-				class Audio;
-				class Subtitle;
-			}
-		}
-		/**
-		 * @namespace Decoder
-		 * @brief Decode backends.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Decoder {
-			/**
-			 * @namespace Details
-			 * @brief Per-media decode engines.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Video;
-				class Audio;
-				class Subtitle;
-			}
-		}
-	}
-
 	/**
 	 * @class Frame
 	 * @brief One decoded access unit.
 	 *
 	 * Public API is move-only. There is no @c Clone().
+	 * Identity (@ref Item::Kind, @ref Item::Type, @ref Item::Track,
+	 * @ref Item::Producer) lives on @ref Item. @ref Item::Kind is
+	 * always @ref Kind::Frame. @ref Item::Producer is set at
+	 * construction and is not stamped again by passthrough or @c Save.
 	 *
-	 * @ref Type is the kind of this unit
+	 * Move leaves the source as @ref Frame(): @ref Item::Type Unknown,
+	 * track -1, no backend. A moved-from unit is safe to destroy
+	 * or assign over and may live in a standard container that
+	 * relocates by move (@c deque, @c vector).
+	 *
+	 * @ref Item::Type is the media of this unit
 	 * (@ref StormByte::Multimedia::Type::Video,
 	 * @ref StormByte::Multimedia::Type::Audio or
 	 * @ref StormByte::Multimedia::Type::Subtitle on a live frame;
 	 * @ref StormByte::Multimedia::Type::Unknown on the empty sentinel).
-	 * Do not infer the kind from whether @ref Video or @ref Audio
-	 * is populated.
+	 * Do not infer the media from whether @ref Video or @ref Audio
+	 * is populated. Do not stamp
+	 * @ref StormByte::Multimedia::Type::Copy on a frame.
 	 *
 	 * Copy constructor and copy assignment clone metadata, the payload
 	 * FIFO and the backend @c AVFrame and stay private. A public copy
 	 * would look cheap and duplicate every plane plus side data.
-	 * Analytics that must keep a reference or a distorted frame clone
-	 * through @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-	 * (nested handle), not from user code.
 	 *
 	 * Planes stay in an opaque backend buffer until @ref Payload() is
 	 * called. @ref Attachments() is filled at receive time. Heuristics
@@ -168,13 +95,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * are the only public mutators. Video, audio, pts and duration
 	 * change through the filter handle, not through setters here.
 	 *
+	 * @see StormByte::Multimedia::Pipeline::Item
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg
 	 * @see StormByte::Multimedia::Pipeline::Engine::Frame::Engine
-	 * @see StormByte::Multimedia::Backend::FFmpeg::AVFrame
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Frame {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Frame: public Item {
 		public:
 			/**
 			 * @name Construction
@@ -184,14 +111,16 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Empty frame.
 			 *
-			 * @ref Type is @ref StormByte::Multimedia::Type::Unknown.
+			 * @ref Item::Type is @ref StormByte::Multimedia::Type::Unknown.
+			 * @ref Item::Track is -1. @ref Item::Kind is @ref Kind::Frame.
 			 */
 			Frame() noexcept;
 
 			/**
 			 * @brief Builds a frame without a backend buffer.
-			 * @param type Kind of this unit (Video, Audio or Subtitle).
-			 * @param stream_index Container stream index.
+			 * @param track Origin container stream index.
+			 * @param type Media of this unit (Video, Audio or Subtitle).
+			 * @param producer Step that created this unit.
 			 * @param payload Owned sample / plane bytes.
 			 * @param pts Presentation timestamp, if known.
 			 * @param duration Frame duration, if known.
@@ -199,7 +128,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param attachments Raw side-data blobs.
 			 * @param audio Audio properties, if this is an audio frame.
 			 */
-			Frame(StormByte::Multimedia::Type type, int stream_index, StormByte::Buffer::FIFO payload,
+			Frame(int track, enum StormByte::Multimedia::Type type, enum Producer producer,
+				StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> duration = std::nullopt,
 				std::optional<Property::Video> video = std::nullopt,
@@ -209,18 +139,24 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Move constructor.
 			 * @param other Frame to take.
+			 *
+			 * Container-safe: @p other becomes the empty sentinel
+			 * (@ref Item::Type Unknown, track -1, no backend). @c ~Frame
+			 * on a moved-from object is a no-op. Copy stays private.
 			 */
 			Frame(Frame&& other) noexcept;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Frame() noexcept;
+			~Frame() noexcept override;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Frame to take.
 			 * @return *this.
+			 *
+			 * Same as the move constructor: @p other is left empty.
 			 */
 			Frame& operator=(Frame&& other) noexcept;
 
@@ -232,26 +168,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @name Timing and identity
 			 * @{
 			 */
-
-			/**
-			 * @brief Kind of this unit.
-			 * @return @ref StormByte::Multimedia::Type::Video,
-			 *         @ref StormByte::Multimedia::Type::Audio or
-			 *         @ref StormByte::Multimedia::Type::Subtitle
-			 *         for a decoded frame;
-			 *         @ref StormByte::Multimedia::Type::Unknown
-			 *         for the empty sentinel.
-			 *
-			 * Fixed when the frame is built. Do not infer it from
-			 * @ref Video() or @ref Audio().
-			 */
-			enum Multimedia::Type Type() const noexcept;
-
-			/**
-			 * @brief Container stream index.
-			 * @return Index, or -1 if empty.
-			 */
-			int StreamIndex() const noexcept;
 
 			/**
 			 * @brief Presentation timestamp.
@@ -332,7 +248,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return FIFO.
 			 *
 			 * After materialisation the backend stays alive; a later
-			 * filter @c Adopt replaces it and this FIFO is cleared.
+			 * @c Save replaces it and this FIFO is cleared.
 			 */
 			StormByte::Buffer::FIFO& Payload() noexcept;
 
@@ -362,13 +278,18 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
+			 * @name Construction
+			 * @{
+			 */
+
+			/**
 			 * @brief Deep copy (metadata, FIFO and cloned @c AVFrame).
 			 * @param other Source frame.
 			 *
 			 * Private on purpose: a public copy of a decoded unit
 			 * would silently duplicate every plane. Only
 			 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-			 * (nested handle) and the codec friends may clone.
+			 * and the codec friends may clone.
 			 * There is no public @c Clone().
 			 */
 			Frame(const Frame& other) noexcept;
@@ -383,8 +304,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			Frame& operator=(const Frame& other) noexcept;
 
-			StormByte::Multimedia::Type m_type;							///< Kind of this unit
-			int m_streamIndex;											///< Container stream index
+			/**
+			 * @}
+			 */
+
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
 			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
 			std::optional<Property::Duration> m_duration;				///< Frame duration
@@ -400,5 +323,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param engine Backend holder.
 			 */
 			void Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept;
+
+			/**
+			 * @brief Turns this unit into the empty sentinel.
+			 *
+			 * Used by move construction and move assignment so a
+			 * relocated @c Frame in a container is always valid.
+			 */
+			void BecomeEmpty() noexcept;
 	};
 }

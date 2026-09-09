@@ -36,32 +36,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/transcode/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/hopper.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
-namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
-	Engine::Engine() noexcept = default;
-
-	Engine::~Engine() noexcept {
-		RequestCancel();
-		Join();
-	}
-
-	void Engine::RequestCancel() noexcept {
-		cancel.store(true, std::memory_order_release);
-		paused.store(false, std::memory_order_release);
-		pauseCv.notify_all();
-	}
-
-	void Engine::Join() noexcept {
-		if (worker.joinable())
-			worker.join();
-	}
-
-	void Engine::WaitIfPaused() noexcept {
-		std::unique_lock wait(pauseMutex);
-		pauseCv.wait(wait, [&]() {
-			return cancel.load(std::memory_order_acquire)
-				|| !paused.load(std::memory_order_acquire);
-		});
-	}
+namespace StormByte::Multimedia::Pipeline {
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>;
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>>;
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>>;
 }

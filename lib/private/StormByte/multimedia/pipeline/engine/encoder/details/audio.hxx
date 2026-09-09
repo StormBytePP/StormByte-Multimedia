@@ -43,9 +43,11 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
 #include <deque>
+#include <memory>
 #include <optional>
 
 extern "C" {
@@ -73,6 +75,11 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 	class STORMBYTE_MULTIMEDIA_PRIVATE Audio final: public Encoder::Engine {
 		public:
 			/**
+			 * @name Lifecycle
+			 * @{
+			 */
+
+			/**
 			 * @brief Default constructor.
 			 */
 			Audio() noexcept;
@@ -83,28 +90,34 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			~Audio() noexcept override;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Audio(const Audio&) = delete;
+			Audio(const Audio& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Audio& operator=(const Audio&) = delete;
+			Audio& operator=(const Audio& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Audio(Audio&&) noexcept;
+			Audio(Audio&& other) noexcept;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Audio& operator=(Audio&&) noexcept;
+			Audio& operator=(Audio&& other) noexcept;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Whether the FFmpeg encoder is open.
@@ -118,35 +131,29 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param frame First audio frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Open(class Encoder& owner, const class Frame& frame) noexcept override;
+			bool Open(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const class StormByte::Multimedia::Pipeline::Frame& frame) noexcept override;
 
 			/**
 			 * @brief Encodes one audio frame. Opens lazily on first call.
 			 * @param owner Public encoder.
 			 * @param frame Decoded audio frame.
-			 * @return false if owner.Fail() was called.
+			 * @return true if the frame was ingested.
 			 */
-			bool Push(class Encoder& owner, class Frame& frame) noexcept override;
-
-			/**
-			 * @brief Receives one backend packet into the pending queue.
-			 * @param owner Public encoder.
-			 * @return true if a packet was queued.
-			 */
-			bool DrainOne(class Encoder& owner) noexcept override;
+			bool Push(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>& frame) noexcept override;
 
 			/**
 			 * @brief Signals EOF, flushes the fifo and drains.
 			 * @param owner Public encoder.
 			 */
-			void Flush(class Encoder& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept override;
 
 			/**
-			 * @brief Pops one pending packet.
-			 * @param packet Replaced on success.
-			 * @return true if @p packet was filled.
+			 * @brief Receives one packet from libav if needed, then pops the queue.
+			 * @return Packet with @ref Producer::Encoder, or empty if none ready.
 			 */
-			bool TakePacket(class Packet& packet) noexcept override;
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Take() noexcept override;
 
 			/**
 			 * @brief Opened AVCodecContext, if any.
@@ -161,19 +168,12 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			AVRational TimeBase() const noexcept override;
 
 		private:
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
-			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
-			std::deque<class Packet> m_pending;											///< Packets waiting for Mux
-			AVRational m_timeBase{0, 1};												///< Encoder time base
-			SwrContext* m_swr = nullptr;												///< Format / layout converter
-			AVAudioFifo* m_fifo = nullptr;												///< Samples waiting for frame_size
-			int m_inFormat = -1;														///< Decoded sample format
-			int m_outFormat = -1;														///< Encoder sample format
-			int m_frameSize = 0;														///< Encoder frame_size
-			int m_channels = 0;															///< Encoder channel count
-			std::int64_t m_nextPts = 0;													///< Next encoder PTS in samples
-			bool m_flushed = false;														///< EOF already signalled
+			/**
+			 * @brief Receives one backend packet into @ref m_pending.
+			 * @param owner Public encoder.
+			 * @return true if a packet was queued.
+			 */
+			bool DrainOne(class StormByte::Multimedia::Pipeline::Encoder& owner) noexcept;
 
 			/**
 			 * @brief Builds swr and the sample fifo.
@@ -182,7 +182,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param ctx Opened encoder context.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool PrepareConvert(class Encoder& owner, const ::AVFrame* src, const AVCodecContext* ctx) noexcept;
+			bool PrepareConvert(class StormByte::Multimedia::Pipeline::Encoder& owner,
+				const ::AVFrame* src, const AVCodecContext* ctx) noexcept;
 
 			/**
 			 * @brief Converts @p src and writes samples into the fifo.
@@ -190,7 +191,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param src Decoded frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Ingest(class Encoder& owner, ::AVFrame* src) noexcept;
+			bool Ingest(class StormByte::Multimedia::Pipeline::Encoder& owner, ::AVFrame* src) noexcept;
 
 			/**
 			 * @brief Sends encoder-sized frames from the fifo.
@@ -198,6 +199,24 @@ namespace StormByte::Multimedia::Pipeline::Engine::Encoder::Details {
 			 * @param last true to send a short tail frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Emit(class Encoder& owner, bool last) noexcept;
+			bool Emit(class StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noexcept;
+
+			void StampOutgoing() noexcept;
+
+			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
+			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
+			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
+			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
+			AVRational m_timeBase;														///< Encoder time base
+			SwrContext* m_swr;															///< Format / layout converter
+			AVAudioFifo* m_fifo;														///< Samples waiting for frame_size
+			int m_inFormat;																///< Decoded sample format
+			int m_outFormat;															///< Encoder sample format
+			int m_frameSize;															///< Encoder frame_size
+			int m_channels;																///< Encoder channel count
+			int m_index;																///< @ref Encoder::Index after Open
+			std::int64_t m_nextPts;														///< Next encoder PTS in samples
+			bool m_flushed;																///< EOF already signalled
+            std::int64_t m_pktPts = 0;													///< Next packet PTS if libav omits it
 	};
 }

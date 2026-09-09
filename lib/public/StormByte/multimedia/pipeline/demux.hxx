@@ -38,11 +38,15 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/filters/chain.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -57,10 +61,10 @@ namespace StormByte::Multimedia {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Copy;
 	class Decoder;
 	class Demux;
 	class Mux;
+	class Transcode;
 
 	/**
 	 * @namespace Engine
@@ -87,39 +91,40 @@ namespace StormByte::Multimedia::Pipeline {
 				class Container;
 			}
 		}
+		/**
+		 * @namespace Mux
+		 * @brief Mux backends.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Mux {
+			/**
+			 * @namespace Details
+			 * @brief Container mux engine.
+			 *
+			 * @ingroup multimedia_pipeline
+			 */
+			namespace Details {
+				class Container;
+			}
+		}
 	}
 
 	/**
-	 * @brief Opens @p file into @p demux. Never throws.
+	 * @brief Binds @p file into @p demux and wakes the worker. Never throws.
 	 * @param file Probed snapshot.
-	 * @param demux Destination (replaced).
+	 * @param demux Destination.
 	 * @return @p demux.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
 
 	/**
-	 * @brief Reads one packet into @p packet after the filter chain. Never throws.
-	 * @param demux Source demuxer.
-	 * @param packet Replaced on success.
-	 * @return @p demux.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(Demux& demux, class Packet& packet) noexcept;
-
-	/**
-	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
+	 * @brief Opens @p decoder on a stream of @p demux and binds that track.
 	 * @param demux Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-
-	/**
-	 * @brief Binds a demux input stream onto @p copy. Never throws.
-	 * @param demux Open demuxer.
-	 * @param copy Destination copy track.
-	 * @return @p copy.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 
 	/**
 	 * @brief Forwards source attachments from @p demux onto @p mux. Never throws.
@@ -133,80 +138,75 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Demux
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
-	 * Public entry point. Open and Read live in Details::Container.
-	 * @ref Filter::Chain goes in Pipe(). @c demux >> packet calls
-	 * @ref Filter::Chain::Call with @ref Filter::Origin::Demux.
-	 * @ref ReachedEof also @ref Filter::Chain::Eof that origin.
-	 * A null pipe is identity.
+	 * A @ref Step, @c final. The constructor launches the worker. The
+	 * worker waits on a Demux-owned condition until @c file >> demux
+	 * installs the backend. Input sink has zero buckets. Units that
+	 * leave @ref Pump are @c std::shared_ptr<Packet>. Empty Read is
+	 * EoF. Errors are @ref Step::Fail. @ref Work stays the Step no-op.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Demux {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Demux final: public Step {
 		public:
 			/**
-			 * @name Lifetime
+			 * @name Lifecycle
 			 * @{
 			 */
 
 			/**
-			 * @brief Empty demuxer (not open).
-			 * @param pipe Shared filter list, or null.
+			 * @brief Empty demuxer. Launches the worker; it waits for a source.
 			 */
-			explicit Demux(std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+			Demux() noexcept;
 
 			/**
-			 * @brief Demuxer bound to an existing chain (non-owning alias).
-			 * @param pipe Live chain.
+			 * @brief Copy constructor.
+			 * @param other Source demuxer.
 			 */
-			explicit Demux(Filter::Chain& pipe) noexcept;
-
-			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Demux(const Demux&) = delete;
+			Demux(const Demux& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Demuxer to take.
 			 */
-			Demux(Demux&& other) noexcept;
+			Demux(Demux&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Demux() noexcept;
+			~Demux() noexcept override;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source demuxer.
 			 * @return *this.
 			 */
-			Demux& operator=(const Demux&) = delete;
+			Demux& operator=(const Demux& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Demuxer to take.
 			 * @return *this.
 			 */
-			Demux& operator=(Demux&& other) noexcept;
+			Demux& operator=(Demux&& other) noexcept = delete;
 
 			/**
 			 * @brief true if open, not failed and not at EOF.
-			 * @return Open, not @ref Failed and not @ref Eof.
+			 * @return Open and readable.
 			 */
 			explicit operator bool() const noexcept;
 
-			/** @} */
+			/**
+			 * @}
+			 */
+			/**
+             * @brief Starts @ref Pump. Mandatory. Call after wiring.
+             */
+            void Launch() noexcept;
 
 			/**
-			 * @name Status
+			 * @name Source
 			 * @{
 			 */
-
-			/**
-			 * @brief Whether a hard error occurred.
-			 * @return true on open/read/filter error.
-			 */
-			bool Failed() const noexcept;
 
 			/**
 			 * @brief Whether the last read hit EOF.
@@ -215,59 +215,40 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Eof() const noexcept;
 
 			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
+			 * @brief Presentation time of the last pushed packet.
+			 * @return Pts, or empty until a packet with Pts arrives.
 			 */
-			const std::optional<std::string>& Error() const noexcept;
-
-			/** @} */
+			std::optional<StormByte::Multimedia::Property::Duration> Position() const noexcept;
 
 			/**
-			 * @name Pipe
-			 * @{
+			 * @}
 			 */
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
-
-			/**
-			 * @brief Replaces the shared chain.
-			 * @param pipe New list, or null.
-			 */
-			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
-
-			/**
-			 * @brief Aliases a live chain (non-owning).
-			 * @param pipe Live list.
-			 */
-			void Pipe(Filter::Chain& pipe) noexcept;
-
-			/** @} */
 
 			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
-			friend Demux& operator>>(Demux& demux, class Packet& packet) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-			friend Copy& operator>>(Demux& demux, Copy& copy) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+			friend class Mux;
+			friend class Transcode;
 			friend class Engine::Demux::Details::Container;
+			friend class Engine::Mux::Details::Container;
+
+		protected:
+			/**
+			 * @brief Prepare-once. No-op; the source is bound by @c file >> demux.
+			 */
+			void Open() noexcept override;
+
+			/**
+			 * @brief Waits for a source, then reads packets onto @ref m_out.
+			 */
+			void Pump() noexcept override;
+
+			/**
+			 * @brief Marks end of source after the last packet.
+			 */
+			void Finish() noexcept override;
 
 		private:
-			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
-			const File* m_file = nullptr;						///< Snapshot used at open
-			std::shared_ptr<Filter::Chain> m_pipe;				///< Shared filter list
-			bool m_failed;										///< Hard error
-			bool m_eof;											///< End of source
-			std::optional<std::string> m_error;					///< Failure text
-
 			/**
 			 * @brief Marks a hard error and drops the backend.
 			 * @param reason Message.
@@ -275,8 +256,15 @@ namespace StormByte::Multimedia::Pipeline {
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Marks end of source and @ref Filter::Chain::Eof Demux.
+			 * @brief Marks end of source. Called by Details::Container on AVERROR_EOF.
 			 */
 			void ReachedEof() noexcept;
+
+			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
+			const File* m_file;									///< Snapshot used at open
+			bool m_eof;											///< End of source
+			std::mutex m_readyMutex;							///< Guards source install
+			std::condition_variable m_ready;					///< Woken when m_engine is set
+			std::atomic<std::int64_t> m_positionNs;				///< Last packet Pts, or -1
 	};
 }

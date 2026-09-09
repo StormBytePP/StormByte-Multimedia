@@ -36,10 +36,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/copy.hxx>
-#include <StormByte/multimedia/pipeline/engine/copy/engine.hxx>
 #include <StormByte/multimedia/pipeline/engine/mux/details/attachment.hxx>
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
+#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -48,6 +48,7 @@
 #endif
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <span>
 #include <string>
@@ -64,7 +65,6 @@ extern "C" {
 	#include <libavutil/rational.h>
 }
 
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 namespace Details = StormByte::Multimedia::Pipeline::Engine::Mux::Details;
 
 namespace {
@@ -72,7 +72,7 @@ namespace {
 	constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
 
 	std::int64_t NsToTicks(std::int64_t ns, AVRational time_base) noexcept {
-		if (ns < 0 || time_base.num <= 0 || time_base.den <= 0)
+		if (time_base.num <= 0 || time_base.den <= 0)
 			return AV_NOPTS_VALUE;
 		return av_rescale_q(ns, NanoTimeBase, time_base);
 	}
@@ -146,12 +146,32 @@ namespace {
 		}
 		return raw;
 	}
+
+	char TypeTag(StormByte::Multimedia::Type type) noexcept {
+		switch (type) {
+			case StormByte::Multimedia::Type::Video: return 'v';
+			case StormByte::Multimedia::Type::Audio: return 'a';
+			case StormByte::Multimedia::Type::Subtitle: return 's';
+			default: return '?';
+		}
+	}
 }
 
-Details::Container::Container() noexcept = default;
+Details::Container::Container() noexcept
+: m_ctx(nullptr), m_file(nullptr), m_header(false), m_trailer(false) {}
 
 Details::Container::~Container() noexcept {
+	FreeParams();
 	Close();
+}
+
+void Details::Container::FreeParams() noexcept {
+	for (auto& [index, track] : m_tracks) {
+		if (track.params) {
+			avcodec_parameters_free(&track.params);
+			track.params = nullptr;
+		}
+	}
 }
 
 bool Details::Container::IsOpen() const noexcept {
@@ -162,20 +182,17 @@ bool Details::Container::HeaderWritten() const noexcept {
 	return m_header;
 }
 
-void Details::Container::Close() noexcept {
-	if (!m_ctx)
-		return;
-	if (m_header && !m_trailer) {
-		av_write_trailer(m_ctx);
-		m_trailer = true;
-	}
-	if (m_ctx->pb && !(m_ctx->oformat && (m_ctx->oformat->flags & AVFMT_NOFILE)))
-		avio_closep(&m_ctx->pb);
-	avformat_free_context(m_ctx);
-	m_ctx = nullptr;
+int Details::Container::Resolve(int track) const noexcept {
+	if (m_tracks.contains(track))
+		return track;
+	const auto it = m_inToOut.find(track);
+	if (it != m_inToOut.end())
+		return it->second;
+	return -1;
 }
 
-bool Details::Container::BindPath(class Mux& owner, const std::filesystem::path& path) noexcept {
+bool Details::Container::BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+	const std::filesystem::path& path) noexcept {
 	if (m_ctx) {
 		owner.Fail("muxer destination is already bound");
 		return false;
@@ -219,7 +236,8 @@ bool Details::Container::BindPath(class Mux& owner, const std::filesystem::path&
 	return WriteHeaderIfReady(owner);
 }
 
-bool Details::Container::ReserveEncoder(class Mux& owner, class Encoder& encoder) noexcept {
+bool Details::Container::ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+	class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept {
 	if (m_header) {
 		owner.Fail("cannot add a track after the header");
 		return false;
@@ -238,36 +256,54 @@ bool Details::Container::ReserveEncoder(class Mux& owner, class Encoder& encoder
 	return true;
 }
 
-bool Details::Container::ReserveCopy(class Mux& owner, const class Copy& copy) noexcept {
+bool Details::Container::Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
+	class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept {
 	if (m_header) {
 		owner.Fail("cannot add a track after the header");
 		return false;
 	}
-	if (!copy) {
-		owner.Fail("copy input is not bound");
+	if (out < 0) {
+		owner.Fail("mux output index is invalid");
 		return false;
 	}
-	if (copy.Index() < 0) {
-		owner.Fail("copy output index is invalid");
-		return false;
-	}
-	if (m_tracks.contains(copy.Index())) {
+	if (m_tracks.contains(out)) {
 		owner.Fail("duplicate mux output index");
 		return false;
 	}
-	if (m_inToOut.contains(copy.InputIndex())) {
-		owner.Fail("duplicate mux copy input index");
+	if (!demux.m_engine || !demux.m_engine->Context()) {
+		owner.Fail("demuxer has no format context");
+		return false;
+	}
+	auto* ctx = static_cast<AVFormatContext*>(demux.m_engine->Context());
+	if (in < 0 || in >= static_cast<int>(ctx->nb_streams) || !ctx->streams[in] || !ctx->streams[in]->codecpar) {
+		owner.Fail("copy source stream is invalid");
+		return false;
+	}
+	AVCodecParameters* params = avcodec_parameters_alloc();
+	if (!params) {
+		owner.Fail("avcodec_parameters_alloc failed");
+		return false;
+	}
+	if (avcodec_parameters_copy(params, ctx->streams[in]->codecpar) < 0) {
+		avcodec_parameters_free(&params);
+		owner.Fail("avcodec_parameters_copy failed");
 		return false;
 	}
 	Track track;
-	track.copy = &copy;
-	track.inIndex = copy.InputIndex();
-	m_tracks.emplace(copy.Index(), track);
-	m_inToOut.emplace(copy.InputIndex(), copy.Index());
+	track.inIndex = in;
+	track.params = params;
+	track.srcTb = ctx->streams[in]->time_base;
+	if (AVDictionaryEntry* lang = av_dict_get(ctx->streams[in]->metadata, "language", nullptr, 0))
+		track.language = lang->value;
+	if (AVDictionaryEntry* title = av_dict_get(ctx->streams[in]->metadata, "title", nullptr, 0))
+		track.title = title->value;
+	m_tracks.emplace(out, track);
+	m_inToOut.emplace(in, out);
 	return true;
 }
 
-bool Details::Container::BindAttachments(class Mux& owner, const File& file) noexcept {
+bool Details::Container::BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+	const File& file) noexcept {
 	if (m_header) {
 		owner.Fail("cannot bind attachments after the header");
 		return false;
@@ -280,7 +316,36 @@ bool Details::Container::BindAttachments(class Mux& owner, const File& file) noe
 	return true;
 }
 
-bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
+bool Details::Container::Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+	const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept {
+	if (!packet) {
+		owner.Fail("empty packet");
+		return false;
+	}
+	if (Resolve(packet->Track()) < 0) {
+		owner.Fail("packet stream index is not a mux track");
+		return false;
+	}
+	if (!m_ctx) {
+		m_queue.push_back(packet);
+		return true;
+	}
+	if (!WriteHeaderIfReady(owner))
+		return false;
+	if (m_header) {
+		while (!m_queue.empty()) {
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> leftover = std::move(m_queue.front());
+			m_queue.pop_front();
+			if (!leftover || !WritePacket(owner, *leftover))
+				return false;
+		}
+		return WritePacket(owner, *packet);
+	}
+	m_queue.push_back(packet);
+	return true;
+}
+
+bool Details::Container::WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept {
 	if (owner.Failed() || m_header)
 		return !owner.Failed();
 	if (!m_ctx)
@@ -288,25 +353,19 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 	if (m_tracks.empty())
 		return true;
 	for (const auto& [index, track] : m_tracks) {
-		if (track.encoder) {
-			if (track.encoder->Failed()) {
-				owner.Fail(track.encoder->Error().value_or("encoder failed"));
-				return false;
-			}
-			if (!*track.encoder)
-				return true;
+		if (!track.encoder)
 			continue;
+		if (track.encoder->Failed()) {
+			owner.Fail("encoder failed");
+			return false;
 		}
-		if (track.copy) {
-			if (!*track.copy)
-				return true;
-			continue;
-		}
-		owner.Fail("mux track has neither encoder nor copy");
-		return false;
+		if (!*track.encoder)
+			return true;
 	}
 
 	int expected = 0;
+	bool haveDefaultVideo = false;
+	bool haveDefaultAudio = false;
 	for (auto& [index, track] : m_tracks) {
 		if (index != expected) {
 			owner.Fail("mux output indexes must be contiguous from 0");
@@ -328,33 +387,36 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 				track.language = track.encoder->Language();
 			if (track.encoder->Title())
 				track.title = track.encoder->Title();
+			av_dict_set(&stream->metadata, "ENCODER", track.encoder->EncoderTag().c_str(), 0);
 		}
 		else {
-			auto* par = track.copy->m_engine->params.Get();
-			if (!par) {
-				owner.Fail("copy stream has no codec parameters");
+			if (!track.params) {
+				owner.Fail("remux track has no codec parameters");
 				return false;
 			}
-			if (avcodec_parameters_copy(stream->codecpar, par) < 0) {
+			if (avcodec_parameters_copy(stream->codecpar, track.params) < 0) {
 				owner.Fail("avcodec_parameters_copy failed");
 				return false;
 			}
-			AVRational tb = track.copy->m_engine->timeBase;
-			if (tb.num <= 0 || tb.den <= 0)
-				tb = AVRational{1, 1000};
-			stream->time_base = tb;
-			if (track.copy->m_engine->language)
-				track.language = track.copy->m_engine->language;
-			if (track.copy->m_engine->title)
-				track.title = track.copy->m_engine->title;
+			if (track.srcTb.num > 0 && track.srcTb.den > 0)
+				stream->time_base = track.srcTb;
 		}
 
 		if (track.language)
 			av_dict_set(&stream->metadata, "language", track.language->c_str(), 0);
 		if (track.title)
 			av_dict_set(&stream->metadata, "title", track.title->c_str(), 0);
-		if (track.encoder)
-			av_dict_set(&stream->metadata, "ENCODER", track.encoder->EncoderTag().c_str(), 0);
+
+		if (stream->codecpar) {
+			if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && !haveDefaultVideo) {
+				stream->disposition |= AV_DISPOSITION_DEFAULT;
+				haveDefaultVideo = true;
+			}
+			if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && !haveDefaultAudio) {
+				stream->disposition |= AV_DISPOSITION_DEFAULT;
+				haveDefaultAudio = true;
+			}
+		}
 
 		track.avIndex = stream->index;
 		track.timeBase = stream->time_base;
@@ -365,7 +427,28 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 
 	av_dict_set(&m_ctx->metadata, "encoding_tool", WritingApp, 0);
 
+	bool hasAudio = false;
+	bool hasVideo = false;
+	for (unsigned i = 0; i < m_ctx->nb_streams; ++i) {
+		const auto* par = m_ctx->streams[i]->codecpar;
+		if (!par)
+			continue;
+		if (par->codec_type == AVMEDIA_TYPE_AUDIO)
+			hasAudio = true;
+		if (par->codec_type == AVMEDIA_TYPE_VIDEO)
+			hasVideo = true;
+	}
+	if (hasAudio && hasVideo)
+		m_ctx->max_interleave_delta = 120LL * 1000 * 1000;
+	std::fprintf(stderr, "STMM-M header streams=%u a=%d v=%d interleave=%lld\n",
+		m_ctx->nb_streams,
+		hasAudio ? 1 : 0,
+		hasVideo ? 1 : 0,
+		static_cast<long long>(m_ctx->max_interleave_delta));
+	std::fflush(stderr);
+
 	AVDictionary* opts = nullptr;
+	av_dict_set(&opts, "default_mode", "passthrough", 0);
 	const int rc = avformat_write_header(m_ctx, &opts);
 	av_dict_free(&opts);
 	if (rc < 0) {
@@ -386,22 +469,19 @@ bool Details::Container::WriteHeaderIfReady(class Mux& owner) noexcept {
 
 	m_header = true;
 	while (!m_queue.empty()) {
-		class Packet queued = std::move(m_queue.front());
+		std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> queued = std::move(m_queue.front());
 		m_queue.pop_front();
-		if (!WritePacket(owner, queued))
+		if (!queued || !WritePacket(owner, *queued))
 			return false;
 	}
 	return true;
 }
 
-bool Details::Container::WritePacket(class Mux& owner, class Packet& packet) noexcept {
+bool Details::Container::WritePacket(class StormByte::Multimedia::Pipeline::Mux& owner,
+	class StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
 	if (owner.Failed() || !m_header)
 		return false;
-	int out = packet.StreamIndex();
-	if (!m_tracks.contains(out)) {
-		const auto mapped = m_inToOut.find(out);
-		out = (mapped == m_inToOut.end()) ? -1 : mapped->second;
-	}
+	const int out = Resolve(packet.Track());
 	const auto it = m_tracks.find(out);
 	if (it == m_tracks.end() || it->second.avIndex < 0) {
 		owner.Fail("packet stream index is not a mux track");
@@ -415,6 +495,13 @@ bool Details::Container::WritePacket(class Mux& owner, class Packet& packet) noe
 	auto& track = it->second;
 	raw->stream_index = track.avIndex;
 	const AVRational tb = track.timeBase;
+
+	const bool isVideo = packet.Type() == StormByte::Multimedia::Type::Video;
+	const bool isAudio = packet.Type() == StormByte::Multimedia::Type::Audio;
+	const bool isSub = packet.Type() == StormByte::Multimedia::Type::Subtitle;
+	const std::int64_t inPtsNs = packet.Pts() ? packet.Pts()->Nanoseconds().count() : -1;
+	const std::int64_t inDtsNs = packet.Dts() ? packet.Dts()->Nanoseconds().count() : -1;
+
 	if (packet.Pts())
 		raw->pts = NsToTicks(packet.Pts()->Nanoseconds().count(), tb);
 	else
@@ -422,19 +509,66 @@ bool Details::Container::WritePacket(class Mux& owner, class Packet& packet) noe
 	if (packet.Dts())
 		raw->dts = NsToTicks(packet.Dts()->Nanoseconds().count(), tb);
 	else
-		raw->dts = raw->pts;
-	if (raw->dts == AV_NOPTS_VALUE)
-		raw->dts = raw->pts;
+		raw->dts = AV_NOPTS_VALUE;
 	if (packet.Duration()) {
 		const auto ticks = NsToTicks(packet.Duration()->Nanoseconds().count(), tb);
-		raw->duration = (ticks == AV_NOPTS_VALUE) ? 0 : ticks;
+		raw->duration = (ticks == AV_NOPTS_VALUE || ticks < 0) ? 0 : ticks;
 	}
-	if (raw->dts != AV_NOPTS_VALUE && track.lastDts != AV_NOPTS_VALUE && raw->dts < track.lastDts)
-		raw->dts = track.lastDts;
-	if (raw->pts != AV_NOPTS_VALUE && raw->dts != AV_NOPTS_VALUE && raw->pts < raw->dts)
-		raw->pts = raw->dts;
-	if (raw->dts != AV_NOPTS_VALUE)
-		track.lastDts = raw->dts + (raw->duration > 0 ? raw->duration : 1);
+
+	const std::int64_t dtsBeforeFix = raw->dts;
+	if (isSub) {
+		if (raw->dts == AV_NOPTS_VALUE)
+			raw->dts = raw->pts;
+	}
+	else {
+		if (raw->dts == AV_NOPTS_VALUE) {
+			if (track.lastDts != AV_NOPTS_VALUE)
+				raw->dts = track.lastDts + 1;
+			else if (raw->pts != AV_NOPTS_VALUE)
+				raw->dts = raw->pts;
+		}
+		else if (track.lastDts != AV_NOPTS_VALUE && raw->dts <= track.lastDts)
+			raw->dts = track.lastDts + 1;
+		if (raw->pts != AV_NOPTS_VALUE && raw->dts != AV_NOPTS_VALUE && raw->pts < raw->dts)
+			raw->pts = raw->dts;
+		if (raw->dts != AV_NOPTS_VALUE)
+			track.lastDts = raw->dts;
+	}
+
+	static int nv = 0, na = 0, ns = 0, nAll = 0;
+	++nAll;
+	const bool logThis = (isVideo && nv < 24) || (isAudio && na < 24) || (isSub && ns < 24);
+	if (logThis) {
+		int& n = isVideo ? nv : (isAudio ? na : ns);
+		std::fprintf(stderr,
+			"STMM-M %c n=%d track=%d av=%d key=%d "
+			"in_pts_ns=%lld in_dts_ns=%lld "
+			"tb=%d/%d ticks_pts=%lld ticks_dts_raw=%lld ticks_dts=%lld last=%lld dur=%lld bytes=%d\n",
+			TypeTag(packet.Type()),
+			n,
+			packet.Track(),
+			track.avIndex,
+			packet.KeyFrame() ? 1 : 0,
+			static_cast<long long>(inPtsNs),
+			static_cast<long long>(inDtsNs),
+			tb.num, tb.den,
+			static_cast<long long>(raw->pts),
+			static_cast<long long>(dtsBeforeFix),
+			static_cast<long long>(raw->dts),
+			static_cast<long long>(track.lastDts),
+			static_cast<long long>(raw->duration),
+			raw->size);
+		std::fflush(stderr);
+		++n;
+	}
+	if (nAll == 1 || nAll == 50 || nAll == 200 || (nAll % 500) == 0) {
+		std::fprintf(stderr, "STMM-M mix n=%d last=%c av=%d dts_ms=%lld\n",
+			nAll,
+			TypeTag(packet.Type()),
+			track.avIndex,
+			raw->dts == AV_NOPTS_VALUE ? -1LL : static_cast<long long>(raw->dts));
+		std::fflush(stderr);
+	}
 
 	const int rc = av_interleaved_write_frame(m_ctx, raw);
 	av_packet_free(&raw);
@@ -445,58 +579,41 @@ bool Details::Container::WritePacket(class Mux& owner, class Packet& packet) noe
 	return true;
 }
 
-bool Details::Container::Push(class Mux& owner, class Packet& packet) noexcept {
-	int out = packet.StreamIndex();
-	if (!m_tracks.contains(out)) {
-		const auto mapped = m_inToOut.find(out);
-		out = (mapped == m_inToOut.end()) ? -1 : mapped->second;
-	}
-	if (out < 0) {
-		owner.Fail("packet stream index is not a mux track");
-		return false;
-	}
-	if (!m_ctx) {
-		m_queue.push_back(std::move(packet));
-		return true;
-	}
-	if (!WriteHeaderIfReady(owner))
-		return false;
-	if (m_header) {
-		while (!m_queue.empty()) {
-			class Packet leftover = std::move(m_queue.front());
-			m_queue.pop_front();
-			if (!WritePacket(owner, leftover))
-				return false;
-		}
-		return WritePacket(owner, packet);
-	}
-	m_queue.push_back(std::move(packet));
-	return true;
-}
-
-void Details::Container::Flush(class Mux& owner) noexcept {
+void Details::Container::Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept {
 	if (owner.Failed() || m_trailer)
 		return;
 	for (const auto& [index, track] : m_tracks) {
 		if (track.encoder && track.encoder->Failed()) {
-			owner.Fail(track.encoder->Error().value_or("encoder failed"));
+			owner.Fail("encoder failed");
 			return;
 		}
 	}
+
+	for (auto& [index, track] : m_tracks) {
+		if (!track.encoder || *track.encoder)
+			continue;
+		AVCodecParameters* params = avcodec_parameters_alloc();
+		if (!params) {
+			owner.Fail("avcodec_parameters_alloc failed");
+			return;
+		}
+		params->codec_type = AVMEDIA_TYPE_SUBTITLE;
+		params->codec_id = AV_CODEC_ID_SUBRIP;
+		track.params = params;
+		track.srcTb = AVRational{1, 1000};
+		track.encoder = nullptr;
+		std::fprintf(stderr, "STMM-M drop idle encoder out=%d (never opened)\n", index);
+		std::fflush(stderr);
+	}
+
 	if (!WriteHeaderIfReady(owner))
 		return;
-	for (auto& [index, track] : m_tracks) {
-		if (!track.encoder || !*track.encoder)
-			continue;
-		track.encoder->Flush();
-		class Packet leftover;
-		while (track.encoder->MuxTakePacket(leftover)) {
-			if (m_header) {
-				if (!WritePacket(owner, leftover))
-					return;
-			}
-			else
-				m_queue.push_back(std::move(leftover));
+	while (!m_queue.empty()) {
+		std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> leftover = std::move(m_queue.front());
+		m_queue.pop_front();
+		if (m_header) {
+			if (!leftover || !WritePacket(owner, *leftover))
+				return;
 		}
 	}
 	if (!m_header)
@@ -505,5 +622,24 @@ void Details::Container::Flush(class Mux& owner) noexcept {
 		av_dict_set(&m_ctx->metadata, "ENCODER", WritingApp, 0);
 		av_write_trailer(m_ctx);
 		m_trailer = true;
+		std::fprintf(stderr, "STMM-M trailer written\n");
+		std::fflush(stderr);
 	}
+	else if (!m_header) {
+		std::fprintf(stderr, "STMM-M flush without header\n");
+		std::fflush(stderr);
+	}
+}
+
+void Details::Container::Close() noexcept {
+	if (!m_ctx)
+		return;
+	if (m_header && !m_trailer) {
+		av_write_trailer(m_ctx);
+		m_trailer = true;
+	}
+	if (m_ctx->pb && !(m_ctx->oformat && (m_ctx->oformat->flags & AVFMT_NOFILE)))
+		avio_closep(&m_ctx->pb);
+	avformat_free_context(m_ctx);
+	m_ctx = nullptr;
 }

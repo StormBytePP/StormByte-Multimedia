@@ -53,15 +53,15 @@ Resize::Resize(std::uint32_t width, std::uint32_t height) noexcept
 : Filter::Process("resize"), m_width(width), m_height(height) {}
 
 enum StormByte::Multimedia::Type Resize::Media() const noexcept {
-	return Type::Video;
+	return StormByte::Multimedia::Type::Video;
 }
 
 void Resize::Clean() noexcept {}
 
 void Resize::Setup() noexcept {}
 
-void Resize::Process(Pipeline::Frame& frame, Origin) noexcept {
-	::AVFrame* src = Native(frame);
+void Resize::Process(const Pipeline::Frame&) noexcept {
+	::AVFrame* src = AVFrame();
 	if (!src || src->width <= 0 || src->height <= 0) {
 		Fail("missing video buffer");
 		return;
@@ -125,5 +125,5 @@ void Resize::Process(Pipeline::Frame& frame, Origin) noexcept {
 		return;
 	}
 
-	Replace(frame, out);
+	Save(out);
 }

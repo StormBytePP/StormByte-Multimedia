@@ -40,11 +40,12 @@
 
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/filters/chain.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -57,9 +58,10 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Copy;
 	class Demux;
+	class Encoder;
 	class Mux;
+	class Transcode;
 
 	/**
 	 * @namespace Engine
@@ -78,7 +80,7 @@ namespace StormByte::Multimedia::Pipeline {
 			class Engine;
 			/**
 			 * @namespace Details
-			 * @brief Container and attachment mux engines.
+			 * @brief Container mux engine.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -90,23 +92,15 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @brief Binds @p encoder's Index() as a mux track. Never throws.
-	 * @param encoder Source encoder (must outlive the mux until the header).
+	 * @brief Reserves @p encoder as an output track of @p mux.
+	 * @param encoder Live encoder.
 	 * @param mux Destination.
 	 * @return @p encoder.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
 
 	/**
-	 * @brief Reserves Copy::Index() on @p mux as a remux track. Never throws.
-	 * @param copy Bound copy track (must outlive the mux until the header).
-	 * @param mux Destination.
-	 * @return @p copy.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Copy& operator>>(Copy& copy, Mux& mux) noexcept;
-
-	/**
-	 * @brief Opens @p mux on @p path using the constructor container. Never throws.
+	 * @brief Binds the output path of @p mux.
 	 * @param mux Muxer.
 	 * @param path Destination file.
 	 * @return @p mux.
@@ -114,24 +108,16 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
 
 	/**
-	 * @brief Writes @p packet after the filter chain. Never throws.
-	 * @param packet Encoded or copied packet.
-	 * @param mux Destination.
-	 * @return @p packet.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC class Packet& operator>>(class Packet& packet, Mux& mux) noexcept;
-
-	/**
-	 * @brief Snapshots File::Attachments() onto @p mux. Never throws.
-	 * @param file Opened source file.
+	 * @brief Snapshots attachments of @p file onto @p mux.
+	 * @param file Source file.
 	 * @param mux Destination.
 	 * @return @p mux.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(const File& file, Mux& mux) noexcept;
 
 	/**
-	 * @brief Forwards the demuxer's File attachments onto @p mux. Never throws.
-	 * @param demux Open demuxer bound to a File.
+	 * @brief Forwards source attachments from @p demux onto @p mux.
+	 * @param demux Open demuxer.
 	 * @param mux Destination.
 	 * @return @p mux.
 	 */
@@ -139,168 +125,137 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Mux
-	 * @brief Writes interleaved compressed packets to a destination file.
+	 * @brief Writes interleaved packets to a destination container.
 	 *
-	 * @ref Filter::Chain goes in Pipe(). @c packet >> mux calls
-	 * @ref Filter::Chain::Call with @ref Filter::Origin::Mux.
-	 * @ref Flush also @ref Filter::Chain::Eof that origin.
-	 * A null pipe is identity.
+	 * A @ref Step, @c final. Launches in the constructor.
+	 * Encoded tracks come from @c encoder >> mux. Copy tracks (V1)
+	 * come from @ref Remux plus a @ref Route from Demux.
+	 * @ref Work writes to the container, not to @ref m_out.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Mux {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Mux final: public Step {
 		public:
 			/**
-			 * @name Lifetime
+			 * @name Lifecycle
 			 * @{
 			 */
 
 			/**
-			 * @brief Muxer for @p container. Does not open a file.
-			 * @param container Registry container. Must HasAccess(Write).
-			 * @param pipe Shared filter list, or null.
+			 * @brief Muxer for @p container. Destination path is bound later.
+			 * @param container Writable registry container.
+			 *
+			 * Launches the worker. @ref Pop waits until Bind creates buckets.
 			 */
-			explicit Mux(const Container& container,
-				std::shared_ptr<Filter::Chain> pipe = nullptr) noexcept;
+			explicit Mux(const StormByte::Multimedia::Container& container) noexcept;
 
 			/**
-			 * @brief Muxer bound to an existing chain (non-owning alias).
-			 * @param container Registry container. Must HasAccess(Write).
-			 * @param pipe Live chain.
+			 * @brief Copy constructor.
+			 * @param other Source muxer.
 			 */
-			Mux(const Container& container, Filter::Chain& pipe) noexcept;
-
-			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			Mux(const Mux&) = delete;
+			Mux(const Mux& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Muxer to take.
 			 */
-			Mux(Mux&& other) noexcept;
+			Mux(Mux&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Flushes encoders and writes the trailer.
+			 * @brief Destructor. Closes the backend.
 			 */
-			~Mux() noexcept;
+			~Mux() noexcept override;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source muxer.
 			 * @return *this.
 			 */
-			Mux& operator=(const Mux&) = delete;
+			Mux& operator=(const Mux& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Muxer to take.
 			 * @return *this.
 			 */
-			Mux& operator=(Mux&& other) noexcept;
+			Mux& operator=(Mux&& other) noexcept = delete;
 
 			/**
-			 * @brief true if a destination is bound and not failed.
-			 * @return Open and not @ref Failed.
+			 * @}
+			 */
+
+			/**
+			 * @brief true if the destination is bound and the muxer has not failed.
+			 * @return Open and writable.
 			 */
 			explicit operator bool() const noexcept;
 
-			/** @} */
+			/**
+			 * @brief true after @ref Finish flushed the trailer, or after @ref Fail.
+			 * @return Muxer will not accept more packets.
+			 */
+			bool Closed() const noexcept;
 
 			/**
-			 * @name Bind
-			 * @{
+			 * @brief Presentation time of the last packet written.
+			 * @return Pts, or empty until a packet with Pts is written.
 			 */
+			std::optional<StormByte::Multimedia::Property::Duration> Position() const noexcept;
 
 			/**
-			 * @brief Destination container bound at construction.
-			 * @return Registry container.
+			 * @brief Destination container.
+			 * @return Registry container passed to the constructor.
 			 */
-			const Container& Destination() const noexcept;
-
-			/** @} */
+			const StormByte::Multimedia::Container& Destination() const noexcept;
 
 			/**
-			 * @name Pipe
-			 * @{
+			 * @brief V1 remux reserve: copy @p in from @p demux onto output index @p out.
+			 * @param demux Open demuxer (format context already adopted).
+			 * @param in Source stream index.
+			 * @param out Destination order key (contiguous from 0 with encoders).
+			 * @return false if @ref Fail was called.
+			 *
+			 * Clones @c codecpar and time base from the source stream.
+			 * Packets arriving with @ref Item::Track equal to @p in are
+			 * written on @p out.
 			 */
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			std::shared_ptr<Filter::Chain>& Pipe() noexcept;
-
-			/**
-			 * @brief Shared filter chain, or null.
-			 * @return Pipe.
-			 */
-			const std::shared_ptr<Filter::Chain>& Pipe() const noexcept;
-
-			/**
-			 * @brief Replaces the shared chain.
-			 * @param pipe New list, or null.
-			 */
-			void Pipe(std::shared_ptr<Filter::Chain> pipe) noexcept;
-
-			/**
-			 * @brief Aliases a live chain (non-owning).
-			 * @param pipe Live list.
-			 */
-			void Pipe(Filter::Chain& pipe) noexcept;
-
-			/** @} */
-
-			/**
-			 * @name Status
-			 * @{
-			 */
-
-			/**
-			 * @brief Whether a hard error occurred.
-			 * @return true on open/write/filter error.
-			 */
-			bool Failed() const noexcept;
-
-			/**
-			 * @brief Failure text, if Failed().
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept;
-
-			/**
-			 * @brief Flushes every reserved encoder, leftover packets, and @ref Pipe Eof.
-			 */
-			void Flush() noexcept;
-
-			/** @} */
+			bool Remux(class Demux& demux, int in, int out) noexcept;
 
 			friend Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
-			friend Copy& operator>>(Copy& copy, Mux& mux) noexcept;
 			friend Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
-			friend class Packet& operator>>(class Packet& packet, Mux& mux) noexcept;
 			friend Mux& operator>>(const File& file, Mux& mux) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
-			friend class Copy;
+			friend class Transcode;
 			friend class Engine::Mux::Details::Container;
 			friend class Engine::Mux::Details::Attachment;
 
-		private:
-			const Container* m_container;							///< Destination container
-			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Output format backend
-			std::shared_ptr<Filter::Chain> m_pipe;					///< Shared filter list
-			bool m_failed;											///< Hard error
-			std::optional<std::string> m_error;						///< Failure text
+		protected:
+			/**
+			 * @brief Prepare-once. Does not Fail if the path is still unbound.
+			 */
+			void Open() noexcept override;
 
 			/**
-			 * @brief Marks a hard error and drops the backend.
+			 * @brief Writes one packet to the container. Does not touch @ref m_out.
+			 * @param item Incoming packet.
+			 */
+			void Work(std::shared_ptr<Item> item) noexcept override;
+
+			/**
+			 * @brief Flushes leftover packets and the trailer.
+			 */
+			void Finish() noexcept override;
+
+		private:
+			/**
+			 * @brief Marks a hard error and closes the backend.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
 
-			/**
-			 * @brief Flush + close. Used from the destructor.
-			 */
-			void Finish() noexcept;
+			const StormByte::Multimedia::Container* m_container;	///< Destination container
+			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Format backend
+			std::atomic<bool> m_closed;								///< Set by Finish / Fail
+			std::atomic<std::int64_t> m_positionNs;					///< Last written Pts, or -1
 	};
 }

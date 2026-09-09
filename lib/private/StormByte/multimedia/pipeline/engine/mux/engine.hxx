@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <filesystem>
+#include <memory>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Engine::Mux
@@ -52,13 +53,17 @@
  *
  * @ingroup multimedia_pipeline
  */
+namespace StormByte::Multimedia::Pipeline {
+	class Demux;
+}
+
 namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 	/**
 	 * @class Engine
 	 * @brief Abstract mux backend. One instance per public Mux.
 	 *
-	 * The public Mux is the entry point. Path, tracks, packets, flush and
-	 * attachments live in Details::Container / Details::Attachment.
+	 * BindPath, ReserveEncoder, Remux and BindAttachments stay bool+Fail.
+	 * Push uses shared_ptr. Errors are owner.Fail().
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -70,15 +75,17 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			virtual ~Engine() noexcept = default;
 
 			/**
-			 * @brief Copy constructor (deleted).
+			 * @brief Copy constructor.
+			 * @param other Source engine.
 			 */
-			Engine(const Engine&) = delete;
+			Engine(const Engine& other) = delete;
 
 			/**
-			 * @brief Copy assignment (deleted).
+			 * @brief Copy assignment.
+			 * @param other Source engine.
 			 * @return *this.
 			 */
-			Engine& operator=(const Engine&) = delete;
+			Engine& operator=(const Engine& other) = delete;
 
 			/**
 			 * @brief Whether a destination file is bound.
@@ -98,7 +105,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param path Output file.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool BindPath(class Mux& owner, const std::filesystem::path& path) noexcept = 0;
+			virtual bool BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const std::filesystem::path& path) noexcept = 0;
 
 			/**
 			 * @brief Reserves an encode track at Encoder::Index().
@@ -106,15 +114,19 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param encoder Live encoder (must outlive the header).
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool ReserveEncoder(class Mux& owner, class Encoder& encoder) noexcept = 0;
+			virtual bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept = 0;
 
 			/**
-			 * @brief Reserves a copy track at Copy::Index().
+			 * @brief Reserves a bitstream-copy track from an open demuxer.
 			 * @param owner Public muxer.
-			 * @param copy Bound copy handle.
+			 * @param demux Open demuxer.
+			 * @param in Source stream index.
+			 * @param out Destination order key.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool ReserveCopy(class Mux& owner, const class Copy& copy) noexcept = 0;
+			virtual bool Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept = 0;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -122,21 +134,23 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param file Source file.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool BindAttachments(class Mux& owner, const File& file) noexcept = 0;
+			virtual bool BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const File& file) noexcept = 0;
 
 			/**
 			 * @brief Queues or writes one packet. Writes the header when ready.
 			 * @param owner Public muxer.
 			 * @param packet Encoded or copied packet.
-			 * @return false if owner.Fail() was called.
+			 * @return true if the packet was accepted.
 			 */
-			virtual bool Push(class Mux& owner, class Packet& packet) noexcept = 0;
+			virtual bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept = 0;
 
 			/**
-			 * @brief Flushes reserved encoders, leftover packets and the trailer.
+			 * @brief Flushes leftover packets and the trailer.
 			 * @param owner Public muxer.
 			 */
-			virtual void Flush(class Mux& owner) noexcept = 0;
+			virtual void Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept = 0;
 
 			/**
 			 * @brief Writes trailer if needed and frees AVIO + context.
@@ -153,13 +167,13 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @brief Move constructor.
 			 * @param other Engine to take.
 			 */
-			Engine(Engine&&) noexcept = default;
+			Engine(Engine&& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&&) noexcept = default;
+			Engine& operator=(Engine&& other) noexcept = default;
 	};
 }

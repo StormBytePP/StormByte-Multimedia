@@ -36,32 +36,45 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/transcode/engine.hxx>
+#pragma once
 
-namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
-	Engine::Engine() noexcept = default;
+#include <StormByte/string.hxx>
 
-	Engine::~Engine() noexcept {
-		RequestCancel();
-		Join();
+#include <string>
+
+#ifdef LINUX
+	#include <pthread.h>
+#elif defined(MACOS)
+	#include <pthread.h>
+#elif defined(WINDOWS)
+	#include <windows.h>
+#endif
+
+/**
+ * @brief Sets the current thread name for debuggers and process tools.
+ * @param name Host name. Linux keeps the first 15 bytes.
+ */
+inline void NameThread(const std::string& name) noexcept {
+	if (name.empty())
+		return;
+#ifdef LINUX
+	char buf[16]{};
+	const std::size_t n = name.size() < 15 ? name.size() : 15;
+	name.copy(buf, n);
+	buf[n] = '\0';
+	::pthread_setname_np(::pthread_self(), buf);
+#elif defined(MACOS)
+	::pthread_setname_np(name.c_str());
+#elif defined(WINDOWS)
+	std::wstring wide;
+	try {
+		wide = StormByte::String::UTF8Decode(name);
 	}
-
-	void Engine::RequestCancel() noexcept {
-		cancel.store(true, std::memory_order_release);
-		paused.store(false, std::memory_order_release);
-		pauseCv.notify_all();
+	catch (...) {
+		return;
 	}
-
-	void Engine::Join() noexcept {
-		if (worker.joinable())
-			worker.join();
-	}
-
-	void Engine::WaitIfPaused() noexcept {
-		std::unique_lock wait(pauseMutex);
-		pauseCv.wait(wait, [&]() {
-			return cancel.load(std::memory_order_acquire)
-				|| !paused.load(std::memory_order_acquire);
-		});
-	}
+	if (wide.empty())
+		return;
+	::SetThreadDescription(::GetCurrentThread(), wide.c_str());
+#endif
 }

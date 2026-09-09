@@ -39,58 +39,60 @@
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 
+#include <utility>
+
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Multimedia::Type;
 
-/**
- * @brief Empty frame.
- */
 Frame::Frame() noexcept
-: m_type(Type::Unknown), m_streamIndex(-1) {}
+: Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder) {}
 
-/**
- * @brief Builds a frame without a backend buffer.
- */
-Frame::Frame(enum Type type, int stream_index, StormByte::Buffer::FIFO payload,
+Frame::Frame(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
 	std::optional<StormByte::Multimedia::Property::Duration> pts,
 	std::optional<StormByte::Multimedia::Property::Duration> duration,
 	std::optional<StormByte::Multimedia::Property::Video> video,
 	std::vector<class SideData> attachments,
 	std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept
-: m_type(type), m_streamIndex(stream_index), m_payload(std::move(payload)),
-m_pts(std::move(pts)), m_duration(std::move(duration)),
-m_video(std::move(video)), m_audio(std::move(audio)),
-m_attachments(std::move(attachments)) {}
+: Item(track, type, Kind::Frame, producer),
+	m_payload(std::move(payload)),
+	m_pts(std::move(pts)), m_duration(std::move(duration)),
+	m_video(std::move(video)), m_audio(std::move(audio)),
+	m_attachments(std::move(attachments)) {}
 
-/**
- * @brief Deep copy (metadata, FIFO and cloned AVFrame).
- * @param other Source frame.
- */
 Frame::Frame(const Frame& other) noexcept
-: m_type(other.m_type),
-m_streamIndex(other.m_streamIndex),
-m_payload(other.m_payload),
-m_pts(other.m_pts),
-m_duration(other.m_duration),
-m_video(other.m_video),
-m_audio(other.m_audio),
-m_language(other.m_language),
-m_title(other.m_title),
-m_attachments(other.m_attachments) {
+: Item(other),
+	m_payload(other.m_payload),
+	m_pts(other.m_pts),
+	m_duration(other.m_duration),
+	m_video(other.m_video),
+	m_audio(other.m_audio),
+	m_language(other.m_language),
+	m_title(other.m_title),
+	m_attachments(other.m_attachments) {
 	if (other.m_engine)
 		m_engine = std::make_unique<Engine::Frame::Engine>(*other.m_engine);
 }
 
-/**
- * @brief Deep copy assignment.
- * @param other Source frame.
- * @return *this.
- */
+Frame::Frame(Frame&& other) noexcept
+: Item(std::move(other)),
+	m_payload(std::move(other.m_payload)),
+	m_pts(std::move(other.m_pts)),
+	m_duration(std::move(other.m_duration)),
+	m_video(std::move(other.m_video)),
+	m_audio(std::move(other.m_audio)),
+	m_language(std::move(other.m_language)),
+	m_title(std::move(other.m_title)),
+	m_attachments(std::move(other.m_attachments)),
+	m_engine(std::move(other.m_engine)) {
+	other.BecomeEmpty();
+}
+
+Frame::~Frame() noexcept = default;
+
 Frame& Frame::operator=(const Frame& other) noexcept {
 	if (this == &other)
 		return *this;
-	m_type = other.m_type;
-	m_streamIndex = other.m_streamIndex;
+	Item::operator=(other);
 	m_payload = other.m_payload;
 	m_pts = other.m_pts;
 	m_duration = other.m_duration;
@@ -106,16 +108,35 @@ Frame& Frame::operator=(const Frame& other) noexcept {
 	return *this;
 }
 
-Frame::Frame(Frame&&) noexcept = default;
-Frame::~Frame() noexcept = default;
-Frame& Frame::operator=(Frame&&) noexcept = default;
-
-enum Type Frame::Type() const noexcept {
-	return m_type;
+Frame& Frame::operator=(Frame&& other) noexcept {
+	if (this == &other)
+		return *this;
+	Item::operator=(std::move(other));
+	m_payload = std::move(other.m_payload);
+	m_pts = std::move(other.m_pts);
+	m_duration = std::move(other.m_duration);
+	m_video = std::move(other.m_video);
+	m_audio = std::move(other.m_audio);
+	m_language = std::move(other.m_language);
+	m_title = std::move(other.m_title);
+	m_attachments = std::move(other.m_attachments);
+	m_engine = std::move(other.m_engine);
+	other.BecomeEmpty();
+	return *this;
 }
 
-int Frame::StreamIndex() const noexcept {
-	return m_streamIndex;
+void Frame::BecomeEmpty() noexcept {
+	Item::operator=(Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder));
+	m_payload = StormByte::Buffer::FIFO{};
+	m_pts.reset();
+	m_duration.reset();
+	m_video.reset();
+	m_audio.reset();
+	m_language.reset();
+	m_title.reset();
+	m_attachments.clear();
+	m_attachments.shrink_to_fit();
+	m_engine.reset();
 }
 
 const std::optional<StormByte::Multimedia::Property::Duration>& Frame::Pts() const noexcept {
