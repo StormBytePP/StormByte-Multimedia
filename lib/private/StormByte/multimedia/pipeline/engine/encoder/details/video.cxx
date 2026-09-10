@@ -77,15 +77,9 @@ void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::StampOutg
 	std::int64_t dur = m_scratch.Duration();
 
 	if (!m_tsOffsetSet) {
-		std::int64_t lowest = INT64_MAX;
-		if (pts != AV_NOPTS_VALUE)
-			lowest = pts;
-		if (dts != AV_NOPTS_VALUE && dts < lowest)
-			lowest = dts;
-		m_tsOffset = (lowest != INT64_MAX && lowest < 0) ? -lowest : 0;
+		/* Presentation origin: first PTS → 0. DTS may go negative (B delay). */
+		m_tsOffset = (pts != AV_NOPTS_VALUE) ? -pts : 0;
 		m_tsOffsetSet = true;
-		std::fprintf(stderr, "STMM-V offset=%lld\n", static_cast<long long>(m_tsOffset));
-		std::fflush(stderr);
 	}
 
 	if (pts != AV_NOPTS_VALUE)
@@ -97,23 +91,12 @@ void StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::StampOutg
 		dts = (pts != AV_NOPTS_VALUE) ? pts : 0;
 	if (pts == AV_NOPTS_VALUE)
 		pts = dts;
-	if (pts < dts)
-		pts = dts;
+	/* Do not clamp pts up to dts: B-frames are PTS ahead of a later P,
+	but the first I is PTS >= DTS after this shift (PTS=0, DTS=-delay). */
+
 	if (dur <= 0)
 		dur = 1;
 	m_scratch.Timestamps(pts, dts, dur);
-
-	static int n = 0;
-	if (n < 12) {
-		std::fprintf(stderr, "STMM-V stamped n=%d pts=%lld dts=%lld dur=%lld key=%d\n",
-			n,
-			static_cast<long long>(pts),
-			static_cast<long long>(dts),
-			static_cast<long long>(dur),
-			(m_scratch.Flags() & AV_PKT_FLAG_KEY) ? 1 : 0);
-		std::fflush(stderr);
-		++n;
-	}
 }
 
 bool StormByte::Multimedia::Pipeline::Engine::Encoder::Details::Video::Open(
