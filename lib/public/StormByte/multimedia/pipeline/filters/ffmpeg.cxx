@@ -96,10 +96,18 @@ void FFmpeg::Release() noexcept {
 		return;
 	m_hold = 0;
 	m_heldFor = 0;
-	while (!m_queue.empty()) {
-		m_out.Push(std::move(m_queue.front()));
-		m_queue.pop_front();
+	auto parked = std::move(m_queue);
+	for (auto& item : parked) {
+		m_current = item;
+		if (m_current->Kind() == Pipeline::Kind::Frame)
+			Process(static_cast<const Pipeline::Frame&>(*m_current));
+		else
+			Process(static_cast<const Pipeline::Packet&>(*m_current));
+		if (Failed())
+			return;
+		m_out.Push(std::move(m_current));
 	}
+	m_current.reset();
 }
 
 bool FFmpeg::Held() const noexcept {

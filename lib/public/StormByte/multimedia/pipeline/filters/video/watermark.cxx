@@ -485,26 +485,25 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 			Hold(ProbeMax);
 		const bool usable = ProbeBars(src);
 		const bool letterbox = m_barTop > 8 && m_barBottom > 8;
-		std::fprintf(stderr, "STMM-W hold held=%d/%d usable=%d letterbox=%d released=%d\n",
-			HeldFor(), ProbeMax, usable ? 1 : 0, letterbox ? 1 : 0, m_released ? 1 : 0);
-		std::fflush(stderr);
-		if (usable && letterbox && m_stable >= 8)
+		if (usable && letterbox && m_stable >= 8) {
+			m_released = true;
 			Release();
-		else if (HeldFor() >= ProbeMax) {
+			return;
+		}
+		if (HeldFor() >= ProbeMax) {
 			if (!letterbox) {
 				m_barTop = 0;
 				m_barBottom = 0;
 				m_barLeft = 0;
 				m_barRight = 0;
 			}
+			m_released = true;
 			Release();
+			return;
 		}
 		if (Held())
 			return;
 		m_released = true;
-		std::fprintf(stderr, "STMM-W release bars t=%d b=%d l=%d r=%d\n",
-			m_barTop, m_barBottom, m_barLeft, m_barRight);
-		std::fflush(stderr);
 	}
 
 	Paint();
