@@ -83,14 +83,14 @@ namespace StormByte::Multimedia::Metadata {
 	 * @brief Per-stream disposition bits (FFmpeg AV_DISPOSITION_* subset).
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC DispositionFlag: std::uint16_t {
-		None			= 0,		///< No flags
-		Default			= 1 << 0,	///< Default playback stream
-		Dub			= 1 << 1,	///< Dubbed audio
-		Original		= 1 << 2,	///< Original language
-		Comment			= 1 << 3,	///< Commentary
-		Lyrics			= 1 << 4,	///< Lyrics
-		Karaoke			= 1 << 5,	///< Karaoke
-		Forced			= 1 << 6,	///< Forced (e.g. foreign subs)
+		None				= 0,		///< No flags
+		Default				= 1 << 0,	///< Default playback stream
+		Dub					= 1 << 1,	///< Dubbed audio
+		Original			= 1 << 2,	///< Original language
+		Comment				= 1 << 3,	///< Commentary
+		Lyrics				= 1 << 4,	///< Lyrics
+		Karaoke				= 1 << 5,	///< Karaoke
+		Forced				= 1 << 6,	///< Forced (e.g. foreign subs)
 		HearingImpaired		= 1 << 7,	///< Hearing impaired
 		VisualImpaired		= 1 << 8,	///< Visual impaired
 		AttachedPicture		= 1 << 9	///< Cover / attached pic
