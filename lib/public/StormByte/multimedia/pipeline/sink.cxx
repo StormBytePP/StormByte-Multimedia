@@ -58,7 +58,7 @@ void Sink::Push(std::shared_ptr<Item> item) noexcept {
 void Sink::Push(int track, std::shared_ptr<Item> item) noexcept {
 	if (!item)
 		return;
-	std::shared_ptr<Hopper<std::shared_ptr<Item>>> hopper;
+	std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> hopper;
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this, track] {
@@ -79,7 +79,7 @@ void Sink::Wake(std::condition_variable& wake) noexcept {
 	m_wake.store(&wake, std::memory_order_release);
 	const auto hoppers = Order();
 	for (auto& hopper : hoppers)
-		hopper->Wake(wake);
+		hopper->Notify(wake);
 }
 
 void Sink::Bind(Sink& consumer) {
@@ -87,7 +87,7 @@ void Sink::Bind(Sink& consumer) {
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
 	for (auto& [track, hopper] : m_buckets) {
 		if (wake != nullptr)
-			hopper->Wake(*wake);
+			hopper->Notify(*wake);
 		consumer.m_buckets[track] = hopper;
 	}
 	consumer.RebuildOrder();
@@ -100,7 +100,7 @@ void Sink::Bind(int track, Sink& consumer) {
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
 	auto hopper = Ensure(track);
 	if (wake != nullptr)
-		hopper->Wake(*wake);
+		hopper->Notify(*wake);
 	consumer.m_buckets[track] = hopper;
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
@@ -112,7 +112,7 @@ std::shared_ptr<Item> Sink::Pop() noexcept {
 }
 
 std::shared_ptr<Item> Sink::Pop(const Select& select) noexcept {
-	std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> hoppers;
+	std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> hoppers;
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this] {
@@ -165,14 +165,14 @@ bool Sink::Ready() const noexcept {
 	return drained;
 }
 
-std::shared_ptr<Hopper<std::shared_ptr<Item>>> Sink::Ensure(int track) {
+std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> Sink::Ensure(int track) {
 	auto found = m_buckets.find(track);
 	if (found != m_buckets.end())
 		return found->second;
-	auto hopper = std::make_shared<Hopper<std::shared_ptr<Item>>>();
+	auto hopper = std::make_shared<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>();
 	std::condition_variable* wake = m_wake.load(std::memory_order_acquire);
 	if (wake != nullptr)
-		hopper->Wake(*wake);
+		hopper->Notify(*wake);
 	m_buckets.emplace(track, hopper);
 	RebuildOrder();
 	return hopper;
@@ -185,7 +185,7 @@ void Sink::RebuildOrder() {
 		m_order.push_back(hopper);
 }
 
-std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> Sink::Order() const {
+std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> Sink::Order() const {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	return m_order;
 }

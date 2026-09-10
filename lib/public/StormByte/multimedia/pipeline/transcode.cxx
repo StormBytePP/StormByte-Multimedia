@@ -637,227 +637,236 @@ namespace StormByte::Multimedia::Pipeline {
 		}
 	}
 
-	void Transcode::Worker() noexcept {
-		NameThread("STMM:Transcode");
+    void Transcode::Worker() noexcept {
+        NameThread("STMM:Transcode");
 
-		auto& log = *m_logger;
-		log << Level::LowLevel << "Transcode::Worker enter" << std::endl;
-		OnConfigure();
-		if (m_engine->status.load(std::memory_order_acquire) == Status::Error) {
-			OnError(Error().value_or("configure failed"));
-			return;
-		}
-		if (m_engine->cancel.load(std::memory_order_acquire)) {
-			m_engine->status.store(Status::Aborted, std::memory_order_release);
-			OnAborted();
-			return;
-		}
-		if (!m_engine->container || m_engine->path.empty()) {
-			Fail("destination is not set");
-			OnError(Error().value_or("destination is not set"));
-			return;
-		}
+        auto& log = *m_logger;
+        log << Level::LowLevel << "Transcode::Worker enter" << std::endl;
+        OnConfigure();
+        if (m_engine->status.load(std::memory_order_acquire) == Status::Error) {
+            OnError(Error().value_or("configure failed"));
+            return;
+        }
+        if (m_engine->cancel.load(std::memory_order_acquire)) {
+            m_engine->status.store(Status::Aborted, std::memory_order_release);
+            OnAborted();
+            return;
+        }
+        if (!m_engine->container || m_engine->path.empty()) {
+            Fail("destination is not set");
+            OnError(Error().value_or("destination is not set"));
+            return;
+        }
 
-		if (auto snapshot = Configuration())
-			OnPlan(*snapshot);
+        if (auto snapshot = Configuration())
+            OnPlan(*snapshot);
 
-		std::vector<Engine::Transcode::Slot> plan = m_engine->mapped;
-		for (const auto& slot : plan) {
-			if (!slot.copy && slot.codec == nullptr) {
-				Fail("stream " + std::to_string(slot.in) + " has no Codec() or Copy()");
-				OnError(Error().value_or("incomplete map"));
-				return;
-			}
-		}
+        std::vector<Engine::Transcode::Slot> plan = m_engine->mapped;
+        for (const auto& slot : plan) {
+            if (!slot.copy && slot.codec == nullptr) {
+                Fail("stream " + std::to_string(slot.in) + " has no Codec() or Copy()");
+                OnError(Error().value_or("incomplete map"));
+                return;
+            }
+        }
 
-		std::set<int> used;
-		for (const auto& slot : plan)
-			used.insert(slot.in);
-		for (int in : m_engine->ignore)
-			used.insert(in);
-		for (const auto& stream : m_file->Streams()) {
-			if (used.contains(stream.Index()))
-				continue;
-			Engine::Transcode::Slot implied;
-			implied.in = stream.Index();
-			implied.outKey = stream.Index();
-			implied.kind = stream.Type();
-			implied.copy = true;
-			plan.push_back(std::move(implied));
-		}
+        std::set<int> used;
+        for (const auto& slot : plan)
+            used.insert(slot.in);
+        for (int in : m_engine->ignore)
+            used.insert(in);
+        for (const auto& stream : m_file->Streams()) {
+            if (used.contains(stream.Index()))
+                continue;
+            Engine::Transcode::Slot implied;
+            implied.in = stream.Index();
+            implied.outKey = stream.Index();
+            implied.kind = stream.Type();
+            implied.copy = true;
+            plan.push_back(std::move(implied));
+        }
 
-		std::sort(plan.begin(), plan.end(), [](const Engine::Transcode::Slot& a, const Engine::Transcode::Slot& b) {
-			if (a.outKey != b.outKey)
-				return a.outKey < b.outKey;
-			return a.in < b.in;
-		});
+        std::sort(plan.begin(), plan.end(), [](const Engine::Transcode::Slot& a, const Engine::Transcode::Slot& b) {
+            if (a.outKey != b.outKey)
+                return a.outKey < b.outKey;
+            return a.in < b.in;
+        });
 
-		const auto start = OnStart();
-		if (start != Status::Running) {
-			if (start == Status::Error) {
-				if (!Failed())
-					Fail("OnStart rejected the job");
-				OnError(Error().value_or("OnStart rejected the job"));
-			}
-			else if (start == Status::Aborted) {
-				m_engine->status.store(Status::Aborted, std::memory_order_release);
-				OnAborted();
-			}
-			else {
-				m_engine->status.store(Status::Stopped, std::memory_order_release);
-			}
-			return;
-		}
+        const auto start = OnStart();
+        if (start != Status::Running) {
+            if (start == Status::Error) {
+                if (!Failed())
+                    Fail("OnStart rejected the job");
+                OnError(Error().value_or("OnStart rejected the job"));
+            }
+            else if (start == Status::Aborted) {
+                m_engine->status.store(Status::Aborted, std::memory_order_release);
+                OnAborted();
+            }
+            else {
+                m_engine->status.store(Status::Stopped, std::memory_order_release);
+            }
+            return;
+        }
 
-		class Demux demux;
-		*m_file >> demux;
-		if (demux.Failed()) {
-			Fail("demux open failed");
-			OnError(Error().value_or("demux"));
-			return;
-		}
+        class Demux demux;
+        *m_file >> demux;
+        if (demux.Failed()) {
+            Fail("demux open failed");
+            OnError(Error().value_or("demux"));
+            return;
+        }
 
-		class Mux mux(*m_engine->container);
-		mux >> m_engine->path;
-		*m_file >> mux;
-		if (mux.Failed()) {
-			Fail("mux open failed");
-			OnError(Error().value_or("mux"));
-			return;
-		}
+        class Mux mux(*m_engine->container);
+        mux >> m_engine->path;
+        *m_file >> mux;
+        if (mux.Failed()) {
+            Fail("mux open failed");
+            OnError(Error().value_or("mux"));
+            return;
+        }
 
-		struct EncodeLane {
-			int in = -1;
-			std::unique_ptr<class Decoder> decoder;
-			std::unique_ptr<class Encoder> encoder;
-			std::unique_ptr<Route> frames;
-		};
-		std::vector<EncodeLane> lanes;
-		std::vector<std::unique_ptr<Route>> copies;
+        struct EncodeLane {
+            int in = -1;
+            std::unique_ptr<class Decoder> decoder;
+            std::unique_ptr<class Encoder> encoder;
+            std::unique_ptr<Route> frames;
+        };
+        std::vector<EncodeLane> lanes;
+        std::vector<std::unique_ptr<Route>> copies;
 
-		int muxIndex = 0;
-		for (auto& slot : plan) {
-			if (slot.copy) {
-				if (!mux.Remux(demux, slot.in, muxIndex)) {
-					Fail("copy remux reserve failed");
-					OnError(Error().value_or("mux"));
-					return;
-				}
-				auto route = std::make_unique<Route>(slot.in, true);
-				for (const auto& filter : slot.filters)
-					route->Add(filter);
-				route->Close(demux, mux);
-				copies.push_back(std::move(route));
-			}
-			else {
-				auto decoder = std::make_unique<class Decoder>(slot.in);
-				auto encoder = std::make_unique<class Encoder>(muxIndex, *slot.codec);
-				if (slot.implementation)
-					encoder->Implementation(*slot.implementation);
-				if (slot.crf)
-					encoder->CRF(*slot.crf);
-				if (slot.bitRate)
-					encoder->BitRate(*slot.bitRate);
-				if (slot.maxBitRate)
-					encoder->MaxBitRate(*slot.maxBitRate);
-				if (slot.preset)
-					encoder->Preset(*slot.preset);
-				if (slot.tune)
-					encoder->Tune(*slot.tune);
-				if (!slot.fineTune.empty())
-					encoder->FineTune(slot.fineTune);
-				if (slot.language)
-					encoder->Language(*slot.language);
-				if (slot.title)
-					encoder->Title(*slot.title);
-				demux >> *decoder;
-				*encoder >> mux;
-				mux.m_in.Wake(mux.Wake());
-				encoder->m_out.Bind(slot.in, mux.m_in);
-				auto frames = std::make_unique<Route>(slot.in, false);
-				for (const auto& filter : slot.filters)
-					frames->Add(filter);
-				for (const auto& filter : m_engine->analytics)
-					frames->Add(filter);
-				frames->Close(*decoder, *encoder);
-				EncodeLane lane;
-				lane.in = slot.in;
-				lane.decoder = std::move(decoder);
-				lane.encoder = std::move(encoder);
-				lane.frames = std::move(frames);
-				lanes.push_back(std::move(lane));
-			}
-			++muxIndex;
-		}
+        int muxIndex = 0;
+        for (auto& slot : plan) {
+            if (slot.copy) {
+                if (!mux.Remux(demux, slot.in, muxIndex)) {
+                    Fail("copy remux reserve failed");
+                    OnError(Error().value_or("mux"));
+                    return;
+                }
+                auto route = std::make_unique<Route>(slot.in, true);
+                for (const auto& filter : slot.filters)
+                    route->Add(filter);
+                route->Close(demux, mux);
+                copies.push_back(std::move(route));
+            }
+            else {
+                auto decoder = std::make_unique<class Decoder>(slot.in);
+                auto encoder = std::make_unique<class Encoder>(muxIndex, *slot.codec);
+                if (slot.implementation)
+                    encoder->Implementation(*slot.implementation);
+                if (slot.crf)
+                    encoder->CRF(*slot.crf);
+                if (slot.bitRate)
+                    encoder->BitRate(*slot.bitRate);
+                if (slot.maxBitRate)
+                    encoder->MaxBitRate(*slot.maxBitRate);
+                if (slot.preset)
+                    encoder->Preset(*slot.preset);
+                if (slot.tune)
+                    encoder->Tune(*slot.tune);
+                if (!slot.fineTune.empty())
+                    encoder->FineTune(slot.fineTune);
+                if (slot.language)
+                    encoder->Language(*slot.language);
+                if (slot.title)
+                    encoder->Title(*slot.title);
+                demux >> *decoder;
+                *encoder >> mux;
+                mux.m_in.Wake(mux.Wake());
+                encoder->m_out.Bind(slot.in, mux.m_in);
+                auto frames = std::make_unique<Route>(slot.in, false);
+                for (const auto& filter : slot.filters)
+                    frames->Add(filter);
+                for (const auto& filter : m_engine->analytics)
+                    frames->Add(filter);
+                frames->Close(*decoder, *encoder);
+                EncodeLane lane;
+                lane.in = slot.in;
+                lane.decoder = std::move(decoder);
+                lane.encoder = std::move(encoder);
+                lane.frames = std::move(frames);
+                lanes.push_back(std::move(lane));
+            }
+            ++muxIndex;
+        }
 
-		log << Level::Notice << "transcode running tracks=" << plan.size()
-			<< " encode-lanes=" << lanes.size()
-			<< " copy-routes=" << copies.size() << std::endl;
+        log << Level::Notice << "transcode running tracks=" << plan.size()
+            << " encode-lanes=" << lanes.size()
+            << " copy-routes=" << copies.size() << std::endl;
 
-		demux.Launch();
-		SetProgress(0);
-		const auto total = m_file->Duration();
+        demux.Launch();
+        SetProgress(0);
+        const auto total = m_file->Duration();
+        unsigned shown = 0;
+        std::int64_t maxNs = 0;
 
-		while (!m_engine->cancel.load(std::memory_order_acquire)) {
-			m_engine->WaitIfPaused();
-			if (m_engine->cancel.load(std::memory_order_acquire))
-				break;
-			if (demux.Failed()) {
-				Fail("demux failed");
-				break;
-			}
-			if (mux.Failed()) {
-				Fail("mux failed");
-				break;
-			}
-			bool laneFail = false;
-			for (auto& lane : lanes) {
-				if (lane.decoder->Failed()) {
-					Fail("decoder failed");
-					laneFail = true;
-					break;
-				}
-				if (lane.encoder->Failed()) {
-					Fail("encoder failed");
-					laneFail = true;
-					break;
-				}
-				if (*lane.encoder)
-					MarkSettled(lane.in, *lane.encoder);
-			}
-			if (laneFail)
-				break;
-			if (mux.Closed())
-				break;
-			if (total) {
-				if (const auto pos = mux.Position()) {
-					const auto den = total->Nanoseconds().count();
-					if (den > 0) {
-						const auto num = pos->Nanoseconds().count();
-						unsigned pct = static_cast<unsigned>((num * 100) / den);
-						if (pct > 100)
-							pct = 100;
-						SetProgress(pct);
-					}
-				}
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		}
+        while (!m_engine->cancel.load(std::memory_order_acquire)) {
+            m_engine->WaitIfPaused();
+            if (m_engine->cancel.load(std::memory_order_acquire))
+                break;
+            if (demux.Failed()) {
+                Fail("demux failed");
+                break;
+            }
+            if (mux.Failed()) {
+                Fail("mux failed");
+                break;
+            }
+            bool laneFail = false;
+            for (auto& lane : lanes) {
+                if (lane.decoder->Failed()) {
+                    Fail("decoder failed");
+                    laneFail = true;
+                    break;
+                }
+                if (lane.encoder->Failed()) {
+                    Fail("encoder failed");
+                    laneFail = true;
+                    break;
+                }
+                if (*lane.encoder)
+                    MarkSettled(lane.in, *lane.encoder);
+            }
+            if (laneFail)
+                break;
+            if (mux.Closed())
+                break;
+            if (total) {
+                const auto den = total->Nanoseconds().count();
+                if (den > 0) {
+                    if (const auto pos = mux.Position()) {
+                        const auto num = pos->Nanoseconds().count();
+                        if (num > maxNs)
+                            maxNs = num;
+                    }
+                    unsigned pct = static_cast<unsigned>((maxNs * 100) / den);
+                    if (pct > 99)
+                        pct = 99;
+                    if (pct < shown)
+                        pct = shown;
+                    if (pct != shown) {
+                        shown = pct;
+                        SetProgress(shown);
+                    }
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
 
-		if (m_engine->cancel.load(std::memory_order_acquire) && !Failed()) {
-			demux.Fail("cancelled");
-			mux.Fail("cancelled");
-			m_engine->status.store(Status::Aborted, std::memory_order_release);
-			OnAborted();
-			return;
-		}
-		if (Failed()) {
-			OnError(Error().value_or("transcode failed"));
-			return;
-		}
+        if (m_engine->cancel.load(std::memory_order_acquire) && !Failed()) {
+            demux.Fail("cancelled");
+            mux.Fail("cancelled");
+            m_engine->status.store(Status::Aborted, std::memory_order_release);
+            OnAborted();
+            return;
+        }
+        if (Failed()) {
+            OnError(Error().value_or("transcode failed"));
+            return;
+        }
 
-		SetProgress(100);
-		m_engine->status.store(Status::Done, std::memory_order_release);
-		OnDone();
-	}
+        SetProgress(100);
+        m_engine->status.store(Status::Done, std::memory_order_release);
+        OnDone();
+    }
 }

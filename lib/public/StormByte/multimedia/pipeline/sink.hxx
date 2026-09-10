@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/hopper.hxx>
+#include <StormByte/multimedia/buffer/hopper.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 
 #include <atomic>
@@ -271,7 +271,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param track Origin stream index.
 			 * @return Shared hopper. Caller holds @ref m_mutex.
 			 */
-			std::shared_ptr<Hopper<std::shared_ptr<Item>>> Ensure(int track);
+			std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> Ensure(int track);
 
 			/**
 			 * @brief Rebuilds the pop order from @ref m_buckets.
@@ -284,12 +284,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Snapshot of hoppers in pop order.
 			 * @return Shared hoppers. Safe to use without @ref m_mutex.
 			 */
-			std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> Order() const;
+			std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> Order() const;
 
 			mutable std::mutex m_mutex;													///< Guards the map
 			std::condition_variable m_wired;											///< Waits for Bind of a bucket
-			std::map<int, std::shared_ptr<Hopper<std::shared_ptr<Item>>>> m_buckets;	///< Track -> hopper
-			std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> m_order;		///< Stable pop order
+			std::map<int, std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> m_buckets;	///< Track -> hopper
+			std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> m_order;		///< Stable pop order
 			std::atomic<std::size_t> m_rr;												///< Round-robin cursor
 			std::atomic<std::condition_variable*> m_wake;								///< Consumer CV
 	};
