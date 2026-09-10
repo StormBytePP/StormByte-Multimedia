@@ -51,9 +51,9 @@
 #include <StormByte/multimedia/pipeline/engine/decoder/details/video.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/video.hxx>
-
 #include <StormByte/multimedia/name_thread.hxx>
 
 #include <memory>
@@ -67,13 +67,11 @@ using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 Demux::Demux() noexcept
-: m_file(nullptr), m_eof(false), m_positionNs(-1) {}
+: m_eof(false), m_positionNs(-1) {
+	Launch();
+}
 
 Demux::~Demux() noexcept = default;
-
-void Demux::Launch() noexcept {
-	Step::Launch();
-}
 
 Demux::operator bool() const noexcept {
 	return !Failed() && !m_eof && m_engine && m_engine->IsOpen();
@@ -95,27 +93,41 @@ void Demux::ReachedEof() noexcept {
 }
 
 void Demux::Fail(std::string reason) noexcept {
-	{
-		std::lock_guard lock(m_readyMutex);
-		// m_engine.reset();
-		m_file = nullptr;
-	}
 	m_ready.notify_all();
 	Step::Fail(std::move(reason));
 }
-
-void Demux::Open() noexcept {}
 
 void Demux::Pump() noexcept {
 	NameThread("STMM:Demux");
 	{
 		std::unique_lock lock(m_readyMutex);
 		m_ready.wait(lock, [this]() {
-			return Failed() || static_cast<bool>(m_engine);
+			return Failed() || static_cast<bool>(m_plan);
 		});
 	}
-	if (Failed() || !m_engine)
+	if (Failed() || !m_plan)
 		return;
+
+	if (const CheckResult check = m_plan->Check(); !check) {
+		Fail((*check.error()).what());
+		return;
+	}
+
+	auto opened = m_plan->Source().m_origin->Visit([](auto&& held) {
+		return FFmpeg::AVFormatContext::Open(held);
+	});
+	if (!opened.has_value()) {
+		Fail(opened.error()->what());
+		return;
+	}
+
+	auto engine = std::make_unique<Engine::Demux::Details::Container>();
+	if (!engine->Adopt(*this, std::move(opened.value())))
+		return;
+	m_engine = std::move(engine);
+	m_eof = false;
+	m_positionNs.store(-1, std::memory_order_release);
+
 	for (;;) {
 		if (Failed())
 			return;
@@ -136,35 +148,10 @@ void Demux::Finish() noexcept {
 	ReachedEof();
 }
 
-Demux& StormByte::Multimedia::Pipeline::operator>>(const File& file, Demux& demux) noexcept {
-	if (demux.Failed())
-		return demux;
-
-	auto opened = file.m_origin->Visit([](auto&& held) {
-		return FFmpeg::AVFormatContext::Open(held);
-	});
-	if (!opened.has_value()) {
-		demux.Fail(opened.error()->what());
-		return demux;
-	}
-
-	auto engine = std::make_unique<Engine::Demux::Details::Container>();
-	if (!engine->Adopt(demux, std::move(opened.value())))
-		return demux;
-	{
-		std::lock_guard lock(demux.m_readyMutex);
-		demux.m_engine = std::move(engine);
-		demux.m_file = &file;
-		demux.m_eof = false;
-		demux.m_positionNs.store(-1, std::memory_order_release);
-	}
-	demux.m_ready.notify_all();
-	return demux;
-}
-
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {
 	if (decoder.Failed())
 		return decoder;
+	static_cast<Step&>(demux) >> decoder;
 	if (demux.Failed() || !demux.m_engine) {
 		decoder.Fail(demux.Error().value_or("demuxer is not open"));
 		return decoder;
@@ -194,8 +181,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 		return decoder;
 	}
 
-	if (demux.m_file) {
-		for (const auto& stream : demux.m_file->Streams()) {
+	if (demux.Plan()) {
+		for (const auto& stream : demux.Plan()->Source().Streams()) {
 			if (stream.Index() != decoder.Index())
 				continue;
 			if (const auto& language = stream.Metadata().Language(); language)
@@ -233,4 +220,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	decoder.m_in->Notify(decoder.Wake());
 	demux.m_out->Bind(decoder.Index(), *decoder.m_in);
 	return decoder;
+}
+
+const StormByte::Multimedia::File& Demux::OriginFile() const noexcept {
+    return m_plan->Source();
 }

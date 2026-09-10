@@ -58,9 +58,18 @@
 namespace StormByte::Multimedia {
 	class Origin;
 
+	/**
+	 * @namespace StormByte::Multimedia::Pipeline
+	 * @brief Demux / decode / filter / encode / mux types.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
 	namespace Pipeline {
+		/**
+		 * @class Demux
+		 * @brief Reads interleaved packets from a File origin.
+		 */
 		class Demux;
-		Demux& operator>>(const File&, Demux&) noexcept;
 	}
 
 	/**
@@ -178,7 +187,7 @@ namespace StormByte::Multimedia {
 				std::chrono::nanoseconds duration) noexcept;
 
 		private:
-			friend Pipeline::Demux& Pipeline::operator>>(const File&, Pipeline::Demux&) noexcept;
+			friend class Pipeline::Demux;
 
 			std::unique_ptr<Origin> m_origin;					///< Path or Consumer
 			const class Container& m_container;					///< Registry container

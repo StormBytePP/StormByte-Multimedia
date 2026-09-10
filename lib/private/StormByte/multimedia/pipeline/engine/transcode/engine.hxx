@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/pipeline/config/base.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/transcode.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -48,58 +48,53 @@
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <set>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Engine::Transcode
- * @brief Private runtime behind Pipeline::Transcode.
+ * @brief Job map and coordinator behind @ref StormByte::Multimedia::Pipeline::Transcode.
  *
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 	/**
-	 * @brief One mapped or implied output track.
+	 * @struct Slot
+	 * @brief One explicit output track of the facade map.
+	 *
+	 * Intention lives in @ref Config. A null destination codec on the
+	 * leaf is remux. Filters are Process / Packet only.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
-	struct Slot {
-		int in = -1;														///< Source stream index
-		int outKey = -1;													///< Destination order key
-		StormByte::Multimedia::Type kind = StormByte::Multimedia::Type::Video;	///< Media kind
-		bool copy = false;													///< Bitstream copy
-		const StormByte::Multimedia::Codec* codec = nullptr;				///< Destination codec
-		std::optional<std::string> implementation;							///< Pinned encoder name
-		std::optional<int> crf;												///< CRF/CQ
-		std::optional<std::int64_t> bitRate;								///< Target bitrate
-		std::optional<std::int64_t> maxBitRate;								///< VBV ceiling
-		std::optional<std::string> preset;									///< Preset
-		std::optional<std::string> tune;									///< Tune
-		std::map<std::string, std::string> fineTune;						///< Vendor leftovers
-		std::optional<std::string> language;								///< Language override
-		std::optional<std::string> title;									///< Title override
-		std::optional<int> sampleFormat;									///< Settled AVSampleFormat
-		std::optional<int> encoderChannels;									///< Settled encoder channels
-		std::optional<int> frameSize;										///< Settled frame_size
-		std::optional<int> settledRate;										///< Settled sample rate
-		bool settled = false;												///< OnSettled already fired
-		std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> filters;	///< Per-input-track filters
+	struct STORMBYTE_MULTIMEDIA_PRIVATE Slot {
+		int In = -1;																			///< Origin stream index
+		int Out = -1;																			///< Mux slot
+		StormByte::Multimedia::Type Kind = StormByte::Multimedia::Type::Unknown;				///< Media kind
+		std::unique_ptr<StormByte::Multimedia::Pipeline::Config::Base> Config;					///< Intention leaf
+		std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Filters;	///< Per-track filters
+		bool Settled = false;																	///< @ref Transcode::OnSettled already fired
 	};
 
 	/**
 	 * @class Engine
-	 * @brief Map, lifecycle flags and the coordinator thread.
+	 * @brief Runtime of one @ref Transcode instance.
+	 *
+	 * Holds the fluent map, destination container, coordinator thread
+	 * and lifecycle flags. Wires Demux / Route / Encoder / Mux when
+	 * @ref Start runs. The facade only validates and fires hooks.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class Engine {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Engine {
 		public:
 			/**
-			 * @brief Constructs an idle engine.
+			 * @brief Idle engine. Coordinator is not started.
 			 */
 			Engine() noexcept;
 
@@ -111,12 +106,12 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Source engine.
+			 * @param other Engine to take.
 			 */
-			Engine(Engine&& other) = delete;
+			Engine(Engine&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Cancels and joins the coordinator.
+			 * @brief Destructor. Requests stop and joins the coordinator.
 			 */
 			~Engine() noexcept;
 
@@ -129,42 +124,56 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Source engine.
+			 * @param other Engine to take.
 			 * @return *this.
 			 */
-			Engine& operator=(Engine&& other) = delete;
+			Engine& operator=(Engine&& other) noexcept = delete;
 
 			/**
-			 * @brief Sets cancel and wakes the coordinator.
+			 * @brief Starts the coordinator if it is not already running.
+			 * @param job Facade that owns this engine.
+			 */
+			void Start(StormByte::Multimedia::Pipeline::Transcode& job) noexcept;
+
+			/**
+			 * @brief Requests abort and wakes a paused coordinator.
 			 */
 			void RequestCancel() noexcept;
 
 			/**
-			 * @brief Joins the coordinator thread if it is running.
+			 * @brief Joins the coordinator if it is joinable.
 			 */
 			void Join() noexcept;
 
 			/**
-			 * @brief Blocks while the job is paused.
+			 * @brief Blocks while paused and not cancelled or failed.
 			 */
 			void WaitIfPaused() noexcept;
 
-			mutable std::mutex lock;											///< Status / error
-			std::mutex pauseMutex;												///< Pause wait
-			std::condition_variable pauseCv;									///< Pause waiters
-			std::atomic<StormByte::Multimedia::Pipeline::Status> status {
+			mutable std::mutex Lock;											///< Guards Status text and Error
+			std::mutex PauseMutex;												///< Mutex for @ref PauseCv
+			std::condition_variable PauseCv;									///< Waiters of @ref WaitIfPaused
+			std::atomic<StormByte::Multimedia::Pipeline::Status> Status {
 				StormByte::Multimedia::Pipeline::Status::Stopped
-			};																	///< Lifecycle
-			std::atomic_bool cancel { false };									///< Abort requested
-			std::atomic_bool paused { false };									///< Pause requested
-			std::atomic<unsigned> progress { 0 };								///< Last percent
-			std::atomic_bool hasProgress { false };								///< Progress() is valid
-			std::optional<std::string> error;									///< Fail text
-			const StormByte::Multimedia::Container* container = nullptr;		///< Destination
-			std::filesystem::path path;											///< Output path
-			std::vector<Slot> mapped;											///< Explicit tracks
-			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> analytics;	///< Job-level Analytics
-			std::set<int> ignore;												///< Dropped source indexes
-			std::thread worker;													///< Coordinator thread
+			};																	///< Published lifecycle
+			std::atomic<bool> Cancel { false };									///< Abort requested
+			std::atomic<bool> Paused { false };									///< Pause latch
+			std::atomic<bool> HasProgress { false };							///< Progress() has a value
+			std::atomic<unsigned> Progress { 0 };								///< Last percent
+			std::optional<std::string> Error;									///< Fail text
+			const StormByte::Multimedia::Container* Container = nullptr;		///< Destination registry
+			std::filesystem::path Path;											///< Output path
+			std::vector<Slot> Mapped;											///< Fluent map; order is add order
+			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Analytics;	///< Encode-lane analytics
+
+		private:
+			/**
+			 * @brief Coordinator body. Builds the Plan and wires the job.
+			 * @param job Facade.
+			 * @param token Stop token of @ref m_worker.
+			 */
+			void Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_token token) noexcept;
+
+			std::jthread m_worker;												///< Coordinator
 	};
 }

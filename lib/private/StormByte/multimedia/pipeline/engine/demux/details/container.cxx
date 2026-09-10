@@ -80,10 +80,8 @@ namespace {
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	bool KnownByFile(const StormByte::Multimedia::File* file, int index) noexcept {
-		if (!file)
-			return false;
-		for (const auto& stream : file->Streams()) {
+	bool KnownByFile(const StormByte::Multimedia::File& file, int index) noexcept {
+		for (const auto& stream : file.Streams()) {
 			if (stream.Index() == index)
 				return true;
 		}
@@ -114,7 +112,7 @@ bool Details::Container::IsOpen() const noexcept {
 }
 
 bool Details::Container::Open(class StormByte::Multimedia::Pipeline::Demux& owner, const File&) noexcept {
-	owner.Fail("use file >> demux");
+	owner.Fail("use plan >> demux");
 	return false;
 }
 
@@ -151,7 +149,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Details::Container::Rea
 		}
 
 		const int index = m_scratch.StreamIndex();
-		if (!KnownByFile(owner.m_file, index)) {
+		if (!KnownByFile(owner.OriginFile(), index)) {
 			m_scratch.Unref();
 			continue;
 		}

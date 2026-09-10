@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -71,14 +72,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @namespace Engine
-	 * @brief Private backends behind the public pipeline types.
+	 * @brief Private backends. Public headers only forward-declare them.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	namespace Engine {
 		/**
 		 * @namespace Transcode
-		 * @brief Job map and lifecycle flags. No BoundQueue workers.
+		 * @brief Job map and coordinator. Not a tube Step.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
@@ -89,11 +90,13 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @enum Status
-	 * @brief Lifecycle of a Transcode instance.
+	 * @brief Lifecycle of a @ref Transcode instance.
 	 *
 	 * @ref Open leaves the job @ref Status::Stopped. @ref Run starts
 	 * the coordinator. @ref OnStart may return Stopped / Error /
-	 * Aborted to bail without starting steps.
+	 * Aborted to bail without starting the job.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	enum class Status {
 		Stopped,	///< Open succeeded; Run has not started, or OnStart declined
@@ -105,195 +108,135 @@ namespace StormByte::Multimedia::Pipeline {
 	};
 
 	/**
-	 * @class TrackPlan
-	 * @brief One mapped track as requested or after the encoder opened.
+	 * @class TrackSettled
+	 * @brief What an encoder actually opened. Not intention.
 	 *
-	 * Settled encoder fields stay empty until @ref Transcode::OnSettled.
-	 * Paid jobs derive this and override Clone()/Move() via
-	 * StormByte::Clonable. @c out is the destination order key, not a
-	 * mux stream index stamped onto @ref Item::Track.
+	 * @ref Plan / @ref Track are the request. This type is filled
+	 * after @ref Encoder is open and passed to
+	 * @ref Transcode::OnSettled. Derive it and return the type from
+	 * @ref Transcode::EmptySettled to carry extra fields.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC TrackPlan:
-		public StormByte::Clonable<TrackPlan, std::unique_ptr<TrackPlan>> {
+	class STORMBYTE_MULTIMEDIA_PUBLIC TrackSettled:
+		public StormByte::Clonable<TrackSettled, std::unique_ptr<TrackSettled>> {
 		public:
-			int in;														///< Source stream index
-			int out;													///< Destination order key
-			Type kind;													///< Video / audio / subtitle
-			bool copy;													///< Bitstream copy
-			const Codec* source;										///< Source codec
-			const Codec* destination;									///< Destination codec, or nullptr if copy
-			std::optional<std::string> implementation;					///< Pin (libx265, …)
-			std::optional<std::string> language;						///< Language tag
-			std::optional<std::string> title;							///< Track title
-			std::optional<int> crf;										///< CRF/CQ
-			std::optional<std::int64_t> bitRate;						///< Target bitrate
-			std::optional<std::int64_t> maxBitRate;						///< VBV ceiling
-			std::optional<std::string> preset;							///< Preset
-			std::optional<std::string> tune;							///< Tune
-			std::map<std::string, std::string> fineTune;				///< Vendor leftovers
-			std::optional<int> sampleFormat;							///< Encoder AVSampleFormat
-			std::optional<int> sourceChannels;							///< Decoded channel count
-			std::optional<int> encoderChannels;							///< Encoder channel count
-			std::optional<int> frameSize;								///< Encoder frame_size
-			std::optional<int> sampleRate;								///< Samples per second
-
 			/**
 			 * @name Lifecycle
 			 * @{
 			 */
 
 			/**
-			 * @brief Default constructor.
+			 * @brief Empty settled row.
 			 */
-			TrackPlan() noexcept;
+			TrackSettled() noexcept = default;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param other Source row.
 			 */
-			TrackPlan(const TrackPlan& other) = default;
+			TrackSettled(const TrackSettled& other) = default;
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Source row.
+			 * @param other Row to take.
 			 */
-			TrackPlan(TrackPlan&& other) noexcept = default;
+			TrackSettled(TrackSettled&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~TrackPlan() noexcept override = default;
+			virtual ~TrackSettled() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source row.
 			 * @return *this.
 			 */
-			TrackPlan& operator=(const TrackPlan& other) = default;
+			TrackSettled& operator=(const TrackSettled& other) = default;
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Source row.
+			 * @param other Row to take.
 			 * @return *this.
 			 */
-			TrackPlan& operator=(TrackPlan&& other) noexcept = default;
+			TrackSettled& operator=(TrackSettled&& other) noexcept = default;
 
 			/**
 			 * @}
 			 */
 
 			/**
-			 * @brief Deep copy into a unique_ptr.
-			 * @return New track plan of the same dynamic type.
+			 * @brief Deep copy.
+			 * @return Owning pointer to a new row of the same dynamic type.
 			 */
-			PointerType Clone() const override;
+			inline PointerType Clone() const override {
+				return MakePointer<TrackSettled>(*this);
+			}
 
 			/**
-			 * @brief Move this row into a unique_ptr.
-			 * @return Owning pointer to the moved instance.
+			 * @brief Move into a new pointer.
+			 * @return Owning pointer to the moved row.
 			 */
-			PointerType Move() override;
+			inline PointerType Move() override {
+				return MakePointer<TrackSettled>(std::move(*this));
+			}
 
 			/**
 			 * @brief Human-readable line for logs.
 			 * @return One or more lines, no trailing newline required.
 			 */
 			virtual std::string ToString() const;
-	};
 
-	/**
-	 * @class Plan
-	 * @brief Job snapshot. Paid apps derive this and return it from MakePlan().
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Plan:
-		public StormByte::Clonable<Plan, std::unique_ptr<Plan>> {
-		public:
-			const File* source;											///< Opened source
-			const Container* container;									///< Destination container
-			std::filesystem::path destination;							///< Output path
-			std::vector<std::unique_ptr<TrackPlan>> tracks;				///< Mapped tracks, out order
-			std::vector<int> ignored;									///< Source indexes dropped
-
-			/**
-			 * @name Lifecycle
-			 * @{
-			 */
-
-			/**
-			 * @brief Default constructor.
-			 */
-			Plan() noexcept;
-
-			/**
-			 * @brief Copy constructor. Deep-copies tracks.
-			 * @param other Source plan.
-			 */
-			Plan(const Plan& other);
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Source plan.
-			 */
-			Plan(Plan&& other) noexcept = default;
-
-			/**
-			 * @brief Destructor.
-			 */
-			~Plan() noexcept override = default;
-
-			/**
-			 * @brief Copy assignment. Deep-copies tracks.
-			 * @param other Source plan.
-			 * @return *this.
-			 */
-			Plan& operator=(const Plan& other);
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Source plan.
-			 * @return *this.
-			 */
-			Plan& operator=(Plan&& other) noexcept = default;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @brief Deep copy into a unique_ptr.
-			 * @return New plan of the same dynamic type.
-			 */
-			PointerType Clone() const override;
-
-			/**
-			 * @brief Move this plan into a unique_ptr.
-			 * @return Owning pointer to the moved instance.
-			 */
-			PointerType Move() override;
-
-			/**
-			 * @brief Human-readable dump.
-			 * @return Multi-line text.
-			 */
-			virtual std::string ToString() const;
+			int In = -1;												///< Origin stream index
+			int Out = -1;												///< Mux slot (order in @ref Plan::Tracks)
+			Type Kind = Type::Unknown;									///< Media kind
+			const Codec* Source = nullptr;								///< Origin codec
+			const Codec* Destination = nullptr;							///< Opened encoder codec, or nullptr if remux
+			std::optional<std::string> Implementation;					///< Opened encoder pin
+			std::optional<int> Crf;										///< CRF/CQ actually used
+			std::optional<std::int64_t> BitRate;						///< Bitrate actually used
+			std::optional<std::int64_t> MaxBitRate;						///< VBV actually used
+			std::optional<std::string> Preset;							///< Preset actually used
+			std::optional<std::string> Tune;							///< Tune actually used
+			std::map<std::string, std::string> FineTune;				///< Vendor leftovers actually used
+			std::optional<int> SampleFormat;							///< Encoder AVSampleFormat
+			std::optional<int> SourceChannels;							///< Decoded channel count
+			std::optional<int> EncoderChannels;							///< Encoder channel count
+			std::optional<int> FrameSize;								///< Encoder frame_size
+			std::optional<int> SampleRate;								///< Samples per second
 	};
 
 	/**
 	 * @class Transcode
-	 * @brief High-level job: map tracks, wire Demux / Route / Encoder / Mux.
+	 * @brief Facade that maps tracks and runs one file-to-file job.
 	 *
-	 * @ref Run starts a coordinator thread and returns at once.
-	 * Process / Packet filters chain on the track handle:
-	 * @c Video(in, out).Filter<Watermark>(…).Filter<Resize>(…).
-	 * Analytics chain on the job: @c Filter<Vmaf>(…). Copy tracks
-	 * use @ref Route with @c copy=true; frame filters on those
-	 * tracks are dropped. Packet filters on copy stay.
+	 * Connects @c operator>> and @ref Route for you. The stock class
+	 * is a complete job: open a @ref File, choose origin streams,
+	 * remux or encode each one, write another file. You do not have
+	 * to derive anything to transcode.
 	 *
-	 * One failed step or filter aborts the job (@ref Status::Error).
+	 * It is also the extension point. Nothing in the extra surface
+	 * is required. Mix what you need:
+	 *
+	 * - Hooks only. Keep the stock @ref Plan and override
+	 *   @ref OnConfigure, @ref OnStart, @ref OnPlan,
+	 *   @ref OnSettled, @ref OnProgress, @ref OnDone,
+	 *   @ref OnError, @ref OnAborted.
+	 * - A richer intention. Override @ref EmptyPlan and return a
+	 *   type derived from @ref Plan. @ref Plan::Check is virtual
+	 *   on that type. You may still use the stock
+	 *   @ref TrackSettled.
+	 * - A richer settled row. Override @ref EmptySettled and return
+	 *   a type derived from @ref TrackSettled. You may still use
+	 *   the stock @ref Plan.
+	 * - Both. Derived @ref Plan plus derived @ref TrackSettled plus
+	 *   the hooks you care about.
+	 *
+	 * @ref EmptyPlan / @ref EmptySettled only pick the dynamic type.
+	 * This class still fills tracks from the fluent map and settled
+	 * fields from the opened @ref Encoder. One instance is one
+	 * source and one destination; another job is another instance.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -301,7 +244,11 @@ namespace StormByte::Multimedia::Pipeline {
 		public:
 			/**
 			 * @class Track
-			 * @brief Fluent configuration for one mapped source track.
+			 * @brief Fluent handle for one origin stream in this job.
+			 *
+			 * Writes the matching @ref Config leaf. Mux order is the
+			 * @c out passed to @ref Video / @ref Audio / @ref Subtitle,
+			 * not a field here. Call before @ref Run.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -320,7 +267,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 					/**
 					 * @brief Move constructor.
-					 * @param other Source handle.
+					 * @param other Handle to take.
 					 */
 					Track(Track&& other) noexcept = default;
 
@@ -338,7 +285,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 					/**
 					 * @brief Move assignment.
-					 * @param other Source handle.
+					 * @param other Handle to take.
 					 * @return *this.
 					 */
 					Track& operator=(Track&& other) noexcept = default;
@@ -348,21 +295,23 @@ namespace StormByte::Multimedia::Pipeline {
 					 */
 
 					/**
-					 * @brief Marks the track as bitstream copy.
+					 * @brief Remux this track (no destination codec).
 					 * @return *this.
+					 *
+					 * Frame filters on this handle are dropped by @ref Route.
 					 */
 					Track& Copy() noexcept;
 
 					/**
-					 * @brief Recodes this track to @p codec.
+					 * @brief Encodes this track to @p codec.
 					 * @param codec Destination registry codec.
 					 * @return *this.
 					 */
 					Track& Codec(const StormByte::Multimedia::Codec& codec) noexcept;
 
 					/**
-					 * @brief Pins an FFmpeg encoder implementation name.
-					 * @param name avcodec_find_encoder_by_name key.
+					 * @brief Pins an FFmpeg encoder name.
+					 * @param name Table name.
 					 * @return *this.
 					 */
 					Track& Implementation(std::string name) noexcept;
@@ -382,7 +331,7 @@ namespace StormByte::Multimedia::Pipeline {
 					Track& BitRate(std::int64_t bits_per_second) noexcept;
 
 					/**
-					 * @brief Sets VBV/max bitrate.
+					 * @brief Sets VBV / max bitrate.
 					 * @param bits_per_second Bits per second.
 					 * @return *this.
 					 */
@@ -404,21 +353,21 @@ namespace StormByte::Multimedia::Pipeline {
 
 					/**
 					 * @brief Replaces vendor leftovers.
-					 * @param options Key/value map.
+					 * @param options Key / value map.
 					 * @return *this.
 					 */
 					Track& FineTune(std::map<std::string, std::string> options) noexcept;
 
 					/**
 					 * @brief Overrides stream language.
-					 * @param language ISO tag.
+					 * @param language ISO tag. Empty clears the override.
 					 * @return *this.
 					 */
 					Track& Language(std::string language) noexcept;
 
 					/**
 					 * @brief Overrides stream title.
-					 * @param title Title text.
+					 * @param title Title text. Empty clears the override.
 					 * @return *this.
 					 */
 					Track& Title(std::string title) noexcept;
@@ -431,7 +380,7 @@ namespace StormByte::Multimedia::Pipeline {
 					 * @return *this.
 					 *
 					 * Call before @ref Transcode::Run. Frame filters on a
-					 * copy track are dropped by @ref Route. Analytics attach
+					 * remux track are dropped by @ref Route. Analytics attach
 					 * on @ref Transcode::Filter.
 					 */
 					template<typename FilterType, typename... Args>
@@ -449,18 +398,25 @@ namespace StormByte::Multimedia::Pipeline {
 					/**
 					 * @brief Binds this handle to a mapped slot.
 					 * @param owner Parent job.
-					 * @param slot Index into Engine::mapped.
+					 * @param slot Index into the engine map.
 					 */
 					Track(Transcode& owner, std::size_t slot) noexcept;
 
 					Transcode* m_owner;									///< Parent job
-					std::size_t m_slot;									///< Slot index
+					std::size_t m_slot;									///< Engine map index
 			};
 
 			/**
 			 * @name Lifecycle
 			 * @{
 			 */
+
+			/**
+			 * @brief Constructs an empty job. Only Open / derived classes.
+			 * @param logger Required logger.
+			 * @param file Opened source (moved).
+			 */
+			Transcode(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -470,12 +426,12 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Source job.
+			 * @param other Job to take.
 			 */
-			Transcode(Transcode&& other) noexcept;
+			Transcode(Transcode&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Cancels and joins if still running.
+			 * @brief Destructor. Stops the coordinator and joins.
 			 */
 			virtual ~Transcode() noexcept;
 
@@ -488,153 +444,178 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Source job.
+			 * @param other Job to take.
 			 * @return *this.
 			 */
-			Transcode& operator=(Transcode&& other) noexcept;
+			Transcode& operator=(Transcode&& other) noexcept = delete;
 
 			/**
 			 * @}
 			 */
 
 			/**
-			 * @brief Opens a path.
-			 * @param logger Required logger.
-			 * @param path Source file.
-			 * @return Job, or unexpected.
+			 * @name Open
+			 * @{
 			 */
-			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
-				const std::filesystem::path& path) noexcept;
+
+            /**
+             * @brief Opens @p source and binds @p destination.
+             * @param logger Required logger.
+             * @param source Input path.
+             * @param destination Output path.
+             * @param duration Authoritative container duration, if known.
+             *        Empty runs the normal probe. A value skips the packet scan.
+             * @return Job, or unexpected.
+             *
+             * Shorthand for @ref File::Open plus the public constructor.
+             * The destination container is still set with @ref Destination
+             * before @ref Run.
+             */
+            static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
+                const std::filesystem::path& source,
+                const std::filesystem::path& destination,
+                std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
 
 			/**
-			 * @brief Opens a path with a known duration hint.
-			 * @param logger Required logger.
-			 * @param path Source file.
-			 * @param duration Hint used for Progress().
-			 * @return Job, or unexpected.
+			 * @}
 			 */
-			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
-				const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept;
 
 			/**
-			 * @brief Opens a consumer buffer.
-			 * @param logger Required logger.
-			 * @param consumer Source bytes.
-			 * @return Job, or unexpected.
+			 * @name Source
+			 * @{
 			 */
-			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
-				StormByte::Buffer::Consumer consumer) noexcept;
-
-			/**
-			 * @brief Opens a consumer with a known duration hint.
-			 * @param logger Required logger.
-			 * @param consumer Source bytes.
-			 * @param duration Hint used for Progress().
-			 * @return Job, or unexpected.
-			 */
-			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
-				StormByte::Buffer::Consumer consumer, std::chrono::nanoseconds duration) noexcept;
 
 			/**
 			 * @brief Opened source file.
 			 * @return File snapshot.
+			 *
+			 * After @ref Run hands the File to the Plan, this is
+			 * @c Plan::Source().
 			 */
 			const File& Source() const noexcept;
 
 			/**
 			 * @brief Logger bound at Open.
-			 * @return Shared logger.
+			 * @return Logger.
 			 */
 			const std::shared_ptr<StormByte::Logger::Log>& Logger() const noexcept;
 
 			/**
-			 * @brief Maps a video stream.
-			 * @param in Source index.
-			 * @param out Destination order key.
+			 * @brief Intention built for this job, if any.
+			 * @return Plan, or empty before Destination / Run.
+			 */
+			inline const std::shared_ptr<class Plan>& Plan() const noexcept {
+				return m_plan;
+			}
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Map
+			 * @{
+			 */
+
+			/**
+			 * @brief Maps a video origin stream.
+			 * @param in Origin stream index.
+			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
 			Track Video(int in, int out) noexcept;
 
 			/**
-			 * @brief Maps an audio stream.
-			 * @param in Source index.
-			 * @param out Destination order key.
+			 * @brief Maps an audio origin stream.
+			 * @param in Origin stream index.
+			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
 			Track Audio(int in, int out) noexcept;
 
 			/**
-			 * @brief Maps a subtitle stream.
-			 * @param in Source index.
-			 * @param out Destination order key.
+			 * @brief Maps a subtitle origin stream.
+			 * @param in Origin stream index.
+			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
 			Track Subtitle(int in, int out) noexcept;
 
 			/**
-			 * @brief Drops a source stream from the job.
-			 * @param in Source index.
+			 * @brief Drops an origin stream (omit from the Plan).
+			 * @param in Origin stream index.
 			 * @return *this.
 			 */
 			Transcode& Ignore(int in) noexcept;
 
 			/**
-			 * @brief Appends an Analytics filter to every encode route.
+			 * @brief Appends an analytics filter to every encode lane.
 			 * @tparam FilterType Child of @ref Filter::Analytics.
 			 * @param args Constructor arguments, forwarded.
 			 * @return *this.
-			 *
-			 * Call before @ref Run. Copy tracks have no frames; Route
-			 * drops a frame Analytics there. Process / Packet filters
-			 * attach on @ref Track::Filter.
 			 */
 			template<typename FilterType, typename... Args>
 			Transcode& Filter(Args&&... args) noexcept {
 				static_assert(std::is_base_of_v<Filter::Analytics, FilterType>,
-					"Track Process/Packet filters attach on Track::Filter");
-				AttachAnalytics(
-					std::make_shared<FilterType>(std::forward<Args>(args)...));
+					"Track filters attach on Track::Filter");
+				AttachAnalytics(std::make_shared<FilterType>(std::forward<Args>(args)...));
 				return *this;
 			}
 
 			/**
-			 * @brief Sets destination container and path.
-			 * @param container Writable container.
+			 * @brief Sets the destination container and path.
+			 * @param container Registry destination container.
 			 * @param path Output path.
 			 * @return *this.
+			 *
+			 * Required before @ref Run. Closes the job identity together
+			 * with the File from Open.
 			 */
 			Transcode& Destination(const StormByte::Multimedia::Container& container,
 				std::filesystem::path path) noexcept;
 
 			/**
-			 * @brief Starts the coordinator. Returns immediately.
+			 * @}
+			 */
+
+			/**
+			 * @name Run
+			 * @{
+			 */
+
+			/**
+			 * @brief Builds the @ref Plan, starts the coordinator and returns.
+			 *
+			 * Calls @ref OnConfigure, @ref EmptyPlan, fills tracks from
+			 * the fluent map, @ref OnPlan, @ref OnStart, then
+			 * @c std::move(*plan) >> demux. Does not block until Done.
 			 */
 			void Run() noexcept;
 
 			/**
-			 * @brief Requests abort. Status becomes Aborted after join.
+			 * @brief Requests abort. Coordinator ends in @ref Status::Aborted.
 			 */
 			void Cancel() noexcept;
 
 			/**
-			 * @brief Pauses the coordinator if Running.
+			 * @brief Pauses the coordinator.
 			 */
 			void Pause() noexcept;
 
 			/**
-			 * @brief Resumes the coordinator if Paused.
+			 * @brief Resumes after @ref Pause.
 			 */
 			void Resume() noexcept;
 
 			/**
-			 * @brief Current lifecycle.
-			 * @return Status value.
+			 * @brief Current lifecycle value.
+			 * @return Status.
 			 */
 			enum Status Status() const noexcept;
 
 			/**
-			 * @brief Whether Status is Error.
-			 * @return true after Fail().
+			 * @brief Whether the job failed.
+			 * @return true after @ref Status::Error.
 			 */
 			bool Failed() const noexcept;
 
@@ -645,65 +626,67 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> Error() const noexcept;
 
 			/**
-			 * @brief Approximate percent, when known.
-			 * @return 0..100, or empty before the first update.
+			 * @brief Last published percent.
+			 * @return 0..100, or empty before the first tick.
 			 */
 			std::optional<unsigned> Progress() const noexcept;
 
 			/**
-			 * @brief true while the job is usable (not Error/Aborted).
-			 * @return false after a hard fail or cancel.
+			 * @brief true if not failed.
+			 * @return Not @ref Failed.
 			 */
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief Current snapshot (requested map, plus settled fields when known).
-			 * @return Plan owned by the caller.
+			 * @}
 			 */
-			virtual std::unique_ptr<Plan> Configuration() const noexcept;
 
 		protected:
 			/**
-			 * @brief Constructs an empty job. Only Open / derived classes.
-			 * @param logger Required logger.
-			 * @param file Opened source.
+			 * @brief Allocates the Plan type for this job.
+			 * @param source Origin File (moved).
+			 * @param container Destination container.
+			 * @param destination Output path.
+			 * @return Plan of the desired dynamic type, with no tracks yet.
+			 *
+			 * Override to return a type derived from @ref Plan. Tracks
+			 * are filled from the fluent map after this returns.
 			 */
-			Transcode(std::shared_ptr<StormByte::Logger::Log> logger, File file) noexcept;
+			virtual std::unique_ptr<class Plan> EmptyPlan(File&& source,
+				const StormByte::Multimedia::Container& container,
+				std::filesystem::path destination) const noexcept;
 
 			/**
-			 * @brief Allocates the snapshot type. Paid jobs return a derived Plan.
-			 * @return Empty plan of the desired dynamic type.
+			 * @brief Allocates the settled-row type.
+			 * @return Empty row of the desired dynamic type.
+			 *
+			 * Override to return a type derived from @ref TrackSettled.
+			 * @ref MarkSettled fills it and calls @ref OnSettled.
 			 */
-			virtual std::unique_ptr<Plan> MakePlan() const noexcept;
+			virtual std::unique_ptr<TrackSettled> EmptySettled() const noexcept;
 
 			/**
-			 * @brief Allocates one track row. Paid jobs return a derived TrackPlan.
-			 * @return Empty track plan of the desired dynamic type.
-			 */
-			virtual std::unique_ptr<TrackPlan> MakeTrackPlan() const noexcept;
-
-			/**
-			 * @brief Last chance to raise ceilings before steps start.
+			 * @brief Last chance to raise ceilings before the job starts.
 			 */
 			virtual void OnConfigure() noexcept;
 
 			/**
-			 * @brief Gate after the map is valid and Destination is set.
-			 * @return Running to proceed, Error/Aborted/Stopped to bail.
+			 * @brief Gate after the Plan is filled and Destination is set.
+			 * @return Running to proceed, Error / Aborted / Stopped to bail.
 			 */
 			virtual enum Status OnStart() noexcept;
 
 			/**
-			 * @brief Requested map, just before steps start.
-			 * @param plan Snapshot from Configuration().
+			 * @brief Intention, just before @c plan >> demux.
+			 * @param plan Filled Plan (still owned by this job).
 			 */
-			virtual void OnPlan(const Plan& plan) noexcept;
+			virtual void OnPlan(const class Plan& plan) noexcept;
 
 			/**
-			 * @brief One recode track finished Encoder open.
-			 * @param track Settled row.
+			 * @brief One encode lane finished Encoder open.
+			 * @param track Settled row from @ref EmptySettled.
 			 */
-			virtual void OnSettled(const TrackPlan& track) noexcept;
+			virtual void OnSettled(const TrackSettled& track) noexcept;
 
 			/**
 			 * @brief Progress tick.
@@ -731,10 +714,6 @@ namespace StormByte::Multimedia::Pipeline {
 			friend class Engine::Transcode::Engine;
 			friend class Track;
 
-			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Required logger
-			std::unique_ptr<File> m_file;								///< Opened source
-			std::unique_ptr<Engine::Transcode::Engine> m_engine;		///< Map and coordinator thread
-
 			/**
 			 * @brief Marks a hard error and cancels the coordinator.
 			 * @param reason Message stored in Error().
@@ -751,9 +730,9 @@ namespace StormByte::Multimedia::Pipeline {
 				ExpectedFile opened) noexcept;
 
 			/**
-			 * @brief Maps one source stream.
-			 * @param in Source index.
-			 * @param out Destination order key.
+			 * @brief Maps one origin stream.
+			 * @param in Origin index.
+			 * @param out Mux slot.
 			 * @param kind Expected type.
 			 * @return Fluent track handle.
 			 */
@@ -765,8 +744,8 @@ namespace StormByte::Multimedia::Pipeline {
 			void Worker() noexcept;
 
 			/**
-			 * @brief Records encoder open into the matching slot and fires OnSettled.
-			 * @param in Source stream index of the lane.
+			 * @brief Records encoder open into a @ref TrackSettled and fires OnSettled.
+			 * @param in Origin stream index of the lane.
 			 * @param encoder Encoder that just opened.
 			 */
 			void MarkSettled(int in, Encoder& encoder) noexcept;
@@ -778,24 +757,28 @@ namespace StormByte::Multimedia::Pipeline {
 			void SetProgress(unsigned percent) noexcept;
 
 			/**
-			 * @brief Whether @p slot indexes Engine::mapped.
-			 * @param slot Slot index.
-			 * @return true if usable.
+			 * @brief Whether @p slot is a mapped track.
+			 * @param slot Engine map index.
+			 * @return true if the slot exists.
 			 */
 			bool ValidSlot(std::size_t slot) const noexcept;
 
 			/**
-			 * @brief Appends a Process/Packet filter to mapped[@p slot].
-			 * @param slot Index into Engine::mapped.
-			 * @param filter Owned filter node.
+			 * @brief Appends a track filter to @p slot.
+			 * @param slot Engine map index.
+			 * @param filter Filter instance.
 			 */
-			void AttachFilter(std::size_t slot,
-				std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+			void AttachFilter(std::size_t slot, std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
 			/**
-			 * @brief Stores a job-level Analytics node.
-			 * @param filter Owned Analytics filter.
+			 * @brief Appends an analytics filter to every encode lane.
+			 * @param filter Filter instance.
 			 */
 			void AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+
+			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Required logger
+			std::unique_ptr<File> m_file;								///< Source until handed to the Plan
+			std::shared_ptr<class Plan> m_plan;							///< Intention; shared with the job after Run
+			std::unique_ptr<Engine::Transcode::Engine> m_engine;		///< Map and coordinator thread
 	};
 }

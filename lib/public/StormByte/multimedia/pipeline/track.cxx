@@ -36,85 +36,39 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
-Step::Step() noexcept
-: m_in(std::make_unique<Buffer::Sink>()),
-m_out(std::make_unique<Buffer::Sink>()),
-m_failed(false) {}
+Track::Track(int in, enum StormByte::Multimedia::Type type) noexcept
+: m_in(in), m_type(type) {}
 
-Step::~Step() noexcept {
-	if (m_worker.joinable())
-		m_worker.request_stop();
+Track::Track(int in, const Config::Base& config) noexcept
+: m_in(in), m_type(config.Type()), m_config(config.Clone()) {}
+
+Track::Track(int in, Config::Base&& config) noexcept
+: m_in(in), m_type(config.Type()), m_config(config.Move()) {}
+
+Track::Track(const Track& other)
+: m_in(other.m_in), m_type(other.m_type), m_config(other.m_config ? other.m_config->Clone() : nullptr) {}
+
+Track& Track::operator=(const Track& other) {
+	if (this == &other)
+		return *this;
+	m_in = other.m_in;
+	m_type = other.m_type;
+	m_config = other.m_config ? other.m_config->Clone() : nullptr;
+	return *this;
 }
 
-void Step::Fail(std::string reason) noexcept {
-	m_error = std::move(reason);
-	m_failed.store(true, std::memory_order_release);
-	m_in->Eof();
-	m_out->Eof();
-	m_wake.notify_all();
+Tracks::Tracks(const Tracks& other) {
+	for (const std::unique_ptr<Track>& track : other)
+		add(*track);
 }
 
-bool Step::Failed() const noexcept {
-	return m_failed.load(std::memory_order_acquire);
-}
-
-const std::optional<std::string>& Step::Error() const noexcept {
-	return m_error;
-}
-
-std::condition_variable& Step::Wake() noexcept {
-	return m_wake;
-}
-
-void Step::Wait() noexcept {
-	std::unique_lock lock(m_wait);
-	m_wake.wait(lock, [this] {
-		return Failed() || m_in->Ready();
-	});
-}
-
-void Step::Open() noexcept {}
-
-void Step::Work(std::shared_ptr<Item>) noexcept {}
-
-void Step::Finish() noexcept {}
-
-void Step::Pump() noexcept {
-	for (;;) {
-		if (Failed())
-			break;
-		std::shared_ptr<Item> item = m_in->Pop();
-		if (!item) {
-			if (!m_in->EoF()) {
-				Wait();
-				continue;
-			}
-			Finish();
-			break;
-		}
-		Work(std::move(item));
-	}
-	m_out->Eof();
-}
-
-void Step::Launch() noexcept {
-	if (m_worker.joinable())
-		return;
-	m_in->Notify(m_wake);
-	m_worker = std::jthread([this]() {
-		Open();
-		Pump();
-		m_out->Eof();
-	});
-}
-
-Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
-	if (!to.m_plan)
-		to.m_plan = from.m_plan;
-	return to;
+Tracks& Tracks::operator=(const Tracks& other) {
+	if (this == &other)
+		return *this;
+	*this = Tracks(other);
+	return *this;
 }

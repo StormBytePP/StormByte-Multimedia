@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <atomic>
@@ -69,10 +70,16 @@ namespace StormByte::Multimedia::Buffer {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Demux;
+	class Mux;
 	class Route;
 	class Router;
 	class Step;
 	class Transcode;
+
+	namespace Engine::Transcode {
+		class Engine;
+	}
 
 	/**
 	 * @brief Shares @p from output hoppers with @p to input.
@@ -119,9 +126,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Step {
+		friend class Demux;
 		friend class Route;
 		friend class Router;
 		friend class Transcode;
+		friend class Engine::Transcode::Engine;
+		friend Demux& operator>>(Plan&& plan, Demux& demux) noexcept;
+		friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 		friend Step& operator>>(Step& from, Step& to) noexcept;
 
 		public:
@@ -175,6 +186,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return The single CV of this step.
 			 */
 			std::condition_variable& Wake() noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Plan
+			 * @{
+			 */
+
+			/**
+			 * @brief Bound job intention, if any.
+			 * @return Shared Plan, or empty. The pointer cannot be reseated.
+			 */
+			inline const std::shared_ptr<class Plan>& Plan() const noexcept {
+				return m_plan;
+			}
 
 			/**
 			 * @}
@@ -286,6 +314,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
 
 		private:
+			std::shared_ptr<class Plan> m_plan;			///< Current plan
 			std::condition_variable m_wake;				///< Single consumer CV
 			std::mutex m_wait;							///< Mutex for @ref m_wake
 			std::jthread m_worker;						///< Owned worker

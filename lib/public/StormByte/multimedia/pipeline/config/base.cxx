@@ -36,85 +36,22 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/pipeline/config/base.hxx>
 
-using namespace StormByte::Multimedia::Pipeline;
+#include <utility>
 
-Step::Step() noexcept
-: m_in(std::make_unique<Buffer::Sink>()),
-m_out(std::make_unique<Buffer::Sink>()),
-m_failed(false) {}
+using namespace StormByte::Multimedia::Pipeline::Config;
 
-Step::~Step() noexcept {
-	if (m_worker.joinable())
-		m_worker.request_stop();
+void Base::Language(std::string language) noexcept {
+	if (language.empty())
+		m_language.reset();
+	else
+		m_language = std::move(language);
 }
 
-void Step::Fail(std::string reason) noexcept {
-	m_error = std::move(reason);
-	m_failed.store(true, std::memory_order_release);
-	m_in->Eof();
-	m_out->Eof();
-	m_wake.notify_all();
-}
-
-bool Step::Failed() const noexcept {
-	return m_failed.load(std::memory_order_acquire);
-}
-
-const std::optional<std::string>& Step::Error() const noexcept {
-	return m_error;
-}
-
-std::condition_variable& Step::Wake() noexcept {
-	return m_wake;
-}
-
-void Step::Wait() noexcept {
-	std::unique_lock lock(m_wait);
-	m_wake.wait(lock, [this] {
-		return Failed() || m_in->Ready();
-	});
-}
-
-void Step::Open() noexcept {}
-
-void Step::Work(std::shared_ptr<Item>) noexcept {}
-
-void Step::Finish() noexcept {}
-
-void Step::Pump() noexcept {
-	for (;;) {
-		if (Failed())
-			break;
-		std::shared_ptr<Item> item = m_in->Pop();
-		if (!item) {
-			if (!m_in->EoF()) {
-				Wait();
-				continue;
-			}
-			Finish();
-			break;
-		}
-		Work(std::move(item));
-	}
-	m_out->Eof();
-}
-
-void Step::Launch() noexcept {
-	if (m_worker.joinable())
-		return;
-	m_in->Notify(m_wake);
-	m_worker = std::jthread([this]() {
-		Open();
-		Pump();
-		m_out->Eof();
-	});
-}
-
-Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
-	if (!to.m_plan)
-		to.m_plan = from.m_plan;
-	return to;
+void Base::Title(std::string title) noexcept {
+	if (title.empty())
+		m_title.reset();
+	else
+		m_title = std::move(title);
 }

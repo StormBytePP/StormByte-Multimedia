@@ -38,30 +38,304 @@
 
 #include <StormByte/multimedia/pipeline/engine/transcode/engine.hxx>
 
-namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
-	Engine::Engine() noexcept = default;
+#include <StormByte/multimedia/buffer/sink.hxx>
+#include <StormByte/multimedia/pipeline/config/audio.hxx>
+#include <StormByte/multimedia/pipeline/config/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/config/video.hxx>
+#include <StormByte/multimedia/pipeline/decoder.hxx>
+#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/encoder.hxx>
+#include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
+#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/route.hxx>
+#include <StormByte/multimedia/name_thread.hxx>
 
-	Engine::~Engine() noexcept {
-		RequestCancel();
-		Join();
+#include <algorithm>
+#include <chrono>
+#include <thread>
+
+using namespace StormByte::Multimedia::Pipeline::Engine::Transcode;
+
+namespace {
+	const StormByte::Multimedia::Codec* LeafCodec(const StormByte::Multimedia::Pipeline::Config::Base* config) noexcept {
+		if (const auto* video = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Video*>(config))
+			return video->Codec();
+		if (const auto* audio = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Audio*>(config))
+			return audio->Codec();
+		if (const auto* subtitle = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Subtitle*>(config))
+			return subtitle->Codec();
+		return nullptr;
 	}
 
-	void Engine::RequestCancel() noexcept {
-		cancel.store(true, std::memory_order_release);
-		paused.store(false, std::memory_order_release);
-		pauseCv.notify_all();
+	void ApplyEncoder(StormByte::Multimedia::Pipeline::Encoder& encoder,
+		const StormByte::Multimedia::Pipeline::Config::Base& config) noexcept {
+		if (config.Implementation().Encoder)
+			encoder.Implementation(*config.Implementation().Encoder);
+		if (config.Language())
+			encoder.Language(*config.Language());
+		if (config.Title())
+			encoder.Title(*config.Title());
+		if (const auto* video = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Video*>(&config)) {
+			if (video->CRF())
+				encoder.CRF(*video->CRF());
+			if (video->BitRate())
+				encoder.BitRate(*video->BitRate());
+			if (video->Preset())
+				encoder.Preset(*video->Preset());
+			if (video->Tune())
+				encoder.Tune(*video->Tune());
+			if (!video->FineTune().empty())
+				encoder.FineTune(video->FineTune());
+		}
+		else if (const auto* audio = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Audio*>(&config)) {
+			if (audio->BitRate())
+				encoder.BitRate(*audio->BitRate());
+			if (audio->MaxBitRate())
+				encoder.MaxBitRate(*audio->MaxBitRate());
+			if (audio->Preset())
+				encoder.Preset(*audio->Preset());
+		}
 	}
 
-	void Engine::Join() noexcept {
-		if (worker.joinable())
-			worker.join();
+	bool Stopping(const Engine& engine, const std::stop_token& token) noexcept {
+		return token.stop_requested() || engine.Cancel.load(std::memory_order_acquire);
+	}
+}
+
+Engine::Engine() noexcept = default;
+
+Engine::~Engine() noexcept {
+	RequestCancel();
+	Join();
+}
+
+void Engine::Start(StormByte::Multimedia::Pipeline::Transcode& job) noexcept {
+	const auto current = Status.load(std::memory_order_acquire);
+	if (current == StormByte::Multimedia::Pipeline::Status::Running
+		|| current == StormByte::Multimedia::Pipeline::Status::Paused)
+		return;
+	Cancel.store(false, std::memory_order_release);
+	Paused.store(false, std::memory_order_release);
+	Status.store(StormByte::Multimedia::Pipeline::Status::Running, std::memory_order_release);
+	m_worker = std::jthread([this, &job](std::stop_token token) {
+		Run(job, token);
+	});
+}
+
+void Engine::RequestCancel() noexcept {
+	Cancel.store(true, std::memory_order_release);
+	Paused.store(false, std::memory_order_release);
+	if (m_worker.joinable())
+		m_worker.request_stop();
+	PauseCv.notify_all();
+}
+
+void Engine::Join() noexcept {
+	if (m_worker.joinable())
+		m_worker.join();
+}
+
+void Engine::WaitIfPaused() noexcept {
+	std::unique_lock wait(PauseMutex);
+	PauseCv.wait(wait, [this]() {
+		return Cancel.load(std::memory_order_acquire)
+			|| !Paused.load(std::memory_order_acquire);
+	});
+}
+
+void Engine::Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_token token) noexcept {
+	NameThread("STMM:Transcode");
+	job.OnConfigure();
+	if (Status.load(std::memory_order_acquire) == StormByte::Multimedia::Pipeline::Status::Error) {
+		job.OnError(job.Error().value_or("configure failed"));
+		return;
+	}
+	if (Stopping(*this, token)) {
+		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		job.OnAborted();
+		return;
+	}
+	if (!Container || Path.empty() || !job.m_file) {
+		job.Fail("destination or source is not set");
+		job.OnError(job.Error().value_or("destination or source is not set"));
+		return;
+	}
+	for (const auto& slot : Mapped) {
+		if (!slot.Config) {
+			job.Fail("track origin " + std::to_string(slot.In) + " has no config");
+			job.OnError(job.Error().value_or("incomplete map"));
+			return;
+		}
 	}
 
-	void Engine::WaitIfPaused() noexcept {
-		std::unique_lock wait(pauseMutex);
-		pauseCv.wait(wait, [&]() {
-			return cancel.load(std::memory_order_acquire)
-				|| !paused.load(std::memory_order_acquire);
-		});
+	auto built = job.EmptyPlan(std::move(*job.m_file), *Container, Path);
+	job.m_file.reset();
+	for (const auto& slot : Mapped)
+		built->add(StormByte::Multimedia::Pipeline::Track(slot.In, *slot.Config));
+	job.OnPlan(*built);
+
+	const auto start = job.OnStart();
+	if (start != StormByte::Multimedia::Pipeline::Status::Running) {
+		if (start == StormByte::Multimedia::Pipeline::Status::Error) {
+			if (!job.Failed())
+				job.Fail("OnStart rejected the job");
+			job.OnError(job.Error().value_or("OnStart rejected the job"));
+		}
+		else if (start == StormByte::Multimedia::Pipeline::Status::Aborted) {
+			Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+			job.OnAborted();
+		}
+		else {
+			Status.store(StormByte::Multimedia::Pipeline::Status::Stopped, std::memory_order_release);
+		}
+		return;
 	}
+
+	StormByte::Multimedia::Pipeline::Demux demux;
+	StormByte::Multimedia::Pipeline::Mux mux(*Container);
+	mux >> Path;
+	std::move(*built) >> demux;
+	job.m_plan = demux.Plan();
+	demux >> mux;
+
+	while (!Stopping(*this, token) && !demux.Failed()
+		&& !(demux.m_engine && demux.m_engine->Context()))
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+	if (demux.Failed()) {
+		job.Fail(demux.Error().value_or("demux open failed"));
+		job.OnError(job.Error().value_or("demux"));
+		return;
+	}
+	if (mux.Failed()) {
+		job.Fail(mux.Error().value_or("mux open failed"));
+		job.OnError(job.Error().value_or("mux"));
+		return;
+	}
+	if (Stopping(*this, token)) {
+		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		job.OnAborted();
+		return;
+	}
+
+	struct EncodeLane {
+		int In = -1;
+		std::unique_ptr<StormByte::Multimedia::Pipeline::Decoder> Decoder;
+		std::unique_ptr<StormByte::Multimedia::Pipeline::Encoder> Encoder;
+		std::unique_ptr<StormByte::Multimedia::Pipeline::Route> Frames;
+	};
+	std::vector<EncodeLane> lanes;
+	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Route>> remuxes;
+
+	int muxIndex = 0;
+	for (auto& slot : Mapped) {
+		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
+		if (!codec) {
+			if (!mux.Remux(demux, slot.In, muxIndex)) {
+				job.Fail("remux reserve failed");
+				job.OnError(job.Error().value_or("mux"));
+				return;
+			}
+			auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In, true);
+			for (const auto& filter : slot.Filters)
+				route->Add(filter);
+			route->Close(demux, mux);
+			remuxes.push_back(std::move(route));
+		}
+		else {
+			auto decoder = std::make_unique<StormByte::Multimedia::Pipeline::Decoder>(slot.In);
+			auto encoder = std::make_unique<StormByte::Multimedia::Pipeline::Encoder>(muxIndex, *codec);
+			ApplyEncoder(*encoder, *slot.Config);
+			demux >> *decoder;
+			*encoder >> mux;
+			mux.m_in->Notify(mux.Wake());
+			encoder->m_out->Bind(slot.In, *mux.m_in);
+			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In, false);
+			for (const auto& filter : slot.Filters)
+				frames->Add(filter);
+			for (const auto& filter : Analytics)
+				frames->Add(filter);
+			frames->Close(*decoder, *encoder);
+			EncodeLane lane;
+			lane.In = slot.In;
+			lane.Decoder = std::move(decoder);
+			lane.Encoder = std::move(encoder);
+			lane.Frames = std::move(frames);
+			lanes.push_back(std::move(lane));
+		}
+		++muxIndex;
+	}
+
+	job.SetProgress(0);
+	const auto total = job.Source().Duration();
+	unsigned shown = 0;
+	std::int64_t maxNs = 0;
+
+	while (!Stopping(*this, token)) {
+		WaitIfPaused();
+		if (Stopping(*this, token))
+			break;
+		if (demux.Failed()) {
+			job.Fail(demux.Error().value_or("demux failed"));
+			break;
+		}
+		if (mux.Failed()) {
+			job.Fail(mux.Error().value_or("mux failed"));
+			break;
+		}
+		bool dead = false;
+		for (auto& lane : lanes) {
+			if (lane.Decoder && lane.Decoder->Failed()) {
+				job.Fail(lane.Decoder->Error().value_or("decoder failed"));
+				dead = true;
+				break;
+			}
+			if (lane.Encoder && lane.Encoder->Failed()) {
+				job.Fail(lane.Encoder->Error().value_or("encoder failed"));
+				dead = true;
+				break;
+			}
+			if (lane.Encoder && *lane.Encoder)
+				job.MarkSettled(lane.In, *lane.Encoder);
+		}
+		if (dead)
+			break;
+		if (mux.Closed())
+			break;
+		if (total) {
+			const auto den = total->Nanoseconds().count();
+			if (den > 0) {
+				if (const auto pos = mux.Position()) {
+					const auto num = pos->Nanoseconds().count();
+					if (num > maxNs)
+						maxNs = num;
+				}
+				unsigned pct = static_cast<unsigned>((maxNs * 100) / den);
+				if (pct > 99)
+					pct = 99;
+				if (pct < shown)
+					pct = shown;
+				if (pct != shown) {
+					shown = pct;
+					job.SetProgress(shown);
+				}
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
+
+	if (Stopping(*this, token)
+		&& Status.load(std::memory_order_acquire) != StormByte::Multimedia::Pipeline::Status::Error) {
+		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		job.OnAborted();
+		return;
+	}
+	if (job.Failed()) {
+		job.OnError(job.Error().value_or("transcode failed"));
+		return;
+	}
+	job.SetProgress(100);
+	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);
+	job.OnDone();
 }

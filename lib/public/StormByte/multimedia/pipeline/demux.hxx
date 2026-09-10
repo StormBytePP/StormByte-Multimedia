@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -50,10 +51,6 @@
 #include <optional>
 #include <string>
 
-namespace StormByte::Multimedia {
-	class File;
-}
-
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
@@ -64,6 +61,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demux;
 	class Mux;
+	class Plan;
 	class Transcode;
 
 	/**
@@ -81,6 +79,7 @@ namespace StormByte::Multimedia::Pipeline {
 		 */
 		namespace Demux {
 			class Engine;
+
 			/**
 			 * @namespace Details
 			 * @brief Container demux engine.
@@ -91,6 +90,7 @@ namespace StormByte::Multimedia::Pipeline {
 				class Container;
 			}
 		}
+
 		/**
 		 * @namespace Mux
 		 * @brief Mux backends.
@@ -108,22 +108,17 @@ namespace StormByte::Multimedia::Pipeline {
 				class Container;
 			}
 		}
-	}
 
-	/**
-	 * @brief Binds @p file into @p demux and wakes the waiter. Never throws.
-	 * @param file Probed snapshot.
-	 * @param demux Destination.
-	 * @return @p demux.
-	 *
-	 * Installs the format context. Does not start reading.
-	 * @ref Demux::Launch is live current: call it after every
-	 * decoder, remux reserve, encoder and route is wired.
-	 * Connecting a half-built circuit lets copy packets reach
-	 * the mux before encode tracks exist and the header is
-	 * written short.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
+		/**
+		 * @namespace Transcode
+		 * @brief Job map and coordinator behind @ref StormByte::Multimedia::Pipeline::Transcode.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Transcode {
+			class Engine;
+		}
+	}
 
 	/**
 	 * @brief Opens @p decoder on a stream of @p demux and binds that track.
@@ -131,9 +126,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param decoder Destination.
 	 * @return @p decoder.
 	 *
-	 * Attaches the decode backend and launches the decoder worker.
+	 * Attaches the decode backend and binds hoppers.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC class Decoder& operator>>(class Demux& demux, class Decoder& decoder) noexcept;
 
 	/**
 	 * @brief Forwards source attachments from @p demux onto @p mux. Never throws.
@@ -141,24 +136,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param mux Destination.
 	 * @return @p mux.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC class Mux& operator>>(class Demux& demux, class Mux& mux) noexcept;
 
 	/**
 	 * @class Demux
-	 * @brief Reads interleaved compressed packets from a File origin.
+	 * @brief Reads interleaved compressed packets from the Plan origin.
 	 *
-	 * A @ref Step, @c final. Unlike Decoder, Encoder, Mux and filters,
-	 * the constructor does not start the worker.
+	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
+	 * @c plan >> demux stores the Plan and wakes @ref Pump. Pump runs
+	 * @ref Plan::Check, opens the format context and reads. There is
+	 * no @c Open hook and no public Launch.
 	 *
-	 * @c file >> demux installs the backend (@ref Pump waits on a CV).
-	 * @ref Launch starts Pump after tracks are bound. Demux is the
-	 * only producer that can fill the mux before the output map is
-	 * complete; that is why Launch stays explicit.
-	 *
-	 * Input sink has zero buckets: this stage reads the File, not
-	 * @ref m_in. Units that leave Pump are @c std::shared_ptr<Packet>.
-	 * Empty Read is EoF. Errors are @ref Step::Fail. @ref Work stays
-	 * the Step no-op.
+	 * Input sink has zero buckets. Units that leave Pump are
+	 * @c std::shared_ptr<Packet>. Empty Read is EoF.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -170,7 +160,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Empty demuxer. Does not launch; @ref Pump waits for a source.
+			 * @brief Demuxer. Launches; @ref Pump waits for a Plan.
 			 */
 			Demux() noexcept;
 
@@ -216,15 +206,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Starts @ref Pump.
-			 *
-			 * Call after @c file >> demux and every track bind
-			 * (decoder, Remux, encoder, Route::Close). Idempotent.
-			 * Public on Demux; protected on @ref Step.
-			 */
-			void Launch() noexcept;
-
-			/**
 			 * @name Source
 			 * @{
 			 */
@@ -245,22 +226,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			friend Demux& operator>>(const File& file, Demux& demux) noexcept;
+			friend Demux& operator>>(class Plan&& plan, Demux& demux) noexcept;
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 			friend class Mux;
 			friend class Transcode;
 			friend class Engine::Demux::Details::Container;
 			friend class Engine::Mux::Details::Container;
+			friend class Engine::Transcode::Engine;
 
 		protected:
 			/**
-			 * @brief Prepare-once. No-op; the source is bound by @c file >> demux.
-			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Waits for a source, then reads packets onto @ref m_out.
+			 * @brief Waits for a Plan, checks it, opens the source, then reads.
 			 */
 			void Pump() noexcept override;
 
@@ -271,7 +248,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
-			 * @brief Marks a hard error and drops the backend.
+			 * @brief Marks a hard error and wakes the Plan waiter.
 			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
@@ -281,11 +258,19 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void ReachedEof() noexcept;
 
+			/**
+			 * @brief Origin snapshot owned by the bound Plan.
+			 * @return File.
+			 *
+			 * For the demux engine. Valid after @c plan >> demux.
+			 * Undefined if no Plan is set.
+			 */
+			const StormByte::Multimedia::File& OriginFile() const noexcept;
+
 			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
-			const File* m_file;									///< Snapshot used at open
 			bool m_eof;											///< End of source
-			std::mutex m_readyMutex;							///< Guards source install
-			std::condition_variable m_ready;					///< Woken when m_engine is set
+			std::mutex m_readyMutex;							///< Guards Plan / engine install
+			std::condition_variable m_ready;					///< Woken when a Plan arrives
 			std::atomic<std::int64_t> m_positionNs;				///< Last packet Pts, or -1
 	};
 }

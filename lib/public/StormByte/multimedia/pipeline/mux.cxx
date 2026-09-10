@@ -107,7 +107,7 @@ void Mux::Fail(std::string reason) noexcept {
 void Mux::Open() noexcept {}
 
 void Mux::Work(std::shared_ptr<Item> item) noexcept {
-    NameThread("STMM:Mux");
+	NameThread("STMM:Mux");
 
 	if (Failed() || !m_engine)
 		return;
@@ -134,6 +134,7 @@ void Mux::Finish() noexcept {
 }
 
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Mux& mux) noexcept {
+	static_cast<Step&>(encoder) >> mux;
 	if (mux.Failed() || encoder.Failed())
 		return encoder;
 	if (!mux.m_engine) {
@@ -155,23 +156,18 @@ Mux& StormByte::Multimedia::Pipeline::operator>>(Mux& mux, const std::filesystem
 	return mux;
 }
 
-Mux& StormByte::Multimedia::Pipeline::operator>>(const StormByte::Multimedia::File& file, Mux& mux) noexcept {
+Mux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Mux& mux) noexcept {
+	static_cast<Step&>(demux) >> mux;
 	if (mux.Failed())
 		return mux;
+	if (!demux.Plan()) {
+		mux.Fail("demuxer has no plan");
+		return mux;
+	}
 	if (!mux.m_engine) {
 		mux.Fail("muxer has no backend");
 		return mux;
 	}
-	mux.m_engine->BindAttachments(mux, file);
+	mux.m_engine->BindAttachments(mux, demux.OriginFile());
 	return mux;
-}
-
-Mux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Mux& mux) noexcept {
-	if (mux.Failed())
-		return mux;
-	if (!demux.m_file) {
-		mux.Fail("demuxer has no source file for attachments");
-		return mux;
-	}
-	return operator>>(*demux.m_file, mux);
 }
