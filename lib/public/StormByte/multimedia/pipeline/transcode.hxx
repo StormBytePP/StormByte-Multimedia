@@ -56,6 +56,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -89,6 +90,10 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @enum Status
 	 * @brief Lifecycle of a Transcode instance.
+	 *
+	 * @ref Open leaves the job @ref Status::Stopped. @ref Run starts
+	 * the coordinator. @ref OnStart may return Stopped / Error /
+	 * Aborted to bail without starting steps.
 	 */
 	enum class Status {
 		Stopped,	///< Open succeeded; Run has not started, or OnStart declined
@@ -103,8 +108,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class TrackPlan
 	 * @brief One mapped track as requested or after the encoder opened.
 	 *
-	 * Settled fields stay empty until OnSettled. Paid jobs derive this
-	 * and override Clone()/Move() via StormByte::Clonable.
+	 * Settled encoder fields stay empty until @ref Transcode::OnSettled.
+	 * Paid jobs derive this and override Clone()/Move() via
+	 * StormByte::Clonable. @c out is the destination order key, not a
+	 * mux stream index stamped onto @ref Item::Track.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -279,10 +286,14 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Transcode
 	 * @brief High-level job: map tracks, wire Demux / Route / Encoder / Mux.
 	 *
-	 * @ref Run starts a coordinator thread and returns at once. Each
-	 * @ref Step uses @ref Step::Work. Filters attach with
-	 * @ref Filter by source track index. Copy tracks use @ref Route
-	 * (copy=true) and @ref Mux::Remux (V1).
+	 * @ref Run starts a coordinator thread and returns at once.
+	 * Process / Packet filters chain on the track handle:
+	 * @c Video(in, out).Filter<Watermark>(…).Filter<Resize>(…).
+	 * Analytics chain on the job: @c Filter<Vmaf>(…). Copy tracks
+	 * use @ref Route with @c copy=true; frame filters on those
+	 * tracks are dropped. Packet filters on copy stay.
+	 *
+	 * One failed step or filter aborts the job (@ref Status::Error).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -411,6 +422,26 @@ namespace StormByte::Multimedia::Pipeline {
 					 * @return *this.
 					 */
 					Track& Title(std::string title) noexcept;
+
+					/**
+					 * @brief Appends a Process or Packet filter to this track.
+					 * @tparam FilterType Child of @ref Filter::Process or
+					 *         @ref Filter::Packet. Not @ref Filter::Analytics.
+					 * @param args Constructor arguments, forwarded.
+					 * @return *this.
+					 *
+					 * Call before @ref Transcode::Run. Frame filters on a
+					 * copy track are dropped by @ref Route. Analytics attach
+					 * on @ref Transcode::Filter.
+					 */
+					template<typename FilterType, typename... Args>
+					Track& Filter(Args&&... args) noexcept {
+						static_assert(!std::is_base_of_v<Filter::Analytics, FilterType>,
+							"Analytics attach on Transcode::Filter, not Track::Filter");
+						m_owner->AttachFilter(m_slot,
+							std::make_shared<FilterType>(std::forward<Args>(args)...));
+						return *this;
+					}
 
 				private:
 					friend class Transcode;
@@ -548,18 +579,20 @@ namespace StormByte::Multimedia::Pipeline {
 			Transcode& Ignore(int in) noexcept;
 
 			/**
-			 * @brief Appends a filter to the mapped source track @p in.
-			 * @tparam FilterType Child of Process, Analytics or Packet.
-			 * @param in Source stream index already passed to Video/Audio/Subtitle.
+			 * @brief Appends an Analytics filter to every encode route.
+			 * @tparam FilterType Child of @ref Filter::Analytics.
 			 * @param args Constructor arguments, forwarded.
 			 * @return *this.
 			 *
-			 * Call before @ref Run. Frame filters on a copy track are
-			 * ignored by @ref Route.
+			 * Call before @ref Run. Copy tracks have no frames; Route
+			 * drops a frame Analytics there. Process / Packet filters
+			 * attach on @ref Track::Filter.
 			 */
 			template<typename FilterType, typename... Args>
-			Transcode& Filter(int in, Args&&... args) noexcept {
-				AttachFilterByTrack(in,
+			Transcode& Filter(Args&&... args) noexcept {
+				static_assert(std::is_base_of_v<Filter::Analytics, FilterType>,
+					"Track Process/Packet filters attach on Track::Filter");
+				AttachAnalytics(
 					std::make_shared<FilterType>(std::forward<Args>(args)...));
 				return *this;
 			}
@@ -752,8 +785,7 @@ namespace StormByte::Multimedia::Pipeline {
 			bool ValidSlot(std::size_t slot) const noexcept;
 
 			/**
-			 * @brief Appends a filter to mapped[@p slot]. Defined in the cxx
-			 *        because Engine is incomplete here.
+			 * @brief Appends a Process/Packet filter to mapped[@p slot].
 			 * @param slot Index into Engine::mapped.
 			 * @param filter Owned filter node.
 			 */
@@ -761,11 +793,9 @@ namespace StormByte::Multimedia::Pipeline {
 				std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
 			/**
-			 * @brief Appends a filter to the slot whose source index is @p in.
-			 * @param in Source stream index.
-			 * @param filter Owned filter node.
+			 * @brief Stores a job-level Analytics node.
+			 * @param filter Owned Analytics filter.
 			 */
-			void AttachFilterByTrack(int in,
-				std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+			void AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 	};
 }

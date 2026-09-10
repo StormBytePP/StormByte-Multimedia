@@ -135,72 +135,71 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			}
 	};
 
-    /**
-     * @class FFmpeg
-     * @brief Abstract base for every StormByte Multimedia filter.
-     *
-     * Do not inherit this type. Inherit @ref Process, @ref Packet or
-     * @ref Analytics. @ref StormByte::Multimedia::Pipeline::Route::Add
-     * compiles with a bare FFmpeg pointer and then @ref Fail at wiring
-     * time: one failed node aborts the whole job.
-     *
-     * Construct the leaf with a short name (`resize`). @ref Name is
-     * `Media()/name`.
-     *
-     * @par Headers and libav
-     * StormByte-Multimedia does not install or export libav / libsw
-     * headers on its public API. A plugin includes the headers of the
-     * FFmpeg build this library was compiled against:
-     * FFmpeg @STORMBYTE_FFMPEG_VERSION@, libavcodec major
-     * @STORMBYTE_LIBAVCODEC_MAJOR@. Matching docs:
-     * https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION@/index.html
-     *
-     * Do not link libavcodec, libavformat, libavutil, libswscale or
-     * libswresample in the plugin. StormByte-Multimedia already links
-     * them. A second copy of those ABIs fails at load or at the first
-     * `av_*` call.
-     *
-     * The plugin talks to libav through @ref AVFrame, @ref AVPacket
-     * and @ref Save. Those pointers are borrowed or given away; do
-     * not `av_frame_free` / `av_packet_free` a pointer @ref AVFrame
-     * or @ref AVPacket returned. @ref Save takes ownership of @p raw.
-     *
-     * @par Plugin surface
-     * Public: @ref Media, @ref Accepts, @ref Clean, @ref Setup and
-     * the @ref Process overload that @ref Accepts requires.
-     * Protected: @ref AVFrame, @ref AVPacket, @ref Save, @ref Hold,
-     * @ref Release, @ref LastChance, @ref Fail, @ref Held,
-     * @ref HeldFor, @ref Eof.
-     * The plugin does not see Sink, Hopper, Bind, Route or Router.
-     *
-     * Inherits @ref StormByte::Multimedia::Pipeline::Step as
-     * protected: one pair of Sink objects, one CV, one thread.
-     * The worker launches in the constructor.
-     *
-     * @par Hold
-     * @ref Hold parks incoming units so @ref Process can look at a
-     * window (letterbox, loudness, a decoder delay) before anything
-     * reaches the next node. @p n of 0 means 255. A second Hold
-     * while @ref Held is @ref Fail. Exactly @p n units may sit on
-     * the queue. The next unit that would exceed that ceiling runs
-     * @ref LastChance instead of parking. If that call returns
-     * without @ref Release, @ref Fail runs and the job stops.
-     * Hold plus EoF without @ref Release is the same: @ref LastChance
-     * on the last parked unit, then @ref Fail if still Held.
-     *
-     * @ref Release ends the Hold and runs @ref Process again on
-     * every parked unit (now with the state the probe computed),
-     * then pushes them to the output sink. Units seen while Held
-     * are read-only until that replay; @ref Save during the probe
-     * window is dropped on the floor if the plugin @c return s
-     * while Held.
-     *
-     * @par Mutation
-     * Effect of a mutation is @ref Save inside @ref Work.
-     * @ref Analytics deletes @ref Save.
-     *
-     * @ingroup multimedia_pipeline
-     */
+	/**
+	 * @class FFmpeg
+	 * @brief Abstract base for every StormByte Multimedia filter.
+	 *
+	 * Do not inherit this type. Inherit @ref Process, @ref Packet or
+	 * @ref Analytics. @ref StormByte::Multimedia::Pipeline::Route::Add
+	 * compiles with a bare FFmpeg pointer and then @ref Fail at wiring
+	 * time: one failed node aborts the whole job.
+	 *
+	 * Construct the leaf with a short name (`resize`). @ref Name is
+	 * `Media()/name`.
+	 *
+	 * @par Headers and libav
+	 * StormByte-Multimedia does not install or export libav / libsw
+	 * headers on its public API. A plugin includes the headers of the
+	 * FFmpeg build this library was compiled against:
+	 * FFmpeg @STORMBYTE_FFMPEG_VERSION@, libavcodec major
+	 * @STORMBYTE_LIBAVCODEC_MAJOR@. Matching docs:
+	 * https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION@/index.html
+	 *
+	 * Do not link libavcodec, libavformat, libavutil, libswscale or
+	 * libswresample in the plugin. StormByte-Multimedia already links
+	 * them. A second copy of those ABIs fails at load or at the first
+	 * `av_*` call.
+	 *
+	 * The plugin talks to libav through @ref AVFrame, @ref AVPacket
+	 * and @ref Save. Those pointers are borrowed or given away; do
+	 * not `av_frame_free` / `av_packet_free` a pointer @ref AVFrame
+	 * or @ref AVPacket returned. @ref Save takes ownership of @p raw.
+	 *
+	 * @par Plugin surface
+	 * Public: @ref Media, @ref Accepts, @ref Clean, @ref Setup and
+	 * the @ref Process overload that @ref Accepts requires.
+	 * Protected: @ref AVFrame, @ref AVPacket, @ref Save, @ref Hold,
+	 * @ref Release, @ref LastChance, @ref Fail, @ref Held,
+	 * @ref HeldFor, @ref Eof.
+	 * The plugin does not see Sink, Hopper, Bind, Route or Router.
+	 *
+	 * Inherits @ref StormByte::Multimedia::Pipeline::Step as
+	 * protected: one pair of Sink objects, one CV, one thread.
+	 * The worker launches in the constructor.
+	 *
+	 * @par Hold
+	 * @ref Hold parks incoming units so @ref Process can look at a
+	 * window (letterbox, loudness, a decoder delay) before anything
+	 * reaches the next node. @p n of 0 means 255. A second Hold
+	 * while @ref Held is @ref Fail. Exactly @p n units may sit on
+	 * the queue. The next unit that would exceed that ceiling runs
+	 * @ref LastChance instead of parking. If that call returns
+	 * without @ref Release, @ref Fail runs and the job stops.
+	 * Hold plus EoF is the same path: @ref LastChance on the last
+	 * parked unit, then @ref Fail if still Held.
+	 *
+	 * @ref Release ends the Hold and runs @ref Process again on
+	 * every parked unit (now with the state the probe computed),
+	 * then pushes them to the output sink in that same call.
+	 * @ref Step sends EoF on the sink after @ref Finish returns,
+	 * so a Release from LastChance during Finish still flushes.
+	 *
+	 * @par Mutation
+	 * Effect of a mutation is @ref Save inside @ref Work.
+	 * @ref Analytics deletes @ref Save.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC FFmpeg: protected Pipeline::Step {
 		friend class StormByte::Multimedia::Pipeline::Route;
 
@@ -334,27 +333,27 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			void Fail(std::string reason) noexcept;
 
-            /**
-             * @brief Starts a Hold of at most @p n units.
-             *
-             * @p n of 0 means 255. Parks the current unit. Later
-             * units while Held are parked by Work. @ref Release may
-             * run before the ceiling. @ref HeldFor equal to @p n is
-             * still valid; the next unit is @ref LastChance, not a
-             * park. A second Hold while @ref Held is @ref Fail.
-             *
-             * @param n Maximum units for this Hold.
-             */
-            void Hold(std::uint8_t n) noexcept;
+			/**
+			 * @brief Starts a Hold of at most @p n units.
+			 *
+			 * @p n of 0 means 255. Parks the current unit. Later
+			 * units while Held are parked by Work. @ref Release may
+			 * run before the ceiling. @ref HeldFor equal to @p n is
+			 * still valid; the next unit is @ref LastChance, not a
+			 * park. A second Hold while @ref Held is @ref Fail.
+			 *
+			 * @param n Maximum units for this Hold.
+			 */
+			void Hold(std::uint8_t n) noexcept;
 
-            /**
-             * @brief Ends the Hold and replays parked units through
-             *        @ref Process, then pushes them to the output sink.
-             *
-             * No-op if not @ref Held. Set any probe state before
-             * calling this; the replay sees that state.
-             */
-            void Release() noexcept;
+			/**
+			 * @brief Ends the Hold and replays parked units through
+			 *        @ref Process, then pushes them to the output sink.
+			 *
+			 * Runs in the same call (not on the next Work). No-op if
+			 * not @ref Held. Set probe state before calling this.
+			 */
+			void Release() noexcept;
 
 			/**
 			 * @brief Whether this filter is inside a Hold.
@@ -373,22 +372,24 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			virtual void Eof() noexcept;
 
-            /**
-             * @brief Last unit that would overflow the Hold queue.
-             *
-             * Default no-op. Override to @ref Release with a sane
-             * default, or leave Held and let the job @ref Fail.
-             * Not called when the plugin never @ref Hold s.
-             *
-             * @param frame Current frame.
-             */
-            virtual void LastChance(const Pipeline::Frame& frame) noexcept;
+			/**
+			 * @brief Last look before the Hold must end.
+			 *
+			 * Called when one more unit would overflow the queue, and
+			 * when the route hits EoF while still Held. Default no-op.
+			 * Override to @ref Release with a sane default, or leave
+			 * Held and let the job @ref Fail. Not called if the leaf
+			 * never @ref Hold s.
+			 *
+			 * @param frame Current frame, or last parked frame on EoF.
+			 */
+			virtual void LastChance(const Pipeline::Frame& frame) noexcept;
 
-            /**
-             * @brief Last unit that would overflow the Hold queue.
-             * @param packet Current packet.
-             */
-            virtual void LastChance(const Pipeline::Packet& packet) noexcept;
+			/**
+			 * @brief Last look before the Hold must end.
+			 * @param packet Current packet, or last parked packet on EoF.
+			 */
+			virtual void LastChance(const Pipeline::Packet& packet) noexcept;
 
 			/**
 			 * @brief Borrowed libav frame of the current unit, or nullptr.
@@ -431,7 +432,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			void Work(std::shared_ptr<Pipeline::Item> item) noexcept override;
 
 			/**
-			 * @brief Hold plus EoF without Release is Fail. Then @ref Eof.
+			 * @brief If Held, @ref LastChance on the last parked unit.
+			 *        Still Held afterwards is Fail. Then @ref Eof.
+			 *
+			 * @ref Release from LastChance flushes the queue before
+			 * this returns. @ref Step then sends EoF on the sink.
 			 */
 			void Finish() noexcept override;
 
@@ -442,6 +447,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			void Park() noexcept;
 
+			/**
+			 * @brief Dispatches @ref LastChance to the kind of @ref m_current.
+			 */
+			void CallLastChance() noexcept;
+
 			std::string m_name;											///< Leaf name
 			std::shared_ptr<Pipeline::Item> m_current;					///< Unit of this Work call
 			std::deque<std::shared_ptr<Pipeline::Item>> m_queue;			///< Thread-local Hold
@@ -449,17 +459,17 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::uint8_t m_heldFor;										///< Parked count
 	};
 
-    /**
-     * @class Process
-     * @brief Mutates decoded frames.
-     *
-     * Inherit this for a video / audio / subtitle filter that
-     * rewrites planes (watermark, resize, tonemap). Accept mask is
-     * @ref StormByte::Multimedia::Pipeline::Kind::Frame. Implement
-     * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVFrame
-     * and @ref Save. Do not declare a method named Process on this
-     * class: that is a constructor.
-     */
+	/**
+	 * @class Process
+	 * @brief Mutates decoded frames.
+	 *
+	 * Inherit this for a video / audio / subtitle filter that
+	 * rewrites planes (watermark, resize, tonemap). Accept mask is
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. Implement
+	 * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVFrame
+	 * and @ref Save. Do not declare a method named Process on this
+	 * class: that is a constructor.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
 		public:
 			/**
@@ -507,15 +517,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			explicit Process(std::string name) noexcept;
 	};
 
-    /**
-     * @class Packet
-     * @brief Mutates compressed packets.
-     *
-     * Inherit this for a bitstream filter (Annex-B, caption inject).
-     * Accept mask is @ref StormByte::Multimedia::Pipeline::Kind::Packet.
-     * Implement @ref FFmpeg::Process(const Pipeline::Packet&). Use
-     * @ref AVPacket and @ref Save.
-     */
+	/**
+	 * @class Packet
+	 * @brief Mutates compressed packets.
+	 *
+	 * Inherit this for a bitstream filter (Annex-B, caption inject).
+	 * Accept mask is @ref StormByte::Multimedia::Pipeline::Kind::Packet.
+	 * Implement @ref FFmpeg::Process(const Pipeline::Packet&). Use
+	 * @ref AVPacket and @ref Save.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
 			/**
@@ -563,23 +573,23 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			explicit Packet(std::string name) noexcept;
 	};
 
-    /**
-     * @class Analytics
-     * @brief Measures units. Does not rewrite them.
-     *
-     * Last node of its Kind stretch: @ref StormByte::Multimedia::Pipeline::Route
-     * detects this type with @c dynamic_cast and wires it after every
-     * @ref Process / @ref Packet on that lane. @ref Save is deleted.
-     *
-     * @ref Process runs once per unit on that lane. When the same
-     * unit is seen again (a second look after a Hold replay, or a
-     * second stretch the job feeds), the unit's pass getter tells
-     * first look from second look. Implement @ref Report for the
-     * numbers the job reads at the end.
-     *
-     * There is no method named Analytics on this class: that would
-     * be a constructor.
-     */
+	/**
+	 * @class Analytics
+	 * @brief Measures units. Does not rewrite them.
+	 *
+	 * Last node of its Kind stretch: @ref StormByte::Multimedia::Pipeline::Route
+	 * detects this type with @c dynamic_cast and wires it after every
+	 * @ref Process / @ref Packet on that lane. @ref Save is deleted.
+	 *
+	 * @ref Process runs once per unit on that lane. When the same
+	 * unit is seen again (a second look after a Hold replay, or a
+	 * second stretch the job feeds), the unit's pass getter tells
+	 * first look from second look. Implement @ref Report for the
+	 * numbers the job reads at the end.
+	 *
+	 * There is no method named Analytics on this class: that would
+	 * be a constructor.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Analytics: public FFmpeg {
 		public:
 			/**

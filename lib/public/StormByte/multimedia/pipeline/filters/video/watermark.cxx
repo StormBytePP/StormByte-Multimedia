@@ -55,6 +55,11 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 namespace {
+	/*
+	* Still-image decoder from the logo file extension.
+	* Unknown extensions fall back to MJPEG so a misnamed file
+	* still has a chance; DecodeLogo Fail()s if that decode dies.
+	*/
 	const ::AVCodec* CodecFromPath(const std::filesystem::path& path) noexcept {
 		std::string ext = path.extension().string();
 		for (char& c : ext)
@@ -70,12 +75,18 @@ namespace {
 		return avcodec_find_decoder(AV_CODEC_ID_MJPEG);
 	}
 
+	/* One 8-bit luma sample. `src` is always AV_PIX_FMT_GRAY8 here. */
 	int SampleY8(const ::AVFrame* src, int x, int y) noexcept {
 		if (!src->data[0] || x < 0 || y < 0 || x >= src->width || y >= src->height)
 			return 0;
 		return src->data[0][y * src->linesize[0] + x];
 	}
 
+	/*
+	* Mean luma of a row, subsampled (~64 samples).
+	* Fast enough to run on every held frame; good enough to tell
+	* a black bar from picture.
+	*/
 	int RowMeanY8(const ::AVFrame* src, int row) noexcept {
 		unsigned sum = 0;
 		const int step = src->width > 64 ? src->width / 64 : 1;
@@ -87,6 +98,7 @@ namespace {
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
+	/* Same idea on a column (pillarbox). */
 	int ColMeanY8(const ::AVFrame* src, int col) noexcept {
 		unsigned sum = 0;
 		const int step = src->height > 64 ? src->height / 64 : 1;
@@ -98,6 +110,11 @@ namespace {
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
+	/*
+	* Walk inward from an edge while the row/column mean stays
+	* at or below `black`. `limit` caps how far we trust a bar
+	* (letterbox ≤ 20% of height, pillarbox ≤ 12.5% of width).
+	*/
 	int ScanBar(int limit, int black, const auto& meanAt) noexcept {
 		int bar = 0;
 		while (bar < limit && meanAt(bar) <= black)
@@ -105,6 +122,11 @@ namespace {
 		return bar;
 	}
 
+	/*
+	* Logo top-left in frame pixels.
+	* Point: absolute, ignore bars.
+	* Anchor: (x0,y0,aw,ah) is the active picture after bars.
+	*/
 	std::pair<int, int> Place(int logoW, int logoH,
 		const std::optional<Anchor>& anchor,
 		const std::optional<StormByte::Multimedia::Property::Point>& point,
@@ -128,6 +150,7 @@ namespace {
 		return {x, y};
 	}
 
+	/* Straight alpha blend of the logo onto an RGBA frame. */
 	void Blend(uint8_t* dst, int dstLinesize, int frameW, int frameH,
 		const uint8_t* logo, int logoW, int logoH, int x, int y, unsigned opacity) noexcept {
 		const int alphaScale = static_cast<int>(opacity);
@@ -339,6 +362,10 @@ bool Watermark::DecodeLogo() noexcept {
 	return true;
 }
 
+/*
+* HDR / 10-bit / YUV frames cannot be probed on data[0].
+* Convert once to GRAY8 and cache SwsContext while size+format hold.
+*/
 ::AVFrame* Watermark::Luma(::AVFrame* src) noexcept {
 	if (!src || src->width <= 0 || src->height <= 0)
 		return nullptr;
@@ -387,6 +414,11 @@ bool Watermark::DecodeLogo() noexcept {
 	return m_luma;
 }
 
+/*
+* One probe. false = ignore this frame (too small / full slate).
+* Bars accumulate with max() so a later frame can only grow them.
+* m_stable counts consecutive frames that did not grow a letterbox pair.
+*/
 bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 	::AVFrame* gray = Luma(src);
 	if (!gray || gray->width < 16 || gray->height < 16)
@@ -458,12 +490,33 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 	if (m_opacity == 0)
 		return;
 
+	::AVFrame* src = AVFrame();
+
+	/*
+     * Anchor placement is relative to the active picture, not the
+     * full frame. Letterbox / pillarbox width is unknown on frame 0
+     * (many films stay black for 1–2 s). Painting immediately would
+     * either put the logo inside the bars or leave the first N frames
+     * without a mark while we wait.
+     *
+     * Hold(ProbeMax) parks every video unit here until the bars are
+     * known. ProbeBars still runs on each parked unit. When a
+     * letterbox pair is stable — or LastChance fires at the ceiling
+     * / route EOF — set m_released and Release(). Release replays
+     * the parked units through Process; those calls skip this block
+     * and Paint from frame 0 with the measured offset (or 0 if there
+     * were no bars).
+     *
+     * Do not branch on HeldFor(): the ceiling belongs to LastChance.
+     * Point placement skips this block; the coordinate is already
+     * in frame pixels.
+     */
 	if (m_anchor && !m_point && !m_released) {
 		if (!Held())
 			Hold(ProbeMax);
-		(void)ProbeBars(AVFrame());
+		const bool usable = ProbeBars(src);
 		const bool letterbox = m_barTop > 8 && m_barBottom > 8;
-		if (letterbox && m_stable >= 8) {
+		if (usable && letterbox && m_stable >= 8) {
 			m_released = true;
 			Release();
 			return;
@@ -477,14 +530,20 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 }
 
 void Watermark::LastChance(const Pipeline::Frame&) noexcept {
-	if (m_barTop <= 8 || m_barBottom <= 8) {
-		m_barTop = 0;
-		m_barBottom = 0;
-		m_barLeft = 0;
-		m_barRight = 0;
-	}
-	m_released = true;
-	Release();
+    /*
+     * Pipeline::Filter::FFmpeg calls this instead of overflowing
+     * the Hold queue, and again if the route ends while still Held.
+     * Keep a measured letterbox; otherwise pad = 0 (true BottomRight).
+     * Must Release() or the job Fails.
+     */
+    if (!(m_barTop > 8 && m_barBottom > 8)) {
+        m_barTop = 0;
+        m_barBottom = 0;
+        m_barLeft = 0;
+        m_barRight = 0;
+    }
+    m_released = true;
+    Release();
 }
 
 void Watermark::Paint() noexcept {

@@ -163,6 +163,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Transcode {
 			const StormByte::Multimedia::Container* container = nullptr;		///< Destination
 			std::filesystem::path path;											///< Output path
 			std::vector<Slot> mapped;											///< Explicit tracks
+			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> analytics;	///< Job-level Analytics
 			std::set<int> ignore;												///< Dropped source indexes
 			std::thread worker;													///< Coordinator thread
 	};

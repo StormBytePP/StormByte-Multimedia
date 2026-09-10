@@ -48,15 +48,24 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
+ *
+ * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
+ * Attach with @c job.Video(in, out).Filter<Resize>(w, h).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Resize
-	 * @brief Scales a decoded video frame.
+	 * @brief Scales a decoded video frame with libswscale.
+	 *
+	 * Minimal Process filter: @ref Media is Video, @ref Clean and
+	 * @ref Setup are empty, @ref Process reads @ref FFmpeg::AVFrame,
+	 * allocates a new @c AVFrame, calls @ref FFmpeg::Save. After a
+	 * successful Save the old backend is gone; do not @c av_frame_free
+	 * the pointer you passed.
 	 *
 	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
-	 * on the first video frame. Destination is applied with swscale
-	 * on the backend frame; Payload() is invalidated.
+	 * on the first video frame. Same size as the source is a no-op
+	 * (no Save). Destination pixel format matches the source.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */
@@ -122,7 +131,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Media this filter handles.
-			 * @return Video.
+			 * @return Video. Other kinds pass through Gate.
 			 */
 			enum StormByte::Multimedia::Type Media() const noexcept override;
 
@@ -137,7 +146,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 
 			/**
-			 * @brief Nothing to drop on first run.
+			 * @brief Nothing to drop between runs.
 			 */
 			void Clean() noexcept override;
 

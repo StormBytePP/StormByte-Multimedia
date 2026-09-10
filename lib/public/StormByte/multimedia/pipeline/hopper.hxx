@@ -75,19 +75,19 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Hopper
-	 * @brief N-N queue of @ref SmartPointer items inside one Sink bucket.
+	 * @brief MPMC queue of @ref SmartPointer items inside one Sink bucket.
 	 *
-	 * Lock-free V1 contract: any number of producers and consumers,
-	 * including zero and one. This compilation uses a mutex; the
-	 * lock-free body moves to Buffer.
+	 * Any number of producers and consumers, including zero and one.
+	 * This compilation uses a mutex. A lock-free body is planned under
+	 * Buffer; the public contract stays the same.
 	 *
 	 * Instantiated only for @c shared_ptr of @ref Item, @ref Frame
 	 * and @ref Packet. User code does not instantiate this template.
 	 *
-	 * The hopper does not own a condition variable. Bind stores the
+	 * The hopper does not own a condition variable. @ref Wake stores the
 	 * consumer step's CV. @ref Push and @ref Eof notify only when that
-	 * pointer is set. Hold is a thread-local queue on FFmpeg, not this
-	 * type.
+	 * pointer is set. Filter Hold is a thread-local queue on FFmpeg, not
+	 * this type.
 	 *
 	 * @tparam T @ref SmartPointer stored in the bucket.
 	 *
@@ -157,7 +157,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Enqueues one item and wakes a waiter if Bind already ran.
+			 * @brief Enqueues one item and wakes a waiter if @ref Wake already ran.
 			 * @param item Pointer to push. Empty pointers are discarded.
 			 */
 			void Push(T item) noexcept {
@@ -172,6 +172,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Marks end of input and wakes a waiter.
+			 *
+			 * Does not discard items already queued. Drain with @ref Pop
+			 * until @ref Empty, then treat @ref EoF as tube end.
 			 */
 			void Eof() noexcept {
 				m_eof.store(true, std::memory_order_release);
@@ -202,7 +205,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether the producer called @ref Eof.
-			 * @return true after @ref Eof.
+			 * @return true after @ref Eof. The queue may still hold items.
 			 */
 			bool EoF() const noexcept {
 				return m_eof.load(std::memory_order_acquire);
@@ -210,7 +213,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether the queue has no pending items.
-			 * @return true if empty. Does not pop.
+			 * @return true if empty. Does not pop. Independent of @ref EoF.
 			 */
 			bool Empty() const noexcept {
 				std::lock_guard<std::mutex> lock(m_mutex);
@@ -240,7 +243,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
-			 * @brief Notifies the consumer CV when Bind has set one.
+			 * @brief Notifies the consumer CV when @ref Wake has set one.
 			 */
 			void Notify() noexcept {
 				std::condition_variable* wake = m_wake.load(std::memory_order_acquire);
@@ -252,7 +255,7 @@ namespace StormByte::Multimedia::Pipeline {
 			mutable std::mutex m_mutex;							///< Guards @ref m_items
 			std::queue<T> m_items;								///< Pending pointers
 			std::atomic<bool> m_eof;							///< Producer called @ref Eof
-			std::atomic<std::condition_variable*> m_wake;		///< Consumer CV; Bind sets it
+			std::atomic<std::condition_variable*> m_wake;		///< Consumer CV; @ref Wake sets it
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<Item>>;

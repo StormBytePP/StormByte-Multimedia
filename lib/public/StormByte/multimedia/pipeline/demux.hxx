@@ -111,10 +111,17 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @brief Binds @p file into @p demux and wakes the worker. Never throws.
+	 * @brief Binds @p file into @p demux and wakes the waiter. Never throws.
 	 * @param file Probed snapshot.
 	 * @param demux Destination.
 	 * @return @p demux.
+	 *
+	 * Installs the format context. Does not start reading.
+	 * @ref Demux::Launch is live current: call it after every
+	 * decoder, remux reserve, encoder and route is wired.
+	 * Connecting a half-built circuit lets copy packets reach
+	 * the mux before encode tracks exist and the header is
+	 * written short.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(const File& file, Demux& demux) noexcept;
 
@@ -123,6 +130,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param demux Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
+	 *
+	 * Attaches the decode backend and launches the decoder worker.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 
@@ -138,11 +147,18 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Demux
 	 * @brief Reads interleaved compressed packets from a File origin.
 	 *
-	 * A @ref Step, @c final. The constructor launches the worker. The
-	 * worker waits on a Demux-owned condition until @c file >> demux
-	 * installs the backend. Input sink has zero buckets. Units that
-	 * leave @ref Pump are @c std::shared_ptr<Packet>. Empty Read is
-	 * EoF. Errors are @ref Step::Fail. @ref Work stays the Step no-op.
+	 * A @ref Step, @c final. Unlike Decoder, Encoder, Mux and filters,
+	 * the constructor does not start the worker.
+	 *
+	 * @c file >> demux installs the backend (@ref Pump waits on a CV).
+	 * @ref Launch starts Pump after tracks are bound. Demux is the
+	 * only producer that can fill the mux before the output map is
+	 * complete; that is why Launch stays explicit.
+	 *
+	 * Input sink has zero buckets: this stage reads the File, not
+	 * @ref m_in. Units that leave Pump are @c std::shared_ptr<Packet>.
+	 * Empty Read is EoF. Errors are @ref Step::Fail. @ref Work stays
+	 * the Step no-op.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -154,7 +170,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Empty demuxer. Launches the worker; it waits for a source.
+			 * @brief Empty demuxer. Does not launch; @ref Pump waits for a source.
 			 */
 			Demux() noexcept;
 
@@ -198,10 +214,15 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @}
 			 */
+
 			/**
-             * @brief Starts @ref Pump. Mandatory. Call after wiring.
-             */
-            void Launch() noexcept;
+			 * @brief Starts @ref Pump.
+			 *
+			 * Call after @c file >> demux and every track bind
+			 * (decoder, Remux, encoder, Route::Close). Idempotent.
+			 * Public on Demux; protected on @ref Step.
+			 */
+			void Launch() noexcept;
 
 			/**
 			 * @name Source

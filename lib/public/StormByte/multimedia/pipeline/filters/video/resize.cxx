@@ -46,6 +46,12 @@ extern "C" {
 
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
+/*
+* Process leaf. Route::Add only accepts Process / Packet / Analytics.
+*
+* Construction names the node ("resize") so logs and Report dumps
+* can tell filters apart. Do not Launch() here: Route::Add does.
+*/
 Resize::Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept
 : Filter::Process("resize"), m_width(resolution.Width()), m_height(resolution.Height()) {}
 
@@ -61,6 +67,7 @@ void Resize::Clean() noexcept {}
 void Resize::Setup() noexcept {}
 
 void Resize::Process(const Pipeline::Frame&) noexcept {
+	/* Gate already matched Kind::Frame + Video. AVFrame() is the live backend. */
 	::AVFrame* src = AVFrame();
 	if (!src || src->width <= 0 || src->height <= 0) {
 		Fail("missing video buffer");
@@ -85,6 +92,7 @@ void Resize::Process(const Pipeline::Frame&) noexcept {
 		return;
 	}
 
+	/* Same geometry: leave the unit alone. No Save. */
 	if (static_cast<int>(dstW) == src->width && static_cast<int>(dstH) == src->height)
 		return;
 
@@ -125,5 +133,9 @@ void Resize::Process(const Pipeline::Frame&) noexcept {
 		return;
 	}
 
+	/*
+	* Save takes ownership of `out`. Do not av_frame_free(out) after
+	* a successful Save. Fail paths above still free.
+	*/
 	Save(out);
 }

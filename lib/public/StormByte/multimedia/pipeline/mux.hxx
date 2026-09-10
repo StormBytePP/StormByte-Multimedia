@@ -96,6 +96,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param encoder Live encoder.
 	 * @param mux Destination.
 	 * @return @p encoder.
+	 *
+	 * Does not bind hoppers. Transcode / @ref Route bind
+	 * @c encoder.m_out to @c mux.m_in on the origin track.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
 
@@ -127,10 +130,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Mux
 	 * @brief Writes interleaved packets to a destination container.
 	 *
-	 * A @ref Step, @c final. Launches in the constructor.
-	 * Encoded tracks come from @c encoder >> mux. Copy tracks (V1)
-	 * come from @ref Remux plus a @ref Route from Demux.
-	 * @ref Work writes to the container, not to @ref m_out.
+	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
+	 * Encoded tracks come from @c encoder >> mux plus a hopper bind
+	 * on the origin track. Copy tracks come from @ref Remux plus a
+	 * @ref Route from Demux. @ref Work writes to the container, not
+	 * to @ref m_out. Header write waits until reserved encode
+	 * backends are open.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -145,7 +150,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Muxer for @p container. Destination path is bound later.
 			 * @param container Writable registry container.
 			 *
-			 * Launches the worker. @ref Pop waits until Bind creates buckets.
+			 * Starts the worker. @ref Pop waits until Bind creates buckets.
 			 */
 			explicit Mux(const StormByte::Multimedia::Container& container) noexcept;
 
@@ -209,7 +214,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const StormByte::Multimedia::Container& Destination() const noexcept;
 
 			/**
-			 * @brief V1 remux reserve: copy @p in from @p demux onto output index @p out.
+			 * @brief Remux reserve: copy @p in from @p demux onto output index @p out.
 			 * @param demux Open demuxer (format context already adopted).
 			 * @param in Source stream index.
 			 * @param out Destination order key (contiguous from 0 with encoders).

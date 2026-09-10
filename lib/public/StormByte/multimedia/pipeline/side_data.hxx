@@ -47,11 +47,16 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
+ *
+ * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @enum SideDataKind
-	 * @brief Known AVFrame side-data kinds. Unmapped kinds use Other.
+	 * @brief Known libav side-data kinds on a @ref Frame or @ref Packet.
+	 *
+	 * Unmapped libav types use @ref SideDataKind::Other and keep the
+	 * FFmpeg name in @ref SideData::Name.
 	 */
 	enum class SideDataKind {
 		MasteringDisplay,	///< Mastering display metadata
@@ -79,6 +84,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Copy duplicates the FIFO. That is cheap next to an @c AVFrame
 	 * plane clone; @ref StormByte::Multimedia::Pipeline::Frame needs it
 	 * for its private copy.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC SideData {
 		public:
@@ -93,6 +100,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Other kind plus FFmpeg name and payload.
 			 * @param name libav side-data name.
 			 * @param payload Raw bytes.
+			 *
+			 * Sets @ref Kind to @ref SideDataKind::Other.
 			 */
 			SideData(std::string name, StormByte::Buffer::FIFO payload) noexcept;
 
@@ -104,8 +113,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Move constructor.
+			 * @param other Blob to take.
 			 */
-			SideData(SideData&&) noexcept = default;
+			SideData(SideData&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
@@ -114,15 +124,17 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Copy assignment.
+			 * @param other Source blob.
 			 * @return *this.
 			 */
 			SideData& operator=(const SideData& other) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
+			 * @param other Blob to take.
 			 * @return *this.
 			 */
-			SideData& operator=(SideData&&) noexcept = default;
+			SideData& operator=(SideData&& other) noexcept = default;
 
 			/**
 			 * @brief Kind.

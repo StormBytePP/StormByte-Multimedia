@@ -51,6 +51,9 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
+ *
+ * Inherit @ref Filter::Process. Attach with
+ * @c job.Video(in, out).Filter<Watermark>(path, Anchor::BottomRight).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -74,24 +77,40 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 	/**
 	 * @class Watermark
-	 * @brief Overlays a still image from a file on decoded video.
+	 * @brief Overlays a still image on decoded video. Real Hold example.
 	 *
 	 * Opacity 0 is a no-op. The logo is never cropped: if it does not
 	 * fit the active picture, @ref FFmpeg::Fail runs.
 	 *
-	 * Works on every software pixel format the decoder emits. Bars
-	 * are measured on a luma plane produced by libswscale, not by
-	 * reading @c data[0] of the source. Overlay converts to RGBA and
-	 * back to the source format.
+	 * @par Hold (anchor placement only)
+	 * Movies often show a black slate before letterbox bars appear.
+	 * An @ref Anchor therefore opens @ref FFmpeg::Hold(@ref ProbeMax)
+	 * on the first video unit. Parked units are not forwarded.
+	 * @ref Process only probes; it returns while @ref FFmpeg::Held
+	 * is true so @ref Paint does not run on the live unit.
 	 *
-	 * With an @ref Anchor the first run opens @ref FFmpeg::Hold with a
-	 * plugin-chosen maximum. Near-black slates do not update the
-	 * rectangle. Bar widths accumulate (max). @ref FFmpeg::Release may
-	 * run before the ceiling when the rectangle stops changing. An
-	 * absolute @ref StormByte::Multimedia::Property::Point does not Hold.
+	 * @ref FFmpeg::Release replays every parked unit through
+	 * @ref Process again. After @ref m_released is set those
+	 * replays fall through to @ref Paint, so the logo appears
+	 * from the first frame, not after the probe window.
 	 *
-	 * Talks to libav with raw @c AVFrame* from @ref FFmpeg::AVFrame
+	 * Release early when a letterbox pair is stable
+	 * (@c m_stable >= 8). If the ceiling is hit first,
+	 * @ref LastChance keeps the bars that were found or
+	 * zeros them (full-frame BottomRight) and Releases.
+	 * Returning from LastChance without Release fails the job.
+	 *
+	 * An absolute @ref StormByte::Multimedia::Property::Point
+	 * does not Hold: coordinates are already in frame pixels.
+	 *
+	 * Bars are measured on a GRAY8 plane from libswscale, not
+	 * on @c data[0] of HDR sources. Overlay is RGBA then back
+	 * to the source format. Talks to libav via @ref FFmpeg::AVFrame
 	 * and @ref FFmpeg::Save.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Filter::Process
+	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Hold
+	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::LastChance
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
@@ -103,7 +122,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			/**
 			 * @brief Logo at an anchor on the active picture.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
-			 * @param anchor Placement.
+			 * @param anchor Placement relative to measured bars.
 			 * @param opacity 0–100. 0 = no-op.
 			 * @param margin Pixels from the anchored active edge.
 			 */
@@ -162,7 +181,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Media this filter handles.
-			 * @return Video.
+			 * @return Video. Other kinds pass through Gate.
 			 */
 			enum StormByte::Multimedia::Type Media() const noexcept override;
 
@@ -187,14 +206,19 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Holds to measure bars when needed, blends, @ref FFmpeg::Save.
-			 * @param frame Video unit.
+			 * @brief Probes bars while Held; paints after Release replay.
+			 * @param frame Video unit (read the backend with AVFrame()).
+			 *
+			 * Must not @ref Paint while @ref FFmpeg::Held is true.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
 			/**
-			 * @brief Hold ceiling: keep measured bars or drop them to 0, then Release.
+			 * @brief Hold ceiling: keep measured bars or zero them, then Release.
 			 * @param frame Last unit that would overflow the Hold queue.
+			 *
+			 * Called by FFmpeg when HeldFor() would exceed Hold() and
+			 * again on Hold+EOF. Must Release() or the job Fails.
 			 */
 			void LastChance(const Pipeline::Frame& frame) noexcept override;
 
@@ -203,7 +227,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 
 		private:
-			static constexpr std::uint8_t ProbeMax = 200;	///< Plugin Hold ceiling
+			static constexpr std::uint8_t ProbeMax = 200;	///< Hold ceiling in units
 
 			/**
 			 * @brief Reads @ref m_path into @ref m_bytes.
@@ -252,12 +276,12 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			StormByte::Buffer::DataType m_rgba;								///< Decoded RGBA8888
 			bool m_loaded;													///< File read attempted
 			bool m_decoded;													///< Decode attempted
-			bool m_released;												///< Hold finished for this run
+			bool m_released;												///< Hold finished; replays may Paint
 			int m_barTop;													///< Letterbox top
 			int m_barBottom;												///< Letterbox bottom
 			int m_barLeft;													///< Pillarbox left
 			int m_barRight;													///< Pillarbox right
-			int m_stable;													///< Consecutive unchanged probes
+			int m_stable;													///< Consecutive unchanged letterbox probes
 			int m_lumaW;													///< Cached luma width
 			int m_lumaH;													///< Cached luma height
 			int m_lumaFmt;													///< Cached source pixel format

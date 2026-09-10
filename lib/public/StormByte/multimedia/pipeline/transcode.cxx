@@ -328,19 +328,21 @@ namespace StormByte::Multimedia::Pipeline {
 	void Transcode::AttachFilter(std::size_t slot, std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 		if (!ValidSlot(slot) || !filter)
 			return;
+		if (dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr) {
+			Fail("Analytics attach on Transcode::Filter, not Track::Filter");
+			return;
+		}
 		m_engine->mapped[slot].filters.push_back(std::move(filter));
 	}
 
-	void Transcode::AttachFilterByTrack(int in, std::shared_ptr<Filter::FFmpeg> filter) noexcept {
+	void Transcode::AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 		if (!m_engine || !filter)
 			return;
-		for (std::size_t slot = 0; slot < m_engine->mapped.size(); ++slot) {
-			if (m_engine->mapped[slot].in != in)
-				continue;
-			AttachFilter(slot, std::move(filter));
+		if (dynamic_cast<Filter::Analytics*>(filter.get()) == nullptr) {
+			Fail("Track Process/Packet filters attach on Track::Filter");
 			return;
 		}
-		Fail("filter track " + std::to_string(in) + " is not mapped");
+		m_engine->analytics.push_back(std::move(filter));
 	}
 
 	ExpectedTranscode Transcode::BindLoggerAndFile(std::shared_ptr<StormByte::Logger::Log> logger,
@@ -636,7 +638,7 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	void Transcode::Worker() noexcept {
-    	NameThread("STMM:Transcode");
+		NameThread("STMM:Transcode");
 
 		auto& log = *m_logger;
 		log << Level::LowLevel << "Transcode::Worker enter" << std::endl;
@@ -774,6 +776,8 @@ namespace StormByte::Multimedia::Pipeline {
 				encoder->m_out.Bind(slot.in, mux.m_in);
 				auto frames = std::make_unique<Route>(slot.in, false);
 				for (const auto& filter : slot.filters)
+					frames->Add(filter);
+				for (const auto& filter : m_engine->analytics)
 					frames->Add(filter);
 				frames->Close(*decoder, *encoder);
 				EncodeLane lane;

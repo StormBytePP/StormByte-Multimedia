@@ -68,23 +68,25 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Sink
 	 * @brief Set of @ref Hopper buckets keyed by origin track.
 	 *
-	 * Private to the tube (moves to Buffer later). Default is zero
-	 * buckets. One bucket is one track or one @ref Kind. N buckets
-	 * (Demux out, Mux in) key by origin track.
+	 * Internal to the tube (moves to Buffer later). Starts with zero
+	 * buckets. One-bucket sinks are a single-track step (Decoder,
+	 * Encoder, a filter). N-bucket sinks (Demux out, Mux in) key each
+	 * hopper by @ref Item::Track.
 	 *
-	 * Read/write that is not wiring blocks until **that** bucket
-	 * exists. @ref Push(int, std::shared_ptr<Item>) waits for
-	 * @p track. @ref Pop waits until at least one bucket exists.
-	 * @ref Bind / @ref Wake never block. This is the only blocking
-	 * Sink does. The consumer Step CV is separate (@ref Wake).
+	 * @ref Push(int, std::shared_ptr<Item>) blocks until bucket
+	 * @p track exists. @ref Pop blocks until at least one bucket
+	 * exists. @ref Bind and @ref Wake never block. That wait is the
+	 * only blocking Sink does; the consumer step CV is separate
+	 * (@ref Wake).
 	 *
 	 * @ref Push(std::shared_ptr<Item>) forwards to
 	 * @ref Push(int, std::shared_ptr<Item>) with @ref Item::Track.
 	 *
 	 * @ref EoF with zero buckets is false (no tube yet). @ref Eof
-	 * marks only buckets that already exist.
+	 * marks only hoppers that already exist; a late Bind is a new
+	 * hopper without EoF.
 	 *
-	 * A bucket has no Fail.
+	 * A bucket has no Fail. One failed @ref Step aborts the job.
 	 *
 	 * @todo Buffer next release.
 	 *
@@ -177,11 +179,20 @@ namespace StormByte::Multimedia::Pipeline {
 			void Push(int track, std::shared_ptr<Item> item) noexcept;
 
 			/**
-			 * @brief Marks every bound hopper @ref Hopper::Eof.
+			 * @brief Marks every existing hopper @ref Hopper::Eof.
 			 *
 			 * Does not wait for missing tracks. Zero buckets: no-op.
 			 */
 			void Eof() noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Wiring
+			 * @{
+			 */
 
 			/**
 			 * @brief Shares every existing hopper with @p consumer.
@@ -201,6 +212,12 @@ namespace StormByte::Multimedia::Pipeline {
 			void Bind(int track, Sink& consumer);
 
 			/**
+			 * @brief Points every hopper at the consumer step CV.
+			 * @param wake Consumer @c Wake() CV. Not owned.
+			 */
+			void Wake(std::condition_variable& wake) noexcept;
+
+			/**
 			 * @}
 			 */
 
@@ -208,12 +225,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @name Consumer
 			 * @{
 			 */
-
-			/**
-			 * @brief Points every hopper at the consumer step CV.
-			 * @param wake Consumer @c Wake() CV. Not owned.
-			 */
-			void Wake(std::condition_variable& wake) noexcept;
 
 			/**
 			 * @brief Pops one item. No track argument.
@@ -228,8 +239,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param select Index chooser. Empty: round-robin.
 			 * @return Next pointer, or empty.
 			 *
-			 * Blocks while there are zero buckets. Not used as a
-			 * selector when there is one bucket.
+			 * Blocks while there are zero buckets. Ignored when there
+			 * is one bucket.
 			 */
 			std::shared_ptr<Item> Pop(const Select& select) noexcept;
 
@@ -278,7 +289,7 @@ namespace StormByte::Multimedia::Pipeline {
 			mutable std::mutex m_mutex;													///< Guards the map
 			std::condition_variable m_wired;											///< Waits for Bind of a bucket
 			std::map<int, std::shared_ptr<Hopper<std::shared_ptr<Item>>>> m_buckets;	///< Track -> hopper
-			std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> m_order;			///< Stable pop order
+			std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> m_order;		///< Stable pop order
 			std::atomic<std::size_t> m_rr;												///< Round-robin cursor
 			std::atomic<std::condition_variable*> m_wake;								///< Consumer CV
 	};

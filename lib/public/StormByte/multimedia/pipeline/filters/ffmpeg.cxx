@@ -157,19 +157,6 @@ void FFmpeg::Save(::AVPacket* raw) noexcept {
 	packet->m_engine->BindProperties(*packet);
 }
 
-void FFmpeg::Park() noexcept {
-	if (!m_current)
-		return;
-	if (!m_queue.empty() && m_queue.back() == m_current)
-		return;
-	if (m_heldFor >= m_hold) {
-		Fail("Hold exceeded");
-		return;
-	}
-	m_queue.push_back(m_current);
-	++m_heldFor;
-}
-
 void FFmpeg::Open() noexcept {
 	NameThread("STMM:FFmpeg:" + m_name);
 	Clean();
@@ -180,49 +167,64 @@ void FFmpeg::LastChance(const Pipeline::Frame&) noexcept {}
 
 void FFmpeg::LastChance(const Pipeline::Packet&) noexcept {}
 
+void FFmpeg::Park() noexcept {
+    if (!m_current)
+        return;
+    if (!m_queue.empty() && m_queue.back() == m_current)
+        return;
+    if (m_heldFor >= m_hold) {
+        Fail("Hold exceeded");
+        return;
+    }
+    m_queue.push_back(m_current);
+    ++m_heldFor;
+}
+
+void FFmpeg::CallLastChance() noexcept {
+    if (!m_current)
+        return;
+    if (m_current->Kind() == Pipeline::Kind::Frame)
+        LastChance(static_cast<const Pipeline::Frame&>(*m_current));
+    else
+        LastChance(static_cast<const Pipeline::Packet&>(*m_current));
+}
+
 void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
-	m_current = std::move(item);
-	if (m_current->Kind() == Pipeline::Kind::Frame)
-		Process(static_cast<const Pipeline::Frame&>(*m_current));
-	else
-		Process(static_cast<const Pipeline::Packet&>(*m_current));
-	if (Failed())
-		return;
-	if (Held()) {
-		if (m_heldFor >= m_hold) {
-			if (m_current->Kind() == Pipeline::Kind::Frame)
-				LastChance(static_cast<const Pipeline::Frame&>(*m_current));
-			else
-				LastChance(static_cast<const Pipeline::Packet&>(*m_current));
-			if (Failed())
-				return;
-			if (Held()) {
-				Fail("Hold exceeded");
-				return;
-			}
-			m_out.Push(std::move(m_current));
-			return;
-		}
-		Park();
-		return;
-	}
-	m_out.Push(std::move(m_current));
+    m_current = std::move(item);
+    if (m_current->Kind() == Pipeline::Kind::Frame)
+        Process(static_cast<const Pipeline::Frame&>(*m_current));
+    else
+        Process(static_cast<const Pipeline::Packet&>(*m_current));
+    if (Failed())
+        return;
+    if (Held()) {
+        if (m_heldFor >= m_hold) {
+            CallLastChance();
+            if (Held()) {
+                Fail("Hold exceeded");
+                return;
+            }
+        }
+        else {
+            Park();
+            return;
+        }
+    }
+    if (m_current)
+        m_out.Push(std::move(m_current));
 }
 
 void FFmpeg::Finish() noexcept {
-	if (Held()) {
-		if (!m_queue.empty())
-			m_current = m_queue.back();
-		if (m_current) {
-			if (m_current->Kind() == Pipeline::Kind::Frame)
-				LastChance(static_cast<const Pipeline::Frame&>(*m_current));
-			else
-				LastChance(static_cast<const Pipeline::Packet&>(*m_current));
-		}
-		if (Held())
-			Fail("Hold + EoF without Release");
-	}
-	Eof();
+    if (Held()) {
+        if (!m_current && !m_queue.empty())
+            m_current = m_queue.back();
+        CallLastChance();
+        /* LastChance → Release() already Process+Push every parked unit. */
+        if (Held())
+            Fail("Hold + EoF without Release");
+    }
+    if (!Failed())
+        Eof();
 }
 
 Process::Process(std::string name) noexcept

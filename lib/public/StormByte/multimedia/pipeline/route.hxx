@@ -62,21 +62,25 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Glue for one origin track and the filters of that track.
 	 *
 	 * @ref Add takes ownership of one filter instance. Filters are not
-	 * wired by hand. For each @ref Kind the route keeps a process chain
-	 * and an analytics chain, with a pointer to the last node of each.
-	 * Analytics of a Kind always sit after the process nodes of that
-	 * Kind, even if they were @ref Add 'd first.
+	 * wired by hand. Inherit @ref Filter::Process, @ref Filter::Packet
+	 * or @ref Filter::Analytics; a bare @ref Filter::FFmpeg is
+	 * @ref Step::Fail at Add.
+	 *
+	 * For each @ref Kind the route keeps a process chain and an
+	 * analytics chain. Analytics of a Kind always sit after the
+	 * process nodes of that Kind, even if they were @ref Add 'd first.
 	 *
 	 * @ref Close is per track: one origin, one destination, one stretch.
 	 * O(1) at the ends: origin binds the first filter, the last filter
 	 * binds the destination. No filters kept: origin binds destination.
 	 * Frame filters on a copy track are ignored; there are no frames.
-	 * Packet / BSF filters on copy stay. If the plugin honours its
-	 * contract, copy does not @ref Step::Fail.
+	 * Packet / BSF filters on copy stay.
 	 *
-	 * Filters launch in their constructor. @ref Close only binds.
+	 * @ref Add calls @ref Step::Launch on the kept filter.
+	 * @ref Close only binds; it does not launch.
 	 *
-	 * @ref Reports is collected at route EoF.
+	 * @ref Reports is collected at route EoF, one entry per owned
+	 * filter, in Add order.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -156,10 +160,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Takes ownership of @p filter and hooks it in O(1).
+			 * @brief Takes ownership of @p filter, hooks it and launches it.
 			 * @param filter Filter instance for this track.
 			 *
-			 * Frame-only filters on a copy route are ignored.
+			 * Frame-only filters on a copy route are dropped.
+			 * A leaf that is not Process, Packet or Analytics fails the job.
 			 */
 			void Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
@@ -185,7 +190,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Reports of every kept filter.
 			 * @return One entry per owned filter, in Add order.
 			 *
-			 * Call at route EoF.
+			 * Call at route EoF. Dropped copy-frame filters are absent.
 			 */
 			std::vector<Filter::Report> Reports() const noexcept;
 

@@ -69,6 +69,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @return @p to.
 	 *
 	 * Calls @c to.m_in.Wake(to.Wake()) and @c from.m_out.Bind(to.m_in).
+	 * Does not create per-track buckets; @ref Route::Close /
+	 * @ref Sink::Bind(int, Sink&) does that.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Step& operator>>(Step& from, Step& to) noexcept;
 
@@ -76,19 +78,21 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Step
 	 * @brief One threaded stage with an input @ref Sink and an output @ref Sink.
 	 *
-	 * Abstract. @ref Work is the consumer oficio (one unit).
-	 * Default @ref Work is a no-op so Demux need not override it.
-	 * @ref Launch starts the worker. @ref Pump is the thread body.
-	 * Default @ref Pump is the consumer loop. Demux overrides @ref Pump
-	 * and reads the File. Mux uses the default loop and does not write
-	 * to @ref m_out.
+	 * Abstract. @ref Work is one consumed unit. Default @ref Work is a
+	 * no-op so Demux need not override it. @ref Launch starts the
+	 * worker. @ref Pump is the thread body. Default @ref Pump is the
+	 * consumer loop. Demux overrides @ref Pump and reads the File.
+	 * Mux uses the default loop and does not write to @ref m_out.
+	 * Filters inherit Step as protected and expose @ref Launch through
+	 * the filter facade.
 	 *
 	 * No @c In() / @c Out() getters: derived types and friends use
 	 * @ref m_in / @ref m_out.
 	 *
-	 * No copy. Move is deleted. One condition variable. Bind must run
-	 * before a Push of that track unblocks. @ref Route, @ref Router,
-	 * @ref Transcode and @c operator>> are friends.
+	 * No copy. Move is deleted. One condition variable. Bind of a
+	 * track must run before a Push of that track unblocks.
+	 * @ref Route, @ref Router, @ref Transcode and @c operator>> are
+	 * friends.
 	 *
 	 * Demux input and Mux output stay at zero buckets until Bind.
 	 * Decoder and Encoder are one track and one bucket.
@@ -183,7 +187,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Marks a hard error and wakes the worker.
-			 * @param reason Message. Kills the job.
+			 * @param reason Message. One failed step aborts the job.
 			 */
 			void Fail(std::string reason) noexcept;
 
@@ -207,7 +211,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @name Oficio
+			 * @name Work
 			 * @{
 			 */
 
@@ -223,8 +227,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief One unit taken from @ref m_in.
 			 * @param item Never empty.
 			 *
-			 * Consumer oficio. Default no-op (Demux). Must be
-			 * @c noexcept. On error call @ref Fail.
+			 * Consumer body. Default no-op (Demux overrides @ref Pump
+			 * instead). Must be @c noexcept. On error call @ref Fail.
 			 */
 			virtual void Work(std::shared_ptr<Item> item) noexcept;
 
@@ -258,8 +262,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Starts the worker thread that runs @ref Pump.
 			 *
-			 * Idempotent. Called from configuration @c operator>>
-			 * (Demux after File) and from @ref Route after Close.
+			 * Idempotent no-op if the worker already runs.
 			 */
 			void Launch() noexcept;
 
@@ -267,14 +270,14 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			Sink m_in;		///< Input buckets
-			Sink m_out;		///< Output buckets
+			Sink m_in;									///< Input buckets
+			Sink m_out;									///< Output buckets
 
 		private:
-			std::condition_variable m_wake;			///< Single consumer CV
-			std::mutex m_wait;						///< Mutex for @ref m_wake
-			std::jthread m_worker;					///< Owned worker
-			std::atomic<bool> m_failed;				///< @ref Fail latched
-			std::optional<std::string> m_error;		///< @ref Fail message
+			std::condition_variable m_wake;				///< Single consumer CV
+			std::mutex m_wait;							///< Mutex for @ref m_wake
+			std::jthread m_worker;						///< Owned worker
+			std::atomic<bool> m_failed;					///< @ref Fail latched
+			std::optional<std::string> m_error;			///< @ref Fail message
 	};
 }

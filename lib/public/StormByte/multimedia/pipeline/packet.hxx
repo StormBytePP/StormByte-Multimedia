@@ -57,7 +57,7 @@
 namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Packet
-	 * @brief One compressed access unit: identity, owned payload, timestamps and side data.
+	 * @brief One compressed access unit.
 	 *
 	 * Public API is move-only. Copy constructor and copy assignment stay
 	 * private and clone metadata, the payload FIFO and the backend
@@ -74,16 +74,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * with track -1.
 	 *
 	 * @ref Item::Producer is set at construction. Passthrough and
-	 * @c Save do not overwrite it. @ref Item::Track is the origin
-	 * stream index; the muxer does not stamp a new one.
+	 * filter @c Save do not overwrite it. @ref Item::Track is the
+	 * origin stream index; the muxer does not stamp a new one.
 	 *
-	 * Pts / Dts / Duration are nanoseconds on the stream clock, not
-	 * FFmpeg ticks. Side data uses the same @ref SideData blobs as Frame.
+	 * Move leaves the source as the empty sentinel, same contract as
+	 * @ref Frame. Destructor and move are out of line so this header
+	 * can forward-declare @ref Engine::Packet::Engine.
 	 *
-	 * Destructor and move are out of line so this header can
-	 * forward-declare @ref Engine::Packet::Engine.
+	 * Pts / Dts / Duration are @ref Property::Duration values on the
+	 * stream clock, not FFmpeg ticks. Side data uses the same
+	 * @ref SideData blobs as Frame; the bag is mutable here.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Item
+	 * @see StormByte::Multimedia::Pipeline::Frame
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -122,6 +125,8 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Move constructor.
 			 * @param other Packet to take.
+			 *
+			 * @p other becomes the empty sentinel.
 			 */
 			Packet(Packet&& other) noexcept;
 
@@ -134,6 +139,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Move assignment.
 			 * @param other Packet to take.
 			 * @return *this.
+			 *
+			 * @p other becomes the empty sentinel.
 			 */
 			Packet& operator=(Packet&& other) noexcept;
 
@@ -147,26 +154,26 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Presentation timestamp.
+			 * @brief Presentation timestamp on the stream clock.
 			 * @return Pts, or empty.
 			 */
 			const std::optional<Property::Duration>& Pts() const noexcept;
 
 			/**
-			 * @brief Decode timestamp.
+			 * @brief Decode timestamp on the stream clock.
 			 * @return Dts, or empty.
 			 */
 			const std::optional<Property::Duration>& Dts() const noexcept;
 
 			/**
-			 * @brief Packet duration.
+			 * @brief Packet duration on the stream clock.
 			 * @return Duration, or empty.
 			 */
 			const std::optional<Property::Duration>& Duration() const noexcept;
 
 			/**
-			 * @brief Whether this is a key frame.
-			 * @return true if key frame.
+			 * @brief Whether this is a key frame / key packet.
+			 * @return true if marked as a key frame.
 			 */
 			bool KeyFrame() const noexcept;
 

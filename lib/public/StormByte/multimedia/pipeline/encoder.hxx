@@ -124,9 +124,14 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Encoder
 	 * @brief Encodes frames of one output track into packets.
 	 *
-	 * A @ref Step, @c final. Launches in the constructor.
+	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
 	 * Codec Open is lazy on the first frame. @ref Work encodes one
-	 * frame. @ref Finish flushes. @ref Index is the mux output track.
+	 * frame. @ref Finish flushes.
+	 *
+	 * @ref Index is the mux destination order key passed at
+	 * construction. Packets leaving @ref m_out keep the origin
+	 * @ref Item::Track that @ref Route / Transcode bound; the muxer
+	 * does not stamp a new one.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -139,10 +144,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Encoder for output track @p output_index and destination @p codec.
-			 * @param output_index Mux track index.
+			 * @param output_index Mux destination order key.
 			 * @param codec Registry codec. Must HasAccess(Write) at open.
 			 *
-			 * Launches the worker. Backend Open stays lazy.
+			 * Starts the worker. Backend Open stays lazy until the first frame.
 			 */
 			Encoder(int output_index, const Codec& codec) noexcept;
 
@@ -193,7 +198,7 @@ namespace StormByte::Multimedia::Pipeline {
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief Mux output track index.
+			 * @brief Mux destination order key.
 			 * @return Index set at construction.
 			 */
 			int Index() const noexcept;
@@ -446,7 +451,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			bool MuxBindStream(void* avStream) noexcept;
 
-			int m_index;											///< Mux output track
+			int m_index;											///< Mux destination order key
 			const Codec* m_codec;									///< Destination codec
 			std::string m_encoderTag;								///< ENCODER metadata
 			std::optional<std::string> m_language;					///< Language tag

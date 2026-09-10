@@ -42,40 +42,20 @@
 
 using StormByte::Multimedia::Pipeline::Filter::Report;
 
-/**
- * @brief Empty report (`None`).
- */
 Report::Report() noexcept
 : m_status(Status::None), m_data() {}
 
-/**
- * @brief Report with a status and a dictionary.
- * @param status Measurement result.
- * @param data Key/value payload (owned).
- */
 Report::Report(Status status, std::map<std::string, std::string> data) noexcept
 : m_status(status), m_data(std::move(data)) {}
 
-/**
- * @brief Measurement status.
- * @return Status value.
- */
 Report::Status Report::Kind() const noexcept {
 	return m_status;
 }
 
-/**
- * @brief Dictionary payload.
- * @return Owned key/value map (may be empty).
- */
 const std::map<std::string, std::string>& Report::Data() const noexcept {
 	return m_data;
 }
 
-/**
- * @brief Single callable dump of status plus data.
- * @return Human-readable snapshot.
- */
 std::string Report::operator()() const noexcept {
 	const char* kind = "none";
 	if (m_status == Status::Ok)

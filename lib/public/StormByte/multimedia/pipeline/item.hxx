@@ -66,7 +66,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * without including the generated filter header.
 	 */
 	namespace Filter {
-		class FFmpeg;	///< Filter base.
+		class FFmpeg;	///< Filter base. Not a leaf: inherit Process, Packet or Analytics.
 	}
 
 	/**
@@ -148,9 +148,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Whether an @ref Item is a decoded frame or a compressed packet.
 	 *
 	 * Distinct from @ref StormByte::Multimedia::Type (Video / Audio / Subtitle).
-	 * Used as the static @c Accepts mask on filters. Values are
-	 * bit flags: @c 0 is not a valid kind. Combine with
-	 * @ref StormByte::Bitmask / @ref Filter::Accepts.
+	 * Used as the static @c Accepts mask on filters. Values are bit flags:
+	 * @c 0 is not a valid kind. Combine with @ref StormByte::Bitmask /
+	 * @ref Filter::Accepts. @ref ToString understands a single flag only.
 	 */
 	enum class Kind: std::uint8_t {
 		Packet = 1 << 0,	///< @ref StormByte::Multimedia::Pipeline::Packet
@@ -158,15 +158,15 @@ namespace StormByte::Multimedia::Pipeline {
 	};
 
 	/**
-	 * @brief Converts a @ref Kind to a string literal.
+	 * @brief Converts a single @ref Kind flag to a string literal.
 	 * @param kind Value to convert.
-	 * @return Null-terminated name, or `"Invalid"`.
+	 * @return `"Frame"`, `"Packet"`, or `"Invalid"` for a mask or zero.
 	 */
 	constexpr const char* ToString(Kind kind) noexcept {
 		switch (kind) {
 			case Kind::Frame:	return "Frame";		///< Frame
 			case Kind::Packet:	return "Packet";	///< Packet
-			default:			return "Invalid";	///< Out of range
+			default:			return "Invalid";	///< Combined mask or zero
 		}
 	}
 
@@ -175,8 +175,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Step that created this @ref Item.
 	 *
 	 * Set in the private constructor. Only a getter afterwards.
-	 * Passthrough and @c Save do not stamp a new producer.
-	 * Formerly named Origin.
+	 * Passthrough and filter @c Save do not stamp a new producer.
 	 */
 	enum class Producer: std::uint8_t {
 		Demux,		///< @ref StormByte::Multimedia::Pipeline::Demux
@@ -207,7 +206,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Carries @ref Kind, @ref StormByte::Multimedia::Type, origin track
 	 * and @ref Producer. Construction is private: only the engines and
 	 * steps that produce units (and the two derived types) may build one.
-	 * The muxer does not overwrite the origin track.
+	 * The muxer does not overwrite the origin track: @ref Track stays the
+	 * input stream index for the life of the unit.
 	 *
 	 * The tube stores @c std::shared_ptr of the derived type through this
 	 * facade. There is no public clone.
@@ -264,14 +264,16 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 			/**
-			 * @brief Media type of the origin track.
+			 * @brief Media of this access unit.
 			 * @return @ref StormByte::Multimedia::Type::Video,
 			 *         @ref StormByte::Multimedia::Type::Audio or
 			 *         @ref StormByte::Multimedia::Type::Subtitle
-			 *         on a live unit.
+			 *         on a live unit;
+			 *         @ref StormByte::Multimedia::Type::Unknown on the
+			 *         empty sentinel.
 			 *
 			 * Not @ref StormByte::Multimedia::Type::Copy: that value is a
-			 * track mode, not a kind of access unit.
+			 * track mode on the job, not a kind of access unit.
 			 */
 			enum StormByte::Multimedia::Type Type() const noexcept {
 				return m_type;
@@ -279,7 +281,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Origin track index.
-			 * @return Container stream index. The muxer does not overwrite it.
+			 * @return Input container stream index. The muxer does not
+			 *         overwrite it. @c -1 on the empty sentinel.
 			 */
 			int Track() const noexcept {
 				return m_track;
@@ -342,7 +345,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Builds the facade.
 			 * @param track Origin container stream index.
-			 * @param type Media type of that track.
+			 * @param type Media of this unit. Not Copy.
 			 * @param kind @ref Kind::Frame or @ref Kind::Packet.
 			 * @param producer Step that created this unit.
 			 */
@@ -354,7 +357,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			int m_track;									///< Origin container stream index
-			enum StormByte::Multimedia::Type m_type;		///< Video / Audio / Subtitle
+			enum StormByte::Multimedia::Type m_type;		///< Video / Audio / Subtitle / Unknown
 			enum Kind m_kind;								///< Frame or Packet
 			enum Producer m_producer;						///< Step that created this unit
 	};

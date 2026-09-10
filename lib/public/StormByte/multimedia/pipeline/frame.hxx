@@ -66,12 +66,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Identity (@ref Item::Kind, @ref Item::Type, @ref Item::Track,
 	 * @ref Item::Producer) lives on @ref Item. @ref Item::Kind is
 	 * always @ref Kind::Frame. @ref Item::Producer is set at
-	 * construction and is not stamped again by passthrough or @c Save.
+	 * construction and is not stamped again by passthrough or filter
+	 * @c Save.
 	 *
 	 * Move leaves the source as @ref Frame(): @ref Item::Type Unknown,
 	 * track -1, no backend. A moved-from unit is safe to destroy
-	 * or assign over and may live in a standard container that
-	 * relocates by move (@c deque, @c vector).
+	 * or assign over and may live in a container that relocates by
+	 * move (@c deque, @c vector).
 	 *
 	 * @ref Item::Type is the media of this unit
 	 * (@ref StormByte::Multimedia::Type::Video,
@@ -86,14 +87,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * FIFO and the backend @c AVFrame and stay private. A public copy
 	 * would look cheap and duplicate every plane plus side data.
 	 *
-	 * Planes stay in an opaque backend buffer until @ref Payload() is
-	 * called. @ref Attachments() is filled at receive time. Heuristics
+	 * Planes stay in an opaque backend buffer until the non-const
+	 * @ref Payload() is called. The const overload does not pull
+	 * planes out. @ref Attachments() is filled at receive time and
+	 * is read-only here; Packet exposes a mutable bag. Heuristics
 	 * fill @ref Video() HDR10 only, never the side-data bag.
 	 * @ref Audio() is set on audio frames; empty on video and subtitle
 	 * frames. @ref Language() and @ref Title() are stream tags copied
 	 * by the decoder when known. Those two tags, plus @ref Payload(),
 	 * are the only public mutators. Video, audio, pts and duration
 	 * change through the filter handle, not through setters here.
+	 *
+	 * Pts and Duration are @ref Property::Duration values on the
+	 * stream clock, not FFmpeg ticks.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Item
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg
@@ -170,13 +176,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Presentation timestamp.
+			 * @brief Presentation timestamp on the stream clock.
 			 * @return Pts, or empty.
 			 */
 			const std::optional<Property::Duration>& Pts() const noexcept;
 
 			/**
-			 * @brief Frame duration.
+			 * @brief Frame duration on the stream clock.
 			 * @return Duration, or empty.
 			 */
 			const std::optional<Property::Duration>& Duration() const noexcept;
@@ -228,7 +234,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<Property::Audio>& Audio() const noexcept;
 
 			/**
-			 * @brief Raw side data captured at receive.
+			 * @brief Raw side data captured at receive. Read-only.
 			 * @return Blobs. MDM/CLL also appear in @ref Video() HDR10
 			 *         when the decoder could map them.
 			 */
@@ -248,7 +254,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return FIFO.
 			 *
 			 * After materialisation the backend stays alive; a later
-			 * @c Save replaces it and this FIFO is cleared.
+			 * filter @c Save replaces it and this FIFO is cleared.
 			 */
 			StormByte::Buffer::FIFO& Payload() noexcept;
 

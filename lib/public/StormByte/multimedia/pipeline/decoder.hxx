@@ -115,6 +115,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param demux Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
+	 *
+	 * Attaches the backend and launches the decoder worker.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 
@@ -122,10 +124,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Decoder
 	 * @brief Decodes packets of one origin track into frames.
 	 *
-	 * A @ref Step, @c final. Launches in the constructor.
-	 * @c demux >> decoder only attaches the backend. @ref Work
-	 * sends one packet and drains frames to @ref m_out.
+	 * A @ref Step, @c final. The constructor does not start the worker.
+	 * @c demux >> decoder attaches the backend and launches.
+	 * @ref Work sends one packet and drains frames to @ref m_out.
 	 * @ref Finish flushes the codec. Errors are @ref Step::Fail.
+	 *
+	 * @ref Item::Track on outgoing frames stays the origin index.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -137,7 +141,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Decoder for one origin track. Launches the worker.
+			 * @brief Decoder for one origin track. Does not launch.
 			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
 			 *

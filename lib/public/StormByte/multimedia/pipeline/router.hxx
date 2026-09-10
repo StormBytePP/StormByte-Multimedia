@@ -50,14 +50,15 @@
 namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Router
-	 * @brief Wires sinks. Holds no reports and no progress.
+	 * @brief Wires sinks. Holds no filters, no reports and no progress.
 	 *
 	 * After @ref Bind the router is disposable. Routes live on the
 	 * owner that will call @ref Route::Reports at EoF.
 	 *
-	 * Copy without packet filters: @c Bind(track, demux, mux) which is
-	 * @c from.m_out.Bind(track, to.m_in). All bound tracks:
-	 * @c Bind(demux, mux).
+	 * Copy without packet filters: @c Bind(track, demux, mux), which
+	 * is @c from.m_out.Bind(track, to.m_in). Every hopper already on
+	 * @p from: @c Bind(demux, mux), which is @c from.m_out.Bind(to.m_in).
+	 * A filtered track uses @ref Route::Close instead of this type.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -114,14 +115,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Shares every hopper of @p from output with @p to input.
+			 * @brief Shares every hopper already on @p from output with @p to input.
 			 * @param from Producer step.
 			 * @param to Consumer step.
+			 *
+			 * Does not create buckets. Zero hoppers: no-op.
 			 */
 			void Bind(Step& from, Step& to) noexcept;
 
 			/**
-			 * @brief Creates and shares the hopper for @p track.
+			 * @brief Creates the hopper for @p track and shares it.
 			 * @param track Origin stream index.
 			 * @param from Producer step.
 			 * @param to Consumer step.
