@@ -193,6 +193,12 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
 			/**
+			 * @brief Hold ceiling: keep measured bars or drop them to 0, then Release.
+			 * @param frame Last unit that would overflow the Hold queue.
+			 */
+			void LastChance(const Pipeline::Frame& frame) noexcept override;
+
+			/**
 			 * @}
 			 */
 

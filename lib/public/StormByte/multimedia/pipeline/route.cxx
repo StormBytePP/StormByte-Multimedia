@@ -59,6 +59,13 @@ void Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	if (!filter)
 		return;
 
+    if (!dynamic_cast<Filter::Process*>(filter.get())
+        && !dynamic_cast<Filter::Packet*>(filter.get())
+        && !dynamic_cast<Filter::Analytics*>(filter.get())) {
+        filter->Fail("inherit Process, Packet or Analytics; FFmpeg is not a leaf");
+        return;
+    }
+
 	const auto accepts = filter->Accepts();
 	const bool frame = accepts.Has(Kind::Frame);
 	const bool packet = accepts.Has(Kind::Packet);

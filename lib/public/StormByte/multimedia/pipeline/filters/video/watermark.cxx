@@ -389,14 +389,8 @@ bool Watermark::DecodeLogo() noexcept {
 
 bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 	::AVFrame* gray = Luma(src);
-	if (!gray || gray->width < 16 || gray->height < 16) {
-		std::fprintf(stderr, "STMM-W probe skip luma=%p %dx%d\n",
-			static_cast<void*>(gray),
-			gray ? gray->width : 0,
-			gray ? gray->height : 0);
-		std::fflush(stderr);
+	if (!gray || gray->width < 16 || gray->height < 16)
 		return false;
-	}
 
 	constexpr int black = 12;
 	const int maxY = gray->height / 5;
@@ -406,12 +400,8 @@ bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 	const int edgeTop = RowMeanY8(gray, 0);
 	const int edgeBot = RowMeanY8(gray, gray->height - 1);
 
-	if (midY < 8 && midX < 8 && edgeTop < 8 && edgeBot < 8) {
-		std::fprintf(stderr, "STMM-W slate midY=%d midX=%d edgeT=%d edgeB=%d\n",
-			midY, midX, edgeTop, edgeBot);
-		std::fflush(stderr);
+	if (midY < 8 && midX < 8 && edgeTop < 8 && edgeBot < 8)
 		return false;
-	}
 
 	const int top = ScanBar(maxY, black,
 		[&](int i) { return RowMeanY8(gray, i); });
@@ -461,17 +451,6 @@ bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 		else
 			m_stable = 0;
 	}
-
-	std::fprintf(stderr,
-		"STMM-W raw t=%d b=%d l=%d r=%d use t=%d b=%d l=%d r=%d "
-		"acc t=%d b=%d l=%d r=%d midY=%d midX=%d edgeT=%d edgeB=%d "
-		"stable=%d %dx%d\n",
-		top, bottom, left, right,
-		useTop, useBottom, useLeft, useRight,
-		m_barTop, m_barBottom, m_barLeft, m_barRight,
-		midY, midX, edgeTop, edgeBot,
-		m_stable, gray->width, gray->height);
-	std::fflush(stderr);
 	return true;
 }
 
@@ -479,24 +458,12 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 	if (m_opacity == 0)
 		return;
 
-	::AVFrame* src = AVFrame();
 	if (m_anchor && !m_point && !m_released) {
 		if (!Held())
 			Hold(ProbeMax);
-		const bool usable = ProbeBars(src);
+		(void)ProbeBars(AVFrame());
 		const bool letterbox = m_barTop > 8 && m_barBottom > 8;
-		if (usable && letterbox && m_stable >= 8) {
-			m_released = true;
-			Release();
-			return;
-		}
-		if (HeldFor() >= ProbeMax) {
-			if (!letterbox) {
-				m_barTop = 0;
-				m_barBottom = 0;
-				m_barLeft = 0;
-				m_barRight = 0;
-			}
+		if (letterbox && m_stable >= 8) {
 			m_released = true;
 			Release();
 			return;
@@ -507,6 +474,17 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 	}
 
 	Paint();
+}
+
+void Watermark::LastChance(const Pipeline::Frame&) noexcept {
+	if (m_barTop <= 8 || m_barBottom <= 8) {
+		m_barTop = 0;
+		m_barBottom = 0;
+		m_barLeft = 0;
+		m_barRight = 0;
+	}
+	m_released = true;
+	Release();
 }
 
 void Watermark::Paint() noexcept {

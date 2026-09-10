@@ -171,10 +171,14 @@ void FFmpeg::Park() noexcept {
 }
 
 void FFmpeg::Open() noexcept {
-    NameThread("STMM:FFmpeg:" + m_name);
-    Clean();
-    Setup();
+	NameThread("STMM:FFmpeg:" + m_name);
+	Clean();
+	Setup();
 }
+
+void FFmpeg::LastChance(const Pipeline::Frame&) noexcept {}
+
+void FFmpeg::LastChance(const Pipeline::Packet&) noexcept {}
 
 void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 	m_current = std::move(item);
@@ -185,6 +189,20 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 	if (Failed())
 		return;
 	if (Held()) {
+		if (m_heldFor >= m_hold) {
+			if (m_current->Kind() == Pipeline::Kind::Frame)
+				LastChance(static_cast<const Pipeline::Frame&>(*m_current));
+			else
+				LastChance(static_cast<const Pipeline::Packet&>(*m_current));
+			if (Failed())
+				return;
+			if (Held()) {
+				Fail("Hold exceeded");
+				return;
+			}
+			m_out.Push(std::move(m_current));
+			return;
+		}
 		Park();
 		return;
 	}
@@ -192,8 +210,18 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 }
 
 void FFmpeg::Finish() noexcept {
-	if (Held())
-		Fail("Hold + EoF without Release");
+	if (Held()) {
+		if (!m_queue.empty())
+			m_current = m_queue.back();
+		if (m_current) {
+			if (m_current->Kind() == Pipeline::Kind::Frame)
+				LastChance(static_cast<const Pipeline::Frame&>(*m_current));
+			else
+				LastChance(static_cast<const Pipeline::Packet&>(*m_current));
+		}
+		if (Held())
+			Fail("Hold + EoF without Release");
+	}
 	Eof();
 }
 
