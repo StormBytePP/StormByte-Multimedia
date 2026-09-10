@@ -36,79 +36,13 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/buffer/hopper.hxx>
+#include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
-using namespace StormByte::Multimedia::Pipeline;
-
-Step::Step() noexcept
-: m_in(std::make_unique<Buffer::Sink>()),
-  m_out(std::make_unique<Buffer::Sink>()),
-  m_failed(false) {}
-
-Step::~Step() noexcept {
-	if (m_worker.joinable())
-		m_worker.request_stop();
-}
-
-void Step::Fail(std::string reason) noexcept {
-	m_error = std::move(reason);
-	m_failed.store(true, std::memory_order_release);
-	m_in->Eof();
-	m_out->Eof();
-	m_wake.notify_all();
-}
-
-bool Step::Failed() const noexcept {
-	return m_failed.load(std::memory_order_acquire);
-}
-
-const std::optional<std::string>& Step::Error() const noexcept {
-	return m_error;
-}
-
-std::condition_variable& Step::Wake() noexcept {
-	return m_wake;
-}
-
-void Step::Wait() noexcept {
-	std::unique_lock lock(m_wait);
-	m_wake.wait(lock, [this] {
-		return Failed() || m_in->Ready();
-	});
-}
-
-void Step::Open() noexcept {}
-
-void Step::Work(std::shared_ptr<Item>) noexcept {}
-
-void Step::Finish() noexcept {}
-
-void Step::Pump() noexcept {
-	for (;;) {
-		if (Failed())
-			break;
-		std::shared_ptr<Item> item = m_in->Pop();
-		if (!item) {
-			if (!m_in->EoF()) {
-				Wait();
-				continue;
-			}
-			Finish();
-			break;
-		}
-		Work(std::move(item));
-	}
-	m_out->Eof();
-}
-
-void Step::Launch() noexcept {
-	if (m_worker.joinable())
-		return;
-	m_in->Notify(m_wake);
-	m_worker = std::jthread([this]() {
-		Open();
-		Pump();
-		m_out->Eof();
-	});
+namespace StormByte::Multimedia::Buffer {
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>;
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>>;
+	template class STORMBYTE_MULTIMEDIA_PRIVATE Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>>;
 }

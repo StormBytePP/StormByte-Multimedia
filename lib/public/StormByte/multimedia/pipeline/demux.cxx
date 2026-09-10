@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -127,7 +128,7 @@ void Demux::Pump() noexcept {
 		}
 		if (const auto& pts = packet->Pts(); pts)
 			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-		m_out.Push(packet);
+		m_out->Push(packet);
 	}
 }
 
@@ -229,7 +230,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 			std::move(backend.value()), timeBase);
 	}
 	decoder.Bind(std::move(engine));
-	decoder.m_in.Wake(decoder.Wake());
-	demux.m_out.Bind(decoder.Index(), decoder.m_in);
+	decoder.m_in->Notify(decoder.Wake());
+	demux.m_out->Bind(decoder.Index(), *decoder.m_in);
 	return decoder;
 }

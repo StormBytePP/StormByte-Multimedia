@@ -39,7 +39,6 @@
 #pragma once
 
 #include <StormByte/multimedia/pipeline/item.hxx>
-#include <StormByte/multimedia/pipeline/sink.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <atomic>
@@ -49,6 +48,19 @@
 #include <optional>
 #include <string>
 #include <thread>
+
+/**
+ * @namespace StormByte::Multimedia::Buffer
+ * @brief Private tube queues.
+ *
+ * Hopper is one SPSC bucket. Sink maps integer keys to hoppers.
+ * Not a media source; that Buffer is a later type.
+ *
+ * @ingroup buffer
+ */
+namespace StormByte::Multimedia::Buffer {
+	class Sink;
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -68,7 +80,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param to Consumer step.
 	 * @return @p to.
 	 *
-	 * Calls @c to.m_in.Wake(to.Wake()) and @c from.m_out.Bind(to.m_in).
+	 * Calls @c to.m_in->Notify(to.Wake()) and @c from.m_out->Bind(to.m_in).
 	 * Does not create per-track buckets; @ref Route::Close /
 	 * @ref Sink::Bind(int, Sink&) does that.
 	 */
@@ -270,8 +282,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			Sink m_in;									///< Input buckets
-			Sink m_out;									///< Output buckets
+			std::unique_ptr<Buffer::Sink> m_in;			///< Input buckets
+			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
 
 		private:
 			std::condition_variable m_wake;				///< Single consumer CV

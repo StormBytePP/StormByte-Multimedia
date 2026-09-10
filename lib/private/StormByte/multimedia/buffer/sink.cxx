@@ -36,14 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/sink.hxx>
+#include <StormByte/multimedia/buffer/sink.hxx>
 
 #include <utility>
 
-using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Multimedia::Pipeline::Item;
+using StormByte::Multimedia::Buffer::Hopper;
+using StormByte::Multimedia::Buffer::Sink;
 
 Sink::Sink() noexcept
-: m_rr(0), m_wake(nullptr) {}
+: m_rr(0), m_consumer(nullptr) {}
 
 Sink::~Sink() noexcept {
 	m_wired.notify_all();
@@ -55,16 +57,16 @@ void Sink::Push(std::shared_ptr<Item> item) noexcept {
 	Push(item->Track(), std::move(item));
 }
 
-void Sink::Push(int track, std::shared_ptr<Item> item) noexcept {
+void Sink::Push(int key, std::shared_ptr<Item> item) noexcept {
 	if (!item)
 		return;
-	std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> hopper;
+	std::shared_ptr<Hopper<std::shared_ptr<Item>>> hopper;
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
-		m_wired.wait(lock, [this, track] {
-			return m_buckets.find(track) != m_buckets.end();
+		m_wired.wait(lock, [this, key] {
+			return m_buckets.find(key) != m_buckets.end();
 		});
-		hopper = m_buckets[track];
+		hopper = m_buckets[key];
 	}
 	hopper->Push(std::move(item));
 }
@@ -75,36 +77,64 @@ void Sink::Eof() noexcept {
 		hopper->Eof();
 }
 
-void Sink::Wake(std::condition_variable& wake) noexcept {
-	m_wake.store(&wake, std::memory_order_release);
-	const auto hoppers = Order();
-	for (auto& hopper : hoppers)
-		hopper->Notify(wake);
-}
-
 void Sink::Bind(Sink& consumer) {
-	std::condition_variable* wake = consumer.m_wake.load(std::memory_order_acquire);
+	std::condition_variable* cv = consumer.m_consumer.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
-	for (auto& [track, hopper] : m_buckets) {
-		if (wake != nullptr)
-			hopper->Notify(*wake);
-		consumer.m_buckets[track] = hopper;
+	for (auto& [key, hopper] : m_buckets) {
+		if (cv != nullptr)
+			hopper->Notify(*cv);
+		consumer.m_buckets[key] = hopper;
 	}
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
 	m_wired.notify_all();
 }
 
-void Sink::Bind(int track, Sink& consumer) {
-	std::condition_variable* wake = consumer.m_wake.load(std::memory_order_acquire);
+void Sink::Bind(int key, Sink& consumer) {
+	std::condition_variable* cv = consumer.m_consumer.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
-	auto hopper = Ensure(track);
-	if (wake != nullptr)
-		hopper->Notify(*wake);
-	consumer.m_buckets[track] = hopper;
+	auto hopper = Ensure(key);
+	if (cv != nullptr)
+		hopper->Notify(*cv);
+	consumer.m_buckets[key] = hopper;
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
 	m_wired.notify_all();
+}
+
+void Sink::Notify(std::condition_variable& consumer) noexcept {
+	m_consumer.store(&consumer, std::memory_order_release);
+	const auto hoppers = Order();
+	for (auto& hopper : hoppers)
+		hopper->Notify(consumer);
+}
+
+std::size_t Sink::Capacity(int key) const noexcept {
+	const auto hopper = Bucket(key);
+	if (!hopper)
+		return 0;
+	return hopper->Capacity();
+}
+
+void Sink::Capacity(int key, std::size_t capacity) noexcept {
+	const auto hopper = Bucket(key);
+	if (!hopper)
+		return;
+	hopper->Capacity(capacity);
+}
+
+std::size_t Sink::Size(int key) const noexcept {
+	const auto hopper = Bucket(key);
+	if (!hopper)
+		return 0;
+	return hopper->Size();
+}
+
+bool Sink::Full(int key) const noexcept {
+	const auto hopper = Bucket(key);
+	if (!hopper)
+		return false;
+	return hopper->Full();
 }
 
 std::shared_ptr<Item> Sink::Pop() noexcept {
@@ -112,7 +142,7 @@ std::shared_ptr<Item> Sink::Pop() noexcept {
 }
 
 std::shared_ptr<Item> Sink::Pop(const Select& select) noexcept {
-	std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> hoppers;
+	std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> hoppers;
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this] {
@@ -165,15 +195,15 @@ bool Sink::Ready() const noexcept {
 	return drained;
 }
 
-std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> Sink::Ensure(int track) {
-	auto found = m_buckets.find(track);
+std::shared_ptr<Hopper<std::shared_ptr<Item>>> Sink::Ensure(int key) {
+	auto found = m_buckets.find(key);
 	if (found != m_buckets.end())
 		return found->second;
-	auto hopper = std::make_shared<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>();
-	std::condition_variable* wake = m_wake.load(std::memory_order_acquire);
-	if (wake != nullptr)
-		hopper->Notify(*wake);
-	m_buckets.emplace(track, hopper);
+	auto hopper = std::make_shared<Hopper<std::shared_ptr<Item>>>();
+	std::condition_variable* cv = m_consumer.load(std::memory_order_acquire);
+	if (cv != nullptr)
+		hopper->Notify(*cv);
+	m_buckets.emplace(key, hopper);
 	RebuildOrder();
 	return hopper;
 }
@@ -181,11 +211,19 @@ std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>> Sink::Ensure(
 void Sink::RebuildOrder() {
 	m_order.clear();
 	m_order.reserve(m_buckets.size());
-	for (auto& [track, hopper] : m_buckets)
+	for (auto& [key, hopper] : m_buckets)
 		m_order.push_back(hopper);
 }
 
-std::vector<std::shared_ptr<Multimedia::Buffer::Hopper<std::shared_ptr<Item>>>> Sink::Order() const {
+std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> Sink::Order() const {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	return m_order;
+}
+
+std::shared_ptr<Hopper<std::shared_ptr<Item>>> Sink::Bucket(int key) const {
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto found = m_buckets.find(key);
+	if (found == m_buckets.end())
+		return {};
+	return found->second;
 }

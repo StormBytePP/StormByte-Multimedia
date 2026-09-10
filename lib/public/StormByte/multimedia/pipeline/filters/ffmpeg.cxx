@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
 #include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
@@ -105,7 +106,7 @@ void FFmpeg::Release() noexcept {
 			Process(static_cast<const Pipeline::Packet&>(*m_current));
 		if (Failed())
 			return;
-		m_out.Push(std::move(m_current));
+		m_out->Push(std::move(m_current));
 	}
 	m_current.reset();
 }
@@ -211,7 +212,7 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
         }
     }
     if (m_current)
-        m_out.Push(std::move(m_current));
+        m_out->Push(std::move(m_current));
 }
 
 void FFmpeg::Finish() noexcept {

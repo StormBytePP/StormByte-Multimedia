@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/engine.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -154,7 +155,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 			Wait();
 			continue;
 		}
-		m_out.Push(frame);
+		m_out->Push(frame);
 	}
 
 	for (;;) {
@@ -163,7 +164,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
 		if (!frame)
 			break;
-		m_out.Push(frame);
+		m_out->Push(frame);
 	}
 }
 
@@ -177,6 +178,6 @@ void Decoder::Finish() noexcept {
 		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
 		if (!frame)
 			return;
-		m_out.Push(frame);
+		m_out->Push(frame);
 	}
 }

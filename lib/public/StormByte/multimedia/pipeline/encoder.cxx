@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/audio.hxx>
 #include <StormByte/multimedia/pipeline/engine/encoder/details/subtitle.hxx>
@@ -341,7 +342,7 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 			std::this_thread::yield();
 			continue;
 		}
-		m_out.Push(packet);
+		m_out->Push(packet);
 	}
 
 	for (;;) {
@@ -350,7 +351,7 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 		std::shared_ptr<Packet> packet = m_engine->Take();
 		if (!packet)
 			break;
-		m_out.Push(packet);
+		m_out->Push(packet);
 	}
 }
 
@@ -364,6 +365,6 @@ void Encoder::Finish() noexcept {
 		std::shared_ptr<Packet> packet = m_engine->Take();
 		if (!packet)
 			return;
-		m_out.Push(packet);
+		m_out->Push(packet);
 	}
 }

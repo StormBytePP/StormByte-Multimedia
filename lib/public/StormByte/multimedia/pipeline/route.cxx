@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
@@ -90,19 +91,19 @@ void Route::Close(Step& origin, Step& destination) noexcept {
 	Filter::FFmpeg* const frameLast = m_frames.Last();
 
 	if (packetLast != nullptr && frameFirst != nullptr)
-		packetLast->m_out.Bind(m_track, frameFirst->m_in);
+		packetLast->m_out->Bind(m_track, *frameFirst->m_in);
 
 	Filter::FFmpeg* first = packetFirst != nullptr ? packetFirst : frameFirst;
 	Filter::FFmpeg* last = frameLast != nullptr ? frameLast : packetLast;
 
-	destination.m_in.Wake(destination.Wake());
+	destination.m_in->Notify(destination.Wake());
 	if (first == nullptr) {
-		origin.m_out.Bind(m_track, destination.m_in);
+		origin.m_out->Bind(m_track, *destination.m_in);
 	}
 	else {
-		first->m_in.Wake(first->Wake());
-		origin.m_out.Bind(m_track, first->m_in);
-		last->m_out.Bind(m_track, destination.m_in);
+		first->m_in->Notify(first->Wake());
+		origin.m_out->Bind(m_track, *first->m_in);
+		last->m_out->Bind(m_track, *destination.m_in);
 	}
 }
 
@@ -115,22 +116,22 @@ std::vector<Filter::Report> Route::Reports() const noexcept {
 }
 
 void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
-	filter.m_in.Wake(filter.Wake());
+	filter.m_in->Notify(filter.Wake());
 	if (analytics) {
 		if (lane.LastAnalytics != nullptr)
-			lane.LastAnalytics->m_out.Bind(m_track, filter.m_in);
+			lane.LastAnalytics->m_out->Bind(m_track, *filter.m_in);
 		else if (lane.LastProcess != nullptr)
-			lane.LastProcess->m_out.Bind(m_track, filter.m_in);
+			lane.LastProcess->m_out->Bind(m_track, *filter.m_in);
 		if (lane.FirstAnalytics == nullptr)
 			lane.FirstAnalytics = &filter;
 		lane.LastAnalytics = &filter;
 		return;
 	}
 	if (lane.LastProcess != nullptr)
-		lane.LastProcess->m_out.Bind(m_track, filter.m_in);
+		lane.LastProcess->m_out->Bind(m_track, *filter.m_in);
 	if (lane.FirstProcess == nullptr)
 		lane.FirstProcess = &filter;
 	lane.LastProcess = &filter;
 	if (lane.FirstAnalytics != nullptr)
-		filter.m_out.Bind(m_track, lane.FirstAnalytics->m_in);
+		filter.m_out->Bind(m_track, *lane.FirstAnalytics->m_in);
 }

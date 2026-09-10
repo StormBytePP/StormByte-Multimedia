@@ -36,16 +36,17 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/router.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
 void Router::Bind(Step& from, Step& to) noexcept {
-	to.m_in.Wake(to.Wake());
-	from.m_out.Bind(to.m_in);
+	to.m_in->Notify(to.Wake());
+	from.m_out->Bind(*to.m_in);
 }
 
 void Router::Bind(int track, Step& from, Step& to) noexcept {
-	to.m_in.Wake(to.Wake());
-	from.m_out.Bind(track, to.m_in);
+	to.m_in->Notify(to.Wake());
+	from.m_out->Bind(track, *to.m_in);
 }

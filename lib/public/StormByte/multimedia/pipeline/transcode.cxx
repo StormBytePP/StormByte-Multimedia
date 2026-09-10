@@ -41,6 +41,7 @@
 
 #include <StormByte/expected.hxx>
 #include <StormByte/logger/typedefs.hxx>
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -772,8 +773,8 @@ namespace StormByte::Multimedia::Pipeline {
                     encoder->Title(*slot.title);
                 demux >> *decoder;
                 *encoder >> mux;
-                mux.m_in.Wake(mux.Wake());
-                encoder->m_out.Bind(slot.in, mux.m_in);
+                mux.m_in->Notify(mux.Wake());
+                encoder->m_out->Bind(slot.in, *mux.m_in);
                 auto frames = std::make_unique<Route>(slot.in, false);
                 for (const auto& filter : slot.filters)
                     frames->Add(filter);
