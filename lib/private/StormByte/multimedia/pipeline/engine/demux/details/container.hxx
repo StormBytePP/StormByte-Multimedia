@@ -40,7 +40,7 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
@@ -115,7 +115,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			 * @param file Unused.
 			 * @return false.
 			 */
-			bool Open(class StormByte::Multimedia::Pipeline::Demux& owner,
+			bool Open(class StormByte::Multimedia::Pipeline::Demuxer& owner,
 				const File& file) noexcept override;
 
 			/**
@@ -124,7 +124,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			 * @param ctx Opened AVFormatContext.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Adopt(class StormByte::Multimedia::Pipeline::Demux& owner,
+			bool Adopt(class StormByte::Multimedia::Pipeline::Demuxer& owner,
 				StormByte::Multimedia::Backend::FFmpeg::AVFormatContext ctx) noexcept;
 
 			/**
@@ -133,7 +133,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux::Details {
 			 * @return New shared Packet, or empty at EoF.
 			 */
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Read(
-				class StormByte::Multimedia::Pipeline::Demux& owner) noexcept override;
+				class StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept override;
 
 			/**
 			 * @brief Raw AVFormatContext pointer.

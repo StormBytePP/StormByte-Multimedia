@@ -177,7 +177,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param path Output file.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+			bool BindPath(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const std::filesystem::path& path) noexcept override;
 
 			/**
@@ -186,7 +186,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param encoder Live encoder.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+			bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept override;
 
 			/**
@@ -195,8 +195,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param remux Live remuxer.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
-				class StormByte::Multimedia::Pipeline::Remux& remux) noexcept override;
+			bool ReserveRemux(class StormByte::Multimedia::Pipeline::Muxer& owner,
+				class StormByte::Multimedia::Pipeline::Remuxer& remux) noexcept override;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -204,7 +204,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param file Source file.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+			bool BindAttachments(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const File& file) noexcept override;
 
 			/**
@@ -213,14 +213,14 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param packet Encoded or remuxed packet.
 			 * @return true if the packet was accepted.
 			 */
-			bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+			bool Push(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept override;
 
 			/**
 			 * @brief Writes leftover packets and the trailer.
 			 * @param owner Public muxer.
 			 */
-			void Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept override;
+			void Flush(class StormByte::Multimedia::Pipeline::Muxer& owner) noexcept override;
 
 			/**
 			 * @brief Writes trailer if needed and frees AVIO + context.
@@ -240,7 +240,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param owner Public muxer.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept;
+			bool WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Muxer& owner) noexcept;
 
 			/**
 			 * @brief Writes one packet after the header.
@@ -248,7 +248,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param packet Source packet.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool WritePacket(class StormByte::Multimedia::Pipeline::Mux& owner,
+			bool WritePacket(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				class StormByte::Multimedia::Pipeline::Packet& packet) noexcept;
 
 			/**

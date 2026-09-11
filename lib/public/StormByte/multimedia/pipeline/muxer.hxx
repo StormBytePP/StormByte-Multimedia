@@ -58,10 +58,10 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
+	class Demuxer;
 	class Encoder;
-	class Mux;
-	class Remux;
+	class Muxer;
+	class Remuxer;
 	class Transcode;
 
 	/**
@@ -73,15 +73,16 @@ namespace StormByte::Multimedia::Pipeline {
 	namespace Engine {
 		/**
 		 * @namespace Mux
-		 * @brief Mux backends.
+		 * @brief Muxer backends. Untouched until the Backend step.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
 		namespace Mux {
 			class Engine;
+
 			/**
 			 * @namespace Details
-			 * @brief Container mux engine.
+			 * @brief Container muxer engine.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -93,53 +94,62 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @brief Reserves @p encoder as an output track of @p mux.
+	 * @brief Reserves @p encoder as an output track of @p muxer.
 	 * @param encoder Live encoder.
-	 * @param mux Destination.
+	 * @param muxer Destination.
 	 * @return @p encoder.
 	 *
 	 * Does not bind hoppers. Transcode / @ref Route bind
-	 * @c encoder.m_out to @c mux.m_in on the origin track.
+	 * @c encoder.m_out to @c muxer.m_in on the origin track.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
 
 	/**
-	 * @brief Binds the output path of @p mux.
-	 * @param mux Muxer.
+	 * @brief Binds the output path of @p muxer.
+	 * @param muxer Muxer.
 	 * @param path Destination file.
-	 * @return @p mux.
+	 * @return @p muxer.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
 
 	/**
-	 * @brief Snapshots attachments of @p file onto @p mux.
+	 * @brief Snapshots attachments of @p file onto @p muxer.
 	 * @param file Source file.
-	 * @param mux Destination.
-	 * @return @p mux.
+	 * @param muxer Destination.
+	 * @return @p muxer.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(const File& file, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
 
 	/**
-	 * @brief Forwards source attachments from @p demux onto @p mux.
-	 * @param demux Open demuxer.
-	 * @param mux Destination.
-	 * @return @p mux.
+	 * @brief Forwards source attachments from @p demuxer onto @p muxer.
+	 * @param demuxer Open demuxer.
+	 * @param muxer Destination.
+	 * @return @p muxer.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
 
 	/**
-	 * @class Mux
+	 * @class Muxer
 	 * @brief Writes interleaved packets to a destination container.
 	 *
 	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * Encoded tracks come from @c encoder >> mux. Remux tracks come
-	 * from @c remux >> mux. @ref Work writes to the container, not
+	 * Encoded tracks come from @c encoder >> muxer. Remux tracks come
+	 * from @c remuxer >> muxer. @ref Work writes to the container, not
 	 * to @ref m_out. Header write waits until reserved encode
 	 * backends are open.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Mux final: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
+		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
+		friend Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
+		friend Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
+		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+		friend Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+		friend class Transcode;
+		friend class Engine::Mux::Details::Container;
+		friend class Engine::Mux::Details::Attachment;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -152,38 +162,38 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Starts the worker. @ref Pop waits until Bind creates buckets.
 			 */
-			explicit Mux(const StormByte::Multimedia::Container& container) noexcept;
+			explicit Muxer(const Container& container) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param other Source muxer.
 			 */
-			Mux(const Mux& other) = delete;
+			Muxer(const Muxer& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Muxer to take.
 			 */
-			Mux(Mux&& other) noexcept = delete;
+			Muxer(Muxer&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor. Closes the backend.
 			 */
-			~Mux() noexcept override;
+			~Muxer() noexcept override;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source muxer.
 			 * @return *this.
 			 */
-			Mux& operator=(const Mux& other) = delete;
+			Muxer& operator=(const Muxer& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Muxer to take.
 			 * @return *this.
 			 */
-			Mux& operator=(Mux&& other) noexcept = delete;
+			Muxer& operator=(Muxer&& other) noexcept = delete;
 
 			/**
 			 * @}
@@ -205,22 +215,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Presentation time of the last packet written.
 			 * @return Pts, or empty until a packet with Pts is written.
 			 */
-			std::optional<StormByte::Multimedia::Property::Duration> Position() const noexcept;
+			std::optional<Property::Duration> Position() const noexcept;
 
 			/**
 			 * @brief Destination container.
 			 * @return Registry container passed to the constructor.
 			 */
-			const StormByte::Multimedia::Container& Destination() const noexcept;
-
-			friend Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
-			friend Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
-			friend Mux& operator>>(const File& file, Mux& mux) noexcept;
-			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
-			friend Mux& operator>>(Remux& remux, Mux& mux) noexcept;
-			friend class Transcode;
-			friend class Engine::Mux::Details::Container;
-			friend class Engine::Mux::Details::Attachment;
+			const Container& Destination() const noexcept;
 
 		protected:
 			/**
@@ -246,9 +247,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Fail(std::string reason) noexcept;
 
-			const StormByte::Multimedia::Container* m_container;	///< Destination container
-			std::unique_ptr<Engine::Mux::Engine> m_engine;			///< Format backend
-			std::atomic<bool> m_closed;								///< Set by Finish / Fail
-			std::atomic<std::int64_t> m_positionNs;					///< Last written Pts, or -1
+			const Container* m_container;						///< Destination container
+			std::unique_ptr<Engine::Mux::Engine> m_engine;		///< Format backend
+			std::atomic<bool> m_closed;							///< Set by Finish / Fail
+			std::atomic<std::int64_t> m_positionNs;				///< Last written Pts, or -1
 	};
 }

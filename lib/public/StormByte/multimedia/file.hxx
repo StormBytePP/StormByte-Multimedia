@@ -66,10 +66,10 @@ namespace StormByte::Multimedia {
 	 */
 	namespace Pipeline {
 		/**
-		 * @class Demux
+		 * @class Demuxer
 		 * @brief Reads interleaved packets from a File origin.
 		 */
-		class Demux;
+		class Demuxer;
 	}
 
 	/**
@@ -82,6 +82,8 @@ namespace StormByte::Multimedia {
 	 * (`AV_DISPOSITION_ATTACHED_PIC`) are stored in Attachments(), not Streams().
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC File {
+		friend class Pipeline::Demuxer;
+
 		public:
 			/**
 			 * @brief Copy constructor (deleted).
@@ -187,8 +189,6 @@ namespace StormByte::Multimedia {
 				std::chrono::nanoseconds duration) noexcept;
 
 		private:
-			friend class Pipeline::Demux;
-
 			std::unique_ptr<Origin> m_origin;					///< Path or Consumer
 			const class Container& m_container;					///< Registry container
 			mutable Multimedia::Streams m_streams;				///< Probed streams

@@ -36,26 +36,27 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/pipeline/muxer.hxx>
+
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/engine/mux/engine.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
-#include <StormByte/multimedia/pipeline/remux.hxx>
+#include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/type.hxx>
-
-#include <StormByte/multimedia/name_thread.hxx>
 
 #include <chrono>
 #include <utility>
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
-Mux::Mux(const StormByte::Multimedia::Container& container) noexcept
+Muxer::Muxer(const Container& container) noexcept
 : Step(Kinds{Kind::Packet}, Kinds{}),
 m_container(&container), m_engine(std::make_unique<Engine::Mux::Details::Container>()),
 m_closed(false), m_positionNs(-1) {
@@ -66,47 +67,47 @@ m_closed(false), m_positionNs(-1) {
 	Launch();
 }
 
-Mux::~Mux() noexcept {
+Muxer::~Muxer() noexcept {
 	if (m_engine)
 		m_engine->Close();
 }
 
-Mux::operator bool() const noexcept {
+Muxer::operator bool() const noexcept {
 	return !Failed() && !m_closed.load(std::memory_order_acquire) && m_engine && m_engine->IsOpen();
 }
 
-bool Mux::Closed() const noexcept {
+bool Muxer::Closed() const noexcept {
 	return m_closed.load(std::memory_order_acquire) || Failed();
 }
 
-std::optional<StormByte::Multimedia::Property::Duration> Mux::Position() const noexcept {
+std::optional<Property::Duration> Muxer::Position() const noexcept {
 	const std::int64_t ns = m_positionNs.load(std::memory_order_acquire);
 	if (ns < 0)
 		return std::nullopt;
-	return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	return Property::Duration{std::chrono::nanoseconds{ns}};
 }
 
-const StormByte::Multimedia::Container& Mux::Destination() const noexcept {
+const Container& Muxer::Destination() const noexcept {
 	return *m_container;
 }
 
-void Mux::Fail(std::string reason) noexcept {
+void Muxer::Fail(std::string reason) noexcept {
 	m_closed.store(true, std::memory_order_release);
 	if (m_engine)
 		m_engine->Close();
 	Step::Fail(std::move(reason));
 }
 
-void Mux::Open() noexcept {}
+void Muxer::Open() noexcept {}
 
-void Mux::Work(std::shared_ptr<Item> item) noexcept {
-	NameThread("STMM:Mux");
+void Muxer::Work(std::shared_ptr<Item> item) noexcept {
+	NameThread("STMM:Muxer");
 
 	if (Failed() || !m_engine)
 		return;
 	auto packet = std::dynamic_pointer_cast<Packet>(item);
 	if (!packet) {
-		Fail("mux expected a packet");
+		Fail("muxer expected a packet");
 		return;
 	}
 	while (!m_engine->Push(*this, packet)) {
@@ -114,68 +115,68 @@ void Mux::Work(std::shared_ptr<Item> item) noexcept {
 			return;
 		Wait();
 	}
-	if (packet->Type() == StormByte::Multimedia::Type::Video) {
+	if (packet->Type() == Type::Video) {
 		if (const auto& pts = packet->Pts(); pts)
 			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
 	}
 }
 
-void Mux::Finish() noexcept {
+void Muxer::Finish() noexcept {
 	if (m_engine && !Failed())
 		m_engine->Flush(*this);
 	m_closed.store(true, std::memory_order_release);
 }
 
-Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Mux& mux) noexcept {
-	static_cast<Step&>(encoder) >> mux;
-	if (mux.Failed() || encoder.Failed())
+Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {
+	static_cast<Step&>(encoder) >> muxer;
+	if (muxer.Failed() || encoder.Failed())
 		return encoder;
-	if (!mux.m_engine) {
-		mux.Fail("muxer has no backend");
+	if (!muxer.m_engine) {
+		muxer.Fail("muxer has no backend");
 		return encoder;
 	}
-	mux.m_engine->ReserveEncoder(mux, encoder);
+	muxer.m_engine->ReserveEncoder(muxer, encoder);
 	return encoder;
 }
 
-Mux& StormByte::Multimedia::Pipeline::operator>>(Mux& mux, const std::filesystem::path& path) noexcept {
-	if (mux.Failed())
-		return mux;
-	if (!mux.m_engine) {
-		mux.Fail("muxer has no backend");
-		return mux;
+Muxer& StormByte::Multimedia::Pipeline::operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept {
+	if (muxer.Failed())
+		return muxer;
+	if (!muxer.m_engine) {
+		muxer.Fail("muxer has no backend");
+		return muxer;
 	}
-	mux.m_engine->BindPath(mux, path);
-	return mux;
+	muxer.m_engine->BindPath(muxer, path);
+	return muxer;
 }
 
-Mux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Mux& mux) noexcept {
-	static_cast<Step&>(demux) >> mux;
-	if (mux.Failed())
-		return mux;
-	if (!demux.Plan()) {
-		mux.Fail("demuxer has no plan");
-		return mux;
+Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxer) noexcept {
+	static_cast<Step&>(demuxer) >> muxer;
+	if (muxer.Failed())
+		return muxer;
+	if (!demuxer.Plan()) {
+		muxer.Fail("demuxer has no plan");
+		return muxer;
 	}
-	if (!mux.m_engine) {
-		mux.Fail("muxer has no backend");
-		return mux;
+	if (!muxer.m_engine) {
+		muxer.Fail("muxer has no backend");
+		return muxer;
 	}
-	mux.m_engine->BindAttachments(mux, demux.OriginFile());
-	return mux;
+	muxer.m_engine->BindAttachments(muxer, demuxer.OriginFile());
+	return muxer;
 }
 
-Mux& StormByte::Multimedia::Pipeline::operator>>(Remux& remux, Mux& mux) noexcept {
-	static_cast<Step&>(remux) >> mux;
-	if (mux.Failed() || remux.Failed())
-		return mux;
-	if (!mux.m_engine) {
-		mux.Fail("muxer has no backend");
-		return mux;
+Muxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& muxer) noexcept {
+	static_cast<Step&>(remuxer) >> muxer;
+	if (muxer.Failed() || remuxer.Failed())
+		return muxer;
+	if (!muxer.m_engine) {
+		muxer.Fail("muxer has no backend");
+		return muxer;
 	}
-	if (!mux.m_engine->ReserveRemux(mux, remux))
-		return mux;
-	mux.m_in->Notify(mux.Wake());
-	remux.m_out->Bind(remux.In(), *mux.m_in);
-	return mux;
+	if (!muxer.m_engine->ReserveRemux(muxer, remuxer))
+		return muxer;
+	muxer.m_in->Notify(muxer.Wake());
+	remuxer.m_out->Bind(remuxer.In(), *muxer.m_in);
+	return muxer;
 }

@@ -57,7 +57,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Route
 	 * @brief Owns the filter chain of one origin track and wires it.
 	 *
-	 * Packet / BSF filters may sit between Demux and Remux.
+	 * Packet / BSF filters may sit between Demuxer and Remuxer.
 	 * Frame / Process filters on that stretch fail at @ref Close.
 	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
 	 *
@@ -96,14 +96,12 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source route.
-			 * @return *this.
 			 */
 			Route& operator=(const Route& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Route to take.
-			 * @return *this.
 			 */
 			Route& operator=(Route&& other) noexcept = delete;
 
@@ -131,7 +129,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param destination Consumer step.
 			 *
 			 * O(1) at the ends. Uses @c Bind(track, …). Does not launch.
-			 * If @p destination is a @ref Remux and this route holds a
+			 * If @p destination is a @ref Remuxer and this route holds a
 			 * Frame / Process filter, the remuxer fails.
 			 */
 			void Close(Step& origin, Step& destination) noexcept;

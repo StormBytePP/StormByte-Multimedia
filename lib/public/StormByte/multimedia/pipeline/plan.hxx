@@ -55,7 +55,7 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
+	class Demuxer;
 
 	/**
 	 * @class Plan
@@ -86,9 +86,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param container Registry destination container.
 			 * @param destination Output path.
 			 */
-			Plan(StormByte::Multimedia::File&& source,
-				const StormByte::Multimedia::Container& container,
-				std::filesystem::path destination) noexcept;
+			Plan(File&& source, const Container& container, std::filesystem::path destination) noexcept;
 
 			Plan(const Plan&) = delete;
 			Plan& operator=(const Plan&) = delete;
@@ -137,7 +135,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Origin snapshot owned by this Plan.
 			 * @return File.
 			 */
-			inline const StormByte::Multimedia::File& Source() const noexcept {
+			inline const File& Source() const noexcept {
 				return *m_source;
 			}
 
@@ -145,7 +143,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Destination container (registry).
 			 * @return Container.
 			 */
-			inline const StormByte::Multimedia::Container& Container() const noexcept {
+			inline const Container& Container() const noexcept {
 				return *m_container;
 			}
 
@@ -194,13 +192,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * Fails when: the Plan was moved-from; @ref Destination is
 			 * empty; @ref Tracks is empty; @ref Track::In is negative
 			 * or not in @ref Source; @ref Track::Type is
-			 * @ref StormByte::Multimedia::Type::Unknown or does not
-			 * match the origin stream (or attachment slot);
-			 * a destination @ref Config::Video / Audio / Subtitle
-			 * codec has a different @ref StormByte::Multimedia::Codec::Type
+			 * @ref Type::Unknown or does not match the origin stream
+			 * (or attachment slot); a destination @ref Config::Video /
+			 * Audio / Subtitle codec has a different @ref Codec::Type
 			 * than the origin; an attachment MIME is empty or contains
 			 * `*`. Duplicate @ref Track::In is allowed. Encode knobs on
-			 * a Remux track (`Codec() == nullptr`) are ignored.
+			 * a remux track (`Codec() == nullptr`) are ignored.
 			 * Implementation pins, presets and container/codec pairing
 			 * are not checked.
 			 *
@@ -209,20 +206,20 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual CheckResult Check() const;
 
 		private:
-			std::unique_ptr<StormByte::Multimedia::File> m_source;					///< Owned origin
-			const StormByte::Multimedia::Container* m_container;					///< Registry destination
-			std::filesystem::path m_destination;									///< Output path
-			class Tracks m_tracks;													///< Tube tracks; index is mux slot
+			std::unique_ptr<File> m_source;				///< Owned origin
+			const class Container* m_container;			///< Registry destination
+			std::filesystem::path m_destination;		///< Output path
+			class Tracks m_tracks;						///< Tube tracks; index is mux slot
 	};
 
 	/**
-	 * @brief Hands @p plan to @p demux. Not a Step bind.
+	 * @brief Hands @p plan to @p demuxer. Not a Step bind.
 	 * @param plan Intention (moved).
-	 * @param demux Destination.
-	 * @return @p demux.
+	 * @param demuxer Destination.
+	 * @return @p demuxer.
 	 *
-	 * Stores the Plan on the Demux and wakes it. Does not
+	 * Stores the Plan on the Demuxer and wakes it. Does not
 	 * call @ref Plan::Check and does not bind hoppers.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Demux& operator>>(Plan&& plan, Demux& demux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Demuxer& operator>>(Plan&& plan, Demuxer& demuxer) noexcept;
 }

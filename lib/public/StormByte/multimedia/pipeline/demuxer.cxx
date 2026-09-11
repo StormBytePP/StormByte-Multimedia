@@ -45,7 +45,7 @@
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/audio.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/engine/decoder/details/video.hxx>
@@ -63,42 +63,43 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 }
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
-Demux::Demux() noexcept
+Demuxer::Demuxer() noexcept
 : Step(Kinds{}, Kinds{Kind::Packet}), m_eof(false), m_positionNs(-1) {
 	Launch();
 }
 
-Demux::~Demux() noexcept = default;
+Demuxer::~Demuxer() noexcept = default;
 
-Demux::operator bool() const noexcept {
+Demuxer::operator bool() const noexcept {
 	return !Failed() && !m_eof && m_engine && m_engine->IsOpen();
 }
 
-bool Demux::Eof() const noexcept {
+bool Demuxer::Eof() const noexcept {
 	return m_eof;
 }
 
-std::optional<StormByte::Multimedia::Property::Duration> Demux::Position() const noexcept {
+std::optional<Property::Duration> Demuxer::Position() const noexcept {
 	const std::int64_t ns = m_positionNs.load(std::memory_order_acquire);
 	if (ns < 0)
 		return std::nullopt;
-	return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
+	return Property::Duration{std::chrono::nanoseconds{ns}};
 }
 
-void Demux::ReachedEof() noexcept {
+void Demuxer::ReachedEof() noexcept {
 	m_eof = true;
 }
 
-void Demux::Fail(std::string reason) noexcept {
+void Demuxer::Fail(std::string reason) noexcept {
 	m_ready.notify_all();
 	Step::Fail(std::move(reason));
 }
 
-void Demux::Pump() noexcept {
-	NameThread("STMM:Demux");
+void Demuxer::Pump() noexcept {
+	NameThread("STMM:Demuxer");
 	{
 		std::unique_lock lock(m_readyMutex);
 		m_ready.wait(lock, [this]() {
@@ -144,19 +145,19 @@ void Demux::Pump() noexcept {
 	}
 }
 
-void Demux::Finish() noexcept {
+void Demuxer::Finish() noexcept {
 	ReachedEof();
 }
 
-Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& decoder) noexcept {
+Decoder& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Decoder& decoder) noexcept {
 	if (decoder.Failed())
 		return decoder;
-	static_cast<Step&>(demux) >> decoder;
-	if (demux.Failed() || !demux.m_engine) {
-		decoder.Fail(demux.Error().value_or("demuxer is not open"));
+	static_cast<Step&>(demuxer) >> decoder;
+	if (demuxer.Failed() || !demuxer.m_engine) {
+		decoder.Fail(demuxer.Error().value_or("demuxer is not open"));
 		return decoder;
 	}
-	auto* container = static_cast<Engine::Demux::Details::Container*>(demux.m_engine.get());
+	auto* container = static_cast<Engine::Demux::Details::Container*>(demuxer.m_engine.get());
 	auto* fmt = container ? container->Format() : nullptr;
 	if (!fmt) {
 		decoder.Fail("demuxer is not open");
@@ -164,7 +165,7 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	}
 
 	std::optional<FFmpeg::AVCodecParameters> params;
-	std::optional<StormByte::Multimedia::Stream::Properties> mapped;
+	std::optional<Stream::Properties> mapped;
 	AVRational timeBase{0, 1};
 	bool found = false;
 	for (const auto& stream : fmt->Streams()) {
@@ -181,8 +182,8 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 		return decoder;
 	}
 
-	if (demux.Plan()) {
-		for (const auto& stream : demux.Plan()->Source().Streams()) {
+	if (demuxer.Plan()) {
+		for (const auto& stream : demuxer.Plan()->Source().Streams()) {
 			if (stream.Index() != decoder.Index())
 				continue;
 			if (const auto& language = stream.Metadata().Language(); language)
@@ -202,15 +203,15 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	}
 
 	std::unique_ptr<Engine::Decoder::Engine> engine;
-	if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Video>(*mapped)) {
+	if (mapped.has_value() && std::holds_alternative<Property::Video>(*mapped)) {
 		engine = std::make_unique<Engine::Decoder::Details::Video>(
 			std::move(backend.value()), timeBase,
-			std::get<StormByte::Multimedia::Property::Video>(std::move(*mapped)));
+			std::get<Property::Video>(std::move(*mapped)));
 	}
-	else if (mapped.has_value() && std::holds_alternative<StormByte::Multimedia::Property::Audio>(*mapped)) {
+	else if (mapped.has_value() && std::holds_alternative<Property::Audio>(*mapped)) {
 		engine = std::make_unique<Engine::Decoder::Details::Audio>(
 			std::move(backend.value()), timeBase,
-			std::get<StormByte::Multimedia::Property::Audio>(std::move(*mapped)));
+			std::get<Property::Audio>(std::move(*mapped)));
 	}
 	else {
 		engine = std::make_unique<Engine::Decoder::Details::Subtitle>(
@@ -218,10 +219,10 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 	}
 	decoder.Bind(std::move(engine));
 	decoder.m_in->Notify(decoder.Wake());
-	demux.m_out->Bind(decoder.Index(), *decoder.m_in);
+	demuxer.m_out->Bind(decoder.Index(), *decoder.m_in);
 	return decoder;
 }
 
-const StormByte::Multimedia::File& Demux::OriginFile() const noexcept {
+const File& Demuxer::OriginFile() const noexcept {
 	return m_plan->Source();
 }

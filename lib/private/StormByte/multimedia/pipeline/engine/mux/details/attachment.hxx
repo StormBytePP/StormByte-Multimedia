@@ -39,7 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 extern "C" {
@@ -72,6 +72,6 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			 * @param file Source file whose Attachments() are copied.
 			 * @return false if owner.Fail() was called.
 			 */
-			static bool Write(class Mux& owner, AVFormatContext* ctx, const File& file) noexcept;
+			static bool Write(class Muxer& owner, AVFormatContext* ctx, const File& file) noexcept;
 	};
 }

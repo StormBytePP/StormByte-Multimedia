@@ -305,7 +305,7 @@ namespace StormByte::Multimedia::Pipeline {
 					 * @param codec Destination registry codec.
 					 * @return *this.
 					 */
-					Track& Codec(const StormByte::Multimedia::Codec& codec) noexcept;
+					Track& Codec(const Codec& codec) noexcept;
 
 					/**
 					 * @brief Pins an FFmpeg encoder name.
@@ -569,8 +569,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * Required before @ref Run. Closes the job identity together
 			 * with the File from Open.
 			 */
-			Transcode& Destination(const StormByte::Multimedia::Container& container,
-				std::filesystem::path path) noexcept;
+			Transcode& Destination(const Container& container, std::filesystem::path path) noexcept;
 
 			/**
 			 * @}
@@ -586,7 +585,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Calls @ref OnConfigure, @ref EmptyPlan, fills tracks from
 			 * the fluent map, @ref OnPlan, @ref OnStart, then
-			 * @c std::move(*plan) >> demux. Does not block until Done.
+			 * @c std::move(*plan) >> demuxer. Does not block until Done.
 			 */
 			void Run() noexcept;
 
@@ -651,7 +650,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * are filled from the fluent map after this returns.
 			 */
 			virtual std::unique_ptr<class Plan> EmptyPlan(File&& source,
-				const StormByte::Multimedia::Container& container,
+				const Container& container,
 				std::filesystem::path destination) const noexcept;
 
 			/**
@@ -675,7 +674,7 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual enum Status OnStart() noexcept;
 
 			/**
-			 * @brief Intention, just before @c plan >> demux.
+			 * @brief Intention, just before @c plan >> demuxer.
 			 * @param plan Filled Plan (still owned by this job).
 			 */
 			virtual void OnPlan(const class Plan& plan) noexcept;

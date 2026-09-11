@@ -39,7 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -93,7 +93,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			 * @param file Probed snapshot.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool Open(class StormByte::Multimedia::Pipeline::Demux& owner,
+			virtual bool Open(class StormByte::Multimedia::Pipeline::Demuxer& owner,
 				const File& file) noexcept = 0;
 
 			/**
@@ -102,7 +102,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Demux {
 			 * @return Packet with @ref Producer::Demux, or empty at EoF.
 			 */
 			virtual std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Read(
-				class StormByte::Multimedia::Pipeline::Demux& owner) noexcept = 0;
+				class StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept = 0;
 
 			/**
 			 * @brief Opened format context, if any.

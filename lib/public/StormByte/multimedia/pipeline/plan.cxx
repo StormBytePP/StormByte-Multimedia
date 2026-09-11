@@ -43,16 +43,17 @@
 #include <StormByte/multimedia/pipeline/config/audio.hxx>
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/config/video.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/exception.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Multimedia::Type;
 
 namespace {
-	const StormByte::Multimedia::Codec* DestinationCodec(const Config::Base* config) noexcept {
+	const Codec* DestinationCodec(const Config::Base* config) noexcept {
 		if (const auto* video = dynamic_cast<const Config::Video*>(config))
 			return video->Codec();
 		if (const auto* audio = dynamic_cast<const Config::Audio*>(config))
@@ -67,10 +68,8 @@ namespace {
 	}
 }
 
-Plan::Plan(StormByte::Multimedia::File&& source,
-	const StormByte::Multimedia::Container& container,
-	std::filesystem::path destination) noexcept
-: m_source(std::make_unique<StormByte::Multimedia::File>(std::move(source))),
+Plan::Plan(File&& source, const class Container& container, std::filesystem::path destination) noexcept
+: m_source(std::make_unique<File>(std::move(source))),
 m_container(&container),
 m_destination(std::move(destination)) {}
 
@@ -105,7 +104,7 @@ CheckResult Plan::Check() const {
 			continue;
 		}
 
-		const StormByte::Multimedia::Stream* stream = nullptr;
+		const Stream* stream = nullptr;
 		for (const auto& candidate : streams) {
 			if (candidate.Index() == in) {
 				stream = &candidate;
@@ -117,7 +116,7 @@ CheckResult Plan::Check() const {
 		if (stream->Type() != type)
 			return StormByte::Unexpected<PlanException>("track origin {} type does not match source", in);
 
-		if (const StormByte::Multimedia::Codec* codec = DestinationCodec(track.Config())) {
+		if (const Codec* codec = DestinationCodec(track.Config())) {
 			if (codec->Type() != stream->Type())
 				return StormByte::Unexpected<PlanException>("track origin {} codec type does not match source", in);
 		}
@@ -126,10 +125,10 @@ CheckResult Plan::Check() const {
 	return {};
 }
 
-Demux& StormByte::Multimedia::Pipeline::operator>>(Plan&& plan, Demux& demux) noexcept {
-	if (!demux.m_plan) {
-		demux.m_plan = std::make_shared<Plan>(std::move(plan));
-		demux.m_ready.notify_all();
+Demuxer& StormByte::Multimedia::Pipeline::operator>>(Plan&& plan, Demuxer& demuxer) noexcept {
+	if (!demuxer.m_plan) {
+		demuxer.m_plan = std::make_shared<Plan>(std::move(plan));
+		demuxer.m_ready.notify_all();
 	}
-	return demux;
+	return demuxer;
 }

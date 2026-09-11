@@ -39,18 +39,20 @@
 #include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <memory>
 #include <utility>
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Multimedia::Type;
 
 Packet::Packet() noexcept
-: Item(-1, Type::Unknown, Kind::Packet, Producer::Demux), m_keyFrame(false) {}
+: Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer), m_keyFrame(false) {}
 
 Packet::Packet(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
-	std::optional<StormByte::Multimedia::Property::Duration> pts,
-	std::optional<StormByte::Multimedia::Property::Duration> dts,
-	std::optional<StormByte::Multimedia::Property::Duration> duration,
+	std::optional<Property::Duration> pts,
+	std::optional<Property::Duration> dts,
+	std::optional<Property::Duration> duration,
 	bool key_frame,
 	std::vector<SideData> attachments) noexcept
 : Item(track, type, Kind::Packet, producer),
@@ -117,7 +119,7 @@ Packet& Packet::operator=(Packet&& other) noexcept {
 }
 
 void Packet::BecomeEmpty() noexcept {
-	Item::operator=(Item(-1, Type::Unknown, Kind::Packet, Producer::Demux));
+	Item::operator=(Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer));
 	m_payload = StormByte::Buffer::FIFO{};
 	m_pts.reset();
 	m_dts.reset();
@@ -128,15 +130,15 @@ void Packet::BecomeEmpty() noexcept {
 	m_engine.reset();
 }
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Pts() const noexcept {
+const std::optional<Property::Duration>& Packet::Pts() const noexcept {
 	return m_pts;
 }
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Dts() const noexcept {
+const std::optional<Property::Duration>& Packet::Dts() const noexcept {
 	return m_dts;
 }
 
-const std::optional<StormByte::Multimedia::Property::Duration>& Packet::Duration() const noexcept {
+const std::optional<Property::Duration>& Packet::Duration() const noexcept {
 	return m_duration;
 }
 

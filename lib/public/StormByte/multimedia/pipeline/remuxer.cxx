@@ -36,35 +36,35 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/pipeline/remuxer.hxx>
+
 #include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
-#include <StormByte/multimedia/pipeline/remux.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
-Remux::Remux(int in) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{Kind::Packet}), m_index(in), m_demux(nullptr) {
+Remuxer::Remuxer(int in) noexcept
+: Step(Kinds{Kind::Packet}, Kinds{Kind::Packet}), m_index(in), m_demuxer(nullptr) {
 	Launch();
 }
 
-Remux::~Remux() noexcept = default;
+Remuxer::~Remuxer() noexcept = default;
 
-void Remux::Fail(std::string reason) noexcept {
+void Remuxer::Fail(std::string reason) noexcept {
 	Step::Fail(std::move(reason));
 }
 
-void Remux::Open() noexcept {}
+void Remuxer::Open() noexcept {}
 
-void Remux::Work(std::shared_ptr<Item> item) noexcept {
-	NameThread("STMM:Remux:" + std::to_string(m_index));
+void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
+	NameThread("STMM:Remuxer:" + std::to_string(m_index));
 	if (Failed())
 		return;
 	auto packet = std::dynamic_pointer_cast<Packet>(item);
 	if (!packet) {
-		Fail("remux expected a packet");
+		Fail("remuxer expected a packet");
 		return;
 	}
 	if (packet->Track() != m_index)
@@ -72,22 +72,22 @@ void Remux::Work(std::shared_ptr<Item> item) noexcept {
 	m_out->Push(packet);
 }
 
-void Remux::Finish() noexcept {}
+void Remuxer::Finish() noexcept {}
 
-Remux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Remux& remux) noexcept {
-	if (remux.Failed())
-		return remux;
-	static_cast<Step&>(demux) >> remux;
-	if (demux.Failed()) {
-		remux.Fail(demux.Error().value_or("demuxer is not open"));
-		return remux;
+Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept {
+	if (remuxer.Failed())
+		return remuxer;
+	static_cast<Step&>(demuxer) >> remuxer;
+	if (demuxer.Failed()) {
+		remuxer.Fail(demuxer.Error().value_or("demuxer is not open"));
+		return remuxer;
 	}
-	if (remux.m_index < 0) {
-		remux.Fail("remux origin is negative");
-		return remux;
+	if (remuxer.m_index < 0) {
+		remuxer.Fail("remuxer origin is negative");
+		return remuxer;
 	}
-	remux.m_demux = &demux;
-	remux.m_in->Notify(remux.Wake());
-	demux.m_out->Bind(remux.In(), *remux.m_in);
-	return remux;
+	remuxer.m_demuxer = &demuxer;
+	remuxer.m_in->Notify(remuxer.Wake());
+	demuxer.m_out->Bind(remuxer.In(), *remuxer.m_in);
+	return remuxer;
 }

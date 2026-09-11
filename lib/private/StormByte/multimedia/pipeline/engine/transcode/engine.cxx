@@ -43,12 +43,12 @@
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/config/video.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
-#include <StormByte/multimedia/pipeline/remux.hxx>
+#include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 
@@ -193,8 +193,8 @@ void Engine::Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_toke
 		return;
 	}
 
-	StormByte::Multimedia::Pipeline::Demux demux;
-	StormByte::Multimedia::Pipeline::Mux mux(*Container);
+	StormByte::Multimedia::Pipeline::Demuxer demux;
+	StormByte::Multimedia::Pipeline::Muxer mux(*Container);
 	mux >> Path;
 	std::move(*built) >> demux;
 	job.m_plan = demux.Plan();
@@ -227,14 +227,14 @@ void Engine::Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_toke
 		std::unique_ptr<StormByte::Multimedia::Pipeline::Route> Frames;
 	};
 	std::vector<EncodeLane> lanes;
-	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Remux>> remuxes;
+	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Remuxer>> remuxes;
 	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Route>> remuxRoutes;
 
 	int muxIndex = 0;
 	for (auto& slot : Mapped) {
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
-			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remux>(slot.In);
+			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remuxer>(slot.In);
 			demux >> *remux;
 			*remux >> mux;
 			if (mux.Failed() || remux->Failed()) {

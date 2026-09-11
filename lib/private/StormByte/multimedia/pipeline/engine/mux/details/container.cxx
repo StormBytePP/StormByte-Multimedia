@@ -38,9 +38,9 @@
 
 #include <StormByte/multimedia/pipeline/engine/mux/details/attachment.hxx>
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
-#include <StormByte/multimedia/pipeline/remux.hxx>
+#include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -192,7 +192,7 @@ int Details::Container::Resolve(int track) const noexcept {
 	return -1;
 }
 
-bool Details::Container::BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+bool Details::Container::BindPath(class StormByte::Multimedia::Pipeline::Muxer& owner,
 	const std::filesystem::path& path) noexcept {
 	if (m_ctx) {
 		owner.Fail("muxer destination is already bound");
@@ -237,7 +237,7 @@ bool Details::Container::BindPath(class StormByte::Multimedia::Pipeline::Mux& ow
 	return WriteHeaderIfReady(owner);
 }
 
-bool Details::Container::ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+bool Details::Container::ReserveEncoder(class StormByte::Multimedia::Pipeline::Muxer& owner,
 	class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept {
 	if (m_header) {
 		owner.Fail("cannot add a track after the header");
@@ -257,17 +257,17 @@ bool Details::Container::ReserveEncoder(class StormByte::Multimedia::Pipeline::M
 	return true;
 }
 
-bool Details::Container::ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
-	class StormByte::Multimedia::Pipeline::Remux& remux) noexcept {
+bool Details::Container::ReserveRemux(class StormByte::Multimedia::Pipeline::Muxer& owner,
+	class StormByte::Multimedia::Pipeline::Remuxer& remux) noexcept {
 	if (m_header) {
 		owner.Fail("cannot add a track after the header");
 		return false;
 	}
-	if (!remux.m_demux) {
+	if (!remux.m_demuxer) {
 		owner.Fail("remux is not bound to a demuxer");
 		return false;
 	}
-	StormByte::Multimedia::Pipeline::Demux& demux = *remux.m_demux;
+	StormByte::Multimedia::Pipeline::Demuxer& demux = *remux.m_demuxer;
 	const int in = remux.In();
 	const int out = static_cast<int>(m_tracks.size());
 	if (m_tracks.contains(out)) {
@@ -306,7 +306,7 @@ bool Details::Container::ReserveRemux(class StormByte::Multimedia::Pipeline::Mux
 	return true;
 }
 
-bool Details::Container::BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+bool Details::Container::BindAttachments(class StormByte::Multimedia::Pipeline::Muxer& owner,
 	const File& file) noexcept {
 	if (m_header) {
 		owner.Fail("cannot bind attachments after the header");
@@ -320,7 +320,7 @@ bool Details::Container::BindAttachments(class StormByte::Multimedia::Pipeline::
 	return true;
 }
 
-bool Details::Container::Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+bool Details::Container::Push(class StormByte::Multimedia::Pipeline::Muxer& owner,
 	const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept {
 	if (!packet) {
 		owner.Fail("empty packet");
@@ -349,7 +349,7 @@ bool Details::Container::Push(class StormByte::Multimedia::Pipeline::Mux& owner,
 	return true;
 }
 
-bool Details::Container::WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept {
+bool Details::Container::WriteHeaderIfReady(class StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 	if (owner.Failed() || m_header)
 		return !owner.Failed();
 	if (!m_ctx)
@@ -481,7 +481,7 @@ bool Details::Container::WriteHeaderIfReady(class StormByte::Multimedia::Pipelin
 	return true;
 }
 
-bool Details::Container::WritePacket(class StormByte::Multimedia::Pipeline::Mux& owner,
+bool Details::Container::WritePacket(class StormByte::Multimedia::Pipeline::Muxer& owner,
 	class StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
 	if (owner.Failed() || !m_header)
 		return false;
@@ -583,7 +583,7 @@ bool Details::Container::WritePacket(class StormByte::Multimedia::Pipeline::Mux&
 	return true;
 }
 
-void Details::Container::Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept {
+void Details::Container::Flush(class StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 	if (owner.Failed() || m_trailer)
 		return;
 	for (const auto& [index, track] : m_tracks) {

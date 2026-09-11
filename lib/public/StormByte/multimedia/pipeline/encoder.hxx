@@ -61,7 +61,7 @@ extern "C" {
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
-	class Mux;
+	class Muxer;
 	class Transcode;
 
 	/**
@@ -73,14 +73,14 @@ namespace StormByte::Multimedia::Pipeline {
 	namespace Engine {
 		/**
 		 * @namespace Mux
-		 * @brief Mux backends behind the public Mux type.
+		 * @brief Muxer backends. Untouched until the Backend step.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
 		namespace Mux {
 			/**
 			 * @namespace Details
-			 * @brief Container mux backend.
+			 * @brief Container muxer backend.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -136,6 +136,15 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder final: public Step {
+		friend class Muxer;
+		friend class Transcode;
+		friend class Engine::Mux::Details::Container;
+		friend struct Engine::Encoder::Open::Access;
+		friend class Engine::Encoder::Engine;
+		friend class Engine::Encoder::Details::Video;
+		friend class Engine::Encoder::Details::Audio;
+		friend class Engine::Encoder::Details::Subtitle;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -410,15 +419,6 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @}
 			 */
-
-			friend class Mux;
-			friend class Transcode;
-			friend class Engine::Mux::Details::Container;
-			friend struct Engine::Encoder::Open::Access;
-			friend class Engine::Encoder::Engine;
-			friend class Engine::Encoder::Details::Video;
-			friend class Engine::Encoder::Details::Audio;
-			friend class Engine::Encoder::Details::Subtitle;
 
 		protected:
 			/**

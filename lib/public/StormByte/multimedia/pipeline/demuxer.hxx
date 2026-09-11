@@ -59,10 +59,10 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
-	class Demux;
-	class Mux;
+	class Demuxer;
+	class Muxer;
 	class Plan;
-	class Remux;
+	class Remuxer;
 	class Transcode;
 
 	/**
@@ -74,7 +74,7 @@ namespace StormByte::Multimedia::Pipeline {
 	namespace Engine {
 		/**
 		 * @namespace Demux
-		 * @brief Demux backends.
+		 * @brief Demuxer backends. Untouched until the Backend step.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
@@ -83,7 +83,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @namespace Details
-			 * @brief Container demux engine.
+			 * @brief Container demuxer engine.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -94,14 +94,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 		/**
 		 * @namespace Mux
-		 * @brief Mux backends.
+		 * @brief Muxer backends. Untouched until the Backend step.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
 		namespace Mux {
 			/**
 			 * @namespace Details
-			 * @brief Container mux engine.
+			 * @brief Container muxer engine.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -112,7 +112,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 		/**
 		 * @namespace Transcode
-		 * @brief Job map and coordinator behind @ref StormByte::Multimedia::Pipeline::Transcode.
+		 * @brief Job map and coordinator behind @ref Transcode.
 		 *
 		 * @ingroup multimedia_pipeline
 		 */
@@ -122,29 +122,29 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @brief Opens @p decoder on a stream of @p demux and binds that track.
-	 * @param demux Open demuxer.
+	 * @brief Opens @p decoder on a stream of @p demuxer and binds that track.
+	 * @param demuxer Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
 	 *
 	 * Attaches the decode backend and binds hoppers.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC class Decoder& operator>>(class Demux& demux, class Decoder& decoder) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
 	/**
-	 * @brief Forwards source attachments from @p demux onto @p mux. Never throws.
-	 * @param demux Open demuxer.
-	 * @param mux Destination.
-	 * @return @p mux.
+	 * @brief Forwards source attachments from @p demuxer onto @p muxer. Never throws.
+	 * @param demuxer Open demuxer.
+	 * @param muxer Destination.
+	 * @return @p muxer.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC class Mux& operator>>(class Demux& demux, class Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
 
 	/**
-	 * @class Demux
+	 * @class Demuxer
 	 * @brief Reads interleaved compressed packets from the Plan origin.
 	 *
 	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * @c plan >> demux stores the Plan and wakes @ref Pump. Pump runs
+	 * @c plan >> demuxer stores the Plan and wakes @ref Pump. Pump runs
 	 * @ref Plan::Check, opens the format context and reads. There is
 	 * no @c Open hook and no public Launch.
 	 *
@@ -153,7 +153,17 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Demux final: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
+		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
+		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
+		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+		friend class Muxer;
+		friend class Remuxer;
+		friend class Transcode;
+		friend class Engine::Demux::Details::Container;
+		friend class Engine::Mux::Details::Container;
+		friend class Engine::Transcode::Engine;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -163,38 +173,38 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Demuxer. Launches; @ref Pump waits for a Plan.
 			 */
-			Demux() noexcept;
+			Demuxer() noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param other Source demuxer.
 			 */
-			Demux(const Demux& other) = delete;
+			Demuxer(const Demuxer& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Demuxer to take.
 			 */
-			Demux(Demux&& other) noexcept = delete;
+			Demuxer(Demuxer&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Demux() noexcept override;
+			~Demuxer() noexcept override;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source demuxer.
 			 * @return *this.
 			 */
-			Demux& operator=(const Demux& other) = delete;
+			Demuxer& operator=(const Demuxer& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Demuxer to take.
 			 * @return *this.
 			 */
-			Demux& operator=(Demux&& other) noexcept = delete;
+			Demuxer& operator=(Demuxer&& other) noexcept = delete;
 
 			/**
 			 * @brief true if open, not failed and not at EOF.
@@ -221,21 +231,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Presentation time of the last pushed packet.
 			 * @return Pts, or empty until a packet with Pts arrives.
 			 */
-			std::optional<StormByte::Multimedia::Property::Duration> Position() const noexcept;
+			std::optional<Property::Duration> Position() const noexcept;
 
 			/**
 			 * @}
 			 */
-
-			friend Demux& operator>>(class Plan&& plan, Demux& demux) noexcept;
-			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
-			friend class Mux;
-			friend class Remux;
-			friend class Transcode;
-			friend class Engine::Demux::Details::Container;
-			friend class Engine::Mux::Details::Container;
-			friend class Engine::Transcode::Engine;
 
 		protected:
 			/**
@@ -264,10 +264,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Origin snapshot owned by the bound Plan.
 			 * @return File.
 			 *
-			 * For the demux engine. Valid after @c plan >> demux.
+			 * For the demuxer engine. Valid after @c plan >> demuxer.
 			 * Undefined if no Plan is set.
 			 */
-			const StormByte::Multimedia::File& OriginFile() const noexcept;
+			const File& OriginFile() const noexcept;
 
 			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
 			bool m_eof;											///< End of source

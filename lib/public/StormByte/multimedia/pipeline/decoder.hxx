@@ -55,8 +55,8 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
 	class Decoder;
+	class Demuxer;
 	class Transcode;
 
 	/**
@@ -111,21 +111,21 @@ namespace StormByte::Multimedia::Pipeline {
 	inline const DecoderFlags Heuristics{DecoderFlag::HeuristicsHDR10};
 
 	/**
-	 * @brief Opens @p decoder on a stream of @p demux. Never throws.
-	 * @param demux Open demuxer.
+	 * @brief Opens @p decoder on a stream of @p demuxer. Never throws.
+	 * @param demuxer Open demuxer.
 	 * @param decoder Destination.
 	 * @return @p decoder.
 	 *
 	 * Attaches the backend and launches the decoder worker.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
 	/**
 	 * @class Decoder
 	 * @brief Decodes packets of one origin track into frames.
 	 *
 	 * A @ref Step, @c final. The constructor does not start the worker.
-	 * @c demux >> decoder attaches the backend and launches.
+	 * @c demuxer >> decoder attaches the backend and launches.
 	 * @ref Work sends one packet and drains frames to @ref m_out.
 	 * @ref Finish flushes the codec. Errors are @ref Step::Fail.
 	 *
@@ -134,6 +134,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
+		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
+		friend class Transcode;
+		friend class Engine::Decoder::Details::Video;
+		friend class Engine::Decoder::Details::Audio;
+		friend class Engine::Decoder::Details::Subtitle;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -145,7 +151,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
 			 *
-			 * The backend is attached later by @c demux >> decoder.
+			 * The backend is attached later by @c demuxer >> decoder.
 			 */
 			explicit Decoder(int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
@@ -208,7 +214,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const DecoderFlags& Flags() const noexcept;
 
 			/**
-			 * @brief Replaces flags (before demux >> decoder).
+			 * @brief Replaces flags (before demuxer >> decoder).
 			 * @param flags New mask.
 			 */
 			void Flags(DecoderFlags flags) noexcept;
@@ -253,7 +259,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Implementation() const noexcept;
 
 			/**
-			 * @brief Pins an FFmpeg decoder name (before demux >> decoder).
+			 * @brief Pins an FFmpeg decoder name (before demuxer >> decoder).
 			 * @param name Table name. Empty clears the pin.
 			 */
 			void Implementation(std::string name) noexcept;
@@ -280,12 +286,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
-			friend class Transcode;
-			friend class Engine::Decoder::Details::Video;
-			friend class Engine::Decoder::Details::Audio;
-			friend class Engine::Decoder::Details::Subtitle;
-
 		protected:
 			/**
 			 * @brief Prepare-once. Does not Fail if the backend is still unbound.
@@ -311,7 +311,7 @@ namespace StormByte::Multimedia::Pipeline {
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Pins the opened backend. Called from demux >> decoder.
+			 * @brief Pins the opened backend. Called from demuxer >> decoder.
 			 * @param engine Opened engine.
 			 */
 			void Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept;

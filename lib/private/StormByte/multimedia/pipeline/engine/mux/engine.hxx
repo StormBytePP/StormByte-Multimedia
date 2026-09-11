@@ -40,7 +40,7 @@
 
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
-#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -54,8 +54,8 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
-	class Remux;
+	class Demuxer;
+	class Remuxer;
 }
 
 namespace StormByte::Multimedia::Pipeline::Engine::Mux {
@@ -106,7 +106,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param path Output file.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool BindPath(class StormByte::Multimedia::Pipeline::Mux& owner,
+			virtual bool BindPath(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const std::filesystem::path& path) noexcept = 0;
 
 			/**
@@ -115,7 +115,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param encoder Live encoder (must outlive the header).
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Mux& owner,
+			virtual bool ReserveEncoder(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept = 0;
 
 			/**
@@ -126,8 +126,8 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 *
 			 * Output index is the next free slot.
 			 */
-			virtual bool ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
-				class StormByte::Multimedia::Pipeline::Remux& remux) noexcept = 0;
+			virtual bool ReserveRemux(class StormByte::Multimedia::Pipeline::Muxer& owner,
+				class StormByte::Multimedia::Pipeline::Remuxer& remux) noexcept = 0;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -135,7 +135,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param file Source file.
 			 * @return false if owner.Fail() was called.
 			 */
-			virtual bool BindAttachments(class StormByte::Multimedia::Pipeline::Mux& owner,
+			virtual bool BindAttachments(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const File& file) noexcept = 0;
 
 			/**
@@ -144,14 +144,14 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			 * @param packet Encoded or remuxed packet.
 			 * @return true if the packet was accepted.
 			 */
-			virtual bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,
+			virtual bool Push(class StormByte::Multimedia::Pipeline::Muxer& owner,
 				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept = 0;
 
 			/**
 			 * @brief Flushes leftover packets and the trailer.
 			 * @param owner Public muxer.
 			 */
-			virtual void Flush(class StormByte::Multimedia::Pipeline::Mux& owner) noexcept = 0;
+			virtual void Flush(class StormByte::Multimedia::Pipeline::Muxer& owner) noexcept = 0;
 
 			/**
 			 * @brief Writes trailer if needed and frees AVIO + context.

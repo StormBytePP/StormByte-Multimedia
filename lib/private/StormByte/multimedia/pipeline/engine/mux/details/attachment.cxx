@@ -72,7 +72,7 @@ namespace {
 }
 
 bool StormByte::Multimedia::Pipeline::Engine::Mux::Details::Attachment::Write(
-	class Mux& owner, AVFormatContext* ctx, const File& file) noexcept {
+	class Muxer& owner, AVFormatContext* ctx, const File& file) noexcept {
 	if (!ctx)
 		return true;
 	const auto& attachments = file.Attachments();

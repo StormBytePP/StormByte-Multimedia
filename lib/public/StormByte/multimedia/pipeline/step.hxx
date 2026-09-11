@@ -71,9 +71,9 @@ namespace StormByte::Multimedia::Buffer {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
-	class Mux;
-	class Remux;
+	class Demuxer;
+	class Muxer;
+	class Remuxer;
 	class Route;
 	class Router;
 	class Step;
@@ -100,17 +100,17 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief One threaded stage with an input @ref Sink and an output @ref Sink.
 	 *
 	 * Abstract. @ref Work is one consumed unit. Default @ref Work is a
-	 * no-op so Demux need not override it. @ref Launch starts the
+	 * no-op so Demuxer need not override it. @ref Launch starts the
 	 * worker. @ref Pump is the thread body. Default @ref Pump is the
-	 * consumer loop. Demux overrides @ref Pump and reads the File.
-	 * Mux uses the default loop and does not write to @ref m_out.
+	 * consumer loop. Demuxer overrides @ref Pump and reads the File.
+	 * Muxer uses the default loop and does not write to @ref m_out.
 	 * Filters inherit Step as protected and expose @ref Launch through
 	 * the filter facade.
 	 *
 	 * @ref Receives and @ref Produces are @ref Kinds masks fixed at
-	 * construction. Demux receives nothing and produces Packet. Mux
+	 * construction. Demuxer receives nothing and produces Packet. Muxer
 	 * receives Packet and produces nothing. Decoder is Packet to Frame.
-	 * Encoder is Frame to Packet. Remux is Packet to Packet.
+	 * Encoder is Frame to Packet. Remuxer is Packet to Packet.
 	 *
 	 * No @c In() / @c Out() getters: derived types and friends use
 	 * @ref m_in / @ref m_out.
@@ -120,7 +120,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Route, @ref Router, @ref Transcode and @c operator>> are
 	 * friends.
 	 *
-	 * Demux input and Mux output stay at zero buckets until Bind.
+	 * Demuxer input and Muxer output stay at zero buckets until Bind.
 	 * Decoder and Encoder are one track and one bucket.
 	 *
 	 * @ref Fail kills the job. Buckets have no Fail.
@@ -133,17 +133,18 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Step {
-		friend class Demux;
-		friend class Remux;
+		friend class Demuxer;
+		friend class Muxer;
+		friend class Remuxer;
 		friend class Route;
 		friend class Router;
 		friend class Transcode;
 		friend class Engine::Transcode::Engine;
-		friend Demux& operator>>(Plan&& plan, Demux& demux) noexcept;
-		friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+		friend Demuxer& operator>>(Plan&& plan, Demuxer& demuxer) noexcept;
+		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
 		friend Step& operator>>(Step& from, Step& to) noexcept;
-		friend Remux& operator>>(Demux& demux, Remux& remux) noexcept;
-		friend Mux& operator>>(Remux& remux, Mux& mux) noexcept;
+		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
+		friend Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 
 		public:
 			/**
@@ -304,7 +305,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief One unit taken from @ref m_in.
 			 * @param item Never empty.
 			 *
-			 * Consumer body. Default no-op (Demux overrides @ref Pump
+			 * Consumer body. Default no-op (Demuxer overrides @ref Pump
 			 * instead). Must be @c noexcept. On error call @ref Fail.
 			 */
 			virtual void Work(std::shared_ptr<Item> item) noexcept;
@@ -321,7 +322,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Body of the worker thread started by @ref Launch.
 			 *
 			 * Default: @ref Open, Pop / @ref Wait / @ref Work until
-			 * EoF, @ref Finish, then @ref m_out EoF. Demux overrides
+			 * EoF, @ref Finish, then @ref m_out EoF. Demuxer overrides
 			 * this and reads the File. Must be @c noexcept.
 			 */
 			virtual void Pump() noexcept;

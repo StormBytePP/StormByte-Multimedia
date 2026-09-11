@@ -61,16 +61,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Public API is move-only. Copy constructor and copy assignment stay
 	 * private and clone metadata, the payload FIFO and the backend
-	 * @c AVPacket when
-	 * @ref StormByte::Multimedia::Pipeline::Engine::Packet::Engine
-	 * exists.
+	 * @c AVPacket when @ref Engine::Packet::Engine exists.
 	 *
 	 * Identity lives on @ref Item. @ref Item::Kind is always
 	 * @ref Kind::Packet. Construction is
 	 * @c (track, type, producer, …). Do not stamp
-	 * @ref StormByte::Multimedia::Type::Copy on a packet:
-	 * that value is a track mode, not a kind of access unit.
-	 * An empty packet is @ref StormByte::Multimedia::Type::Unknown
+	 * @ref Type::Copy on a packet: that value is a track mode, not a
+	 * kind of access unit. An empty packet is @ref Type::Unknown
 	 * with track -1.
 	 *
 	 * @ref Item::Producer is set at construction. Passthrough and
@@ -85,12 +82,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * stream clock, not FFmpeg ticks. Side data uses the same
 	 * @ref SideData blobs as Frame; the bag is mutable here.
 	 *
-	 * @see StormByte::Multimedia::Pipeline::Item
-	 * @see StormByte::Multimedia::Pipeline::Frame
+	 * @see Item
+	 * @see Frame
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public Item {
+		friend class Decoder;
+		friend class Demuxer;
+		friend class Encoder;
+		friend class Filter::FFmpeg;
+		friend class Muxer;
+		friend class Engine::Packet::Engine;
+
 		public:
 			/**
 			 * @name Construction
@@ -114,7 +118,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param key_frame Whether this is a key frame.
 			 * @param attachments Side-data blobs that must reach the muxer.
 			 */
-			Packet(int track, enum StormByte::Multimedia::Type type, enum Producer producer,
+			Packet(int track, enum Type type, enum Producer producer,
 				StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts = std::nullopt,
 				std::optional<Property::Duration> dts = std::nullopt,
@@ -214,13 +218,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-		friend class Filter::FFmpeg;
-		friend class Demux;
-		friend class Mux;
-		friend class Decoder;
-		friend class Encoder;
-		friend class Engine::Packet::Engine;
-
 		private:
 			/**
 			 * @name Construction
@@ -232,8 +229,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param other Source packet.
 			 *
 			 * Private: a public copy would duplicate the compressed AU.
-			 * Only @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-			 * and the producing steps may clone.
+			 * Only @ref Filter::FFmpeg and the producing steps may clone.
 			 */
 			Packet(const Packet& other) noexcept;
 

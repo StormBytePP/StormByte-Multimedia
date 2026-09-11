@@ -51,9 +51,9 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Demux;
-	class Mux;
-	class Remux;
+	class Demuxer;
+	class Muxer;
+	class Remuxer;
 	class Transcode;
 
 	namespace Engine {
@@ -68,41 +68,48 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @brief Binds origin track @p remux.In() from @p demux onto @p remux.
-	 * @param demux Open demuxer.
-	 * @param remux Destination remuxer.
-	 * @return @p remux.
+	 * @brief Binds origin track @p remuxer.In() from @p demuxer onto @p remuxer.
+	 * @param demuxer Open demuxer.
+	 * @param remuxer Destination remuxer.
+	 * @return @p remuxer.
 	 *
-	 * Propagates the Plan once. Does not reserve a mux slot.
+	 * Propagates the Plan once. Does not reserve a muxer slot.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Remux& operator>>(Demux& demux, Remux& remux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
 
 	/**
-	 * @brief Reserves a remux slot on @p mux and binds hoppers.
-	 * @param remux Origin remuxer.
-	 * @param mux Destination muxer.
-	 * @return @p mux.
+	 * @brief Reserves a remux slot on @p muxer and binds hoppers.
+	 * @param remuxer Origin remuxer.
+	 * @param muxer Destination muxer.
+	 * @return @p muxer.
 	 *
-	 * Slot order is the order of @c remux >> mux / @c encoder >> mux.
+	 * Slot order is the order of @c remuxer >> muxer / @c encoder >> muxer.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Mux& operator>>(Remux& remux, Mux& mux) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 
 	/**
-	 * @class Remux
+	 * @class Remuxer
 	 * @brief Forwards compressed packets of one origin track to the muxer.
 	 *
 	 * A @ref Step, @c final. No decode and no encode. The factory for a
-	 * remux track is @c demux >> remux >> mux. @ref In is the origin
-	 * stream index. The mux slot is assigned when @c remux >> mux runs.
+	 * remux track is @c demuxer >> remuxer >> muxer. @ref In is the origin
+	 * stream index. The muxer slot is assigned when @c remuxer >> muxer runs.
 	 *
-	 * Packet / BSF filters sit in a @ref Route between Demux and Remux.
+	 * Packet / BSF filters sit in a @ref Route between Demuxer and Remuxer.
 	 * Frame / Process filters are not valid on this stretch.
 	 *
 	 * Packets leaving @ref m_out keep @ref Item::Track == @ref In.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Remux final: public Step {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Remuxer final: public Step {
+		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
+		friend Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+		friend class Muxer;
+		friend class Transcode;
+		friend class Engine::Mux::Details::Container;
+		friend class Engine::Transcode::Engine;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -113,40 +120,40 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Remuxer for origin stream @p in.
 			 * @param in Origin stream index.
 			 *
-			 * Starts the worker. The mux slot is not chosen here.
+			 * Starts the worker. The muxer slot is not chosen here.
 			 */
-			explicit Remux(int in) noexcept;
+			explicit Remuxer(int in) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param other Source remuxer.
 			 */
-			Remux(const Remux& other) = delete;
+			Remuxer(const Remuxer& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Remuxer to take.
 			 */
-			Remux(Remux&& other) noexcept = delete;
+			Remuxer(Remuxer&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Remux() noexcept override;
+			~Remuxer() noexcept override;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source remuxer.
 			 * @return *this.
 			 */
-			Remux& operator=(const Remux& other) = delete;
+			Remuxer& operator=(const Remuxer& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Remuxer to take.
 			 * @return *this.
 			 */
-			Remux& operator=(Remux&& other) noexcept = delete;
+			Remuxer& operator=(Remuxer&& other) noexcept = delete;
 
 			/**
 			 * @}
@@ -159,13 +166,6 @@ namespace StormByte::Multimedia::Pipeline {
 			inline int In() const noexcept {
 				return m_index;
 			}
-
-			friend Remux& operator>>(Demux& demux, Remux& remux) noexcept;
-			friend Mux& operator>>(Remux& remux, Mux& mux) noexcept;
-			friend class Mux;
-			friend class Transcode;
-			friend class Engine::Mux::Details::Container;
-			friend class Engine::Transcode::Engine;
 
 		protected:
 			/**
@@ -191,7 +191,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Fail(std::string reason) noexcept;
 
-			int m_index;		///< Origin stream index
-			Demux* m_demux;		///< Set by @c demux >> remux
+			int m_index;			///< Origin stream index
+			Demuxer* m_demuxer;		///< Set by @c demuxer >> remuxer
 	};
 }

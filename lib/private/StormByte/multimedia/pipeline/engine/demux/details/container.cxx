@@ -39,7 +39,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
@@ -111,12 +111,12 @@ bool Details::Container::IsOpen() const noexcept {
 	return m_ctx.has_value();
 }
 
-bool Details::Container::Open(class StormByte::Multimedia::Pipeline::Demux& owner, const File&) noexcept {
+bool Details::Container::Open(class StormByte::Multimedia::Pipeline::Demuxer& owner, const File&) noexcept {
 	owner.Fail("use plan >> demux");
 	return false;
 }
 
-bool Details::Container::Adopt(class StormByte::Multimedia::Pipeline::Demux& owner, FFmpeg::AVFormatContext ctx) noexcept {
+bool Details::Container::Adopt(class StormByte::Multimedia::Pipeline::Demuxer& owner, FFmpeg::AVFormatContext ctx) noexcept {
 	m_ctx = std::move(ctx);
 	m_timeBase.clear();
 	if (!m_ctx) {
@@ -129,7 +129,7 @@ bool Details::Container::Adopt(class StormByte::Multimedia::Pipeline::Demux& own
 }
 
 std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Details::Container::Read(
-	class StormByte::Multimedia::Pipeline::Demux& owner) noexcept {
+	class StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept {
 	if (!m_ctx) {
 		owner.Fail("demuxer is not open");
 		return {};
@@ -169,7 +169,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Details::Container::Rea
 		auto packet = std::make_shared<StormByte::Multimedia::Pipeline::Packet>(
 			index,
 			KindOf(*m_ctx, index),
-			Producer::Demux,
+			Producer::Demuxer,
 			StormByte::Buffer::FIFO{std::move(bytes)},
 			TicksToPts(m_scratch.Pts(), tb),
 			TicksToPts(m_scratch.Dts(), tb),
