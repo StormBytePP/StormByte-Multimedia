@@ -48,6 +48,7 @@
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
 #include <StormByte/multimedia/pipeline/mux.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/remux.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 
@@ -226,22 +227,29 @@ void Engine::Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_toke
 		std::unique_ptr<StormByte::Multimedia::Pipeline::Route> Frames;
 	};
 	std::vector<EncodeLane> lanes;
-	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Route>> remuxes;
+	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Remux>> remuxes;
+	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Route>> remuxRoutes;
 
 	int muxIndex = 0;
 	for (auto& slot : Mapped) {
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
-			if (!mux.Remux(demux, slot.In, muxIndex)) {
-				job.Fail("remux reserve failed");
+			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remux>(slot.In);
+			demux >> *remux;
+			*remux >> mux;
+			if (mux.Failed() || remux->Failed()) {
+				job.Fail(mux.Error().value_or(remux->Error().value_or("remux reserve failed")));
 				job.OnError(job.Error().value_or("mux"));
 				return;
 			}
-			auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In, true);
-			for (const auto& filter : slot.Filters)
-				route->Add(filter);
-			route->Close(demux, mux);
-			remuxes.push_back(std::move(route));
+			if (!slot.Filters.empty()) {
+				auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
+				for (const auto& filter : slot.Filters)
+					route->Add(filter);
+				route->Close(demux, *remux);
+				remuxRoutes.push_back(std::move(route));
+			}
+			remuxes.push_back(std::move(remux));
 		}
 		else {
 			auto decoder = std::make_unique<StormByte::Multimedia::Pipeline::Decoder>(slot.In);
@@ -251,7 +259,7 @@ void Engine::Run(StormByte::Multimedia::Pipeline::Transcode& job, std::stop_toke
 			*encoder >> mux;
 			mux.m_in->Notify(mux.Wake());
 			encoder->m_out->Bind(slot.In, *mux.m_in);
-			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In, false);
+			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
 			for (const auto& filter : slot.Filters)
 				frames->Add(filter);
 			for (const auto& filter : Analytics)

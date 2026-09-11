@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
@@ -44,6 +45,7 @@
 #include <StormByte/multimedia/pipeline/engine/mux/engine.hxx>
 #include <StormByte/multimedia/pipeline/mux.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/remux.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <StormByte/multimedia/name_thread.hxx>
@@ -54,7 +56,8 @@
 using namespace StormByte::Multimedia::Pipeline;
 
 Mux::Mux(const StormByte::Multimedia::Container& container) noexcept
-: m_container(&container), m_engine(std::make_unique<Engine::Mux::Details::Container>()),
+: Step(Kinds{Kind::Packet}, Kinds{}),
+m_container(&container), m_engine(std::make_unique<Engine::Mux::Details::Container>()),
 m_closed(false), m_positionNs(-1) {
 	if (!container.HasAccess(Access{Operation::Write})) {
 		Fail("container does not allow write");
@@ -85,16 +88,6 @@ std::optional<StormByte::Multimedia::Property::Duration> Mux::Position() const n
 
 const StormByte::Multimedia::Container& Mux::Destination() const noexcept {
 	return *m_container;
-}
-
-bool Mux::Remux(class Demux& demux, int in, int out) noexcept {
-	if (Failed())
-		return false;
-	if (!m_engine) {
-		Fail("muxer has no backend");
-		return false;
-	}
-	return m_engine->Remux(*this, demux, in, out);
 }
 
 void Mux::Fail(std::string reason) noexcept {
@@ -169,5 +162,20 @@ Mux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Mux& mux) noexcep
 		return mux;
 	}
 	mux.m_engine->BindAttachments(mux, demux.OriginFile());
+	return mux;
+}
+
+Mux& StormByte::Multimedia::Pipeline::operator>>(Remux& remux, Mux& mux) noexcept {
+	static_cast<Step&>(remux) >> mux;
+	if (mux.Failed() || remux.Failed())
+		return mux;
+	if (!mux.m_engine) {
+		mux.Fail("muxer has no backend");
+		return mux;
+	}
+	if (!mux.m_engine->ReserveRemux(mux, remux))
+		return mux;
+	mux.m_in->Notify(mux.Wake());
+	remux.m_out->Bind(remux.In(), *mux.m_in);
 	return mux;
 }

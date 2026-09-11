@@ -67,7 +67,7 @@ using namespace StormByte::Multimedia::Pipeline;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 Demux::Demux() noexcept
-: m_eof(false), m_positionNs(-1) {
+: Step(Kinds{}, Kinds{Kind::Packet}), m_eof(false), m_positionNs(-1) {
 	Launch();
 }
 
@@ -223,5 +223,5 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Decoder& deco
 }
 
 const StormByte::Multimedia::File& Demux::OriginFile() const noexcept {
-    return m_plan->Source();
+	return m_plan->Source();
 }

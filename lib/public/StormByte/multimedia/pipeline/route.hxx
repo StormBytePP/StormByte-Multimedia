@@ -38,7 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -52,35 +53,13 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	namespace Filter {
-		class FFmpeg;	///< Filter base. Owned by @ref Route.
-		class Report;	///< Measurement from one filter.
-	}
-
 	/**
 	 * @class Route
-	 * @brief Glue for one origin track and the filters of that track.
+	 * @brief Owns the filter chain of one origin track and wires it.
 	 *
-	 * @ref Add takes ownership of one filter instance. Filters are not
-	 * wired by hand. Inherit @ref Filter::Process, @ref Filter::Packet
-	 * or @ref Filter::Analytics; a bare @ref Filter::FFmpeg is
-	 * @ref Step::Fail at Add.
-	 *
-	 * For each @ref Kind the route keeps a process chain and an
-	 * analytics chain. Analytics of a Kind always sit after the
-	 * process nodes of that Kind, even if they were @ref Add 'd first.
-	 *
-	 * @ref Close is per track: one origin, one destination, one stretch.
-	 * O(1) at the ends: origin binds the first filter, the last filter
-	 * binds the destination. No filters kept: origin binds destination.
-	 * Frame filters on a copy track are ignored; there are no frames.
-	 * Packet / BSF filters on copy stay.
-	 *
-	 * @ref Add calls @ref Step::Launch on the kept filter.
-	 * @ref Close only binds; it does not launch.
-	 *
-	 * @ref Reports is collected at route EoF, one entry per owned
-	 * filter, in Add order.
+	 * Packet / BSF filters may sit between Demux and Remux.
+	 * Frame / Process filters on that stretch fail at @ref Close.
+	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -94,9 +73,8 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Route for one origin track.
 			 * @param track Origin stream index.
-			 * @param copy true if this track is stream-copy.
 			 */
-			explicit Route(int track, bool copy = false) noexcept;
+			explicit Route(int track) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -134,37 +112,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @name Identity
-			 * @{
-			 */
-
-			/**
 			 * @brief Origin track.
 			 * @return Stream index passed to the constructor.
 			 */
 			int Track() const noexcept;
 
 			/**
-			 * @brief Whether this track is stream-copy.
-			 * @return true if copy.
-			 */
-			bool Copy() const noexcept;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @name Filters
-			 * @{
-			 */
-
-			/**
 			 * @brief Takes ownership of @p filter, hooks it and launches it.
 			 * @param filter Filter instance for this track.
 			 *
-			 * Frame-only filters on a copy route are dropped.
-			 * A leaf that is not Process, Packet or Analytics fails the job.
+			 * A leaf that is not Process, Packet or Analytics fails the filter.
 			 */
 			void Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
@@ -174,29 +131,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param destination Consumer step.
 			 *
 			 * O(1) at the ends. Uses @c Bind(track, …). Does not launch.
+			 * If @p destination is a @ref Remux and this route holds a
+			 * Frame / Process filter, the remuxer fails.
 			 */
 			void Close(Step& origin, Step& destination) noexcept;
 
 			/**
-			 * @}
-			 */
-
-			/**
-			 * @name Reports
-			 * @{
-			 */
-
-			/**
 			 * @brief Reports of every kept filter.
 			 * @return One entry per owned filter, in Add order.
-			 *
-			 * Call at route EoF. Dropped copy-frame filters are absent.
 			 */
 			std::vector<Filter::Report> Reports() const noexcept;
-
-			/**
-			 * @}
-			 */
 
 		private:
 			/**
@@ -235,7 +179,6 @@ namespace StormByte::Multimedia::Pipeline {
 			void Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept;
 
 			int m_track;											///< Origin stream index
-			bool m_copy;											///< Stream-copy track
 			Lane m_frames;											///< @ref Kind::Frame
 			Lane m_packets;											///< @ref Kind::Packet
 			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;	///< Owned filters, Add order

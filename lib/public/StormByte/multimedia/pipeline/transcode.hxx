@@ -297,10 +297,8 @@ namespace StormByte::Multimedia::Pipeline {
 					/**
 					 * @brief Remux this track (no destination codec).
 					 * @return *this.
-					 *
-					 * Frame filters on this handle are dropped by @ref Route.
 					 */
-					Track& Copy() noexcept;
+					Track& Remux() noexcept;
 
 					/**
 					 * @brief Encodes this track to @p codec.
@@ -458,23 +456,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @{
 			 */
 
-            /**
-             * @brief Opens @p source and binds @p destination.
-             * @param logger Required logger.
-             * @param source Input path.
-             * @param destination Output path.
-             * @param duration Authoritative container duration, if known.
-             *        Empty runs the normal probe. A value skips the packet scan.
-             * @return Job, or unexpected.
-             *
-             * Shorthand for @ref File::Open plus the public constructor.
-             * The destination container is still set with @ref Destination
-             * before @ref Run.
-             */
-            static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
-                const std::filesystem::path& source,
-                const std::filesystem::path& destination,
-                std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
+			/**
+			 * @brief Opens @p source and binds @p destination.
+			 * @param logger Required logger.
+			 * @param source Input path.
+			 * @param destination Output path.
+			 * @param duration Authoritative container duration, if known.
+			 *        Empty runs the normal probe. A value skips the packet scan.
+			 * @return Job, or unexpected.
+			 *
+			 * Shorthand for @ref File::Open plus the public constructor.
+			 * The destination container is still set with @ref Destination
+			 * before @ref Run.
+			 */
+			static ExpectedTranscode Open(std::shared_ptr<StormByte::Logger::Log> logger,
+				const std::filesystem::path& source,
+				const std::filesystem::path& destination,
+				std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
 
 			/**
 			 * @}

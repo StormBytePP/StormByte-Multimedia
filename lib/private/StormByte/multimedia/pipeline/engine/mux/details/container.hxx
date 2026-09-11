@@ -74,7 +74,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 		public:
 			/**
 			 * @class Track
-			 * @brief Reserved output slot for an encoder or a remux copy.
+			 * @brief Reserved output slot for an encoder or a remux track.
 			 */
 			struct Track {
 				/**
@@ -190,15 +190,13 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept override;
 
 			/**
-			 * @brief Reserves a remux track from an open demuxer.
+			 * @brief Reserves a remux track from @p remux.
 			 * @param owner Public muxer.
-			 * @param demux Open demuxer.
-			 * @param in Source stream index.
-			 * @param out Destination order key.
+			 * @param remux Live remuxer.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
-				class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept override;
+			bool ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Remux& remux) noexcept override;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -212,7 +210,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux::Details {
 			/**
 			 * @brief Queues or writes one packet.
 			 * @param owner Public muxer.
-			 * @param packet Encoded or copied packet.
+			 * @param packet Encoded or remuxed packet.
 			 * @return true if the packet was accepted.
 			 */
 			bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,

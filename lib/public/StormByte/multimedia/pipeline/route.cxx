@@ -40,11 +40,12 @@
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
+#include <StormByte/multimedia/pipeline/typedefs.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
-Route::Route(int track, bool copy) noexcept
-: m_track(track), m_copy(copy) {}
+Route::Route(int track) noexcept
+: m_track(track) {}
 
 Route::~Route() noexcept = default;
 
@@ -52,32 +53,26 @@ int Route::Track() const noexcept {
 	return m_track;
 }
 
-bool Route::Copy() const noexcept {
-	return m_copy;
-}
-
 void Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	if (!filter)
 		return;
 
-    if (!dynamic_cast<Filter::Process*>(filter.get())
-        && !dynamic_cast<Filter::Packet*>(filter.get())
-        && !dynamic_cast<Filter::Analytics*>(filter.get())) {
-        filter->Fail("inherit Process, Packet or Analytics; FFmpeg is not a leaf");
-        return;
-    }
-
-	const auto accepts = filter->Accepts();
-	const bool frame = accepts.Has(Kind::Frame);
-	const bool packet = accepts.Has(Kind::Packet);
-	if (m_copy && frame && !packet)
+	if (!dynamic_cast<Filter::Process*>(filter.get())
+		&& !dynamic_cast<Filter::Packet*>(filter.get())
+		&& !dynamic_cast<Filter::Analytics*>(filter.get())) {
+		filter->Fail("inherit Process, Packet or Analytics; FFmpeg is not a leaf");
 		return;
+	}
+
+	const Kinds receives = filter->Receives();
+	const bool frame = receives.Has(Kind::Frame);
+	const bool packet = receives.Has(Kind::Packet);
 
 	Filter::FFmpeg& node = *filter;
 	const bool analytics = dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr;
 	if (packet)
 		Hook(m_packets, node, analytics);
-	if (frame && !m_copy)
+	if (frame)
 		Hook(m_frames, node, analytics);
 
 	m_filters.push_back(std::move(filter));
@@ -85,6 +80,18 @@ void Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 }
 
 void Route::Close(Step& origin, Step& destination) noexcept {
+	const Kinds stretch = origin.Produces() & destination.Receives();
+	if (stretch == Kinds{}) {
+		destination.Fail("route stretch has no overlapping kinds");
+		return;
+	}
+	for (const auto& filter : m_filters) {
+		if (!filter->Receives().Has(stretch)) {
+			destination.Fail(filter->Name() + " does not cover this stretch");
+			return;
+		}
+	}
+
 	Filter::FFmpeg* const packetFirst = m_packets.First();
 	Filter::FFmpeg* const packetLast = m_packets.Last();
 	Filter::FFmpeg* const frameFirst = m_frames.First();

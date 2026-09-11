@@ -61,6 +61,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Demux;
 	class Encoder;
 	class Mux;
+	class Remux;
 	class Transcode;
 
 	/**
@@ -131,9 +132,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Writes interleaved packets to a destination container.
 	 *
 	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * Encoded tracks come from @c encoder >> mux plus a hopper bind
-	 * on the origin track. Copy tracks come from @ref Remux plus a
-	 * @ref Route from Demux. @ref Work writes to the container, not
+	 * Encoded tracks come from @c encoder >> mux. Remux tracks come
+	 * from @c remux >> mux. @ref Work writes to the container, not
 	 * to @ref m_out. Header write waits until reserved encode
 	 * backends are open.
 	 *
@@ -213,23 +213,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const StormByte::Multimedia::Container& Destination() const noexcept;
 
-			/**
-			 * @brief Remux reserve: copy @p in from @p demux onto output index @p out.
-			 * @param demux Open demuxer (format context already adopted).
-			 * @param in Source stream index.
-			 * @param out Destination order key (contiguous from 0 with encoders).
-			 * @return false if @ref Fail was called.
-			 *
-			 * Clones @c codecpar and time base from the source stream.
-			 * Packets arriving with @ref Item::Track equal to @p in are
-			 * written on @p out.
-			 */
-			bool Remux(class Demux& demux, int in, int out) noexcept;
-
 			friend Encoder& operator>>(Encoder& encoder, Mux& mux) noexcept;
 			friend Mux& operator>>(Mux& mux, const std::filesystem::path& path) noexcept;
 			friend Mux& operator>>(const File& file, Mux& mux) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
+			friend Mux& operator>>(Remux& remux, Mux& mux) noexcept;
 			friend class Transcode;
 			friend class Engine::Mux::Details::Container;
 			friend class Engine::Mux::Details::Attachment;

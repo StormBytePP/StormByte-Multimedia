@@ -47,15 +47,16 @@
 #include <limits>
 #include <utility>
 
-using StormByte::Multimedia::Pipeline::Filter::Accepts;
 using StormByte::Multimedia::Pipeline::Filter::Analytics;
 using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
 using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
+using StormByte::Multimedia::Pipeline::Kind;
+using StormByte::Multimedia::Pipeline::Kinds;
 using StormByte::Multimedia::ToString;
 
-FFmpeg::FFmpeg(std::string name) noexcept
-: m_name(std::move(name)), m_hold(0), m_heldFor(0) {}
+FFmpeg::FFmpeg(std::string name, Kinds receives, Kinds produces) noexcept
+: Step(receives, produces), m_name(std::move(name)), m_hold(0), m_heldFor(0) {}
 
 FFmpeg::~FFmpeg() noexcept = default;
 
@@ -169,82 +170,78 @@ void FFmpeg::LastChance(const Pipeline::Frame&) noexcept {}
 void FFmpeg::LastChance(const Pipeline::Packet&) noexcept {}
 
 void FFmpeg::Park() noexcept {
-    if (!m_current)
-        return;
-    if (!m_queue.empty() && m_queue.back() == m_current)
-        return;
-    if (m_heldFor >= m_hold) {
-        Fail("Hold exceeded");
-        return;
-    }
-    m_queue.push_back(m_current);
-    ++m_heldFor;
+	if (!m_current)
+		return;
+	if (!m_queue.empty() && m_queue.back() == m_current)
+		return;
+	if (m_heldFor >= m_hold) {
+		Fail("Hold exceeded");
+		return;
+	}
+	m_queue.push_back(m_current);
+	++m_heldFor;
 }
 
 void FFmpeg::CallLastChance() noexcept {
-    if (!m_current)
-        return;
-    if (m_current->Kind() == Pipeline::Kind::Frame)
-        LastChance(static_cast<const Pipeline::Frame&>(*m_current));
-    else
-        LastChance(static_cast<const Pipeline::Packet&>(*m_current));
+	if (!m_current)
+		return;
+	if (m_current->Kind() == Pipeline::Kind::Frame)
+		LastChance(static_cast<const Pipeline::Frame&>(*m_current));
+	else
+		LastChance(static_cast<const Pipeline::Packet&>(*m_current));
 }
 
 void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
-    m_current = std::move(item);
-    if (m_current->Kind() == Pipeline::Kind::Frame)
-        Process(static_cast<const Pipeline::Frame&>(*m_current));
-    else
-        Process(static_cast<const Pipeline::Packet&>(*m_current));
-    if (Failed())
-        return;
-    if (Held()) {
-        if (m_heldFor >= m_hold) {
-            CallLastChance();
-            if (Held()) {
-                Fail("Hold exceeded");
-                return;
-            }
-        }
-        else {
-            Park();
-            return;
-        }
-    }
-    if (m_current)
-        m_out->Push(std::move(m_current));
+	m_current = std::move(item);
+	if (m_current->Kind() == Pipeline::Kind::Frame)
+		Process(static_cast<const Pipeline::Frame&>(*m_current));
+	else
+		Process(static_cast<const Pipeline::Packet&>(*m_current));
+	if (Failed())
+		return;
+	if (Held()) {
+		if (m_heldFor >= m_hold) {
+			CallLastChance();
+			if (Held()) {
+				Fail("Hold exceeded");
+				return;
+			}
+		}
+		else {
+			Park();
+			return;
+		}
+	}
+	if (m_current)
+		m_out->Push(std::move(m_current));
 }
 
 void FFmpeg::Finish() noexcept {
-    if (Held()) {
-        if (!m_current && !m_queue.empty())
-            m_current = m_queue.back();
-        CallLastChance();
-        /* LastChance → Release() already Process+Push every parked unit. */
-        if (Held())
-            Fail("Hold + EoF without Release");
-    }
-    if (!Failed())
-        Eof();
+	if (Held()) {
+		if (!m_current && !m_queue.empty())
+			m_current = m_queue.back();
+		CallLastChance();
+		if (Held())
+			Fail("Hold + EoF without Release");
+	}
+	if (!Failed())
+		Eof();
 }
 
 Process::Process(std::string name) noexcept
-: FFmpeg(std::move(name)) {}
+: FFmpeg(std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
 
-Accepts Process::Accepts() const noexcept {
-	return StormByte::Multimedia::Pipeline::Filter::Accepts(Pipeline::Kind::Frame);
-}
+Process::Process(std::string name, Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(name), receives, produces) {}
 
 Packet::Packet(std::string name) noexcept
-: FFmpeg(std::move(name)) {}
+: FFmpeg(std::move(name), Kinds{Kind::Packet}, Kinds{Kind::Packet}) {}
 
-Accepts Packet::Accepts() const noexcept {
-	return StormByte::Multimedia::Pipeline::Filter::Accepts(Pipeline::Kind::Packet);
-}
+Packet::Packet(std::string name, Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(name), receives, produces) {}
 
 Analytics::Analytics(std::string name) noexcept
-: FFmpeg(std::move(name)) {}
+: FFmpeg(std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
 
-Accepts Analytics::Accepts() const noexcept {
-	return StormByte::Multimedia::Pipeline::Filter::Accepts(Pipeline::Kind::Frame);
-}
+Analytics::Analytics(std::string name, Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(name), receives, produces) {}

@@ -38,8 +38,12 @@
 
 #pragma once
 
+#include <StormByte/bitmask.hxx>
 #include <StormByte/expected.hxx>
 #include <StormByte/multimedia/pipeline/exception.hxx>
+#include <StormByte/multimedia/visibility.h>
+
+#include <cstdint>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -49,4 +53,50 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	using CheckResult = StormByte::Expected<void, PlanException>;	///< Outcome of @ref Plan::Check
+
+	/**
+	 * @enum Kind
+	 * @brief Whether an @ref Item is a decoded frame or a compressed packet.
+	 *
+	 * Distinct from @ref StormByte::Multimedia::Type (Video / Audio / Subtitle).
+	 * Values are bit flags. @c 0 is not a valid kind. Combine with @ref Kinds.
+	 * @ref ToString understands a single flag only.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	enum class Kind: std::uint8_t {
+		Packet = 1 << 0,	///< @ref StormByte::Multimedia::Pipeline::Packet
+		Frame  = 1 << 1		///< @ref StormByte::Multimedia::Pipeline::Frame
+	};
+
+	/**
+	 * @brief Converts a single @ref Kind flag to a string literal.
+	 * @param kind Value to convert.
+	 * @return `"Frame"`, `"Packet"`, or `"Invalid"` for a mask or zero.
+	 */
+	constexpr const char* ToString(Kind kind) noexcept {
+		switch (kind) {
+			case Kind::Frame:	return "Frame";
+			case Kind::Packet:	return "Packet";
+			default:			return "Invalid";
+		}
+	}
+
+	/**
+	 * @class Kinds
+	 * @brief Bitmask of @ref Kind.
+	 *
+	 * Every @ref Step stores one mask as Receives and one as Produces.
+	 * Empty means that side does not take or emit items (Demux receives
+	 * nothing, Mux produces nothing).
+	 *
+	 * Tests use @ref StormByte::Bitmask::Has (all bits) and
+	 * @ref StormByte::Bitmask::HasAny.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Kinds: public StormByte::Bitmask<Kinds, Kind> {
+		public:
+			using StormByte::Bitmask<Kinds, Kind>::Bitmask;
+	};
 }

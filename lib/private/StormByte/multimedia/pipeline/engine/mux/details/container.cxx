@@ -40,6 +40,7 @@
 #include <StormByte/multimedia/pipeline/engine/mux/details/container.hxx>
 #include <StormByte/multimedia/pipeline/demux.hxx>
 #include <StormByte/multimedia/pipeline/engine/demux/engine.hxx>
+#include <StormByte/multimedia/pipeline/remux.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -256,16 +257,19 @@ bool Details::Container::ReserveEncoder(class StormByte::Multimedia::Pipeline::M
 	return true;
 }
 
-bool Details::Container::Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
-	class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept {
+bool Details::Container::ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
+	class StormByte::Multimedia::Pipeline::Remux& remux) noexcept {
 	if (m_header) {
 		owner.Fail("cannot add a track after the header");
 		return false;
 	}
-	if (out < 0) {
-		owner.Fail("mux output index is invalid");
+	if (!remux.m_demux) {
+		owner.Fail("remux is not bound to a demuxer");
 		return false;
 	}
+	StormByte::Multimedia::Pipeline::Demux& demux = *remux.m_demux;
+	const int in = remux.In();
+	const int out = static_cast<int>(m_tracks.size());
 	if (m_tracks.contains(out)) {
 		owner.Fail("duplicate mux output index");
 		return false;
@@ -276,7 +280,7 @@ bool Details::Container::Remux(class StormByte::Multimedia::Pipeline::Mux& owner
 	}
 	auto* ctx = static_cast<AVFormatContext*>(demux.m_engine->Context());
 	if (in < 0 || in >= static_cast<int>(ctx->nb_streams) || !ctx->streams[in] || !ctx->streams[in]->codecpar) {
-		owner.Fail("copy source stream is invalid");
+		owner.Fail("remux source stream is invalid");
 		return false;
 	}
 	AVCodecParameters* params = avcodec_parameters_alloc();

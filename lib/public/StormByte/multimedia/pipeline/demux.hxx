@@ -62,6 +62,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Demux;
 	class Mux;
 	class Plan;
+	class Remux;
 	class Transcode;
 
 	/**
@@ -230,6 +231,7 @@ namespace StormByte::Multimedia::Pipeline {
 			friend Decoder& operator>>(Demux& demux, Decoder& decoder) noexcept;
 			friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 			friend class Mux;
+			friend class Remux;
 			friend class Transcode;
 			friend class Engine::Demux::Details::Container;
 			friend class Engine::Mux::Details::Container;

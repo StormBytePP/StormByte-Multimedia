@@ -55,6 +55,7 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Demux;
+	class Remux;
 }
 
 namespace StormByte::Multimedia::Pipeline::Engine::Mux {
@@ -62,7 +63,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 	 * @class Engine
 	 * @brief Abstract mux backend. One instance per public Mux.
 	 *
-	 * BindPath, ReserveEncoder, Remux and BindAttachments stay bool+Fail.
+	 * BindPath, ReserveEncoder, ReserveRemux and BindAttachments stay bool+Fail.
 	 * Push uses shared_ptr. Errors are owner.Fail().
 	 *
 	 * @ingroup multimedia_pipeline
@@ -118,15 +119,15 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 				class StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept = 0;
 
 			/**
-			 * @brief Reserves a bitstream-copy track from an open demuxer.
+			 * @brief Reserves a remux track from @p remux.
 			 * @param owner Public muxer.
-			 * @param demux Open demuxer.
-			 * @param in Source stream index.
-			 * @param out Destination order key.
+			 * @param remux Live remuxer (`In()` + bound Demux).
 			 * @return false if owner.Fail() was called.
+			 *
+			 * Output index is the next free slot.
 			 */
-			virtual bool Remux(class StormByte::Multimedia::Pipeline::Mux& owner,
-				class StormByte::Multimedia::Pipeline::Demux& demux, int in, int out) noexcept = 0;
+			virtual bool ReserveRemux(class StormByte::Multimedia::Pipeline::Mux& owner,
+				class StormByte::Multimedia::Pipeline::Remux& remux) noexcept = 0;
 
 			/**
 			 * @brief Snapshots File attachments for header time.
@@ -140,7 +141,7 @@ namespace StormByte::Multimedia::Pipeline::Engine::Mux {
 			/**
 			 * @brief Queues or writes one packet. Writes the header when ready.
 			 * @param owner Public muxer.
-			 * @param packet Encoded or copied packet.
+			 * @param packet Encoded or remuxed packet.
 			 * @return true if the packet was accepted.
 			 */
 			virtual bool Push(class StormByte::Multimedia::Pipeline::Mux& owner,

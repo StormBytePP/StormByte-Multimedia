@@ -38,10 +38,9 @@
 
 #pragma once
 
+#include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
-
-#include <cstdint>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -144,38 +143,12 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @enum Kind
-	 * @brief Whether an @ref Item is a decoded frame or a compressed packet.
-	 *
-	 * Distinct from @ref StormByte::Multimedia::Type (Video / Audio / Subtitle).
-	 * Used as the static @c Accepts mask on filters. Values are bit flags:
-	 * @c 0 is not a valid kind. Combine with @ref StormByte::Bitmask /
-	 * @ref Filter::Accepts. @ref ToString understands a single flag only.
-	 */
-	enum class Kind: std::uint8_t {
-		Packet = 1 << 0,	///< @ref StormByte::Multimedia::Pipeline::Packet
-		Frame  = 1 << 1		///< @ref StormByte::Multimedia::Pipeline::Frame
-	};
-
-	/**
-	 * @brief Converts a single @ref Kind flag to a string literal.
-	 * @param kind Value to convert.
-	 * @return `"Frame"`, `"Packet"`, or `"Invalid"` for a mask or zero.
-	 */
-	constexpr const char* ToString(Kind kind) noexcept {
-		switch (kind) {
-			case Kind::Frame:	return "Frame";		///< Frame
-			case Kind::Packet:	return "Packet";	///< Packet
-			default:			return "Invalid";	///< Combined mask or zero
-		}
-	}
-
-	/**
 	 * @enum Producer
 	 * @brief Step that created this @ref Item.
 	 *
 	 * Set in the private constructor. Only a getter afterwards.
 	 * Passthrough and filter @c Save do not stamp a new producer.
+	 * @ref Remux forwards the origin producer.
 	 */
 	enum class Producer: std::uint8_t {
 		Demux,		///< @ref StormByte::Multimedia::Pipeline::Demux
@@ -191,11 +164,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	constexpr const char* ToString(Producer producer) noexcept {
 		switch (producer) {
-			case Producer::Demux:		return "Demux";		///< Demux
-			case Producer::Decoder:		return "Decoder";	///< Decoder
-			case Producer::Encoder:		return "Encoder";	///< Encoder
-			case Producer::Mux:			return "Mux";		///< Mux
-			default:					return "Invalid";	///< Out of range
+			case Producer::Demux:		return "Demux";
+			case Producer::Decoder:		return "Decoder";
+			case Producer::Encoder:		return "Encoder";
+			case Producer::Mux:			return "Mux";
+			default:					return "Invalid";
 		}
 	}
 
@@ -271,9 +244,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 *         on a live unit;
 			 *         @ref StormByte::Multimedia::Type::Unknown on the
 			 *         empty sentinel.
-			 *
-			 * Not @ref StormByte::Multimedia::Type::Copy: that value is a
-			 * track mode on the job, not a kind of access unit.
 			 */
 			enum StormByte::Multimedia::Type Type() const noexcept {
 				return m_type;
@@ -345,7 +315,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Builds the facade.
 			 * @param track Origin container stream index.
-			 * @param type Media of this unit. Not Copy.
+			 * @param type Media of this unit.
 			 * @param kind @ref Kind::Frame or @ref Kind::Packet.
 			 * @param producer Step that created this unit.
 			 */

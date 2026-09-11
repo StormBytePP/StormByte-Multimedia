@@ -38,7 +38,6 @@
 
 #pragma once
 
-#include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
@@ -73,69 +72,6 @@ namespace StormByte::Multimedia::Pipeline {
  */
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
-	 * @class Accepts
-	 * @brief Bitmask of @ref StormByte::Multimedia::Pipeline::Kind.
-	 *
-	 * Static on each facade. @ref StormByte::Multimedia::Pipeline::Route::Add
-	 * reads the instance mask.
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Accepts: public StormByte::Bitmask<Accepts, Pipeline::Kind> {
-		public:
-			/**
-			 * @brief Empty mask.
-			 */
-			constexpr Accepts() noexcept
-			: StormByte::Bitmask<Accepts, Pipeline::Kind>() {}
-
-			/**
-			 * @brief Mask from one kind.
-			 * @param kind Frame or Packet.
-			 */
-			constexpr Accepts(Pipeline::Kind kind) noexcept
-			: StormByte::Bitmask<Accepts, Pipeline::Kind>(kind) {}
-
-			/**
-			 * @brief Copy constructor.
-			 * @param accepts Source mask.
-			 */
-			constexpr Accepts(const Accepts& accepts) noexcept = default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param accepts Source mask.
-			 */
-			constexpr Accepts(Accepts&& accepts) noexcept = default;
-
-			/**
-			 * @brief Destructor.
-			 */
-			constexpr ~Accepts() noexcept = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param accepts Source mask.
-			 * @return *this.
-			 */
-			constexpr Accepts& operator=(const Accepts& accepts) noexcept = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @param accepts Source mask.
-			 * @return *this.
-			 */
-			constexpr Accepts& operator=(Accepts&& accepts) noexcept = default;
-
-			/**
-			 * @brief Whether @p kind is set.
-			 * @param kind Frame or Packet.
-			 * @return true if present.
-			 */
-			constexpr bool Has(Pipeline::Kind kind) const noexcept {
-				return (*this & Accepts(kind)) != Accepts{};
-			}
-	};
-
-	/**
 	 * @class FFmpeg
 	 * @brief Abstract base for every StormByte Multimedia filter.
 	 *
@@ -146,6 +82,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * Construct the leaf with a short name (`resize`). @ref Name is
 	 * `Media()/name`.
+	 *
+	 * The kinds the leaf consumes and emits are
+	 * @ref StormByte::Multimedia::Pipeline::Step::Receives and
+	 * @ref StormByte::Multimedia::Pipeline::Step::Produces. They are
+	 * fixed at construction. The short constructor of @ref Process,
+	 * @ref Packet and @ref Analytics fills the usual single-kind
+	 * mask. A leaf that handles both Frame and Packet uses the
+	 * three-argument constructor of that same facade.
 	 *
 	 * @par Headers and libav
 	 * StormByte-Multimedia does not install or export libav / libsw
@@ -166,8 +110,10 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * or @ref AVPacket returned. @ref Save takes ownership of @p raw.
 	 *
 	 * @par Plugin surface
-	 * Public: @ref Media, @ref Accepts, @ref Clean, @ref Setup and
-	 * the @ref Process overload that @ref Accepts requires.
+	 * Public: @ref Media, @ref Name, @ref Clean, @ref Setup,
+	 * @ref StormByte::Multimedia::Pipeline::Step::Receives,
+	 * @ref StormByte::Multimedia::Pipeline::Step::Produces and
+	 * the @ref Process overload that matches those masks.
 	 * Protected: @ref AVFrame, @ref AVPacket, @ref Save, @ref Hold,
 	 * @ref Release, @ref LastChance, @ref Fail, @ref Held,
 	 * @ref HeldFor, @ref Eof.
@@ -175,7 +121,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * Inherits @ref StormByte::Multimedia::Pipeline::Step as
 	 * protected: one pair of Sink objects, one CV, one thread.
-	 * The worker launches in the constructor.
+	 * The worker launches from @ref StormByte::Multimedia::Pipeline::Route::Add.
 	 *
 	 * @par Hold
 	 * @ref Hold parks incoming units so @ref Process can look at a
@@ -256,16 +202,13 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			virtual enum StormByte::Multimedia::Type Media() const noexcept = 0;
 
 			/**
-			 * @brief Kinds this filter accepts.
-			 * @return Frame and/or Packet mask.
-			 */
-			virtual class Accepts Accepts() const noexcept = 0;
-
-			/**
 			 * @brief `Media()/name` computed on each call.
 			 * @return Identity string.
 			 */
 			std::string Name() const noexcept;
+
+			using Pipeline::Step::Receives;
+			using Pipeline::Step::Produces;
 
 			/**
 			 * @}
@@ -318,10 +261,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 
 			/**
-			 * @brief Named plugin. Launches the worker. There is no empty constructor.
+			 * @brief Named plugin. There is no empty constructor.
 			 * @param name Short leaf name (`resize`).
+			 * @param receives Kinds this filter consumes.
+			 * @param produces Kinds this filter emits.
+			 *
+			 * Called from @ref Process, @ref Packet and @ref Analytics.
+			 * Do not construct FFmpeg from a plugin.
 			 */
-			explicit FFmpeg(std::string name) noexcept;
+			FFmpeg(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
 			 * @}
@@ -461,14 +409,18 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 	/**
 	 * @class Process
-	 * @brief Mutates decoded frames.
+	 * @brief Mutates decoded frames. May also take packets.
 	 *
 	 * Inherit this for a video / audio / subtitle filter that
-	 * rewrites planes (watermark, resize, tonemap). Accept mask is
-	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. Implement
-	 * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVFrame
-	 * and @ref Save. Do not declare a method named Process on this
-	 * class: that is a constructor.
+	 * rewrites planes (watermark, resize, tonemap). The short
+	 * constructor sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
+	 * also handles packets uses the three-argument constructor.
+	 * Implement @ref FFmpeg::Process(const Pipeline::Frame&) and,
+	 * if the mask includes Packet,
+	 * @ref FFmpeg::Process(const Pipeline::Packet&). Use @ref AVFrame
+	 * / @ref AVPacket and @ref Save. Do not declare a method named
+	 * Process on this class: that is a constructor.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
 		public:
@@ -503,28 +455,37 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			Process& operator=(Process&& other) noexcept = delete;
 
-			/**
-			 * @brief Frame only.
-			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Frame.
-			 */
-			class Accepts Accepts() const noexcept override;
-
 		protected:
 			/**
-			 * @brief Named process node.
+			 * @brief Named process node. Frame to Frame.
 			 * @param name Short leaf name (`resize`).
 			 */
 			explicit Process(std::string name) noexcept;
+
+			/**
+			 * @brief Named process node with an explicit mask.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 *
+			 * Use when the leaf is Frame and Packet (a BSF plus a
+			 * plane rewrite). Route reads these masks at Close.
+			 */
+			Process(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
 	 * @class Packet
-	 * @brief Mutates compressed packets.
+	 * @brief Mutates compressed packets. May also take frames.
 	 *
 	 * Inherit this for a bitstream filter (Annex-B, caption inject).
-	 * Accept mask is @ref StormByte::Multimedia::Pipeline::Kind::Packet.
-	 * Implement @ref FFmpeg::Process(const Pipeline::Packet&). Use
-	 * @ref AVPacket and @ref Save.
+	 * The short constructor sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Packet. A leaf that
+	 * also handles frames uses the three-argument constructor.
+	 * Implement @ref FFmpeg::Process(const Pipeline::Packet&) and,
+	 * if the mask includes Frame,
+	 * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVPacket
+	 * / @ref AVFrame and @ref Save.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
@@ -559,18 +520,20 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			Packet& operator=(Packet&& other) noexcept = delete;
 
-			/**
-			 * @brief Packet only.
-			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Packet.
-			 */
-			class Accepts Accepts() const noexcept override;
-
 		protected:
 			/**
-			 * @brief Named packet node.
+			 * @brief Named packet node. Packet to Packet.
 			 * @param name Short leaf name.
 			 */
 			explicit Packet(std::string name) noexcept;
+
+			/**
+			 * @brief Named packet node with an explicit mask.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 */
+			Packet(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
@@ -580,6 +543,10 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * Last node of its Kind stretch: @ref StormByte::Multimedia::Pipeline::Route
 	 * detects this type with @c dynamic_cast and wires it after every
 	 * @ref Process / @ref Packet on that lane. @ref Save is deleted.
+	 *
+	 * The short constructor sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
+	 * measures packets (or both) uses the three-argument constructor.
 	 *
 	 * @ref Process runs once per unit on that lane. When the same
 	 * unit is seen again (a second look after a Hold replay, or a
@@ -623,18 +590,20 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			Analytics& operator=(Analytics&& other) noexcept = delete;
 
-			/**
-			 * @brief Frame by default. Override if the leaf measures packets.
-			 * @return @ref StormByte::Multimedia::Pipeline::Kind::Frame.
-			 */
-			class Accepts Accepts() const noexcept override;
-
 		protected:
 			/**
-			 * @brief Named analytics node.
+			 * @brief Named analytics node. Frame to Frame.
 			 * @param name Short leaf name.
 			 */
 			explicit Analytics(std::string name) noexcept;
+
+			/**
+			 * @brief Named analytics node with an explicit mask.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 */
+			Analytics(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
 			 * @brief Deleted. Analytics does not mutate the backend.

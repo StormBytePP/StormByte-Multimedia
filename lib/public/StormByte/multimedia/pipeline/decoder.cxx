@@ -49,7 +49,7 @@
 using namespace StormByte::Multimedia::Pipeline;
 
 Decoder::Decoder(int track, DecoderFlags flags) noexcept
-: m_index(track), m_flags(flags) {
+: Step(Kinds{Kind::Packet}, Kinds{Kind::Frame}), m_index(track), m_flags(flags) {
 	Launch();
 }
 

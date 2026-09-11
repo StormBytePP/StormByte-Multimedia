@@ -100,7 +100,7 @@ std::string TrackSettled::ToString() const {
 Transcode::Track::Track(Transcode& owner, std::size_t slot) noexcept
 : m_owner(&owner), m_slot(slot) {}
 
-Transcode::Track& Transcode::Track::Copy() noexcept {
+Transcode::Track& Transcode::Track::Remux() noexcept {
 	if (!m_owner || !m_owner->ValidSlot(m_slot))
 		return *this;
 	*m_owner->m_logger << Level::Debug << "track "

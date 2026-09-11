@@ -193,7 +193,7 @@ namespace {
 		{ "PCM F64 BE",					"PCM 64-bit float big-endian",					{ "pcm_f64be" } },
 		{ "PCM F64 LE",					"PCM 64-bit float little-endian",				{ "pcm_f64le" } },
 		{ "PCM LXF",					"PCM LXF",										{ "pcm_lxf" } },
-		{ "PCM S16 BE",					"PCM signed 16-bit big-endian",					{ "pcm_s16be" } },
+		{ "PCM S16 BE",					"PCM signed 16-bit bigCopy-endian",					{ "pcm_s16be" } },
 		{ "PCM S16 BE Planar",			"PCM signed 16-bit BE planar",					{ "pcm_s16be_planar" } },
 		{ "PCM S16 LE",					"PCM signed 16-bit little-endian",				{ "pcm_s16le" } },
 		{ "PCM S16 LE Planar",			"PCM signed 16-bit LE planar",					{ "pcm_s16le_planar" } },

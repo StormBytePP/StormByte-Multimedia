@@ -37,86 +37,57 @@
  */
 
 #include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/pipeline/demux.hxx>
+#include <StormByte/multimedia/pipeline/mux.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/remux.hxx>
+#include <StormByte/multimedia/name_thread.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
-Step::Step(Kinds receives, Kinds produces) noexcept
-: m_in(std::make_unique<Buffer::Sink>()),
-m_out(std::make_unique<Buffer::Sink>()),
-m_receives(receives),
-m_produces(produces),
-m_failed(false) {}
-
-Step::~Step() noexcept {
-	if (m_worker.joinable())
-		m_worker.request_stop();
+Remux::Remux(int in) noexcept
+: Step(Kinds{Kind::Packet}, Kinds{Kind::Packet}), m_index(in), m_demux(nullptr) {
+	Launch();
 }
 
-void Step::Fail(std::string reason) noexcept {
-	m_error = std::move(reason);
-	m_failed.store(true, std::memory_order_release);
-	m_in->Eof();
-	m_out->Eof();
-	m_wake.notify_all();
+Remux::~Remux() noexcept = default;
+
+void Remux::Fail(std::string reason) noexcept {
+	Step::Fail(std::move(reason));
 }
 
-bool Step::Failed() const noexcept {
-	return m_failed.load(std::memory_order_acquire);
-}
+void Remux::Open() noexcept {}
 
-const std::optional<std::string>& Step::Error() const noexcept {
-	return m_error;
-}
-
-std::condition_variable& Step::Wake() noexcept {
-	return m_wake;
-}
-
-void Step::Wait() noexcept {
-	std::unique_lock lock(m_wait);
-	m_wake.wait(lock, [this] {
-		return Failed() || m_in->Ready();
-	});
-}
-
-void Step::Open() noexcept {}
-
-void Step::Work(std::shared_ptr<Item>) noexcept {}
-
-void Step::Finish() noexcept {}
-
-void Step::Pump() noexcept {
-	for (;;) {
-		if (Failed())
-			break;
-		std::shared_ptr<Item> item = m_in->Pop();
-		if (!item) {
-			if (!m_in->EoF()) {
-				Wait();
-				continue;
-			}
-			Finish();
-			break;
-		}
-		Work(std::move(item));
-	}
-	m_out->Eof();
-}
-
-void Step::Launch() noexcept {
-	if (m_worker.joinable())
+void Remux::Work(std::shared_ptr<Item> item) noexcept {
+	NameThread("STMM:Remux:" + std::to_string(m_index));
+	if (Failed())
 		return;
-	m_in->Notify(m_wake);
-	m_worker = std::jthread([this]() {
-		Open();
-		Pump();
-		m_out->Eof();
-	});
+	auto packet = std::dynamic_pointer_cast<Packet>(item);
+	if (!packet) {
+		Fail("remux expected a packet");
+		return;
+	}
+	if (packet->Track() != m_index)
+		return;
+	m_out->Push(packet);
 }
 
-Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
-	if (!to.m_plan)
-		to.m_plan = from.m_plan;
-	return to;
+void Remux::Finish() noexcept {}
+
+Remux& StormByte::Multimedia::Pipeline::operator>>(Demux& demux, Remux& remux) noexcept {
+	if (remux.Failed())
+		return remux;
+	static_cast<Step&>(demux) >> remux;
+	if (demux.Failed()) {
+		remux.Fail(demux.Error().value_or("demuxer is not open"));
+		return remux;
+	}
+	if (remux.m_index < 0) {
+		remux.Fail("remux origin is negative");
+		return remux;
+	}
+	remux.m_demux = &demux;
+	remux.m_in->Notify(remux.Wake());
+	demux.m_out->Bind(remux.In(), *remux.m_in);
+	return remux;
 }

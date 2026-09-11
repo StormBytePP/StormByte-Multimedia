@@ -40,6 +40,7 @@
 
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <atomic>
@@ -72,6 +73,7 @@ namespace StormByte::Multimedia::Buffer {
 namespace StormByte::Multimedia::Pipeline {
 	class Demux;
 	class Mux;
+	class Remux;
 	class Route;
 	class Router;
 	class Step;
@@ -105,6 +107,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Filters inherit Step as protected and expose @ref Launch through
 	 * the filter facade.
 	 *
+	 * @ref Receives and @ref Produces are @ref Kinds masks fixed at
+	 * construction. Demux receives nothing and produces Packet. Mux
+	 * receives Packet and produces nothing. Decoder is Packet to Frame.
+	 * Encoder is Frame to Packet. Remux is Packet to Packet.
+	 *
 	 * No @c In() / @c Out() getters: derived types and friends use
 	 * @ref m_in / @ref m_out.
 	 *
@@ -127,6 +134,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Step {
 		friend class Demux;
+		friend class Remux;
 		friend class Route;
 		friend class Router;
 		friend class Transcode;
@@ -134,6 +142,8 @@ namespace StormByte::Multimedia::Pipeline {
 		friend Demux& operator>>(Plan&& plan, Demux& demux) noexcept;
 		friend Mux& operator>>(Demux& demux, Mux& mux) noexcept;
 		friend Step& operator>>(Step& from, Step& to) noexcept;
+		friend Remux& operator>>(Demux& demux, Remux& remux) noexcept;
+		friend Mux& operator>>(Remux& remux, Mux& mux) noexcept;
 
 		public:
 			/**
@@ -209,6 +219,31 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
+			 * @name Flow
+			 * @{
+			 */
+
+			/**
+			 * @brief Kinds this step consumes.
+			 * @return Mask set at construction. Empty if this step does not take items.
+			 */
+			inline const Kinds& Receives() const noexcept {
+				return m_receives;
+			}
+
+			/**
+			 * @brief Kinds this step emits.
+			 * @return Mask set at construction. Empty if this step does not emit items.
+			 */
+			inline const Kinds& Produces() const noexcept {
+				return m_produces;
+			}
+
+			/**
+			 * @}
+			 */
+
+			/**
 			 * @name Failure
 			 * @{
 			 */
@@ -243,8 +278,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Idle step. Sinks start at zero buckets.
+			 * @param receives Kinds this step consumes.
+			 * @param produces Kinds this step emits.
 			 */
-			Step() noexcept;
+			Step(Kinds receives, Kinds produces) noexcept;
 
 			/**
 			 * @}
@@ -312,6 +349,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 			std::unique_ptr<Buffer::Sink> m_in;			///< Input buckets
 			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
+			Kinds m_receives;							///< @ref Receives
+			Kinds m_produces;							///< @ref Produces
 
 		private:
 			std::shared_ptr<class Plan> m_plan;			///< Current plan
