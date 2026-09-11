@@ -48,6 +48,8 @@
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <mutex>
+
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Multimedia::Type;
@@ -126,9 +128,11 @@ CheckResult Plan::Check() const {
 }
 
 Demuxer& StormByte::Multimedia::Pipeline::operator>>(Plan&& plan, Demuxer& demuxer) noexcept {
-	if (!demuxer.m_plan) {
-		demuxer.m_plan = std::make_shared<Plan>(std::move(plan));
-		demuxer.m_ready.notify_all();
+	{
+		std::lock_guard lock(demuxer.m_planMutex);
+		if (!demuxer.m_plan)
+			demuxer.m_plan = std::make_shared<Plan>(std::move(plan));
 	}
+	demuxer.m_planPresent.notify_all();
 	return demuxer;
 }

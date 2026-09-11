@@ -38,38 +38,39 @@
 
 #pragma once
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/exception.hxx>
+#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/pipeline/muxer.hxx>
+#include <StormByte/multimedia/visibility.h>
 
-#include <functional>
-#include <memory>
-#include <vector>
+extern "C" {
+	struct AVFormatContext;
+}
 
 /**
- * @namespace StormByte::Multimedia
- * @brief Public media types: codecs, containers, registry and stream kinds.
+ * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
+ * @brief Matroska / WebM mux backend.
+ *
+ * @ingroup multimedia_pipeline
  */
-namespace StormByte::Multimedia {
-	class Codec;
-	class Container;
-	class File;
-	class Stream;
-
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	/**
-	 * @namespace StormByte::Multimedia::Pipeline
-	 * @brief Demux / decode / filter / encode / mux types.
+	 * @class Attachment
+	 * @brief Writes File attachments as Matroska attachment streams.
+	 *
+	 * extradata + filename/mimetype. Not a generic mux helper.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	namespace Pipeline {
-		class Transcoder;	///< File-to-file job facade.
-	}
-
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;								///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;					///< Result of FindContainer
-	using ExpectedFile = StormByte::Expected<File, FileOpenException>;												///< Result of OpenFile
-	using ExpectedTranscoder = StormByte::Expected<std::unique_ptr<Pipeline::Transcoder>, TranscodeException>;		///< Result of Transcoder::Open
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;												///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;									///< List of container references
-	using Streams = std::vector<Stream>;																			///< Ordered streams
+	class STORMBYTE_MULTIMEDIA_PRIVATE Attachment {
+		public:
+			/**
+			 * @brief Writes every File attachment onto @p ctx.
+			 * @param owner Public muxer.
+			 * @param ctx Output format context.
+			 * @param file Source file.
+			 * @return false if owner.Fail() was called.
+			 */
+			static bool Write(StormByte::Multimedia::Pipeline::Muxer& owner,
+				AVFormatContext* ctx, const File& file) noexcept;
+	};
 }

@@ -36,23 +36,23 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
+#include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 
 #include <utility>
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
-using StormByte::Multimedia::Type;
 
 Frame::Frame() noexcept
 : Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder) {}
 
 Frame::Frame(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
-	std::optional<StormByte::Multimedia::Property::Duration> pts,
-	std::optional<StormByte::Multimedia::Property::Duration> duration,
-	std::optional<StormByte::Multimedia::Property::Video> video,
+	std::optional<Property::Duration> pts,
+	std::optional<Property::Duration> duration,
+	std::optional<Property::Video> video,
 	std::vector<class SideData> attachments,
-	std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept
+	std::optional<Property::Audio> audio) noexcept
 : Item(track, type, Kind::Frame, producer),
 	m_payload(std::move(payload)),
 	m_pts(std::move(pts)), m_duration(std::move(duration)),
@@ -69,8 +69,8 @@ Frame::Frame(const Frame& other) noexcept
 	m_language(other.m_language),
 	m_title(other.m_title),
 	m_attachments(other.m_attachments) {
-	if (other.m_engine)
-		m_engine = std::make_unique<Engine::Frame::Engine>(*other.m_engine);
+	if (other.m_backend)
+		m_backend = std::make_unique<Backend::Pipeline::Frame>(*other.m_backend);
 }
 
 Frame::Frame(Frame&& other) noexcept
@@ -83,7 +83,7 @@ Frame::Frame(Frame&& other) noexcept
 	m_language(std::move(other.m_language)),
 	m_title(std::move(other.m_title)),
 	m_attachments(std::move(other.m_attachments)),
-	m_engine(std::move(other.m_engine)) {
+	m_backend(std::move(other.m_backend)) {
 	other.BecomeEmpty();
 }
 
@@ -101,10 +101,10 @@ Frame& Frame::operator=(const Frame& other) noexcept {
 	m_language = other.m_language;
 	m_title = other.m_title;
 	m_attachments = other.m_attachments;
-	if (other.m_engine)
-		m_engine = std::make_unique<Engine::Frame::Engine>(*other.m_engine);
+	if (other.m_backend)
+		m_backend = std::make_unique<Backend::Pipeline::Frame>(*other.m_backend);
 	else
-		m_engine.reset();
+		m_backend.reset();
 	return *this;
 }
 
@@ -120,7 +120,7 @@ Frame& Frame::operator=(Frame&& other) noexcept {
 	m_language = std::move(other.m_language);
 	m_title = std::move(other.m_title);
 	m_attachments = std::move(other.m_attachments);
-	m_engine = std::move(other.m_engine);
+	m_backend = std::move(other.m_backend);
 	other.BecomeEmpty();
 	return *this;
 }
@@ -136,67 +136,19 @@ void Frame::BecomeEmpty() noexcept {
 	m_title.reset();
 	m_attachments.clear();
 	m_attachments.shrink_to_fit();
-	m_engine.reset();
-}
-
-const std::optional<StormByte::Multimedia::Property::Duration>& Frame::Pts() const noexcept {
-	return m_pts;
-}
-
-const std::optional<StormByte::Multimedia::Property::Duration>& Frame::Duration() const noexcept {
-	return m_duration;
-}
-
-const std::optional<std::string>& Frame::Language() const noexcept {
-	return m_language;
-}
-
-void Frame::Language(std::string language) noexcept {
-	if (language.empty()) {
-		m_language.reset();
-		return;
-	}
-	m_language = std::move(language);
-}
-
-const std::optional<std::string>& Frame::Title() const noexcept {
-	return m_title;
-}
-
-void Frame::Title(std::string title) noexcept {
-	if (title.empty()) {
-		m_title.reset();
-		return;
-	}
-	m_title = std::move(title);
-}
-
-const std::optional<StormByte::Multimedia::Property::Video>& Frame::Video() const noexcept {
-	return m_video;
-}
-
-const std::optional<StormByte::Multimedia::Property::Audio>& Frame::Audio() const noexcept {
-	return m_audio;
-}
-
-const std::vector<class SideData>& Frame::Attachments() const noexcept {
-	return m_attachments;
+	m_backend.reset();
 }
 
 StormByte::Buffer::FIFO& Frame::Payload() noexcept {
-	if (m_engine && !m_engine->m_payloadReady) {
+	if (m_backend && !m_backend->PayloadReady()) {
 		StormByte::Buffer::DataType bytes;
-		m_engine->m_backend.CopyPrimaryBuffer(bytes);
+		m_backend->Handle().CopyPrimaryBuffer(bytes);
 		m_payload = StormByte::Buffer::FIFO{std::move(bytes)};
-		m_engine->m_payloadReady = true;
+		m_backend->PayloadReady(true);
 	}
 	return m_payload;
 }
 
-const StormByte::Buffer::FIFO& Frame::Payload() const noexcept {
-	return m_payload;
-}
-
-void Frame::Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept {
-	m_engine = std::move(engine);
+void Frame::Bind(std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept {
+	m_backend = std::move(backend);
 }

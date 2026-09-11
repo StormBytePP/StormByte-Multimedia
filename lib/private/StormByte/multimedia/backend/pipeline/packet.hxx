@@ -38,41 +38,27 @@
 
 #pragma once
 
-#include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <cstddef>
-#include <memory>
+namespace StormByte::Multimedia::Pipeline {
+	class Packet;
+}
 
 /**
- * @namespace StormByte::Multimedia::Pipeline
- * @brief Demux / decode / filter / encode / mux types.
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Multimedia-owned pipeline stages and unit holders.
  *
  * @ingroup multimedia_pipeline
  */
-namespace StormByte::Multimedia::Pipeline {
-	class Demuxer;
-	class Muxer;
-	class Remuxer;
-
+namespace StormByte::Multimedia::Backend::Pipeline {
 	/**
-	 * @brief Binds origin track remuxer.In() from @p demuxer onto @p remuxer.
-	 * @param demuxer Origin demuxer.
-	 * @param remuxer Destination remuxer.
-	 * @return @p remuxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
-
-	/**
-	 * @class Remuxer
-	 * @brief Forwards compressed packets of one origin track to the muxer.
+	 * @class Packet
+	 * @brief Holder of one compressed access unit for the public Packet facade.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Remuxer final: public Step {
-		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
-		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
-
+	class STORMBYTE_MULTIMEDIA_PRIVATE Packet {
 		public:
 			/**
 			 * @name Lifecycle
@@ -80,80 +66,85 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Remuxer for origin stream @p in.
-			 * @param in Origin stream index.
+			 * @brief Empty holder.
 			 */
-			explicit Remuxer(int in) noexcept;
+			Packet() noexcept = default;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other Source remuxer.
+			 * @brief Deep copy (cloned FFmpeg packet).
+			 * @param other Source holder.
 			 */
-			Remuxer(const Remuxer& other) = delete;
+			Packet(const Packet& other) noexcept;
 
 			/**
 			 * @brief Move constructor.
-			 * @param other Remuxer to take.
+			 * @param other Holder to take.
 			 */
-			Remuxer(Remuxer&& other) noexcept = delete;
+			Packet(Packet&& other) noexcept = default;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Remuxer() noexcept override;
+			~Packet() noexcept = default;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param other Source remuxer.
+			 * @brief Deep copy assignment (cloned FFmpeg packet).
+			 * @param other Source holder.
 			 * @return *this.
 			 */
-			Remuxer& operator=(const Remuxer& other) = delete;
+			Packet& operator=(const Packet& other) noexcept;
 
 			/**
 			 * @brief Move assignment.
-			 * @param other Remuxer to take.
+			 * @param other Holder to take.
 			 * @return *this.
 			 */
-			Remuxer& operator=(Remuxer&& other) noexcept = delete;
+			Packet& operator=(Packet&& other) noexcept = default;
 
 			/**
 			 * @}
 			 */
 
 			/**
-			 * @brief Origin stream index.
-			 * @return Index passed to the constructor.
+			 * @name Handle
+			 * @{
 			 */
-			inline int In() const noexcept {
-				return m_index;
+
+			/**
+			 * @brief FFmpeg packet owned by this holder.
+			 * @return Handle.
+			 */
+			inline const StormByte::Multimedia::Backend::FFmpeg::AVPacket& Handle() const noexcept {
+				return m_handle;
 			}
 
 			/**
-			 * @brief Ceiling of the remuxer input hopper.
-			 * @return Max queued packets. Never 0.
+			 * @brief FFmpeg packet owned by this holder.
+			 * @return Handle.
 			 */
-			std::size_t InputCeiling() const noexcept override {
-				return Ceiling;
+			inline StormByte::Multimedia::Backend::FFmpeg::AVPacket& Handle() noexcept {
+				return m_handle;
 			}
+
+			/**
+			 * @brief Replaces the owned FFmpeg packet.
+			 * @param handle Packet to take.
+			 */
+			inline void Handle(StormByte::Multimedia::Backend::FFmpeg::AVPacket handle) noexcept {
+				m_handle = std::move(handle);
+			}
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @brief Hook after Replace. No high-level bag on a Packet.
+			 * @param packet Public unit that owns this holder.
+			 */
+			void BindProperties(StormByte::Multimedia::Pipeline::Packet& packet) noexcept;
 
 		private:
-			/**
-			 * @brief Marks Ready. No codec.
-			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Forwards one packet of In to m_out.
-			 * @param item Incoming packet.
-			 */
-			void Work(std::shared_ptr<Item> item) noexcept override;
-
-			/**
-			 * @brief No codec to flush.
-			 */
-			void Finish() noexcept override;
-
-			static constexpr std::size_t Ceiling = 32;	///< Input hopper ceiling
-			int m_index;								///< Origin stream index
+			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_handle;	///< FFmpeg packet
 	};
 }

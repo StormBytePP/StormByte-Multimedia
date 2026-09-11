@@ -36,65 +36,32 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/decoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/buffer/sink.hxx>
+#include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
-#include <StormByte/multimedia/pipeline/engine/decoder/engine.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
-#include <StormByte/multimedia/name_thread.hxx>
-
 #include <utility>
 
+using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
 Decoder::Decoder(int track, DecoderFlags flags) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{Kind::Frame}), m_index(track), m_flags(flags) {
+: Step(Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+	m_index(track), m_flags(flags) {
 	Launch();
 }
 
-Decoder::~Decoder() noexcept = default;
+Decoder::~Decoder() noexcept {
+	Halt();
+}
 
 Decoder::operator bool() const noexcept {
-	return !Failed() && m_engine && m_engine->IsOpen();
-}
-
-int Decoder::Index() const noexcept {
-	return m_index;
-}
-
-const DecoderFlags& Decoder::Flags() const noexcept {
-	return m_flags;
-}
-
-void Decoder::Flags(DecoderFlags flags) noexcept {
-	m_flags = flags;
-}
-
-const std::optional<std::string>& Decoder::Language() const noexcept {
-	return m_language;
-}
-
-void Decoder::Language(std::string language) noexcept {
-	if (language.empty())
-		m_language.reset();
-	else
-		m_language = std::move(language);
-}
-
-const std::optional<std::string>& Decoder::Title() const noexcept {
-	return m_title;
-}
-
-void Decoder::Title(std::string title) noexcept {
-	if (title.empty())
-		m_title.reset();
-	else
-		m_title = std::move(title);
-}
-
-const std::optional<std::string>& Decoder::Implementation() const noexcept {
-	return m_implementation;
+	return !Failed() && Ready() && m_backend && m_backend->IsOpen();
 }
 
 void Decoder::Implementation(std::string name) noexcept {
@@ -104,36 +71,68 @@ void Decoder::Implementation(std::string name) noexcept {
 		m_implementation = std::move(name);
 }
 
-const StormByte::Multimedia::Features& Decoder::Require() const noexcept {
-	return m_require;
+void Decoder::Attach(Frame& frame, std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept {
+	frame.m_language = m_language;
+	frame.m_title = m_title;
+	frame.Bind(std::move(backend));
 }
 
-void Decoder::Require(StormByte::Multimedia::Features features) noexcept {
-	m_require = features;
+void Decoder::CloseCue(Frame& frame, Property::Duration duration) noexcept {
+	frame.m_duration = std::move(duration);
 }
 
-const StormByte::Multimedia::Features& Decoder::Capabilities() const noexcept {
-	return m_capabilities;
+void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
+	m_backend = std::move(backend);
+	m_capabilities = Features{};
 }
 
-void Decoder::Fail(std::string reason) noexcept {
-	m_capabilities = StormByte::Multimedia::Features{};
-	// m_engine.reset();
-	Step::Fail(std::move(reason));
+void Decoder::Stamp(std::optional<std::string> language, std::optional<std::string> title) noexcept {
+	if (!language || language->empty())
+		m_language.reset();
+	else
+		m_language = std::move(*language);
+	if (!title || title->empty())
+		m_title.reset();
+	else
+		m_title = std::move(*title);
 }
 
-void Decoder::Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept {
-	m_engine = std::move(engine);
-	m_capabilities = StormByte::Multimedia::Features{};
+void Decoder::AttachOrigin(Demuxer& demuxer) noexcept {
+	m_origin = &demuxer;
+	Wake().notify_all();
 }
 
-void Decoder::Open() noexcept {}
+void Decoder::Open() noexcept {
+	NameThread("STMM:Decode:" + std::to_string(m_index));
+	while (!Stopping() && m_origin == nullptr)
+		Wait();
+	if (Stopping())
+		return;
+	if (!m_origin) {
+		Fail("decoder has no demuxer");
+		return;
+	}
+	while (!Stopping() && !m_origin->Failed() && !m_origin->Ready())
+		Wait();
+	if (Stopping())
+		return;
+	if (m_origin->Failed() || !m_origin->Ready()) {
+		Fail(m_origin->Error().value_or("demuxer failed"));
+		return;
+	}
+
+	auto backend = m_origin->OpenDecoder(*this);
+	if (!backend)
+		return;
+	Bind(std::move(backend));
+	Step::Open();
+}
 
 void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	NameThread("STMM:Decode:" + std::to_string(m_index));
 	if (Failed())
 		return;
-	if (!m_engine) {
+	if (!m_backend) {
 		Fail("decoder is not open");
 		return;
 	}
@@ -145,10 +144,10 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	if (packet->Track() != m_index)
 		return;
 
-	while (!m_engine->Send(*this, packet)) {
+	while (!m_backend->Send(*this, packet)) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (Failed())
 			return;
 		if (!frame) {
@@ -161,7 +160,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	for (;;) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			break;
 		m_out->Push(frame);
@@ -169,13 +168,13 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 }
 
 void Decoder::Finish() noexcept {
-	if (Failed() || !m_engine)
+	if (Failed() || !m_backend)
 		return;
-	m_engine->Flush(*this);
+	m_backend->Flush(*this);
 	for (;;) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_engine->Receive(*this);
+		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			return;
 		m_out->Push(frame);

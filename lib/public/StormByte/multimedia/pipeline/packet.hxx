@@ -71,12 +71,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public Item {
+		friend class Backend::Pipeline::Packet;
 		friend class Decoder;
 		friend class Demuxer;
 		friend class Encoder;
 		friend class Filter::FFmpeg;
 		friend class Muxer;
-		friend class Engine::Packet::Engine;
 
 		public:
 			/**
@@ -144,25 +144,33 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Presentation timestamp on the stream clock.
 			 * @return Pts, or empty.
 			 */
-			const std::optional<Property::Duration>& Pts() const noexcept;
+			inline const std::optional<Property::Duration>& Pts() const noexcept {
+				return m_pts;
+			}
 
 			/**
 			 * @brief Decode timestamp on the stream clock.
 			 * @return Dts, or empty.
 			 */
-			const std::optional<Property::Duration>& Dts() const noexcept;
+			inline const std::optional<Property::Duration>& Dts() const noexcept {
+				return m_dts;
+			}
 
 			/**
 			 * @brief Packet duration on the stream clock.
 			 * @return Duration, or empty.
 			 */
-			const std::optional<Property::Duration>& Duration() const noexcept;
+			inline const std::optional<Property::Duration>& Duration() const noexcept {
+				return m_duration;
+			}
 
 			/**
 			 * @brief Whether this is a key frame / key packet.
 			 * @return true if marked as a key frame.
 			 */
-			bool KeyFrame() const noexcept;
+			inline bool KeyFrame() const noexcept {
+				return m_keyFrame;
+			}
 
 			/**
 			 * @}
@@ -177,25 +185,33 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Owned compressed payload.
 			 * @return FIFO (not thread-safe).
 			 */
-			const StormByte::Buffer::FIFO& Payload() const noexcept;
+			inline const StormByte::Buffer::FIFO& Payload() const noexcept {
+				return m_payload;
+			}
 
 			/**
 			 * @brief Owned compressed payload (mutable).
 			 * @return FIFO (not thread-safe).
 			 */
-			StormByte::Buffer::FIFO& Payload() noexcept;
+			inline StormByte::Buffer::FIFO& Payload() noexcept {
+				return m_payload;
+			}
 
 			/**
 			 * @brief Side-data blobs bound to this access unit.
 			 * @return Blobs (HdrPlus, captions, …). Empty when none.
 			 */
-			const std::vector<SideData>& Attachments() const noexcept;
+			inline const std::vector<SideData>& Attachments() const noexcept {
+				return m_attachments;
+			}
 
 			/**
 			 * @brief Side-data blobs bound to this access unit (mutable).
 			 * @return Blobs.
 			 */
-			std::vector<SideData>& Attachments() noexcept;
+			inline std::vector<SideData>& Attachments() noexcept {
+				return m_attachments;
+			}
 
 			/**
 			 * @}
@@ -229,21 +245,21 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Adopts a backend packet.
-			 * @param engine Backend holder.
+			 * @param backend Backend holder.
 			 */
-			void Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept;
+			void Bind(std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
 
 			/**
 			 * @brief Turns this unit into the empty sentinel.
 			 */
 			void BecomeEmpty() noexcept;
 
-			StormByte::Buffer::FIFO m_payload;					///< Compressed bytes
-			std::optional<Property::Duration> m_pts;			///< Presentation timestamp
-			std::optional<Property::Duration> m_dts;			///< Decode timestamp
-			std::optional<Property::Duration> m_duration;		///< Packet duration
-			bool m_keyFrame;									///< Key frame
-			std::vector<SideData> m_attachments;				///< Packet side data
-			std::unique_ptr<Engine::Packet::Engine> m_engine;	///< Backend holder
+			StormByte::Buffer::FIFO m_payload;								///< Compressed bytes
+			std::optional<Property::Duration> m_pts;						///< Presentation timestamp
+			std::optional<Property::Duration> m_dts;						///< Decode timestamp
+			std::optional<Property::Duration> m_duration;					///< Packet duration
+			bool m_keyFrame;												///< Key frame
+			std::vector<SideData> m_attachments;							///< Packet side data
+			std::unique_ptr<Backend::Pipeline::Packet> m_backend;			///< Backend holder
 	};
 }

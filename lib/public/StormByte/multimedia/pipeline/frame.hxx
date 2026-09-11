@@ -59,20 +59,27 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	/**
-     * @class Frame
-     * @brief One decoded access unit.
-     *
-     * In libav that is an @c AVFrame: one picture or one block of
-     * samples after decode. In Multimedia it is what process and
-     * analytics filters, and @ref Encoder, see — pixels or samples,
-     * timestamps and the stream tags the decoder copied across.
-     *
-     * @see Item
-     * @see Packet
-     *
-     * @ingroup multimedia_pipeline
-     */
+	 * @class Frame
+	 * @brief One decoded access unit.
+	 *
+	 * In libav that is an @c AVFrame: one picture or one block of
+	 * samples after decode. In Multimedia it is what process and
+	 * analytics filters, and @ref Encoder, see — pixels or samples,
+	 * timestamps and the stream tags the decoder copied across.
+	 *
+	 * @see Item
+	 * @see Packet
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame: public Item {
+		friend class Backend::Pipeline::Frame;
+		friend class Decoder;
+		friend class Encoder;
+		friend class Filter::FFmpeg;
+		friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
+		friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
+
 		public:
 			/**
 			 * @name Construction
@@ -144,38 +151,33 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Presentation timestamp on the stream clock.
 			 * @return Pts, or empty.
 			 */
-			const std::optional<Property::Duration>& Pts() const noexcept;
+			inline const std::optional<Property::Duration>& Pts() const noexcept {
+				return m_pts;
+			}
 
 			/**
 			 * @brief Frame duration on the stream clock.
 			 * @return Duration, or empty.
 			 */
-			const std::optional<Property::Duration>& Duration() const noexcept;
+			inline const std::optional<Property::Duration>& Duration() const noexcept {
+				return m_duration;
+			}
 
 			/**
 			 * @brief Stream language tag copied from File metadata.
 			 * @return Language, or empty if the stream had none.
 			 */
-			const std::optional<std::string>& Language() const noexcept;
-
-			/**
-			 * @brief Sets the stream language tag.
-			 * @param language ISO code from File metadata (`spa`, `eng`, `es`, …).
-			 *        Empty clears it.
-			 */
-			void Language(std::string language) noexcept;
+			inline const std::optional<std::string>& Language() const noexcept {
+				return m_language;
+			}
 
 			/**
 			 * @brief Stream title tag copied from File metadata.
 			 * @return Title, or empty if the stream had none.
 			 */
-			const std::optional<std::string>& Title() const noexcept;
-
-			/**
-			 * @brief Sets the stream title tag.
-			 * @param title Title from File metadata. Empty clears it.
-			 */
-			void Title(std::string title) noexcept;
+			inline const std::optional<std::string>& Title() const noexcept {
+				return m_title;
+			}
 
 			/**
 			 * @}
@@ -190,20 +192,26 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Video properties (includes HDR10 when set).
 			 * @return Video, or empty.
 			 */
-			const std::optional<Property::Video>& Video() const noexcept;
+			inline const std::optional<Property::Video>& Video() const noexcept {
+				return m_video;
+			}
 
 			/**
 			 * @brief Audio properties (layout, rate, channels).
 			 * @return Audio, or empty.
 			 */
-			const std::optional<Property::Audio>& Audio() const noexcept;
+			inline const std::optional<Property::Audio>& Audio() const noexcept {
+				return m_audio;
+			}
 
 			/**
 			 * @brief Raw side data captured at receive. Read-only.
 			 * @return Blobs. MDM/CLL also appear in @ref Video() HDR10
 			 *         when the decoder could map them.
 			 */
-			const std::vector<class SideData>& Attachments() const noexcept;
+			inline const std::vector<class SideData>& Attachments() const noexcept {
+				return m_attachments;
+			}
 
 			/**
 			 * @}
@@ -227,25 +235,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Payload already materialised, or empty.
 			 * @return FIFO. Does not pull planes out of the backend.
 			 */
-			const StormByte::Buffer::FIFO& Payload() const noexcept;
+			inline const StormByte::Buffer::FIFO& Payload() const noexcept {
+				return m_payload;
+			}
 
 			/**
 			 * @}
 			 */
-
-		friend class Decoder;
-		friend Decoder& operator>>(Decoder& decoder, Frame& frame) noexcept;
-		friend class Encoder;
-		friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
-		friend class Filter::FFmpeg;
-		friend struct Engine::Encoder::Open::Access;
-		friend class Engine::Encoder::Details::Video;
-		friend class Engine::Encoder::Details::Audio;
-		friend class Engine::Encoder::Details::Subtitle;
-		friend class Engine::Decoder::Details::Video;
-		friend class Engine::Decoder::Details::Audio;
-		friend class Engine::Decoder::Details::Subtitle;
-		friend class Engine::Frame::Engine;
 
 		private:
 			/**
@@ -259,8 +255,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Private on purpose: a public copy of a decoded unit
 			 * would silently duplicate every plane. Only
-			 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg
-			 * and the codec friends may clone.
+			 * @ref Filter::FFmpeg and the codec friends may clone.
 			 * There is no public @c Clone().
 			 */
 			Frame(const Frame& other) noexcept;
@@ -279,21 +274,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
-			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
-			std::optional<Property::Duration> m_duration;				///< Frame duration
-			std::optional<Property::Video> m_video;						///< Video properties
-			std::optional<Property::Audio> m_audio;						///< Audio properties
-			std::optional<std::string> m_language;						///< Stream language tag
-			std::optional<std::string> m_title;							///< Stream title tag
-			std::vector<class SideData> m_attachments;					///< Raw side data
-			std::unique_ptr<Engine::Frame::Engine> m_engine;			///< Backend holder
-
 			/**
 			 * @brief Adopts a backend frame for lazy @ref Payload().
-			 * @param engine Backend holder.
+			 * @param backend Backend holder.
 			 */
-			void Bind(std::unique_ptr<Engine::Frame::Engine> engine) noexcept;
+			void Bind(std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept;
 
 			/**
 			 * @brief Turns this unit into the empty sentinel.
@@ -302,5 +287,15 @@ namespace StormByte::Multimedia::Pipeline {
 			 * relocated @c Frame in a container is always valid.
 			 */
 			void BecomeEmpty() noexcept;
+
+			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
+			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
+			std::optional<Property::Duration> m_duration;				///< Frame duration
+			std::optional<Property::Video> m_video;						///< Video properties
+			std::optional<Property::Audio> m_audio;						///< Audio properties
+			std::optional<std::string> m_language;						///< Stream language tag
+			std::optional<std::string> m_title;							///< Stream title tag
+			std::vector<class SideData> m_attachments;					///< Raw side data
+			std::unique_ptr<Backend::Pipeline::Frame> m_backend;		///< Backend holder
 	};
 }

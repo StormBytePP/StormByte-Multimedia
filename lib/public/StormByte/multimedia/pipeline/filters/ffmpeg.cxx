@@ -36,13 +36,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/pipeline/engine/frame/engine.hxx>
-#include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
-#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
-#include <StormByte/multimedia/type.hxx>
-
 #include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <limits>
 #include <utility>
@@ -124,39 +127,37 @@ void FFmpeg::Eof() noexcept {}
 
 ::AVFrame* FFmpeg::AVFrame() noexcept {
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
-	if (!frame || !frame->m_engine)
+	if (!frame || !frame->m_backend)
 		return nullptr;
-	return frame->m_engine->m_backend.Get();
+	return frame->m_backend->Handle().Get();
 }
 
 ::AVPacket* FFmpeg::AVPacket() noexcept {
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
-	if (!packet || !packet->m_engine)
+	if (!packet || !packet->m_backend)
 		return nullptr;
-	return packet->m_engine->m_backend.Get();
+	return packet->m_backend->Handle().Get();
 }
 
 void FFmpeg::Save(::AVFrame* raw) noexcept {
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
 	if (!frame)
 		return;
-	if (!frame->m_engine)
-		frame->m_engine = std::make_unique<Pipeline::Engine::Frame::Engine>();
-	frame->m_engine->m_backend.Free();
-	frame->m_engine->m_backend.m_ptr = raw;
-	frame->m_engine->m_payloadReady = false;
-	frame->m_engine->BindProperties(*frame);
+	if (!frame->m_backend)
+		frame->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
+	frame->m_backend->Handle().Reset(raw);
+	frame->m_backend->PayloadReady(false);
+	frame->m_backend->BindProperties(*frame);
 }
 
 void FFmpeg::Save(::AVPacket* raw) noexcept {
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
 	if (!packet)
 		return;
-	if (!packet->m_engine)
-		packet->m_engine = std::make_unique<Pipeline::Engine::Packet::Engine>();
-	packet->m_engine->m_backend.Free();
-	packet->m_engine->m_backend.m_ptr = raw;
-	packet->m_engine->BindProperties(*packet);
+	if (!packet->m_backend)
+		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
+	packet->m_backend->Handle().Reset(raw);
+	packet->m_backend->BindProperties(*packet);
 }
 
 void FFmpeg::Open() noexcept {

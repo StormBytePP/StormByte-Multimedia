@@ -36,40 +36,21 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/exception.hxx>
+using namespace StormByte::Multimedia::Backend::Pipeline;
 
-#include <functional>
-#include <memory>
-#include <vector>
+Packet::Packet(const Packet& other) noexcept
+: m_handle(other.m_handle) {}
 
-/**
- * @namespace StormByte::Multimedia
- * @brief Public media types: codecs, containers, registry and stream kinds.
- */
-namespace StormByte::Multimedia {
-	class Codec;
-	class Container;
-	class File;
-	class Stream;
+Packet& Packet::operator=(const Packet& other) noexcept {
+	if (this == &other)
+		return *this;
+	m_handle = other.m_handle;
+	return *this;
+}
 
-	/**
-	 * @namespace StormByte::Multimedia::Pipeline
-	 * @brief Demux / decode / filter / encode / mux types.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Pipeline {
-		class Transcoder;	///< File-to-file job facade.
-	}
-
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;								///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;					///< Result of FindContainer
-	using ExpectedFile = StormByte::Expected<File, FileOpenException>;												///< Result of OpenFile
-	using ExpectedTranscoder = StormByte::Expected<std::unique_ptr<Pipeline::Transcoder>, TranscodeException>;		///< Result of Transcoder::Open
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;												///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;									///< List of container references
-	using Streams = std::vector<Stream>;																			///< Ordered streams
+void Packet::BindProperties(StormByte::Multimedia::Pipeline::Packet& packet) noexcept {
+	(void)packet;
 }

@@ -127,6 +127,11 @@ int FFmpeg::AVPacket::Size() const noexcept {
 	return m_ptr ? m_ptr->size : 0;
 }
 
+void FFmpeg::AVPacket::Reset(::AVPacket* raw) noexcept {
+	Free();
+	m_ptr = raw;
+}
+
 void FFmpeg::AVPacket::Free() noexcept {
 	if (m_ptr) {
 		av_packet_free(&m_ptr);

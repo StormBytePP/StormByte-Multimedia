@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/engine/packet/engine.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
 #include <memory>
@@ -44,7 +44,6 @@
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
-using StormByte::Multimedia::Type;
 
 Packet::Packet() noexcept
 : Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer), m_keyFrame(false) {}
@@ -68,8 +67,8 @@ Packet::Packet(const Packet& other) noexcept
 	m_duration(other.m_duration),
 	m_keyFrame(other.m_keyFrame),
 	m_attachments(other.m_attachments) {
-	if (other.m_engine)
-		m_engine = std::make_unique<Engine::Packet::Engine>(*other.m_engine);
+	if (other.m_backend)
+		m_backend = std::make_unique<Backend::Pipeline::Packet>(*other.m_backend);
 }
 
 Packet::Packet(Packet&& other) noexcept
@@ -80,7 +79,7 @@ Packet::Packet(Packet&& other) noexcept
 	m_duration(std::move(other.m_duration)),
 	m_keyFrame(other.m_keyFrame),
 	m_attachments(std::move(other.m_attachments)),
-	m_engine(std::move(other.m_engine)) {
+	m_backend(std::move(other.m_backend)) {
 	other.BecomeEmpty();
 }
 
@@ -96,10 +95,10 @@ Packet& Packet::operator=(const Packet& other) noexcept {
 	m_duration = other.m_duration;
 	m_keyFrame = other.m_keyFrame;
 	m_attachments = other.m_attachments;
-	if (other.m_engine)
-		m_engine = std::make_unique<Engine::Packet::Engine>(*other.m_engine);
+	if (other.m_backend)
+		m_backend = std::make_unique<Backend::Pipeline::Packet>(*other.m_backend);
 	else
-		m_engine.reset();
+		m_backend.reset();
 	return *this;
 }
 
@@ -113,7 +112,7 @@ Packet& Packet::operator=(Packet&& other) noexcept {
 	m_duration = std::move(other.m_duration);
 	m_keyFrame = other.m_keyFrame;
 	m_attachments = std::move(other.m_attachments);
-	m_engine = std::move(other.m_engine);
+	m_backend = std::move(other.m_backend);
 	other.BecomeEmpty();
 	return *this;
 }
@@ -127,41 +126,9 @@ void Packet::BecomeEmpty() noexcept {
 	m_keyFrame = false;
 	m_attachments.clear();
 	m_attachments.shrink_to_fit();
-	m_engine.reset();
+	m_backend.reset();
 }
 
-const std::optional<Property::Duration>& Packet::Pts() const noexcept {
-	return m_pts;
-}
-
-const std::optional<Property::Duration>& Packet::Dts() const noexcept {
-	return m_dts;
-}
-
-const std::optional<Property::Duration>& Packet::Duration() const noexcept {
-	return m_duration;
-}
-
-bool Packet::KeyFrame() const noexcept {
-	return m_keyFrame;
-}
-
-const StormByte::Buffer::FIFO& Packet::Payload() const noexcept {
-	return m_payload;
-}
-
-StormByte::Buffer::FIFO& Packet::Payload() noexcept {
-	return m_payload;
-}
-
-const std::vector<SideData>& Packet::Attachments() const noexcept {
-	return m_attachments;
-}
-
-std::vector<SideData>& Packet::Attachments() noexcept {
-	return m_attachments;
-}
-
-void Packet::Bind(std::unique_ptr<Engine::Packet::Engine> engine) noexcept {
-	m_engine = std::move(engine);
+void Packet::Bind(std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
+	m_backend = std::move(backend);
 }

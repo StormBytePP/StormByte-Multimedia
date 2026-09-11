@@ -212,6 +212,11 @@ void FFmpeg::AVFrame::WriteSideData(
 	}
 }
 
+void FFmpeg::AVFrame::Reset(::AVFrame* raw) noexcept {
+	Free();
+	m_ptr = raw;
+}
+
 void FFmpeg::AVFrame::Free() noexcept {
 	if (m_ptr) {
 		av_frame_free(&m_ptr);

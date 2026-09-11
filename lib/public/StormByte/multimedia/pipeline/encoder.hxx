@@ -38,19 +38,31 @@
 
 #pragma once
 
+#include <StormByte/buffer/fifo.hxx>
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/features.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
-extern "C" {
-	struct AVStream;
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Multimedia-owned pipeline stages and unit holders.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Encoder;	///< Encode backend behind @ref StormByte::Multimedia::Pipeline::Encoder.
 }
 
 /**
@@ -61,89 +73,18 @@ extern "C" {
  */
 namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
+	class Frame;
 	class Muxer;
-	class Transcode;
-
-	/**
-	 * @namespace Engine
-	 * @brief Private backends behind the public pipeline types.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Mux
-		 * @brief Muxer backends. Untouched until the Backend step.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Mux {
-			/**
-			 * @namespace Details
-			 * @brief Container muxer backend.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Container;
-			}
-		}
-
-		/**
-		 * @namespace Encoder
-		 * @brief Encode backends selected by Codec::Type().
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Encoder {
-			class Engine;
-			/**
-			 * @namespace Open
-			 * @brief Shared FFmpeg open + packet wrap.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Open {
-				struct Access;
-			}
-			/**
-			 * @namespace Details
-			 * @brief Per-media encode engines.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Video;
-				class Audio;
-				class Subtitle;
-			}
-		}
-	}
 
 	/**
 	 * @class Encoder
 	 * @brief Encodes frames of one output track into packets.
 	 *
-	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * Codec Open is lazy on the first frame. @ref Work encodes one
-	 * frame. @ref Finish flushes.
-	 *
-	 * @ref Index is the mux destination order key passed at
-	 * construction. Packets leaving @ref m_out keep the origin
-	 * @ref Item::Track that @ref Route / Transcode bound; the muxer
-	 * does not stamp a new one.
-	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder final: public Step {
+		friend class Backend::Pipeline::Encoder;
 		friend class Muxer;
-		friend class Transcode;
-		friend class Engine::Mux::Details::Container;
-		friend struct Engine::Encoder::Open::Access;
-		friend class Engine::Encoder::Engine;
-		friend class Engine::Encoder::Details::Video;
-		friend class Engine::Encoder::Details::Audio;
-		friend class Engine::Encoder::Details::Subtitle;
 
 		public:
 			/**
@@ -155,8 +96,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Encoder for output track @p output_index and destination @p codec.
 			 * @param output_index Mux destination order key.
 			 * @param codec Registry codec. Must HasAccess(Write) at open.
-			 *
-			 * Starts the worker. Backend Open stays lazy until the first frame.
 			 */
 			Encoder(int output_index, const Codec& codec) noexcept;
 
@@ -201,8 +140,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief true if the engine is open and not failed.
-			 * @return Open and not @ref Failed.
+			 * @brief true if the backend is open and not failed.
+			 * @return Open and not Failed.
 			 */
 			explicit operator bool() const noexcept;
 
@@ -210,13 +149,25 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Mux destination order key.
 			 * @return Index set at construction.
 			 */
-			int Index() const noexcept;
+			inline int Index() const noexcept {
+				return m_index;
+			}
+
+			/**
+			 * @brief Ceiling of the encoder input hopper.
+			 * @return Max queued frames. Never 0.
+			 */
+			std::size_t InputCeiling() const noexcept override {
+				return Ceiling;
+			}
 
 			/**
 			 * @brief Destination codec.
 			 * @return Registry codec bound at construction.
 			 */
-			const Codec& Destination() const noexcept;
+			inline const Codec& Destination() const noexcept {
+				return *m_codec;
+			}
 
 			/**
 			 * @brief Whether the backend finished Open().
@@ -253,39 +204,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @name Stream tags
+			 * @name Encoder tag
 			 * @{
 			 */
 
 			/**
-			 * @brief Stream language tag stamped from the decoded frame.
-			 * @return Language, or empty if none was received.
-			 */
-			const std::optional<std::string>& Language() const noexcept;
-
-			/**
-			 * @brief Sets the stream language tag (before or after open).
-			 * @param language ISO code. Empty clears it.
-			 */
-			void Language(std::string language) noexcept;
-
-			/**
-			 * @brief Stream title tag stamped from the decoded frame.
-			 * @return Title, or empty if none was received.
-			 */
-			const std::optional<std::string>& Title() const noexcept;
-
-			/**
-			 * @brief Sets the stream title tag (before or after open).
-			 * @param title Title from File metadata. Empty clears it.
-			 */
-			void Title(std::string title) noexcept;
-
-			/**
 			 * @brief Writing-application tag stamped on every encoded stream.
-			 * @return `StormByte-Multimedia <version>`. Never empty after construction.
+			 * @return StormByte-Multimedia version. Never empty after construction.
 			 */
-			const std::string& EncoderTag() const noexcept;
+			inline const std::string& EncoderTag() const noexcept {
+				return m_encoderTag;
+			}
 
 			/**
 			 * @}
@@ -300,7 +229,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Pinned FFmpeg encoder name, if any.
 			 * @return Name, or empty.
 			 */
-			const std::optional<std::string>& Implementation() const noexcept;
+			inline const std::optional<std::string>& Implementation() const noexcept {
+				return m_implementation;
+			}
 
 			/**
 			 * @brief Pins an FFmpeg encoder name. Empty clears the pin.
@@ -312,19 +243,25 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Extra features the caller demands besides Frame HDR.
 			 * @return Mask.
 			 */
-			const Features& Require() const noexcept;
+			inline const Features& Require() const noexcept {
+				return m_require;
+			}
 
 			/**
 			 * @brief Replaces the extra feature mask (before open).
 			 * @param features Required bits.
 			 */
-			void Require(Features features) noexcept;
+			inline void Require(Features features) noexcept {
+				m_require = features;
+			}
 
 			/**
 			 * @brief Features of the row selected at open. Empty if fallback.
 			 * @return Mask.
 			 */
-			const Features& Capabilities() const noexcept;
+			inline const Features& Capabilities() const noexcept {
+				return m_capabilities;
+			}
 
 			/**
 			 * @}
@@ -339,40 +276,52 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Constant quality (CRF/CQ). Incompatible with BitRate.
 			 * @param value Encoder quality value.
 			 */
-			void CRF(int value) noexcept;
+			inline void CRF(int value) noexcept {
+				m_crf = value;
+			}
 
 			/**
 			 * @brief CRF/CQ, if set.
 			 * @return Value, or empty.
 			 */
-			const std::optional<int>& CRF() const noexcept;
+			inline const std::optional<int>& CRF() const noexcept {
+				return m_crf;
+			}
 
 			/**
 			 * @brief Target bitrate in bits per second. Incompatible with CRF.
 			 * @param bits_per_second Bitrate.
 			 */
-			void BitRate(std::int64_t bits_per_second) noexcept;
+			inline void BitRate(std::int64_t bits_per_second) noexcept {
+				m_bitRate = bits_per_second;
+			}
 
 			/**
 			 * @brief Target bitrate, if set.
 			 * @return Bits per second, or empty.
 			 */
-			const std::optional<std::int64_t>& BitRate() const noexcept;
+			inline const std::optional<std::int64_t>& BitRate() const noexcept {
+				return m_bitRate;
+			}
 
 			/**
-			 * @brief VBV ceiling in bits per second. bufsize is derived internally.
+			 * @brief VBV ceiling in bits per second.
 			 * @param bits_per_second Max bitrate.
 			 */
-			void MaxBitRate(std::int64_t bits_per_second) noexcept;
+			inline void MaxBitRate(std::int64_t bits_per_second) noexcept {
+				m_maxBitRate = bits_per_second;
+			}
 
 			/**
 			 * @brief VBV ceiling, if set.
 			 * @return Bits per second, or empty.
 			 */
-			const std::optional<std::int64_t>& MaxBitRate() const noexcept;
+			inline const std::optional<std::int64_t>& MaxBitRate() const noexcept {
+				return m_maxBitRate;
+			}
 
 			/**
-			 * @brief Encoder preset (`medium`, `p4`, …).
+			 * @brief Encoder preset.
 			 * @param name Preset name.
 			 */
 			void Preset(std::string name) noexcept;
@@ -381,10 +330,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Preset, if set.
 			 * @return Name, or empty.
 			 */
-			const std::optional<std::string>& Preset() const noexcept;
+			inline const std::optional<std::string>& Preset() const noexcept {
+				return m_preset;
+			}
 
 			/**
-			 * @brief Content tune (`animation`, `film`, …).
+			 * @brief Content tune.
 			 * @param name Tune name.
 			 */
 			void Tune(std::string name) noexcept;
@@ -393,7 +344,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Content tune, if set.
 			 * @return Name, or empty.
 			 */
-			const std::optional<std::string>& Tune() const noexcept;
+			inline const std::optional<std::string>& Tune() const noexcept {
+				return m_tune;
+			}
 
 			/**
 			 * @}
@@ -408,26 +361,30 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Vendor leftovers. Not CRF/preset/tune/bufsize.
 			 * @return Key/value map.
 			 */
-			const std::map<std::string, std::string>& FineTune() const noexcept;
+			inline const std::map<std::string, std::string>& FineTune() const noexcept {
+				return m_fineTune;
+			}
 
 			/**
 			 * @brief Replaces the vendor dict (before open).
 			 * @param options Key/value pairs.
 			 */
-			void FineTune(std::map<std::string, std::string> options) noexcept;
+			inline void FineTune(std::map<std::string, std::string> options) noexcept {
+				m_fineTune = std::move(options);
+			}
 
 			/**
 			 * @}
 			 */
 
-		protected:
+		private:
 			/**
-			 * @brief Prepare-once. Codec Open stays lazy in @ref Work.
+			 * @brief Prepare-once. Codec Open stays lazy in Work.
 			 */
 			void Open() noexcept override;
 
 			/**
-			 * @brief Encodes one frame and pushes packets to @ref m_out.
+			 * @brief Encodes one frame and pushes packets to m_out.
 			 * @param item Incoming frame.
 			 */
 			void Work(std::shared_ptr<Item> item) noexcept override;
@@ -437,34 +394,61 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Finish() noexcept override;
 
-		private:
 			/**
-			 * @brief Marks a hard error and drops the backend.
-			 * @param reason Message.
+			 * @brief Builds an encoded packet. Called from the encode backend.
+			 * @param type Destination codec type.
+			 * @param index Mux destination order key.
+			 * @param payload Compressed bytes.
+			 * @param pts Presentation time.
+			 * @param dts Decode time.
+			 * @param duration Packet duration.
+			 * @param keyFrame Whether this is a keyframe.
+			 * @param attachments Mapped packet side data.
+			 * @return Packet with Producer::Encoder.
 			 */
-			void Fail(std::string reason) noexcept;
+			std::shared_ptr<Packet> Wrap(
+				enum StormByte::Multimedia::Type type, int index,
+				StormByte::Buffer::FIFO payload,
+				std::optional<Property::Duration> pts,
+				std::optional<Property::Duration> dts,
+				std::optional<Property::Duration> duration,
+				bool keyFrame,
+				std::vector<SideData> attachments) noexcept;
 
 			/**
 			 * @brief Copies codecpar / time_base onto a mux stream.
-			 * @param avStream AVStream*.
+			 * @param avStream Opaque AVStream*.
 			 * @return false if the encoder is not open.
 			 */
 			bool MuxBindStream(void* avStream) noexcept;
 
-			int m_index;											///< Mux destination order key
-			const Codec* m_codec;									///< Destination codec
-			std::string m_encoderTag;								///< ENCODER metadata
-			std::optional<std::string> m_language;					///< Language tag
-			std::optional<std::string> m_title;						///< Title tag
-			std::optional<std::string> m_implementation;			///< Pinned encoder name
-			Features m_require;										///< Extra required bits
-			Features m_capabilities;								///< Opened capabilities
-			std::optional<int> m_crf;								///< CRF/CQ
-			std::optional<std::int64_t> m_bitRate;					///< Target bitrate
-			std::optional<std::int64_t> m_maxBitRate;				///< VBV ceiling
-			std::optional<std::string> m_preset;					///< Preset
-			std::optional<std::string> m_tune;						///< Tune
-			std::map<std::string, std::string> m_fineTune;			///< Vendor leftovers
-			std::unique_ptr<Engine::Encoder::Engine> m_engine;		///< Encode backend
+			/**
+			 * @brief libav frame bound to @p frame, if any.
+			 * @param frame Public unit.
+			 * @return Backend handle, or nullptr.
+			 */
+			void* FrameHandle(Frame& frame) noexcept;
+
+			/**
+			 * @brief libav frame bound to @p frame, if any.
+			 * @param frame Public unit.
+			 * @return Backend handle, or nullptr.
+			 */
+			const void* FrameHandle(const Frame& frame) noexcept;
+
+			static constexpr std::size_t Ceiling = 8;							///< Input hopper ceiling
+			int m_index;														///< Mux destination order key
+			const Codec* m_codec;												///< Destination codec
+			std::string m_encoderTag;											///< ENCODER metadata
+			std::optional<std::string> m_implementation;						///< Pinned encoder name
+			Features m_require;													///< Extra required bits
+			Features m_capabilities;											///< Opened capabilities
+			std::optional<int> m_crf;											///< CRF/CQ
+			std::optional<std::int64_t> m_bitRate;								///< Target bitrate
+			std::optional<std::int64_t> m_maxBitRate;							///< VBV ceiling
+			std::optional<std::string> m_preset;								///< Preset
+			std::optional<std::string> m_tune;									///< Tune
+			std::map<std::string, std::string> m_fineTune;						///< Vendor leftovers
+			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;				///< Encode backend
 	};
 }

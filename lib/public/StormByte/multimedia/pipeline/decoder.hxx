@@ -41,12 +41,24 @@
 #include <StormByte/bitmask.hxx>
 #include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Multimedia-owned pipeline stages and unit holders.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Decoder;	///< Decode backend behind @ref StormByte::Multimedia::Pipeline::Decoder.
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -57,36 +69,7 @@
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
-	class Transcode;
-
-	/**
-	 * @namespace Engine
-	 * @brief Private backends. Public headers only forward-declare them.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Decoder
-		 * @brief Decode backends selected by stream type.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Decoder {
-			class Engine;
-			/**
-			 * @namespace Details
-			 * @brief Per-media decode engines.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Video;
-				class Audio;
-				class Subtitle;
-			}
-		}
-	}
+	class Frame;
 
 	/**
 	 * @enum DecoderFlag
@@ -111,12 +94,10 @@ namespace StormByte::Multimedia::Pipeline {
 	inline const DecoderFlags Heuristics{DecoderFlag::HeuristicsHDR10};
 
 	/**
-	 * @brief Opens @p decoder on a stream of @p demuxer. Never throws.
-	 * @param demuxer Open demuxer.
-	 * @param decoder Destination.
+	 * @brief Binds one origin track of @p demuxer to @p decoder.
+	 * @param demuxer Origin demuxer.
+	 * @param decoder Destination decoder.
 	 * @return @p decoder.
-	 *
-	 * Attaches the backend and launches the decoder worker.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
@@ -124,21 +105,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Decoder
 	 * @brief Decodes packets of one origin track into frames.
 	 *
-	 * A @ref Step, @c final. The constructor does not start the worker.
-	 * @c demuxer >> decoder attaches the backend and launches.
-	 * @ref Work sends one packet and drains frames to @ref m_out.
-	 * @ref Finish flushes the codec. Errors are @ref Step::Fail.
-	 *
-	 * @ref Item::Track on outgoing frames stays the origin index.
-	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
+		friend class Backend::Pipeline::Decoder;
+		friend class Demuxer;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-		friend class Transcode;
-		friend class Engine::Decoder::Details::Video;
-		friend class Engine::Decoder::Details::Audio;
-		friend class Engine::Decoder::Details::Subtitle;
 
 		public:
 			/**
@@ -147,11 +119,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Decoder for one origin track. Does not launch.
+			 * @brief Decoder for one origin track.
 			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
-			 *
-			 * The backend is attached later by @c demuxer >> decoder.
 			 */
 			explicit Decoder(int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
@@ -188,7 +158,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief true if open and not failed.
-			 * @return Open and not @ref Failed.
+			 * @return Open and not Failed.
 			 */
 			explicit operator bool() const noexcept;
 
@@ -197,7 +167,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @name Bind
+			 * @name Track
 			 * @{
 			 */
 
@@ -205,43 +175,49 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Bound origin track.
 			 * @return Track.
 			 */
-			int Index() const noexcept;
+			inline int Index() const noexcept {
+				return m_index;
+			}
+
+			/**
+			 * @brief Ceiling of the decoder input hopper.
+			 * @return Max queued packets. Never 0.
+			 */
+			std::size_t InputCeiling() const noexcept override {
+				return Ceiling;
+			}
 
 			/**
 			 * @brief Flags.
 			 * @return Mask.
 			 */
-			const DecoderFlags& Flags() const noexcept;
+			inline const DecoderFlags& Flags() const noexcept {
+				return m_flags;
+			}
 
 			/**
 			 * @brief Replaces flags (before demuxer >> decoder).
 			 * @param flags New mask.
 			 */
-			void Flags(DecoderFlags flags) noexcept;
+			inline void Flags(DecoderFlags flags) noexcept {
+				m_flags = flags;
+			}
 
 			/**
-			 * @brief Stream language tag.
+			 * @brief Stream language tag copied from the origin File.
 			 * @return Language, or empty.
 			 */
-			const std::optional<std::string>& Language() const noexcept;
+			inline const std::optional<std::string>& Language() const noexcept {
+				return m_language;
+			}
 
 			/**
-			 * @brief Sets the stream language tag.
-			 * @param language ISO code. Empty clears it.
-			 */
-			void Language(std::string language) noexcept;
-
-			/**
-			 * @brief Stream title tag.
+			 * @brief Stream title tag copied from the origin File.
 			 * @return Title, or empty.
 			 */
-			const std::optional<std::string>& Title() const noexcept;
-
-			/**
-			 * @brief Sets the stream title tag.
-			 * @param title Title. Empty clears it.
-			 */
-			void Title(std::string title) noexcept;
+			inline const std::optional<std::string>& Title() const noexcept {
+				return m_title;
+			}
 
 			/**
 			 * @}
@@ -256,7 +232,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Pinned FFmpeg decoder name, if any.
 			 * @return Name, or empty before pin / auto-select.
 			 */
-			const std::optional<std::string>& Implementation() const noexcept;
+			inline const std::optional<std::string>& Implementation() const noexcept {
+				return m_implementation;
+			}
 
 			/**
 			 * @brief Pins an FFmpeg decoder name (before demuxer >> decoder).
@@ -268,32 +246,38 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Extra required Feature bits.
 			 * @return Mask.
 			 */
-			const Features& Require() const noexcept;
+			inline const Features& Require() const noexcept {
+				return m_require;
+			}
 
 			/**
 			 * @brief Replaces extra required Feature bits.
 			 * @param features Bits the chosen table row must have.
 			 */
-			void Require(Features features) noexcept;
+			inline void Require(Features features) noexcept {
+				m_require = features;
+			}
 
 			/**
 			 * @brief Features of the opened implementation.
 			 * @return Mask.
 			 */
-			const Features& Capabilities() const noexcept;
+			inline const Features& Capabilities() const noexcept {
+				return m_capabilities;
+			}
 
 			/**
 			 * @}
 			 */
 
-		protected:
+		private:
 			/**
-			 * @brief Prepare-once. Does not Fail if the backend is still unbound.
+			 * @brief Waits for the bound demuxer, then opens the codec.
 			 */
 			void Open() noexcept override;
 
 			/**
-			 * @brief Decodes one packet and pushes frames to @ref m_out.
+			 * @brief Decodes one packet and pushes frames to m_out.
 			 * @param item Incoming packet.
 			 */
 			void Work(std::shared_ptr<Item> item) noexcept override;
@@ -303,26 +287,48 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Finish() noexcept override;
 
-		private:
 			/**
-			 * @brief Marks a hard error and drops the backend.
-			 * @param reason Message.
+			 * @brief Pins the opened backend.
+			 * @param backend Opened decode backend.
 			 */
-			void Fail(std::string reason) noexcept;
+			void Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept;
 
 			/**
-			 * @brief Pins the opened backend. Called from demuxer >> decoder.
-			 * @param engine Opened engine.
+			 * @brief Copies origin File tags onto this decoder.
+			 * @param language Stream language, or empty.
+			 * @param title Stream title, or empty.
 			 */
-			void Bind(std::unique_ptr<Engine::Decoder::Engine> engine) noexcept;
+			void Stamp(std::optional<std::string> language, std::optional<std::string> title) noexcept;
 
-			int m_index;											///< Origin track
-			DecoderFlags m_flags;									///< Heuristics
-			std::optional<std::string> m_language;					///< Language tag
-			std::optional<std::string> m_title;						///< Title tag
-			std::optional<std::string> m_implementation;			///< Pinned decoder name
-			Features m_require;										///< Extra required bits
-			Features m_capabilities;								///< Opened capabilities
-			std::unique_ptr<Engine::Decoder::Engine> m_engine;		///< Decode backend
+			/**
+			 * @brief Records the demuxer of demuxer >> decoder.
+			 * @param demuxer Origin demuxer.
+			 */
+			void AttachOrigin(Demuxer& demuxer) noexcept;
+
+			/**
+			 * @brief Binds a decoded handle and copies stream tags onto @p frame.
+			 * @param frame Public unit.
+			 * @param backend Holder of the FFmpeg frame. May be empty.
+			 */
+			void Attach(Frame& frame, std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept;
+
+			/**
+			 * @brief Closes the duration of a subtitle cue on @p frame.
+			 * @param frame Public unit produced by this decoder.
+			 * @param duration Cue length on the stream clock.
+			 */
+			void CloseCue(Frame& frame, Property::Duration duration) noexcept;
+
+			static constexpr std::size_t Ceiling = 8;							///< Input hopper ceiling
+			int m_index;														///< Origin track
+			DecoderFlags m_flags;												///< Heuristics
+			std::optional<std::string> m_language;								///< Language tag
+			std::optional<std::string> m_title;									///< Title tag
+			std::optional<std::string> m_implementation;						///< Pinned decoder name
+			Features m_require;													///< Extra required bits
+			Features m_capabilities;											///< Opened capabilities
+			Demuxer* m_origin = nullptr;										///< Bound demuxer
+			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;				///< Decode backend
 	};
 }

@@ -36,40 +36,22 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/backend/pipeline/decoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/decoder.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/exception.hxx>
+using StormByte::Multimedia::Backend::Pipeline::Decoder;
+using StormByte::Multimedia::Backend::Pipeline::Frame;
+using PublicDecoder = StormByte::Multimedia::Pipeline::Decoder;
+using PublicFrame = StormByte::Multimedia::Pipeline::Frame;
 
-#include <functional>
-#include <memory>
-#include <vector>
+void Decoder::BindFrame(PublicDecoder& owner, PublicFrame& frame,
+	std::unique_ptr<Frame> holder) noexcept {
+	owner.Attach(frame, std::move(holder));
+}
 
-/**
- * @namespace StormByte::Multimedia
- * @brief Public media types: codecs, containers, registry and stream kinds.
- */
-namespace StormByte::Multimedia {
-	class Codec;
-	class Container;
-	class File;
-	class Stream;
-
-	/**
-	 * @namespace StormByte::Multimedia::Pipeline
-	 * @brief Demux / decode / filter / encode / mux types.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Pipeline {
-		class Transcoder;	///< File-to-file job facade.
-	}
-
-	using ExpectedCodec = StormByte::Expected<const Codec&, CodecNotFoundException>;								///< Result of FindCodec
-	using ExpectedContainer = StormByte::Expected<const Container&, ContainerNotFoundException>;					///< Result of FindContainer
-	using ExpectedFile = StormByte::Expected<File, FileOpenException>;												///< Result of OpenFile
-	using ExpectedTranscoder = StormByte::Expected<std::unique_ptr<Pipeline::Transcoder>, TranscodeException>;		///< Result of Transcoder::Open
-	using CodecRefs = std::vector<std::reference_wrapper<const Codec>>;												///< List of codec references
-	using ContainerRefs = std::vector<std::reference_wrapper<const Container>>;									///< List of container references
-	using Streams = std::vector<Stream>;																			///< Ordered streams
+void Decoder::CloseCue(PublicDecoder& owner, PublicFrame& frame,
+	StormByte::Multimedia::Property::Duration duration) noexcept {
+	owner.CloseCue(frame, std::move(duration));
 }

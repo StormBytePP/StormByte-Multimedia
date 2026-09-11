@@ -45,6 +45,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -54,11 +55,6 @@
 /**
  * @namespace StormByte::Multimedia::Buffer
  * @brief Private tube queues.
- *
- * Hopper is one SPSC bucket. Sink maps integer keys to hoppers.
- * Not a media source; that Buffer is a later type.
- *
- * @ingroup buffer
  */
 namespace StormByte::Multimedia::Buffer {
 	class Sink;
@@ -71,64 +67,30 @@ namespace StormByte::Multimedia::Buffer {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Decoder;
 	class Demuxer;
+	class Encoder;
 	class Muxer;
 	class Remuxer;
 	class Route;
 	class Router;
 	class Step;
-	class Transcode;
-
-	namespace Engine::Transcode {
-		class Engine;
-	}
 
 	/**
-	 * @brief Shares @p from output hoppers with @p to input.
+	 * @brief Shares Plan and binds every output hopper of @p from onto @p to.
+	 *
+	 * Demuxer fan-out is not this operator. A demuxer binds one origin
+	 * index at a time from the leaf operator>>.
+	 *
 	 * @param from Producer step.
 	 * @param to Consumer step.
 	 * @return @p to.
-	 *
-	 * Calls @c to.m_in->Notify(to.Wake()) and @c from.m_out->Bind(to.m_in).
-	 * Does not create per-track buckets; @ref Route::Close /
-	 * @ref Sink::Bind(int, Sink&) does that.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Step& operator>>(Step& from, Step& to) noexcept;
 
 	/**
 	 * @class Step
-	 * @brief One threaded stage with an input @ref Sink and an output @ref Sink.
-	 *
-	 * Abstract. @ref Work is one consumed unit. Default @ref Work is a
-	 * no-op so Demuxer need not override it. @ref Launch starts the
-	 * worker. @ref Pump is the thread body. Default @ref Pump is the
-	 * consumer loop. Demuxer overrides @ref Pump and reads the File.
-	 * Muxer uses the default loop and does not write to @ref m_out.
-	 * Filters inherit Step as protected and expose @ref Launch through
-	 * the filter facade.
-	 *
-	 * @ref Receives and @ref Produces are @ref Kinds masks fixed at
-	 * construction. Demuxer receives nothing and produces Packet. Muxer
-	 * receives Packet and produces nothing. Decoder is Packet to Frame.
-	 * Encoder is Frame to Packet. Remuxer is Packet to Packet.
-	 *
-	 * No @c In() / @c Out() getters: derived types and friends use
-	 * @ref m_in / @ref m_out.
-	 *
-	 * No copy. Move is deleted. One condition variable. Bind of a
-	 * track must run before a Push of that track unblocks.
-	 * @ref Route, @ref Router, @ref Transcode and @c operator>> are
-	 * friends.
-	 *
-	 * Demuxer input and Muxer output stay at zero buckets until Bind.
-	 * Decoder and Encoder are one track and one bucket.
-	 *
-	 * @ref Fail kills the job. Buckets have no Fail.
-	 * Lifetime of a live step is a @c shared_ptr to the concrete type.
-	 *
-	 * Empty @ref Sink::Pop with @ref Sink::EoF is tube EoF.
-	 * @ref Hopper::EoF may already be set while the bucket still has
-	 * items; drain with Pop.
+	 * @brief One threaded stage with an input Sink and an output Sink.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -138,13 +100,13 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Remuxer;
 		friend class Route;
 		friend class Router;
-		friend class Transcode;
-		friend class Engine::Transcode::Engine;
+		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 		friend Demuxer& operator>>(Plan&& plan, Demuxer& demuxer) noexcept;
+		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
 		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
-		friend Step& operator>>(Step& from, Step& to) noexcept;
 		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
-		friend Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+		friend Step& operator>>(Step& from, Step& to) noexcept;
 
 		public:
 			/**
@@ -152,35 +114,15 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @{
 			 */
 
-			/**
-			 * @brief Copy constructor.
-			 * @param other Source step.
-			 */
 			Step(const Step& other) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Step to take.
-			 */
 			Step(Step&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Joins the worker if @ref Launch ran.
+			 * @brief Destructor. Signals stop and joins the worker if Launch ran.
 			 */
 			virtual ~Step() noexcept;
 
-			/**
-			 * @brief Copy assignment.
-			 * @param other Source step.
-			 * @return *this.
-			 */
 			Step& operator=(const Step& other) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Step to take.
-			 * @return *this.
-			 */
 			Step& operator=(Step&& other) noexcept = delete;
 
 			/**
@@ -209,7 +151,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Bound job intention, if any.
-			 * @return Shared Plan, or empty. The pointer cannot be reseated.
+			 * @return Shared Plan, or empty.
 			 */
 			inline const std::shared_ptr<class Plan>& Plan() const noexcept {
 				return m_plan;
@@ -226,7 +168,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Kinds this step consumes.
-			 * @return Mask set at construction. Empty if this step does not take items.
+			 * @return Mask set at construction.
 			 */
 			inline const Kinds& Receives() const noexcept {
 				return m_receives;
@@ -234,11 +176,26 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Kinds this step emits.
-			 * @return Mask set at construction. Empty if this step does not emit items.
+			 * @return Mask set at construction.
 			 */
 			inline const Kinds& Produces() const noexcept {
 				return m_produces;
 			}
+
+			/**
+			 * @brief Whether Open has finished without Fail.
+			 * @return true after Step::Open.
+			 */
+			bool Ready() const noexcept;
+
+			/**
+			 * @brief Ceiling of this step's input hopper.
+			 * @return Max queued items. 0 means unbounded.
+			 *
+			 * Leaves override this and return their private Ceiling.
+			 * Bind sites call it after creating the destination bucket.
+			 */
+			virtual std::size_t InputCeiling() const noexcept;
 
 			/**
 			 * @}
@@ -251,7 +208,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether this step has failed.
-			 * @return true after @ref Fail.
+			 * @return true after Fail.
 			 */
 			bool Failed() const noexcept;
 
@@ -262,8 +219,12 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @brief Marks a hard error and wakes the worker.
-			 * @param reason Message. One failed step aborts the job.
+			 * @brief Marks a hard error, closes both hoppers and wakes the worker.
+			 *
+			 * Bound neighbors unblock on hopper EoF. Does not join the
+			 * worker; the worker may be the caller.
+			 *
+			 * @param reason Message.
 			 */
 			void Fail(std::string reason) noexcept;
 
@@ -294,55 +255,53 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Prepare-once hook. Default no-op.
+			 * @brief Prepare-once hook. Marks Ready and wakes waiters.
 			 *
-			 * Called from the default @ref Pump before the first Pop.
-			 * Must be @c noexcept. On error call @ref Fail.
+			 * Leaves that override Open must call Step::Open at the end
+			 * after their backend is usable. Must be noexcept. On error
+			 * call Fail and return without Step::Open.
 			 */
 			virtual void Open() noexcept;
 
 			/**
-			 * @brief One unit taken from @ref m_in.
+			 * @brief One unit taken from m_in.
 			 * @param item Never empty.
-			 *
-			 * Consumer body. Default no-op (Demuxer overrides @ref Pump
-			 * instead). Must be @c noexcept. On error call @ref Fail.
 			 */
 			virtual void Work(std::shared_ptr<Item> item) noexcept;
 
 			/**
-			 * @brief Input is @ref Sink::EoF and the last Pop was empty.
-			 *
-			 * Called from the default @ref Pump before @ref m_out EoF.
-			 * Default no-op. Must be @c noexcept.
+			 * @brief Input is Sink EoF and the last Pop was empty.
 			 */
 			virtual void Finish() noexcept;
 
 			/**
-			 * @brief Body of the worker thread started by @ref Launch.
-			 *
-			 * Default: @ref Open, Pop / @ref Wait / @ref Work until
-			 * EoF, @ref Finish, then @ref m_out EoF. Demuxer overrides
-			 * this and reads the File. Must be @c noexcept.
+			 * @brief Body of the worker after Open returns.
 			 */
 			virtual void Pump() noexcept;
 
 			/**
-			 * @brief Sleeps on @ref Wake until @ref Sink::Ready or @ref Fail.
-			 *
-			 * Predicate: @ref Failed or @ref Sink::Ready. Ready is
-			 * true when a hopper has an item or the input is EoF and
-			 * empty. Does not pop. EoF may still have items; Ready
-			 * then stays true until they are drained.
+			 * @brief Sleeps on Wake until hopper Ready, Fail or stop.
 			 */
 			void Wait() noexcept;
 
 			/**
-			 * @brief Starts the worker thread that runs @ref Pump.
-			 *
-			 * Idempotent no-op if the worker already runs.
+			 * @brief Starts the worker: Open, then Pump if not Failed.
 			 */
 			void Launch() noexcept;
+
+			/**
+			 * @brief Stops the worker and joins it.
+			 *
+			 * Safe to call more than once. Leaves call this from their
+			 * destructor before releasing a backend the worker still uses.
+			 */
+			void Halt() noexcept;
+
+			/**
+			 * @brief Worker must return (destructor stop or Fail).
+			 * @return true if Pump should exit.
+			 */
+			bool Stopping() const noexcept;
 
 			/**
 			 * @}
@@ -350,15 +309,17 @@ namespace StormByte::Multimedia::Pipeline {
 
 			std::unique_ptr<Buffer::Sink> m_in;			///< Input buckets
 			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
-			Kinds m_receives;							///< @ref Receives
-			Kinds m_produces;							///< @ref Produces
+			Kinds m_receives;							///< Receives
+			Kinds m_produces;							///< Produces
 
 		private:
 			std::shared_ptr<class Plan> m_plan;			///< Current plan
 			std::condition_variable m_wake;				///< Single consumer CV
-			std::mutex m_wait;							///< Mutex for @ref m_wake
+			std::mutex m_wait;							///< Mutex for m_wake
 			std::jthread m_worker;						///< Owned worker
-			std::atomic<bool> m_failed;					///< @ref Fail latched
-			std::optional<std::string> m_error;			///< @ref Fail message
+			std::atomic<bool> m_failed;					///< Fail latched
+			std::atomic<bool> m_stop;					///< Destructor requested stop
+			std::atomic<bool> m_ready;					///< Open finished
+			std::optional<std::string> m_error;			///< Fail message
 	};
 }

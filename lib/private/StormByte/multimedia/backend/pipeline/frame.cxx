@@ -36,61 +36,66 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
-#include <StormByte/multimedia/name_thread.hxx>
-#include <StormByte/multimedia/pipeline/demuxer.hxx>
-#include <StormByte/multimedia/pipeline/packet.hxx>
-#include <StormByte/multimedia/pipeline/remuxer.hxx>
+#include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/pipeline/frame.hxx>
+#include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/video.hxx>
+#include <StormByte/multimedia/type.hxx>
 
-#include <string>
-
-using namespace StormByte::Multimedia::Pipeline;
-
-Remuxer::Remuxer(int in) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{Kind::Packet}), m_index(in) {
-	Launch();
+extern "C" {
+	#include <libavutil/channel_layout.h>
+	#include <libavutil/frame.h>
 }
 
-Remuxer::~Remuxer() noexcept {
-	Halt();
+using namespace StormByte::Multimedia;
+using namespace StormByte::Multimedia::Backend::Pipeline;
+
+Frame::Frame(const Frame& other) noexcept
+: m_handle(other.m_handle), m_payloadReady(other.m_payloadReady) {}
+
+Frame& Frame::operator=(const Frame& other) noexcept {
+	if (this == &other)
+		return *this;
+	m_handle = other.m_handle;
+	m_payloadReady = other.m_payloadReady;
+	return *this;
 }
 
-void Remuxer::Open() noexcept {
-	if (m_index < 0) {
-		Fail("remuxer origin is negative");
+void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
+	const ::AVFrame* raw = m_handle.Get();
+	if (!raw)
 		return;
+
+	switch (frame.Type()) {
+		case Type::Video: {
+			if (!frame.m_video)
+				return;
+			if (raw->width <= 0 || raw->height <= 0)
+				return;
+			frame.m_video = Property::Video(
+				frame.m_video->Color(),
+				Property::Resolution{
+					static_cast<std::uint32_t>(raw->width),
+					static_cast<std::uint32_t>(raw->height)
+				},
+				frame.m_video->HDR10(),
+				frame.m_video->FrameRate());
+			break;
+		}
+		case Type::Audio: {
+			if (!frame.m_audio)
+				return;
+			if (raw->sample_rate <= 0 || raw->ch_layout.nb_channels <= 0)
+				return;
+			frame.m_audio = Property::Audio(
+				frame.m_audio->Layout(),
+				static_cast<std::uint32_t>(raw->sample_rate),
+				static_cast<std::uint8_t>(raw->ch_layout.nb_channels),
+				frame.m_audio->BitRate(),
+				frame.m_audio->Profile());
+			break;
+		}
+		default:
+			break;
 	}
-	Step::Open();
-}
-
-void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
-	NameThread("STMM:Remuxer:" + std::to_string(m_index));
-	if (Failed())
-		return;
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("remuxer expected a packet");
-		return;
-	}
-	if (packet->Track() != m_index)
-		return;
-	m_out->Push(packet);
-}
-
-void Remuxer::Finish() noexcept {}
-
-Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept {
-	if (remuxer.Failed())
-		return remuxer;
-	if (!remuxer.m_plan)
-		remuxer.m_plan = demuxer.m_plan;
-	if (demuxer.Failed()) {
-		remuxer.Fail(demuxer.Error().value_or("demuxer failed"));
-		return remuxer;
-	}
-	remuxer.m_in->Notify(remuxer.Wake());
-	demuxer.m_out->Bind(remuxer.In(), *remuxer.m_in);
-	if (const std::size_t cap = remuxer.InputCeiling(); cap > 0)
-		remuxer.m_in->Capacity(remuxer.In(), cap);
-	return remuxer;
 }

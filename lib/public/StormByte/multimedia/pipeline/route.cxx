@@ -112,6 +112,8 @@ void Route::Close(Step& origin, Step& destination) noexcept {
 		origin.m_out->Bind(m_track, *first->m_in);
 		last->m_out->Bind(m_track, *destination.m_in);
 	}
+	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
+		destination.m_in->Capacity(m_track, cap);
 }
 
 std::vector<Filter::Report> Route::Reports() const noexcept {

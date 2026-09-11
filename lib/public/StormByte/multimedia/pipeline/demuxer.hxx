@@ -38,9 +38,11 @@
 
 #pragma once
 
+#include <StormByte/buffer/fifo.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
+#include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <atomic>
@@ -49,7 +51,25 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <string>
+
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Multimedia-owned pipeline stages and unit holders.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Decoder;	///< Decode backend behind @ref StormByte::Multimedia::Pipeline::Decoder.
+	class Demuxer;	///< Demux backend behind @ref StormByte::Multimedia::Pipeline::Demuxer.
+}
+
+/**
+ * @namespace StormByte::Multimedia
+ * @brief Public multimedia types: codecs, containers, streams and files.
+ */
+namespace StormByte::Multimedia {
+	class Origin;
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -61,108 +81,35 @@ namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
 	class Muxer;
+	class Packet;
 	class Plan;
 	class Remuxer;
-	class Transcode;
 
 	/**
-	 * @namespace Engine
-	 * @brief Private backends. Public headers only forward-declare them.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Demux
-		 * @brief Demuxer backends. Untouched until the Backend step.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Demux {
-			class Engine;
-
-			/**
-			 * @namespace Details
-			 * @brief Container demuxer engine.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Container;
-			}
-		}
-
-		/**
-		 * @namespace Mux
-		 * @brief Muxer backends. Untouched until the Backend step.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Mux {
-			/**
-			 * @namespace Details
-			 * @brief Container muxer engine.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Container;
-			}
-		}
-
-		/**
-		 * @namespace Transcode
-		 * @brief Job map and coordinator behind @ref Transcode.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Transcode {
-			class Engine;
-		}
-	}
-
-	/**
-	 * @brief Opens @p decoder on a stream of @p demuxer and binds that track.
-	 * @param demuxer Open demuxer.
-	 * @param decoder Destination.
+	 * @brief Binds one origin track of @p demuxer to @p decoder.
+	 * @param demuxer Origin demuxer.
+	 * @param decoder Destination decoder.
 	 * @return @p decoder.
-	 *
-	 * Attaches the decode backend and binds hoppers.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-
-	/**
-	 * @brief Forwards source attachments from @p demuxer onto @p muxer. Never throws.
-	 * @param demuxer Open demuxer.
-	 * @param muxer Destination.
-	 * @return @p muxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
 
 	/**
 	 * @class Demuxer
 	 * @brief Reads interleaved compressed packets from the Plan origin.
 	 *
-	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * @c plan >> demuxer stores the Plan and wakes @ref Pump. Pump runs
-	 * @ref Plan::Check, opens the format context and reads. There is
-	 * no @c Open hook and no public Launch.
-	 *
-	 * Input sink has zero buckets. Units that leave Pump are
-	 * @c std::shared_ptr<Packet>. Empty Read is EoF.
+	 * Only tracks listed in the bound Plan enter the tube. An origin
+	 * stream omitted from Plan::add is never pushed.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
-		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
-		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+		friend class Backend::Pipeline::Demuxer;
+		friend class Decoder;
 		friend class Muxer;
-		friend class Remuxer;
-		friend class Transcode;
-		friend class Engine::Demux::Details::Container;
-		friend class Engine::Mux::Details::Container;
-		friend class Engine::Transcode::Engine;
+		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
+		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
+		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
 
 		public:
 			/**
@@ -171,7 +118,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Demuxer. Launches; @ref Pump waits for a Plan.
+			 * @brief Demuxer. Launches; Open waits for a Plan.
 			 */
 			Demuxer() noexcept;
 
@@ -207,14 +154,14 @@ namespace StormByte::Multimedia::Pipeline {
 			Demuxer& operator=(Demuxer&& other) noexcept = delete;
 
 			/**
+			 * @}
+			 */
+
+			/**
 			 * @brief true if open, not failed and not at EOF.
 			 * @return Open and readable.
 			 */
 			explicit operator bool() const noexcept;
-
-			/**
-			 * @}
-			 */
 
 			/**
 			 * @name Source
@@ -237,9 +184,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-		protected:
+		private:
 			/**
-			 * @brief Waits for a Plan, checks it, opens the source, then reads.
+			 * @brief Waits for a Plan, checks it and opens the origin.
+			 */
+			void Open() noexcept override;
+
+			/**
+			 * @brief Reads packets until Fail, stop or EOF.
+			 *
+			 * Origin streams not listed in the Plan are discarded
+			 * and never enter a hopper.
 			 */
 			void Pump() noexcept override;
 
@@ -248,31 +203,46 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Finish() noexcept override;
 
-		private:
 			/**
-			 * @brief Marks a hard error and wakes the Plan waiter.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept;
-
-			/**
-			 * @brief Marks end of source. Called by Details::Container on AVERROR_EOF.
+			 * @brief Marks end of source. Called by the backend on EOF.
 			 */
 			void ReachedEof() noexcept;
 
 			/**
 			 * @brief Origin snapshot owned by the bound Plan.
 			 * @return File.
-			 *
-			 * For the demuxer engine. Valid after @c plan >> demuxer.
-			 * Undefined if no Plan is set.
 			 */
 			const File& OriginFile() const noexcept;
 
-			std::unique_ptr<Engine::Demux::Engine> m_engine;	///< Format context backend
-			bool m_eof;											///< End of source
-			std::mutex m_readyMutex;							///< Guards Plan / engine install
-			std::condition_variable m_ready;					///< Woken when a Plan arrives
-			std::atomic<std::int64_t> m_positionNs;				///< Last packet Pts, or -1
+			/**
+			 * @brief Path or Consumer held by the origin File.
+			 * @return Origin. Valid after plan >> demuxer.
+			 */
+			Origin& BoundOrigin() noexcept;
+
+			/**
+			 * @brief Opens the decode backend for @p decoder.
+			 * @param decoder Destination decoder.
+			 * @return Backend, or empty after Fail.
+			 */
+			std::unique_ptr<Backend::Pipeline::Decoder> OpenDecoder(Decoder& decoder) noexcept;
+
+			/**
+			 * @brief Builds a public packet. Called from the backend.
+			 */
+			std::shared_ptr<Packet> Wrap(
+				int track,
+				Type type,
+				StormByte::Buffer::FIFO payload,
+				std::optional<Property::Duration> pts,
+				std::optional<Property::Duration> dts,
+				std::optional<Property::Duration> duration,
+				bool keyframe) noexcept;
+
+			std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;	///< Format backend
+			bool m_eof;												///< End of source
+			std::mutex m_planMutex;									///< Guards Plan wait
+			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
+			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1
 	};
 }

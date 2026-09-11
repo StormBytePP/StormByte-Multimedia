@@ -45,11 +45,33 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Multimedia-owned pipeline stages and unit holders.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Muxer;	///< Mux backend behind @ref StormByte::Multimedia::Pipeline::Muxer.
+}
+
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
+ * @brief Matroska mux leaf.
+ *
+ * @ingroup multimedia_pipeline
+ */
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
+	class Container;	///< Matroska mux backend.
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -62,47 +84,22 @@ namespace StormByte::Multimedia::Pipeline {
 	class Encoder;
 	class Muxer;
 	class Remuxer;
-	class Transcode;
-
-	/**
-	 * @namespace Engine
-	 * @brief Private backends. Public headers only forward-declare them.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	namespace Engine {
-		/**
-		 * @namespace Mux
-		 * @brief Muxer backends. Untouched until the Backend step.
-		 *
-		 * @ingroup multimedia_pipeline
-		 */
-		namespace Mux {
-			class Engine;
-
-			/**
-			 * @namespace Details
-			 * @brief Container muxer engine.
-			 *
-			 * @ingroup multimedia_pipeline
-			 */
-			namespace Details {
-				class Container;
-				class Attachment;
-			}
-		}
-	}
 
 	/**
 	 * @brief Reserves @p encoder as an output track of @p muxer.
 	 * @param encoder Live encoder.
 	 * @param muxer Destination.
 	 * @return @p encoder.
-	 *
-	 * Does not bind hoppers. Transcode / @ref Route bind
-	 * @c encoder.m_out to @c muxer.m_in on the origin track.
 	 */
 	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
+
+	/**
+	 * @brief Reserves @p remuxer as an output track of @p muxer.
+	 * @param remuxer Live remuxer.
+	 * @param muxer Destination.
+	 * @return @p remuxer.
+	 */
+	STORMBYTE_MULTIMEDIA_PUBLIC Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 
 	/**
 	 * @brief Binds the output path of @p muxer.
@@ -121,8 +118,12 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
 
 	/**
-	 * @brief Forwards source attachments from @p demuxer onto @p muxer.
-	 * @param demuxer Open demuxer.
+	 * @brief Binds @p demuxer as remux origin and forwards its attachments.
+	 *
+	 * Required when any remux track is reserved. Without it the muxer
+	 * cannot clone origin codec parameters.
+	 *
+	 * @param demuxer Origin demuxer. Must outlive header write.
 	 * @param muxer Destination.
 	 * @return @p muxer.
 	 */
@@ -132,23 +133,16 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Muxer
 	 * @brief Writes interleaved packets to a destination container.
 	 *
-	 * A @ref Step, @c final. The constructor calls @ref Step::Launch.
-	 * Encoded tracks come from @c encoder >> muxer. Remux tracks come
-	 * from @c remuxer >> muxer. @ref Work writes to the container, not
-	 * to @ref m_out. Header write waits until reserved encode
-	 * backends are open.
-	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
+		friend class Backend::Pipeline::Detail::Muxer::Matroska::Container;
+		friend class Backend::Pipeline::Muxer;
 		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
-		friend Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
 		friend Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
 		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
-		friend Muxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
-		friend class Transcode;
-		friend class Engine::Mux::Details::Container;
-		friend class Engine::Mux::Details::Attachment;
+		friend Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
+		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 
 		public:
 			/**
@@ -159,8 +153,6 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Muxer for @p container. Destination path is bound later.
 			 * @param container Writable registry container.
-			 *
-			 * Starts the worker. @ref Pop waits until Bind creates buckets.
 			 */
 			explicit Muxer(const Container& container) noexcept;
 
@@ -177,7 +169,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Muxer(Muxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Closes the backend.
+			 * @brief Destructor.
 			 */
 			~Muxer() noexcept override;
 
@@ -206,14 +198,15 @@ namespace StormByte::Multimedia::Pipeline {
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief true after @ref Finish flushed the trailer, or after @ref Fail.
+			 * @brief true after Finish flushed the trailer, or after Fail.
 			 * @return Muxer will not accept more packets.
 			 */
 			bool Closed() const noexcept;
 
 			/**
 			 * @brief Presentation time of the last packet written.
-			 * @return Pts, or empty until a packet with Pts is written.
+			 * @return Pts of the last video packet, or of audio if no video
+			 *         has been written yet.
 			 */
 			std::optional<Property::Duration> Position() const noexcept;
 
@@ -223,14 +216,59 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Container& Destination() const noexcept;
 
-		protected:
 			/**
-			 * @brief Prepare-once. Does not Fail if the path is still unbound.
+			 * @brief Ceiling of the muxer input hopper.
+			 * @return Max queued packets. Never 0.
+			 */
+			std::size_t InputCeiling() const noexcept override {
+				return Ceiling;
+			}
+
+			/**
+			 * @name Stream tags
+			 * @{
+			 */
+
+			/**
+			 * @brief Language tag for mux output @p output_index.
+			 * @param output_index Mux destination order key.
+			 * @return Tag, or empty.
+			 */
+			std::optional<std::string> Language(int output_index) const noexcept;
+
+			/**
+			 * @brief Sets the language tag for mux output @p output_index.
+			 * @param output_index Mux destination order key.
+			 * @param language BCP-47 / ISO tag. Empty clears.
+			 */
+			void Language(int output_index, std::string language) noexcept;
+
+			/**
+			 * @brief Title tag for mux output @p output_index.
+			 * @param output_index Mux destination order key.
+			 * @return Title, or empty.
+			 */
+			std::optional<std::string> Title(int output_index) const noexcept;
+
+			/**
+			 * @brief Sets the title tag for mux output @p output_index.
+			 * @param output_index Mux destination order key.
+			 * @param title Stream title. Empty clears.
+			 */
+			void Title(int output_index, std::string title) noexcept;
+
+			/**
+			 * @}
+			 */
+
+		private:
+			/**
+			 * @brief Marks Ready when a backend exists.
 			 */
 			void Open() noexcept override;
 
 			/**
-			 * @brief Writes one packet to the container. Does not touch @ref m_out.
+			 * @brief Writes one packet to the container.
 			 * @param item Incoming packet.
 			 */
 			void Work(std::shared_ptr<Item> item) noexcept override;
@@ -240,16 +278,30 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Finish() noexcept override;
 
-		private:
 			/**
-			 * @brief Marks a hard error and closes the backend.
-			 * @param reason Message.
+			 * @brief Copies an opened encoder into a libav output stream.
+			 * @param encoder Reserved encode lane.
+			 * @param avStream libav AVStream*.
+			 * @return false if the encoder has no context.
 			 */
-			void Fail(std::string reason) noexcept;
+			bool BindEncoderStream(Encoder& encoder, void* avStream) noexcept;
 
-			const Container* m_container;						///< Destination container
-			std::unique_ptr<Engine::Mux::Engine> m_engine;		///< Format backend
-			std::atomic<bool> m_closed;							///< Set by Finish / Fail
-			std::atomic<std::int64_t> m_positionNs;				///< Last written Pts, or -1
+			/**
+			 * @brief Clones remux codecpar from the bound demuxer.
+			 * @param inIndex Origin stream index.
+			 * @param params Owned AVCodecParameters* on success.
+			 * @param timeBase AVRational*.
+			 * @return false if the origin is not ready.
+			 */
+			bool RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept;
+
+			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
+			const Container* m_container;										///< Destination container
+			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
+			Demuxer* m_origin;													///< Set only by demuxer >> muxer. Not owned
+			std::map<int, std::string> m_language;								///< Per-output language
+			std::map<int, std::string> m_title;									///< Per-output title
+			std::atomic<bool> m_closed;											///< Set by Finish / Fail
+			std::atomic<std::int64_t> m_positionNs;								///< Last written Pts, or -1
 	};
 }

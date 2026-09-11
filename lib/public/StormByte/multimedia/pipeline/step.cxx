@@ -43,14 +43,15 @@ using namespace StormByte::Multimedia::Pipeline;
 
 Step::Step(Kinds receives, Kinds produces) noexcept
 : m_in(std::make_unique<Buffer::Sink>()),
-m_out(std::make_unique<Buffer::Sink>()),
-m_receives(receives),
-m_produces(produces),
-m_failed(false) {}
+	m_out(std::make_unique<Buffer::Sink>()),
+	m_receives(receives),
+	m_produces(produces),
+	m_failed(false),
+	m_stop(false),
+	m_ready(false) {}
 
 Step::~Step() noexcept {
-	if (m_worker.joinable())
-		m_worker.request_stop();
+	Halt();
 }
 
 void Step::Fail(std::string reason) noexcept {
@@ -65,6 +66,18 @@ bool Step::Failed() const noexcept {
 	return m_failed.load(std::memory_order_acquire);
 }
 
+bool Step::Ready() const noexcept {
+	return m_ready.load(std::memory_order_acquire);
+}
+
+std::size_t Step::InputCeiling() const noexcept {
+	return 0;
+}
+
+bool Step::Stopping() const noexcept {
+	return m_stop.load(std::memory_order_acquire) || Failed();
+}
+
 const std::optional<std::string>& Step::Error() const noexcept {
 	return m_error;
 }
@@ -76,11 +89,14 @@ std::condition_variable& Step::Wake() noexcept {
 void Step::Wait() noexcept {
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Failed() || m_in->Ready();
+		return Stopping() || m_in->Ready();
 	});
 }
 
-void Step::Open() noexcept {}
+void Step::Open() noexcept {
+	m_ready.store(true, std::memory_order_release);
+	m_wake.notify_all();
+}
 
 void Step::Work(std::shared_ptr<Item>) noexcept {}
 
@@ -88,15 +104,16 @@ void Step::Finish() noexcept {}
 
 void Step::Pump() noexcept {
 	for (;;) {
-		if (Failed())
+		if (Stopping())
 			break;
 		std::shared_ptr<Item> item = m_in->Pop();
 		if (!item) {
-			if (!m_in->EoF()) {
+			if (!m_in->EoF() && !Stopping()) {
 				Wait();
 				continue;
 			}
-			Finish();
+			if (!Stopping())
+				Finish();
 			break;
 		}
 		Work(std::move(item));
@@ -108,15 +125,31 @@ void Step::Launch() noexcept {
 	if (m_worker.joinable())
 		return;
 	m_in->Notify(m_wake);
-	m_worker = std::jthread([this]() {
+	m_worker = std::jthread([this](std::stop_token token) {
+		(void)token;
 		Open();
+		if (Stopping())
+			return;
 		Pump();
 		m_out->Eof();
 	});
 }
 
+void Step::Halt() noexcept {
+	m_stop.store(true, std::memory_order_release);
+	m_in->Eof();
+	m_out->Eof();
+	m_wake.notify_all();
+	if (m_worker.joinable()) {
+		m_worker.request_stop();
+		m_worker.join();
+	}
+}
+
 Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
 	if (!to.m_plan)
 		to.m_plan = from.m_plan;
+	to.m_in->Notify(to.Wake());
+	from.m_out->Bind(*to.m_in);
 	return to;
 }
