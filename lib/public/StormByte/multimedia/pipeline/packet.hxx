@@ -59,28 +59,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Packet
 	 * @brief One compressed access unit.
 	 *
-	 * Public API is move-only. Copy constructor and copy assignment stay
-	 * private and clone metadata, the payload FIFO and the backend
-	 * @c AVPacket when @ref Engine::Packet::Engine exists.
-	 *
-	 * Identity lives on @ref Item. @ref Item::Kind is always
-	 * @ref Kind::Packet. Construction is
-	 * @c (track, type, producer, …). Do not stamp
-	 * @ref Type::Copy on a packet: that value is a track mode, not a
-	 * kind of access unit. An empty packet is @ref Type::Unknown
-	 * with track -1.
-	 *
-	 * @ref Item::Producer is set at construction. Passthrough and
-	 * filter @c Save do not overwrite it. @ref Item::Track is the
-	 * origin stream index; the muxer does not stamp a new one.
-	 *
-	 * Move leaves the source as the empty sentinel, same contract as
-	 * @ref Frame. Destructor and move are out of line so this header
-	 * can forward-declare @ref Engine::Packet::Engine.
-	 *
-	 * Pts / Dts / Duration are @ref Property::Duration values on the
-	 * stream clock, not FFmpeg ticks. Side data uses the same
-	 * @ref SideData blobs as Frame; the bag is mutable here.
+	 * In libav that is an @c AVPacket: compressed bytes for one
+	 * picture, one audio block or one subtitle event. In Multimedia
+	 * it is what packet filters, @ref Remuxer and @ref Muxer see —
+	 * origin track, timestamps, payload and side data — without
+	 * opening a codec.
 	 *
 	 * @see Item
 	 * @see Frame

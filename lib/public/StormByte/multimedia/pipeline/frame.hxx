@@ -59,54 +59,19 @@
  */
 namespace StormByte::Multimedia::Pipeline {
 	/**
-	 * @class Frame
-	 * @brief One decoded access unit.
-	 *
-	 * Public API is move-only. There is no @c Clone().
-	 * Identity (@ref Item::Kind, @ref Item::Type, @ref Item::Track,
-	 * @ref Item::Producer) lives on @ref Item. @ref Item::Kind is
-	 * always @ref Kind::Frame. @ref Item::Producer is set at
-	 * construction and is not stamped again by passthrough or filter
-	 * @c Save.
-	 *
-	 * Move leaves the source as @ref Frame(): @ref Item::Type Unknown,
-	 * track -1, no backend. A moved-from unit is safe to destroy
-	 * or assign over and may live in a container that relocates by
-	 * move (@c deque, @c vector).
-	 *
-	 * @ref Item::Type is the media of this unit
-	 * (@ref StormByte::Multimedia::Type::Video,
-	 * @ref StormByte::Multimedia::Type::Audio or
-	 * @ref StormByte::Multimedia::Type::Subtitle on a live frame;
-	 * @ref StormByte::Multimedia::Type::Unknown on the empty sentinel).
-	 * Do not infer the media from whether @ref Video or @ref Audio
-	 * is populated. Do not stamp
-	 * @ref StormByte::Multimedia::Type::Copy on a frame.
-	 *
-	 * Copy constructor and copy assignment clone metadata, the payload
-	 * FIFO and the backend @c AVFrame and stay private. A public copy
-	 * would look cheap and duplicate every plane plus side data.
-	 *
-	 * Planes stay in an opaque backend buffer until the non-const
-	 * @ref Payload() is called. The const overload does not pull
-	 * planes out. @ref Attachments() is filled at receive time and
-	 * is read-only here; Packet exposes a mutable bag. Heuristics
-	 * fill @ref Video() HDR10 only, never the side-data bag.
-	 * @ref Audio() is set on audio frames; empty on video and subtitle
-	 * frames. @ref Language() and @ref Title() are stream tags copied
-	 * by the decoder when known. Those two tags, plus @ref Payload(),
-	 * are the only public mutators. Video, audio, pts and duration
-	 * change through the filter handle, not through setters here.
-	 *
-	 * Pts and Duration are @ref Property::Duration values on the
-	 * stream clock, not FFmpeg ticks.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Item
-	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg
-	 * @see StormByte::Multimedia::Pipeline::Engine::Frame::Engine
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
+     * @class Frame
+     * @brief One decoded access unit.
+     *
+     * In libav that is an @c AVFrame: one picture or one block of
+     * samples after decode. In Multimedia it is what process and
+     * analytics filters, and @ref Encoder, see — pixels or samples,
+     * timestamps and the stream tags the decoder copied across.
+     *
+     * @see Item
+     * @see Packet
+     *
+     * @ingroup multimedia_pipeline
+     */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Frame: public Item {
 		public:
 			/**

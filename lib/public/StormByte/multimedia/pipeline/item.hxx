@@ -173,16 +173,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Item
-	 * @brief Facade shared by @ref Frame and @ref Packet.
+	 * @brief Common face of a pipeline unit.
 	 *
-	 * Carries @ref Kind, @ref Type, origin track and @ref Producer.
-	 * Construction is private: only the engines and steps that produce
-	 * units (and the two derived types) may build one.
-	 * The muxer does not overwrite the origin track: @ref Track stays the
-	 * input stream index for the life of the unit.
-	 *
-	 * The tube stores @c std::shared_ptr of the derived type through this
-	 * facade. There is no public clone.
+	 * @ref Frame and @ref Packet both inherit it, so a filter, a route
+	 * or a sink can hold one pointer and still know @ref Kind, media
+	 * @ref Type, origin @ref Track and @ref Producer.
 	 *
 	 * @see Frame
 	 * @see Packet
