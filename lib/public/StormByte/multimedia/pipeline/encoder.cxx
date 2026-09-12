@@ -63,7 +63,7 @@ using namespace StormByte::Multimedia::Pipeline;
 
 Encoder::Encoder(int output_index, const Codec& codec) noexcept
 : Step(Kinds{Kind::Frame}, Kinds{Kind::Packet}), m_index(output_index), m_codec(&codec),
-	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION) {
+	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION), m_part(0) {
 	switch (codec.Type()) {
 		case Type::Video:
 			m_backend = std::make_unique<Backend::Pipeline::Detail::Encoder::Video>();
@@ -160,11 +160,16 @@ std::shared_ptr<Packet> Encoder::Wrap(
 	std::optional<Property::Duration> duration,
 	bool keyFrame,
 	std::vector<SideData> attachments) noexcept {
+	if (!m_serial) {
+		Fail("encoder packet has no serial");
+		return {};
+	}
 	return std::shared_ptr<Packet>(new Packet(
 		index, type, Producer::Encoder,
 		std::move(payload),
 		std::move(pts), std::move(dts), std::move(duration),
-		keyFrame, std::move(attachments)));
+		keyFrame, std::move(attachments),
+		*m_serial, m_part));
 }
 
 bool Encoder::MuxBindStream(void* avStream) noexcept {
@@ -225,6 +230,10 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 		Fail("encoder expected a frame");
 		return;
 	}
+	if (!frame->Serial()) {
+		Fail("frame has no serial");
+		return;
+	}
 	if (!m_backend->IsOpen() && !m_backend->Open(*this, *frame))
 		return;
 
@@ -238,6 +247,9 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 		}
 		m_out->Push(packet);
 	}
+
+	m_serial = frame->Serial();
+	m_part = frame->Part();
 
 	for (;;) {
 		if (Failed())

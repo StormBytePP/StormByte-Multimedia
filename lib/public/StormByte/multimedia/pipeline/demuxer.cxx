@@ -108,6 +108,7 @@ std::shared_ptr<Packet> Demuxer::Wrap(
 	std::optional<Property::Duration> dts,
 	std::optional<Property::Duration> duration,
 	bool keyframe) noexcept {
+	const std::uint64_t serial = m_nextSerial[track]++;
 	return std::shared_ptr<Packet>(new Packet(
 		track,
 		type,
@@ -116,7 +117,10 @@ std::shared_ptr<Packet> Demuxer::Wrap(
 		std::move(pts),
 		std::move(dts),
 		std::move(duration),
-		keyframe));
+		keyframe,
+		std::vector<SideData>{},
+		serial,
+		0));
 }
 
 void Demuxer::Open() noexcept {
@@ -141,6 +145,7 @@ void Demuxer::Open() noexcept {
 
 	m_eof = false;
 	m_positionNs.store(-1, std::memory_order_release);
+	m_nextSerial.clear();
 	Step::Open();
 }
 

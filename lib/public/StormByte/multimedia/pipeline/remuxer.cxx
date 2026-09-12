@@ -74,6 +74,10 @@ void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
 	}
 	if (packet->Track() != m_index)
 		return;
+	if (!packet->Serial()) {
+		Fail("packet has no serial");
+		return;
+	}
 	m_out->Push(packet);
 }
 

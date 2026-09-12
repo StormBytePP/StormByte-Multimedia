@@ -46,6 +46,7 @@
 #include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -105,14 +106,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param video Video properties, if this is a video frame.
 			 * @param attachments Raw side-data blobs.
 			 * @param audio Audio properties, if this is an audio frame.
+			 * @param serial Lineage id born at the demuxer for this origin track.
+			 * @param part Sub-id inside @p serial. Zero when the demuxed unit did not split.
 			 */
 			Frame(int track, enum StormByte::Multimedia::Type type, enum Producer producer,
 				StormByte::Buffer::FIFO payload,
-				std::optional<Property::Duration> pts = std::nullopt,
-				std::optional<Property::Duration> duration = std::nullopt,
-				std::optional<Property::Video> video = std::nullopt,
-				std::vector<class SideData> attachments = {},
-				std::optional<Property::Audio> audio = std::nullopt) noexcept;
+				std::optional<Property::Duration> pts,
+				std::optional<Property::Duration> duration,
+				std::optional<Property::Video> video,
+				std::vector<class SideData> attachments,
+				std::optional<Property::Audio> audio,
+				std::uint64_t serial,
+				std::uint64_t part) noexcept;
 
 			/**
 			 * @brief Move constructor.
@@ -177,6 +182,38 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			inline const std::optional<std::string>& Title() const noexcept {
 				return m_title;
+			}
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Lineage
+			 * @{
+			 */
+
+			/**
+			 * @brief Monotonic lineage id assigned when the unit enters the pipe.
+			 * @return Serial born at the demuxer for this origin track; empty on the sentinel.
+			 *
+			 * This is not a decoded-frame count and not an FFmpeg @c nb_frames /
+			 * @c nb_read_frames figure. It identifies one demuxed access unit as it
+			 * travels Demuxer → … → Muxer. Downstream stages copy it.
+			 * @ref Part distinguishes several frames born from the same serial.
+			 */
+			inline const std::optional<std::uint64_t>& Serial() const noexcept {
+				return m_serial;
+			}
+
+			/**
+			 * @brief Sub-id inside @ref Serial when one demuxed unit yields several frames.
+			 * @return Zero when the unit did not split; 0, 1, … after a split.
+			 *
+			 * Downstream stages copy this value. It is not a pipe-wide counter.
+			 */
+			inline std::uint64_t Part() const noexcept {
+				return m_part;
 			}
 
 			/**
@@ -296,6 +333,8 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> m_language;						///< Stream language tag
 			std::optional<std::string> m_title;							///< Stream title tag
 			std::vector<class SideData> m_attachments;					///< Raw side data
+			std::optional<std::uint64_t> m_serial;						///< Lineage id born at demux
+			std::uint64_t m_part;										///< Sub-id inside serial
 			std::unique_ptr<Backend::Pipeline::Frame> m_backend;		///< Backend holder
 	};
 }

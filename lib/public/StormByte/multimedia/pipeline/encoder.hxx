@@ -404,7 +404,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param duration Packet duration.
 			 * @param keyFrame Whether this is a keyframe.
 			 * @param attachments Mapped packet side data.
-			 * @return Packet with Producer::Encoder.
+			 * @return Packet with Producer::Encoder. Empty if no lineage is latched.
+			 *
+			 * Copies @ref Frame::Serial and @ref Frame::Part of the last
+			 * accepted frame. This is pipe lineage, not a packet count.
 			 */
 			std::shared_ptr<Packet> Wrap(
 				enum StormByte::Multimedia::Type type, int index,
@@ -450,5 +453,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> m_tune;									///< Tune
 			std::map<std::string, std::string> m_fineTune;						///< Vendor leftovers
 			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;				///< Encode backend
+			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted frame
+			std::uint64_t m_part;												///< Part of the last accepted frame
 	};
 }

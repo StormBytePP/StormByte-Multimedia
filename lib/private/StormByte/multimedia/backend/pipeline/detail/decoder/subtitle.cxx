@@ -184,7 +184,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				std::move(pts),
 				std::move(duration),
 				std::nullopt,
-				std::vector<SideData>{}
+				std::vector<SideData>{},
+				std::nullopt,
+				0,
+				0
 			));
 		BindFrame(owner, *incoming, nullptr);
 

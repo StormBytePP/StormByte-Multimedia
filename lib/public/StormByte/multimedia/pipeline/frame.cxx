@@ -45,19 +45,22 @@ using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
 Frame::Frame() noexcept
-: Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder) {}
+: Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder), m_part(0) {}
 
 Frame::Frame(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
 	std::optional<Property::Duration> pts,
 	std::optional<Property::Duration> duration,
 	std::optional<Property::Video> video,
 	std::vector<class SideData> attachments,
-	std::optional<Property::Audio> audio) noexcept
+	std::optional<Property::Audio> audio,
+	std::uint64_t serial,
+	std::uint64_t part) noexcept
 : Item(track, type, Kind::Frame, producer),
 	m_payload(std::move(payload)),
 	m_pts(std::move(pts)), m_duration(std::move(duration)),
 	m_video(std::move(video)), m_audio(std::move(audio)),
-	m_attachments(std::move(attachments)) {}
+	m_attachments(std::move(attachments)),
+	m_serial(serial), m_part(part) {}
 
 Frame::Frame(const Frame& other) noexcept
 : Item(other),
@@ -68,7 +71,9 @@ Frame::Frame(const Frame& other) noexcept
 	m_audio(other.m_audio),
 	m_language(other.m_language),
 	m_title(other.m_title),
-	m_attachments(other.m_attachments) {
+	m_attachments(other.m_attachments),
+	m_serial(other.m_serial),
+	m_part(other.m_part) {
 	if (other.m_backend)
 		m_backend = std::make_unique<Backend::Pipeline::Frame>(*other.m_backend);
 }
@@ -83,6 +88,8 @@ Frame::Frame(Frame&& other) noexcept
 	m_language(std::move(other.m_language)),
 	m_title(std::move(other.m_title)),
 	m_attachments(std::move(other.m_attachments)),
+	m_serial(other.m_serial),
+	m_part(other.m_part),
 	m_backend(std::move(other.m_backend)) {
 	other.BecomeEmpty();
 }
@@ -101,6 +108,8 @@ Frame& Frame::operator=(const Frame& other) noexcept {
 	m_language = other.m_language;
 	m_title = other.m_title;
 	m_attachments = other.m_attachments;
+	m_serial = other.m_serial;
+	m_part = other.m_part;
 	if (other.m_backend)
 		m_backend = std::make_unique<Backend::Pipeline::Frame>(*other.m_backend);
 	else
@@ -120,6 +129,8 @@ Frame& Frame::operator=(Frame&& other) noexcept {
 	m_language = std::move(other.m_language);
 	m_title = std::move(other.m_title);
 	m_attachments = std::move(other.m_attachments);
+	m_serial = other.m_serial;
+	m_part = other.m_part;
 	m_backend = std::move(other.m_backend);
 	other.BecomeEmpty();
 	return *this;
@@ -136,6 +147,8 @@ void Frame::BecomeEmpty() noexcept {
 	m_title.reset();
 	m_attachments.clear();
 	m_attachments.shrink_to_fit();
+	m_serial.reset();
+	m_part = 0;
 	m_backend.reset();
 }
 

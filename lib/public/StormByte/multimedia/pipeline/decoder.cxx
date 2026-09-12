@@ -52,7 +52,7 @@ using namespace StormByte::Multimedia::Pipeline;
 
 Decoder::Decoder(int track, DecoderFlags flags) noexcept
 : Step(Kinds{Kind::Packet}, Kinds{Kind::Frame}),
-	m_index(track), m_flags(flags) {
+	m_index(track), m_flags(flags), m_part(0) {
 	Launch();
 }
 
@@ -79,6 +79,11 @@ void Decoder::Attach(Frame& frame, std::unique_ptr<Backend::Pipeline::Frame> bac
 
 void Decoder::CloseCue(Frame& frame, Property::Duration duration) noexcept {
 	frame.m_duration = std::move(duration);
+}
+
+void Decoder::StampLineage(Frame& frame) noexcept {
+	frame.m_serial = m_serial;
+	frame.m_part = m_part++;
 }
 
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
@@ -125,6 +130,8 @@ void Decoder::Open() noexcept {
 	if (!backend)
 		return;
 	Bind(std::move(backend));
+	m_serial.reset();
+	m_part = 0;
 	Step::Open();
 }
 
@@ -143,6 +150,10 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	}
 	if (packet->Track() != m_index)
 		return;
+	if (!packet->Serial()) {
+		Fail("packet has no serial");
+		return;
+	}
 
 	while (!m_backend->Send(*this, packet)) {
 		if (Failed())
@@ -154,7 +165,13 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 			Wait();
 			continue;
 		}
+		StampLineage(*frame);
 		m_out->Push(frame);
+	}
+
+	if (m_serial != packet->Serial()) {
+		m_serial = packet->Serial();
+		m_part = 0;
 	}
 
 	for (;;) {
@@ -163,6 +180,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			break;
+		StampLineage(*frame);
 		m_out->Push(frame);
 	}
 }
@@ -177,6 +195,7 @@ void Decoder::Finish() noexcept {
 		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			return;
+		StampLineage(*frame);
 		m_out->Push(frame);
 	}
 }

@@ -51,6 +51,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <unordered_map>
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
@@ -229,6 +230,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Builds a public packet. Called from the backend.
+			 *
+			 * Assigns the next @ref Packet::Serial for @p track and
+			 * @ref Packet::Part zero. This is pipe lineage, not a
+			 * decoded-frame count.
 			 */
 			std::shared_ptr<Packet> Wrap(
 				int track,
@@ -244,5 +249,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::mutex m_planMutex;									///< Guards Plan wait
 			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
 			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1
+			std::unordered_map<int, std::uint64_t> m_nextSerial;	///< Next lineage id per origin track
 	};
 }

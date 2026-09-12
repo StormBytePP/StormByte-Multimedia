@@ -145,6 +145,9 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Forwards one packet of In to m_out.
 			 * @param item Incoming packet.
+			 *
+			 * The packet keeps the @ref Packet::Serial born at the demuxer.
+			 * Missing lineage is a pipe error, not a drop.
 			 */
 			void Work(std::shared_ptr<Item> item) noexcept override;
 

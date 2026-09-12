@@ -286,7 +286,9 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				TicksToDuration(holder->Handle().DurationTicks(), m_timeBase),
 				std::move(video),
 				std::move(attachments),
-				std::nullopt
+				std::nullopt,
+				0,
+				0
 			));
 		auto* backend = holder.get();
 		BindFrame(owner, *frame, std::move(holder));

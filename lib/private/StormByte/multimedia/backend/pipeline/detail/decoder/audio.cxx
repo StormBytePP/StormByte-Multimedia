@@ -155,7 +155,9 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				TicksToDuration(holder->Handle().DurationTicks(), m_timeBase),
 				std::nullopt,
 				std::vector<StormByte::Multimedia::Pipeline::SideData>{},
-				m_audio
+				m_audio,
+				0,
+				0
 			));
 		auto* backend = holder.get();
 		BindFrame(owner, *frame, std::move(holder));

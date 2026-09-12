@@ -320,6 +320,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void CloseCue(Frame& frame, Property::Duration duration) noexcept;
 
+			/**
+			 * @brief Copies pipe lineage onto @p frame and advances Part.
+			 * @param frame Public unit produced by this decoder.
+			 */
+			void StampLineage(Frame& frame) noexcept;
+
 			static constexpr std::size_t Ceiling = 8;							///< Input hopper ceiling
 			int m_index;														///< Origin track
 			DecoderFlags m_flags;												///< Heuristics
@@ -330,5 +336,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Features m_capabilities;											///< Opened capabilities
 			Demuxer* m_origin = nullptr;										///< Bound demuxer
 			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;				///< Decode backend
+			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted packet
+			std::uint64_t m_part;												///< Next Part inside m_serial
 	};
 }
