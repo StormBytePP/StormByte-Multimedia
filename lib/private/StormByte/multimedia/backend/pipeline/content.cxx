@@ -55,7 +55,6 @@ std::unique_ptr<Content> Content::For(Type type) noexcept {
 			return std::make_unique<Audio>();
 		case Type::Subtitle:
 		case Type::Attachment:
-		case Type::Copy:
 		case Type::Unknown:
 			return std::make_unique<Passthrough>();
 	}

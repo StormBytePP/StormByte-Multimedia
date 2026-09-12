@@ -57,7 +57,6 @@ namespace StormByte::Multimedia {
 		Video,			///< Video stream or codec
 		Subtitle,		///< Subtitle stream or codec
 		Attachment,		///< Attachment / ancillary data
-		Copy,			///< Stream copy (passthrough)
 		Unknown			///< Unclassified type
 	};
 
@@ -68,13 +67,12 @@ namespace StormByte::Multimedia {
 	 */
 	constexpr const char* ToString(Type type) noexcept {
 		switch (type) {
-			case Type::Audio:		return "Audio";		///< Audio
-			case Type::Video:		return "Video";		///< Video
-			case Type::Subtitle:	return "Subtitle";	///< Subtitle
+			case Type::Audio:		return "Audio";			///< Audio
+			case Type::Video:		return "Video";			///< Video
+			case Type::Subtitle:	return "Subtitle";		///< Subtitle
 			case Type::Attachment:	return "Attachment";	///< Attachment
-			case Type::Copy:		return "Copy";		///< Copy
-			case Type::Unknown:		return "Unknown";	///< Unknown
-			default:				return "Invalid";	///< Out of range
+			case Type::Unknown:		return "Unknown";		///< Unknown
+			default:				return "Invalid";		///< Out of range
 		}
 	}
 
