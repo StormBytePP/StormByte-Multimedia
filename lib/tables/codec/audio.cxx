@@ -42,7 +42,7 @@ using namespace StormByte::Multimedia::Tables::Codec;
 
 namespace {
 	constexpr CodecDef table[] = {
-		{ "4GV",				"Fourth Generation Vocoder",							{ "4gv" } },
+		{ "4GV",						"Fourth Generation Vocoder",					{ "4gv" } },
 		{ "8SVX Exponential",			"Commodore 8SVX exponential",					{ "8svx_exp" } },
 		{ "8SVX Fibonacci",				"Commodore 8SVX Fibonacci",						{ "8svx_fib" } },
 		{ "AAC",						"Advanced Audio Coding",						{ "aac" } },
@@ -140,7 +140,7 @@ namespace {
 		{ "DSD MSBF Planar",			"Direct Stream Digital MSB first planar",		{ "dsd_msbf_planar" } },
 		{ "DSS SP",						"Digital Speech Standard SP",					{ "dss_sp" } },
 		{ "DST",						"Direct Stream Transfer",						{ "dst" } },
-		{ "DTS",						"DTS Coherent Acoustics",						{ "dca" } },
+		{ "DTS",						"DTS Coherent Acoustics",						{ "dca", "dts" } },
 		{ "DV Audio",					"DV Audio",										{ "dvaudio" } },
 		{ "Delphine CIN Audio",			"Delphine Software CIN audio",					{ "dsicinaudio" } },
 		{ "Discworld II BMV Audio",		"Discworld II BMV audio",						{ "bmv_audio" } },
@@ -193,7 +193,7 @@ namespace {
 		{ "PCM F64 BE",					"PCM 64-bit float big-endian",					{ "pcm_f64be" } },
 		{ "PCM F64 LE",					"PCM 64-bit float little-endian",				{ "pcm_f64le" } },
 		{ "PCM LXF",					"PCM LXF",										{ "pcm_lxf" } },
-		{ "PCM S16 BE",					"PCM signed 16-bit bigCopy-endian",					{ "pcm_s16be" } },
+		{ "PCM S16 BE",					"PCM signed 16-bit big-endian",					{ "pcm_s16be" } },
 		{ "PCM S16 BE Planar",			"PCM signed 16-bit BE planar",					{ "pcm_s16be_planar" } },
 		{ "PCM S16 LE",					"PCM signed 16-bit little-endian",				{ "pcm_s16le" } },
 		{ "PCM S16 LE Planar",			"PCM signed 16-bit LE planar",					{ "pcm_s16le_planar" } },
