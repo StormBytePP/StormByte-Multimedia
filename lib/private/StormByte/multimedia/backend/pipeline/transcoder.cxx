@@ -52,6 +52,7 @@
 #include <StormByte/multimedia/type.hxx>
 
 #include <chrono>
+#include <thread>
 
 using namespace StormByte::Multimedia::Backend::Pipeline;
 
@@ -195,8 +196,8 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	StormByte::Multimedia::Pipeline::Demuxer demux;
-	StormByte::Multimedia::Pipeline::Muxer mux(*Container);
+	StormByte::Multimedia::Pipeline::Demuxer demux(job.Logger());
+	StormByte::Multimedia::Pipeline::Muxer mux(job.Logger(), *Container);
 	mux >> Path;
 	std::move(*built) >> demux;
 	job.m_plan = demux.Plan();
@@ -237,7 +238,8 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		ApplyMuxTags(mux, muxIndex, *slot.Config);
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
-			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remuxer>(slot.In);
+			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remuxer>(
+				job.Logger(), slot.In);
 			demux >> *remux;
 			*remux >> mux;
 			if (mux.Failed() || remux->Failed()) {
@@ -255,8 +257,10 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 			remuxes.push_back(std::move(remux));
 		}
 		else {
-			auto decoder = std::make_unique<StormByte::Multimedia::Pipeline::Decoder>(slot.In);
-			auto encoder = std::make_unique<StormByte::Multimedia::Pipeline::Encoder>(muxIndex, *codec);
+			auto decoder = std::make_unique<StormByte::Multimedia::Pipeline::Decoder>(
+				job.Logger(), slot.In);
+			auto encoder = std::make_unique<StormByte::Multimedia::Pipeline::Encoder>(
+				job.Logger(), muxIndex, *codec);
 			ApplyEncoder(*encoder, *slot.Config);
 			demux >> *decoder;
 			*encoder >> mux;

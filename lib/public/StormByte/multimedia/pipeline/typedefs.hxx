@@ -83,6 +83,45 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
+	 * @enum Producer
+	 * @brief Named stage of the tube.
+	 *
+	 * Used as @ref Item origin and as @ref Step display name for logs.
+	 * @c Filter covers @ref Filter::FFmpeg and its Process / Packet / Analytics leaves.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	enum class Producer: std::uint8_t {
+		Demuxer,	///< @ref Demuxer
+		Decoder,	///< @ref Decoder
+		Remuxer,	///< @ref Remuxer
+		Filter,		///< @ref Filter::FFmpeg
+		Route,		///< @ref Route
+		Router,		///< @ref Router
+		Encoder,	///< @ref Encoder
+		Muxer		///< @ref Muxer
+	};
+
+	/**
+	 * @brief Converts a @ref Producer to a string literal.
+	 * @param producer Value to convert.
+	 * @return Null-terminated name, or `"Invalid"`.
+	 */
+	constexpr const char* ToString(Producer producer) noexcept {
+		switch (producer) {
+			case Producer::Demuxer:	return "Demuxer";
+			case Producer::Decoder:	return "Decoder";
+			case Producer::Remuxer:	return "Remuxer";
+			case Producer::Filter:	return "Filter";
+			case Producer::Route:	return "Route";
+			case Producer::Router:	return "Router";
+			case Producer::Encoder:	return "Encoder";
+			case Producer::Muxer:	return "Muxer";
+			default:				return "Invalid";
+		}
+	}
+
+	/**
 	 * @class Kinds
 	 * @brief Bitmask of @ref Kind.
 	 *

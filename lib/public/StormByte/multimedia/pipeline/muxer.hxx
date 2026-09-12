@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
@@ -152,9 +153,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Muxer for @p container. Destination path is bound later.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param container Writable registry container.
 			 */
-			explicit Muxer(const Container& container) noexcept;
+			explicit Muxer(std::shared_ptr<StormByte::Logger::Log> log,
+				const Container& container) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -262,6 +265,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			using Step::Log;
+
 			/**
 			 * @brief Marks Ready when a backend exists.
 			 */

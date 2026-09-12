@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
@@ -80,8 +81,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * compiles with a bare FFmpeg pointer and then @ref Fail at wiring
 	 * time: one failed node aborts the whole job.
 	 *
-	 * Construct the leaf with a short name (`resize`). @ref Name is
-	 * `Media()/name`.
+	 * Construct the leaf with a shared logger and a short name
+	 * (`resize`). @ref Name is `Media()/name`.
 	 *
 	 * The kinds the leaf consumes and emits are
 	 * @ref StormByte::Multimedia::Pipeline::Step::Receives and
@@ -89,7 +90,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * fixed at construction. The short constructor of @ref Process,
 	 * @ref Packet and @ref Analytics fills the usual single-kind
 	 * mask. A leaf that handles both Frame and Packet uses the
-	 * three-argument constructor of that same facade.
+	 * longer constructor of that same facade.
 	 *
 	 * @par Headers and libav
 	 * StormByte-Multimedia does not install or export libav / libsw
@@ -109,14 +110,35 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * not `av_frame_free` / `av_packet_free` a pointer @ref AVFrame
 	 * or @ref AVPacket returned. @ref Save takes ownership of @p raw.
 	 *
+	 * @par Logging
+	 * The owner of the tube passes a
+	 * @c std::shared_ptr<StormByte::Logger::Log> as the first
+	 * constructor argument. Prefer
+	 * @c StormByte::Logger::ThreadedLog: every filter runs on its
+	 * own worker. A plain @c Log is only safe if a single thread
+	 * writes. An empty pointer is a silent no-op, not a Fail.
+	 *
+	 * @ref Log is protected so a leaf can write from @ref Process,
+	 * @ref Hold or @ref LastChance. The line is prefixed with
+	 * `Filter`. Levels are @c StormByte::Logger::Level
+	 * (`LowLevel`, `Debug`, `Warning`, `Notice`, `Info`, `Error`,
+	 * `Fatal`). The print floor is set by whoever built the logger,
+	 * not by this class. Format the text before the call
+	 * (`std::format`). Logging is not @ref Fail and is not a
+	 * measurement; @ref Analytics still reports numbers via
+	 * @ref Report.
+	 *
+	 * Full logger API:
+	 * <a href="https://dev.stormbyte.org/StormByte-Logger/">StormByte-Logger</a>.
+	 *
 	 * @par Plugin surface
 	 * Public: @ref Media, @ref Name, @ref Clean, @ref Setup,
 	 * @ref StormByte::Multimedia::Pipeline::Step::Receives,
 	 * @ref StormByte::Multimedia::Pipeline::Step::Produces and
 	 * the @ref Process overload that matches those masks.
-	 * Protected: @ref AVFrame, @ref AVPacket, @ref Save, @ref Hold,
-	 * @ref Release, @ref LastChance, @ref Fail, @ref Held,
-	 * @ref HeldFor, @ref Eof.
+	 * Protected: @ref Log, @ref AVFrame, @ref AVPacket, @ref Save,
+	 * @ref Hold, @ref Release, @ref LastChance, @ref Fail,
+	 * @ref Held, @ref HeldFor, @ref Eof.
 	 * The plugin does not see Sink, Hopper, Bind, Route or Router.
 	 *
 	 * Inherits @ref StormByte::Multimedia::Pipeline::Step as
@@ -262,6 +284,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Named plugin. There is no empty constructor.
+			 * @param log Shared logger. Prefer ThreadedLog. Empty means no log.
 			 * @param name Short leaf name (`resize`).
 			 * @param receives Kinds this filter consumes.
 			 * @param produces Kinds this filter emits.
@@ -269,11 +292,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * Called from @ref Process, @ref Packet and @ref Analytics.
 			 * Do not construct FFmpeg from a plugin.
 			 */
-			FFmpeg(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
+			FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
+				std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
 			 * @}
 			 */
+
+			using Pipeline::Step::Log;
 
 			/**
 			 * @brief Marks a hard error and wakes the step. The job stops.
@@ -415,7 +441,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * rewrites planes (watermark, resize, tonemap). The short
 	 * constructor sets Receives and Produces to
 	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
-	 * also handles packets uses the three-argument constructor.
+	 * also handles packets uses the longer constructor.
 	 * Implement @ref FFmpeg::Process(const Pipeline::Frame&) and,
 	 * if the mask includes Packet,
 	 * @ref FFmpeg::Process(const Pipeline::Packet&). Use @ref AVFrame
@@ -458,12 +484,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 		protected:
 			/**
 			 * @brief Named process node. Frame to Frame.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name (`resize`).
 			 */
-			explicit Process(std::string name) noexcept;
+			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
 			 * @brief Named process node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
 			 * @param receives Kinds this leaf consumes.
 			 * @param produces Kinds this leaf emits.
@@ -471,7 +499,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * Use when the leaf is Frame and Packet (a BSF plus a
 			 * plane rewrite). Route reads these masks at Close.
 			 */
-			Process(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
+			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
@@ -481,7 +510,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * Inherit this for a bitstream filter (Annex-B, caption inject).
 	 * The short constructor sets Receives and Produces to
 	 * @ref StormByte::Multimedia::Pipeline::Kind::Packet. A leaf that
-	 * also handles frames uses the three-argument constructor.
+	 * also handles frames uses the longer constructor.
 	 * Implement @ref FFmpeg::Process(const Pipeline::Packet&) and,
 	 * if the mask includes Frame,
 	 * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVPacket
@@ -523,17 +552,20 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 		protected:
 			/**
 			 * @brief Named packet node. Packet to Packet.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
 			 */
-			explicit Packet(std::string name) noexcept;
+			Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
 			 * @brief Named packet node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
 			 * @param receives Kinds this leaf consumes.
 			 * @param produces Kinds this leaf emits.
 			 */
-			Packet(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
+			Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
@@ -546,7 +578,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * The short constructor sets Receives and Produces to
 	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
-	 * measures packets (or both) uses the three-argument constructor.
+	 * measures packets (or both) uses the longer constructor.
 	 *
 	 * @ref Process runs once per unit on that lane. When the same
 	 * unit is seen again (a second look after a Hold replay, or a
@@ -593,17 +625,20 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 		protected:
 			/**
 			 * @brief Named analytics node. Frame to Frame.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
 			 */
-			explicit Analytics(std::string name) noexcept;
+			Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
 			 * @brief Named analytics node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
 			 * @param receives Kinds this leaf consumes.
 			 * @param produces Kinds this leaf emits.
 			 */
-			Analytics(std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
+			Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
 			 * @brief Deleted. Analytics does not mutate the backend.

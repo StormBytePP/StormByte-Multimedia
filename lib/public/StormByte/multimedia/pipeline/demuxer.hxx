@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -120,8 +121,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Demuxer. Launches; Open waits for a Plan.
+			 * @param log Shared logger. Empty pointer means no log.
 			 */
-			Demuxer() noexcept;
+			explicit Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -186,6 +188,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			using Step::Log;
+
 			/**
 			 * @brief Waits for a Plan, checks it and opens the origin.
 			 */

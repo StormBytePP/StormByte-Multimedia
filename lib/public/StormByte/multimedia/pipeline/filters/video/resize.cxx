@@ -52,11 +52,15 @@ using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 * Construction names the node ("resize") so logs and Report dumps
 * can tell filters apart. Do not Launch() here: Route::Add does.
 */
-Resize::Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept
-: Filter::Process("resize"), m_width(resolution.Width()), m_height(resolution.Height()) {}
+Resize::Resize(std::shared_ptr<StormByte::Logger::Log> log,
+	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
+: Filter::Process(std::move(log), "resize"),
+	m_width(resolution.Width()), m_height(resolution.Height()) {}
 
-Resize::Resize(std::uint32_t width, std::uint32_t height) noexcept
-: Filter::Process("resize"), m_width(width), m_height(height) {}
+Resize::Resize(std::shared_ptr<StormByte::Logger::Log> log,
+	std::uint32_t width, std::uint32_t height) noexcept
+: Filter::Process(std::move(log), "resize"),
+	m_width(width), m_height(height) {}
 
 enum StormByte::Multimedia::Type Resize::Media() const noexcept {
 	return StormByte::Multimedia::Type::Video;

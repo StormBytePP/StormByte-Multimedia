@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
@@ -51,6 +52,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 /**
@@ -311,10 +313,16 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Step in State::Created. Sinks start at zero buckets.
+			 * @param log Shared logger. Prefer @c StormByte::Logger::ThreadedLog
+			 *        when several workers write. A plain @c Log is accepted
+			 *        for single-thread use. Empty pointer means no log.
+			 * @param name Stage name used as the log prefix.
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
 			 */
-			Step(Kinds receives, Kinds produces) noexcept;
+			Step(std::shared_ptr<StormByte::Logger::Log> log,
+				enum Producer name,
+				Kinds receives, Kinds produces) noexcept;
 
 			/**
 			 * @}
@@ -375,9 +383,21 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Stopping() const noexcept;
 
 			/**
+			 * @brief Writes one log line prefixed with @ref m_name.
+			 * @param level StormByte::Logger::Level of this line.
+			 * @param message Already-formatted text (caller may use std::format).
+			 *
+			 * No-op when @ref m_log is empty. Virtual so a leaf can
+			 * re-expose it to its backend (friendship is not inherited).
+			 */
+			virtual void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
+
+			/**
 			 * @}
 			 */
 
+			std::shared_ptr<StormByte::Logger::Log> m_log;	///< Shared logger (ThreadedLog preferred)
+			enum Producer m_name;							///< Stage name for logs
 			std::unique_ptr<Buffer::Sink> m_in;			///< Input buckets
 			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
 			Kinds m_receives;							///< Receives

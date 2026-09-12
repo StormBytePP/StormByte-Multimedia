@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -94,10 +95,12 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Encoder for output track @p output_index and destination @p codec.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param output_index Mux destination order key.
 			 * @param codec Registry codec. Must HasAccess(Write) at open.
 			 */
-			Encoder(int output_index, const Codec& codec) noexcept;
+			Encoder(std::shared_ptr<StormByte::Logger::Log> log,
+				int output_index, const Codec& codec) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -378,6 +381,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			using Step::Log;
+
 			/**
 			 * @brief Prepare-once. Codec Open stays lazy in Work.
 			 */

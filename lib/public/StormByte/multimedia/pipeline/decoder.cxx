@@ -50,8 +50,9 @@
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
-Decoder::Decoder(int track, DecoderFlags flags) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+	int track, DecoderFlags flags) noexcept
+: Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags(flags), m_part(0) {
 	Launch();
 }

@@ -39,6 +39,8 @@
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 
+#include <string>
+
 using namespace StormByte::Multimedia::Pipeline;
 
 namespace {
@@ -47,8 +49,12 @@ namespace {
 	}
 }
 
-Step::Step(Kinds receives, Kinds produces) noexcept
-: m_in(std::make_unique<Buffer::Sink>()),
+Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
+	enum Producer name,
+	Kinds receives, Kinds produces) noexcept
+: m_log(std::move(log)),
+	m_name(name),
+	m_in(std::make_unique<Buffer::Sink>()),
 	m_out(std::make_unique<Buffer::Sink>()),
 	m_receives(receives),
 	m_produces(produces),
@@ -129,6 +135,12 @@ void Step::Open() noexcept {
 void Step::Work(std::shared_ptr<Item>) noexcept {}
 
 void Step::Finish() noexcept {}
+
+void Step::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
+	if (!m_log)
+		return;
+	*m_log << level << ToString(m_name) << ": " << std::string(message) << std::endl;
+}
 
 void Step::Pump() noexcept {
 	for (;;) {

@@ -83,8 +83,9 @@ namespace {
 	}
 }
 
-Muxer::Muxer(const Container& container) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{}),
+Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
+	const Container& container) noexcept
+: Step(std::move(log), Producer::Muxer, Kinds{Kind::Packet}, Kinds{}),
 	m_container(&container),
 	m_origin(nullptr),
 	m_closed(false), m_positionNs(-1) {

@@ -46,8 +46,9 @@
 
 using namespace StormByte::Multimedia::Pipeline;
 
-Remuxer::Remuxer(int in) noexcept
-: Step(Kinds{Kind::Packet}, Kinds{Kind::Packet}), m_index(in) {
+Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
+: Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
+	m_index(in) {
 	Launch();
 }
 

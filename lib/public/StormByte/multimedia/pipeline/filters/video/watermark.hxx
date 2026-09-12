@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/generic.hxx>
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/property/point.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -46,6 +47,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 /**
@@ -53,7 +55,9 @@
  * @brief Video process filters.
  *
  * Inherit @ref Filter::Process. Attach with
- * @c job.Video(in, out).Filter<Watermark>(path, Anchor::BottomRight).
+ * @c job.Video(in, out).Filter<Watermark>(log, path, Anchor::BottomRight).
+ * The first argument is the shared logger of the tube. See
+ * @ref Filter::FFmpeg logging notes.
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -108,9 +112,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * to the source format. Talks to libav via @ref FFmpeg::AVFrame
 	 * and @ref FFmpeg::Save.
 	 *
+	 * The first constructor argument is the shared logger of the
+	 * tube. The leaf may call protected @ref FFmpeg::Log. That is
+	 * not @ref Fail and is not a bar measurement.
+	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Hold
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::LastChance
+	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Log
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
@@ -121,21 +130,25 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Logo at an anchor on the active picture.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param anchor Placement relative to measured bars.
 			 * @param opacity 0–100. 0 = no-op.
 			 * @param margin Pixels from the anchored active edge.
 			 */
-			Watermark(const std::filesystem::path& logo, Anchor anchor,
+			Watermark(std::shared_ptr<StormByte::Logger::Log> log,
+				const std::filesystem::path& logo, Anchor anchor,
 				unsigned opacity = 100, int margin = 0) noexcept;
 
 			/**
 			 * @brief Logo at an absolute top-left. No Hold.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param logo Path to a still image (png, jpeg, webp, bmp).
 			 * @param position Top-left of the logo in frame pixels.
 			 * @param opacity 0–100. 0 = no-op.
 			 */
-			Watermark(const std::filesystem::path& logo,
+			Watermark(std::shared_ptr<StormByte::Logger::Log> log,
+				const std::filesystem::path& logo,
 				StormByte::Multimedia::Property::Point position,
 				unsigned opacity = 100) noexcept;
 

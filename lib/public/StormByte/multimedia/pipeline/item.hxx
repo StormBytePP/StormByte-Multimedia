@@ -80,34 +80,6 @@ namespace StormByte::Multimedia::Pipeline {
 	}
 
 	/**
-	 * @enum Producer
-	 * @brief Step that created this Item.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	enum class Producer: std::uint8_t {
-		Decoder,	///< Decoder
-		Demuxer,	///< Demuxer
-		Encoder,	///< Encoder
-		Muxer		///< Muxer
-	};
-
-	/**
-	 * @brief Converts a Producer to a string literal.
-	 * @param producer Value to convert.
-	 * @return Null-terminated name, or "Invalid".
-	 */
-	constexpr const char* ToString(Producer producer) noexcept {
-		switch (producer) {
-			case Producer::Decoder:	return "Decoder";
-			case Producer::Demuxer:	return "Demuxer";
-			case Producer::Encoder:	return "Encoder";
-			case Producer::Muxer:	return "Muxer";
-			default:				return "Invalid";
-		}
-	}
-
-	/**
 	 * @class Item
 	 * @brief Facade shared by Frame and Packet.
 	 *
@@ -169,7 +141,7 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 			/**
-			 * @brief Step that created this unit.
+			 * @brief Stage that created this unit.
 			 * @return Value passed to the private constructor.
 			 */
 			enum Producer Producer() const noexcept {
@@ -222,7 +194,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param track Origin container stream index.
 			 * @param type Media of this unit. Not Copy.
 			 * @param kind Kind::Frame or Kind::Packet.
-			 * @param producer Step that created this unit.
+			 * @param producer Stage that created this unit.
 			 */
 			Item(int track, enum StormByte::Multimedia::Type type, enum Kind kind, enum Producer producer) noexcept
 			: m_track(track), m_type(type), m_kind(kind), m_producer(producer) {}
@@ -230,6 +202,6 @@ namespace StormByte::Multimedia::Pipeline {
 			int m_track;									///< Origin container stream index
 			enum StormByte::Multimedia::Type m_type;		///< Video / Audio / Subtitle / Unknown
 			enum Kind m_kind;								///< Frame or Packet
-			enum Producer m_producer;						///< Step that created this unit
+			enum Producer m_producer;						///< Stage that created this unit
 	};
 }

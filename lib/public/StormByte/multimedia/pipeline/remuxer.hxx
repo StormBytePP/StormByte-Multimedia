@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -81,9 +82,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Remuxer for origin stream @p in.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param in Origin stream index.
 			 */
-			explicit Remuxer(int in) noexcept;
+			explicit Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -137,6 +139,8 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 		private:
+			using Step::Log;
+
 			/**
 			 * @brief Marks Ready. No codec.
 			 */

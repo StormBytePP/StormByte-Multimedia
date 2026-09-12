@@ -56,10 +56,13 @@ using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
 using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Kinds;
+using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::ToString;
 
-FFmpeg::FFmpeg(std::string name, Kinds receives, Kinds produces) noexcept
-: Step(receives, produces), m_name(std::move(name)), m_hold(0), m_heldFor(0) {}
+FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
+	std::string name, Kinds receives, Kinds produces) noexcept
+: Step(std::move(log), Producer::Filter, receives, produces),
+	m_name(std::move(name)), m_hold(0), m_heldFor(0) {}
 
 FFmpeg::~FFmpeg() noexcept = default;
 
@@ -229,20 +232,23 @@ void FFmpeg::Finish() noexcept {
 		Eof();
 }
 
-Process::Process(std::string name) noexcept
-: FFmpeg(std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
+Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
+: FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
 
-Process::Process(std::string name, Kinds receives, Kinds produces) noexcept
-: FFmpeg(std::move(name), receives, produces) {}
+Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(log), std::move(name), receives, produces) {}
 
-Packet::Packet(std::string name) noexcept
-: FFmpeg(std::move(name), Kinds{Kind::Packet}, Kinds{Kind::Packet}) {}
+Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
+: FFmpeg(std::move(log), std::move(name), Kinds{Kind::Packet}, Kinds{Kind::Packet}) {}
 
-Packet::Packet(std::string name, Kinds receives, Kinds produces) noexcept
-: FFmpeg(std::move(name), receives, produces) {}
+Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(log), std::move(name), receives, produces) {}
 
-Analytics::Analytics(std::string name) noexcept
-: FFmpeg(std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
+Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
+: FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
 
-Analytics::Analytics(std::string name, Kinds receives, Kinds produces) noexcept
-: FFmpeg(std::move(name), receives, produces) {}
+Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(log), std::move(name), receives, produces) {}

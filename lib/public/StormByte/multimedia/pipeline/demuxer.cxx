@@ -54,8 +54,9 @@
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
-Demuxer::Demuxer() noexcept
-: Step(Kinds{}, Kinds{Kind::Packet}), m_eof(false), m_positionNs(-1) {
+Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
+: Step(std::move(log), Producer::Demuxer, Kinds{}, Kinds{Kind::Packet}),
+	m_eof(false), m_positionNs(-1) {
 	Launch();
 }
 

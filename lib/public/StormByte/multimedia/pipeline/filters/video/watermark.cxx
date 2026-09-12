@@ -264,18 +264,20 @@ namespace {
 	}
 }
 
-Watermark::Watermark(const std::filesystem::path& logo, Anchor anchor,
+Watermark::Watermark(std::shared_ptr<StormByte::Logger::Log> log,
+	const std::filesystem::path& logo, Anchor anchor,
 	unsigned opacity, int margin) noexcept
-: Filter::Process("watermark"), m_path(logo), m_anchor(anchor),
+: Filter::Process(std::move(log), "watermark"), m_path(logo), m_anchor(anchor),
 	m_opacity(std::min(opacity, 100u)), m_margin(margin),
 	m_logoWidth(0), m_logoHeight(0), m_loaded(false), m_decoded(false),
 	m_released(false), m_barTop(0), m_barBottom(0), m_barLeft(0), m_barRight(0),
 	m_stable(0), m_lumaW(0), m_lumaH(0), m_lumaFmt(AV_PIX_FMT_NONE),
 	m_swsLuma(nullptr), m_luma(nullptr) {}
 
-Watermark::Watermark(const std::filesystem::path& logo,
+Watermark::Watermark(std::shared_ptr<StormByte::Logger::Log> log,
+	const std::filesystem::path& logo,
 	StormByte::Multimedia::Property::Point position, unsigned opacity) noexcept
-: Filter::Process("watermark"), m_path(logo), m_point(position),
+: Filter::Process(std::move(log), "watermark"), m_path(logo), m_point(position),
 	m_opacity(std::min(opacity, 100u)), m_margin(0),
 	m_logoWidth(0), m_logoHeight(0), m_loaded(false), m_decoded(false),
 	m_released(false), m_barTop(0), m_barBottom(0), m_barLeft(0), m_barRight(0),

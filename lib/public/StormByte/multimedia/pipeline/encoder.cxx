@@ -61,8 +61,10 @@ extern "C" {
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
-Encoder::Encoder(int output_index, const Codec& codec) noexcept
-: Step(Kinds{Kind::Frame}, Kinds{Kind::Packet}), m_index(output_index), m_codec(&codec),
+Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
+	int output_index, const Codec& codec) noexcept
+: Step(std::move(log), Producer::Encoder, Kinds{Kind::Frame}, Kinds{Kind::Packet}),
+	m_index(output_index), m_codec(&codec),
 	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION), m_part(0) {
 	switch (codec.Type()) {
 		case Type::Video:

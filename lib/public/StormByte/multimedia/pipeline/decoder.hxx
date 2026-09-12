@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/bitmask.hxx>
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -120,10 +121,12 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Decoder for one origin track.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
 			 */
-			explicit Decoder(int track, DecoderFlags flags = DecoderFlags{}) noexcept;
+			explicit Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+				int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -271,6 +274,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			using Step::Log;
+
 			/**
 			 * @brief Waits for the bound demuxer, then opens the codec.
 			 */

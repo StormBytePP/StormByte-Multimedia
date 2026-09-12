@@ -38,19 +38,21 @@
 
 #pragma once
 
+#include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/property/resolution.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
+#include <memory>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
  *
  * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in, out).Filter<Resize>(w, h).
+ * Attach with @c job.Video(in, out).Filter<Resize>(log, w, h).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -67,6 +69,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * on the first video frame. Same size as the source is a no-op
 	 * (no Save). Destination pixel format matches the source.
 	 *
+	 * The first constructor argument is the shared logger of the tube.
+	 * See @ref Filter::FFmpeg logging notes.
+	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Filter::Process {
@@ -78,16 +83,20 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Exact destination size.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param resolution Target resolution.
 			 */
-			explicit Resize(const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
+			Resize(std::shared_ptr<StormByte::Logger::Log> log,
+				const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
 
 			/**
 			 * @brief Destination size. 0 on one axis keeps aspect ratio.
+			 * @param log Shared logger. Empty pointer means no log.
 			 * @param width Target width, or 0.
 			 * @param height Target height, or 0.
 			 */
-			Resize(std::uint32_t width, std::uint32_t height) noexcept;
+			Resize(std::shared_ptr<StormByte::Logger::Log> log,
+				std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
 			 * @brief Copy constructor.
