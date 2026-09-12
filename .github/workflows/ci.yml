@@ -45,7 +45,6 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/update-apt-cached@master
         with:
           cache-key: apt-lists
-          rotate-weekly: true
 
   ###########################################################################
   # LINUX
@@ -89,6 +88,7 @@ jobs:
             -DWITH_FFMPEG=BUNDLED
             -DWITH_STORMBYTE=BUNDLED
             -DWITH_OCR=BUNDLED
+            -DWITH_VMAF=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
           run-tests: false
@@ -124,6 +124,7 @@ jobs:
             -DWITH_FFMPEG=BUNDLED
             -DWITH_STORMBYTE=BUNDLED
             -DWITH_OCR=BUNDLED
+            -DWITH_VMAF=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
           run-tests: false
@@ -169,6 +170,7 @@ jobs:
             -DWITH_FFMPEG=BUNDLED
             -DWITH_STORMBYTE=BUNDLED
             -DWITH_OCR=BUNDLED
+            -DWITH_VMAF=BUNDLED
             -DWITH_NONFREE=${{ matrix.extra }}
             -DWITH_GPL=${{ matrix.extra }}
             "-DCMAKE_C_FLAGS=/W3 /wd4244 /wd4267 /wd4996 /wd4065 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00"
@@ -189,6 +191,6 @@ jobs:
       actions: write
     with:
       doc_target: StormByteMultimediaDoc
-      extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM
-      extra-install: "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev"
+      extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM -DWITH_VMAF=BUNDLED
+      extra-install: "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev libvmaf-dev"
       docs_output_dir: ./_site
