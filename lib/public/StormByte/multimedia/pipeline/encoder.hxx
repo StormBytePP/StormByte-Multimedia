@@ -81,6 +81,17 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Encoder
 	 * @brief Encodes frames of one output track into packets.
 	 *
+	 * Notice: destination codec when the backend first opens.
+	 * LowLevel unit lines use @ref Step::Sparse /
+	 * @ref Step::MaybeThrottle keyed by mux output index
+	 * (@ref Index). One incoming frame counts once; packets
+	 * produced in that Work share the sample. Pts/Dts on Wrap
+	 * are the flattened encoder clock (the line that catches a
+	 * bad DTS flatten). Step::Pump times each Work.
+	 *
+	 * @ref Label is `Encoder(libx265)` when an implementation is
+	 * pinned or selected, otherwise `Encoder(<registry name>)`.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder final: public Step {
@@ -381,7 +392,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			/**
+			 * @name Logging
+			 * @{
+			 */
+
 			using Step::Log;
+
+			/**
+			 * @brief Token after `STMM ` for this encoder.
+			 * @return `Encoder(<implementation>)` when pinned or selected,
+			 *         otherwise `Encoder(<registry codec name>)`.
+			 */
+			std::string Label() const noexcept override;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Prepare-once. Codec Open stays lazy in Work.
@@ -413,6 +440,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Copies @ref Frame::Serial and @ref Frame::Part of the last
 			 * accepted frame. This is pipe lineage, not a packet count.
+			 * Logs flattened pts/dts at LowLevel when the current Work
+			 * is inside the Sparse window of @ref Index.
 			 */
 			std::shared_ptr<Packet> Wrap(
 				enum StormByte::Multimedia::Type type, int index,
@@ -444,7 +473,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const void* FrameHandle(const Frame& frame) noexcept;
 
-			static constexpr std::size_t Ceiling = 8;							///< Input hopper ceiling
+			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			int m_index;														///< Mux destination order key
 			const Codec* m_codec;												///< Destination codec
 			std::string m_encoderTag;											///< ENCODER metadata
@@ -460,5 +489,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;				///< Encode backend
 			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted frame
 			std::uint64_t m_part;												///< Part of the last accepted frame
+			bool m_talk;														///< Sparse window of the current Work
 	};
 }

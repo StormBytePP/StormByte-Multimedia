@@ -39,9 +39,12 @@
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 
+#include <chrono>
+#include <format>
 #include <string>
 
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Logger::Level;
 
 namespace {
 	bool Terminal(State state) noexcept {
@@ -58,7 +61,14 @@ Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	m_out(std::make_unique<Buffer::Sink>()),
 	m_receives(receives),
 	m_produces(produces),
-	m_state(State::Created) {}
+	m_state(State::Created),
+	m_workN(0),
+	m_waitN(0),
+	m_workMin(std::numeric_limits<std::int64_t>::max()),
+	m_workMax(0),
+	m_lastWork(0) {
+	Log(Level::Notice, "created");
+}
 
 Step::~Step() noexcept {
 	Halt();
@@ -91,11 +101,16 @@ bool Step::Ready() const noexcept {
 
 void Step::Stop() noexcept {
 	State current = m_state.load(std::memory_order_acquire);
+	bool signaled = false;
 	while (current == State::Created || current == State::Ready) {
 		if (m_state.compare_exchange_weak(current, State::Stopping,
-				std::memory_order_acq_rel, std::memory_order_acquire))
+				std::memory_order_acq_rel, std::memory_order_acquire)) {
+			signaled = true;
 			break;
+		}
 	}
+	if (signaled)
+		Log(Level::LowLevel, "stop");
 	m_in->Eof();
 	m_out->Eof();
 	m_wake.notify_all();
@@ -119,16 +134,27 @@ std::condition_variable& Step::Wake() noexcept {
 }
 
 void Step::Wait() noexcept {
+	++m_waitN;
+	const bool talk = ((m_waitN - 1) % SparseWindow) < SparseKeep;
+	if (talk)
+		Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
 		return Stopping() || m_in->Ready();
 	});
+	if (talk)
+		Log(Level::LowLevel, "wake");
+	if (m_waitN % SparseWindow == SparseKeep)
+		Log(Level::LowLevel, std::format(
+			"wait: logged {} wakes, next wait log in {}",
+			SparseKeep, SparseWindow - SparseKeep));
 }
 
 void Step::Open() noexcept {
 	State expected = State::Created;
 	m_state.compare_exchange_strong(expected, State::Ready,
 		std::memory_order_acq_rel, std::memory_order_acquire);
+	Log(Level::Debug, "ready");
 	m_wake.notify_all();
 }
 
@@ -136,10 +162,57 @@ void Step::Work(std::shared_ptr<Item>) noexcept {}
 
 void Step::Finish() noexcept {}
 
+std::string Step::Label() const noexcept {
+	return std::string(ToString(m_name));
+}
+
 void Step::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
+	// TODO(Logger 1.0.1): drop this mutex. StormByte-Logger master already
+	// always releases the ThreadedLog line lock on endl (hotfix merged,
+	// no release cut yet). Until Multimedia depends on that tag, keep the
+	// guard: Implementation still stores current Level / enabled in shared
+	// fields, so a concurrent LowLevel write can flip WillWrite() mid-line
+	// and, on Logger 1.0.0, skip release_line and stall every other thread.
 	if (!m_log)
 		return;
-	*m_log << level << ToString(m_name) << ": " << std::string(message) << std::endl;
+	static std::mutex line;
+	std::lock_guard<std::mutex> guard(line);
+	*m_log << level << std::format("STMM {}: {}", Label(), message) << std::endl;
+}
+
+bool Step::Sparse(int track) noexcept {
+	const std::uint64_t n = ++m_seen[track];
+	return ((n - 1) % SparseWindow) < SparseKeep;
+}
+
+void Step::MaybeThrottle(int track) noexcept {
+	const std::uint64_t n = m_seen[track];
+	if (n == 0 || ((n - 1) % SparseWindow) != SparseKeep)
+		return;
+	Log(Level::LowLevel, std::format("t={}: logged {} units, next unit log in {}",
+		track, SparseKeep, SparseWindow - SparseKeep));
+}
+
+void Step::RecordWork(std::int64_t microseconds) noexcept {
+	if (microseconds < 0)
+		microseconds = 0;
+	++m_workN;
+	m_lastWork = microseconds;
+	if (microseconds < m_workMin)
+		m_workMin = microseconds;
+	if (microseconds > m_workMax)
+		m_workMax = microseconds;
+}
+
+std::int64_t Step::LastWork() const noexcept {
+	return m_lastWork;
+}
+
+void Step::DumpWork() noexcept {
+	if (m_workN == 0)
+		return;
+	Log(Level::Debug, std::format("work n={} min={}us max={}us",
+		m_workN, m_workMin, m_workMax));
 }
 
 void Step::Pump() noexcept {
@@ -152,11 +225,18 @@ void Step::Pump() noexcept {
 				Wait();
 				continue;
 			}
-			if (!Stopping())
+			if (!Stopping()) {
+				Log(Level::LowLevel, "finish");
 				Finish();
+				DumpWork();
+			}
 			break;
 		}
+		const auto started = std::chrono::steady_clock::now();
 		Work(std::move(item));
+		const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - started).count();
+		RecordWork(us);
 	}
 	m_out->Eof();
 }
@@ -164,6 +244,7 @@ void Step::Pump() noexcept {
 void Step::Launch() noexcept {
 	if (m_worker.joinable())
 		return;
+	Log(Level::LowLevel, "launch");
 	m_in->Notify(m_wake);
 	m_worker = std::jthread([this](std::stop_token token) {
 		(void)token;
@@ -175,6 +256,7 @@ void Step::Launch() noexcept {
 		State expected = State::Stopping;
 		m_state.compare_exchange_strong(expected, State::Stopped,
 			std::memory_order_acq_rel, std::memory_order_acquire);
+		Log(Level::LowLevel, "stopped");
 	});
 }
 
@@ -194,5 +276,6 @@ Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept
 		to.m_plan = from.m_plan;
 	to.m_in->Notify(to.Wake());
 	from.m_out->Bind(*to.m_in);
+	from.Log(Level::Debug, "bound to " + std::string(ToString(to.m_name)));
 	return to;
 }

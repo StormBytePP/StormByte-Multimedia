@@ -48,6 +48,7 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <format>
 #include <thread>
 #include <utility>
 
@@ -60,12 +61,21 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Logger::Level;
+
+namespace {
+	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
+		if (!value)
+			return "-";
+		return std::format("{}", value->Nanoseconds().count());
+	}
+}
 
 Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int output_index, const Codec& codec) noexcept
 : Step(std::move(log), Producer::Encoder, Kinds{Kind::Frame}, Kinds{Kind::Packet}),
 	m_index(output_index), m_codec(&codec),
-	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION), m_part(0) {
+	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION), m_part(0), m_talk(false) {
 	switch (codec.Type()) {
 		case Type::Video:
 			m_backend = std::make_unique<Backend::Pipeline::Detail::Encoder::Video>();
@@ -166,6 +176,9 @@ std::shared_ptr<Packet> Encoder::Wrap(
 		Fail("encoder packet has no serial");
 		return {};
 	}
+	if (m_talk)
+		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={} key={}",
+			index, *m_serial, m_part, Ns(pts), Ns(dts), Ns(duration), keyFrame ? 1 : 0));
 	return std::shared_ptr<Packet>(new Packet(
 		index, type, Producer::Encoder,
 		std::move(payload),
@@ -236,8 +249,19 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 		Fail("frame has no serial");
 		return;
 	}
-	if (!m_backend->IsOpen() && !m_backend->Open(*this, *frame))
+	const bool opening = !m_backend->IsOpen();
+	if (opening && !m_backend->Open(*this, *frame))
 		return;
+	if (opening)
+		Log(Level::Notice, std::format("open t={} codec={} impl={}",
+			m_index, std::string(m_codec->Name()), m_implementation.value_or("auto")));
+
+	m_talk = Sparse(m_index);
+	if (m_talk)
+		Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
+			m_index, *frame->Serial(), frame->Part(),
+			Ns(frame->Pts()), Ns(frame->Dts())));
+	MaybeThrottle(m_index);
 
 	while (!m_backend->Push(*this, frame)) {
 		if (Failed())
@@ -266,6 +290,8 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 void Encoder::Finish() noexcept {
 	if (Failed() || !m_backend)
 		return;
+	m_talk = Sparse(m_index);
+	MaybeThrottle(m_index);
 	m_backend->Flush(*this);
 	for (;;) {
 		if (Failed())
@@ -275,4 +301,10 @@ void Encoder::Finish() noexcept {
 			return;
 		m_out->Push(packet);
 	}
+}
+
+std::string Encoder::Label() const noexcept {
+	if (m_implementation && !m_implementation->empty())
+		return "Encoder(" + *m_implementation + ")";
+	return "Encoder(" + std::string(m_codec->Name()) + ")";
 }

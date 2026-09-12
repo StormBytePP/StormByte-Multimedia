@@ -52,6 +52,7 @@
 
 #include <cctype>
 #include <chrono>
+#include <format>
 #include <string_view>
 #include <utility>
 
@@ -62,6 +63,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Logger::Level;
 
 namespace {
 	bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept {
@@ -80,6 +82,12 @@ namespace {
 		return EqualsIgnoreCase(name, "matroska")
 			|| EqualsIgnoreCase(name, "webm")
 			|| EqualsIgnoreCase(name, "mkv");
+	}
+
+	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
+		if (!value)
+			return "-";
+		return std::format("{}", value->Nanoseconds().count());
 	}
 }
 
@@ -175,30 +183,43 @@ void Muxer::Work(std::shared_ptr<Item> item) noexcept {
 		Fail("muxer expected a packet");
 		return;
 	}
+
 	while (!m_backend->Push(*this, packet)) {
 		if (Failed())
 			return;
 		Wait();
 	}
+
+	const int track = packet->Track();
 	const auto type = packet->Type();
 	if (type == Type::Video || type == Type::Audio) {
 		if (const auto& pts = packet->Pts(); pts) {
-			const auto ns = pts->Nanoseconds().count();
+			auto ns = pts->Nanoseconds().count();
+			if (const auto& dur = packet->Duration(); dur)
+				ns += dur->Nanoseconds().count();
 			if (type == Type::Video)
 				m_positionNs.store(ns, std::memory_order_release);
 			else {
-				std::int64_t current = m_positionNs.load(std::memory_order_acquire);
+				const std::int64_t current = m_positionNs.load(std::memory_order_acquire);
 				if (current < 0)
 					m_positionNs.store(ns, std::memory_order_release);
 			}
 		}
 	}
+
+	if (Sparse(track))
+		Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
+			track, packet->Serial().value_or(0), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts()),
+			m_positionNs.load(std::memory_order_acquire)));
+	MaybeThrottle(track);
 }
 
 void Muxer::Finish() noexcept {
 	if (m_backend && !Failed())
 		m_backend->Flush(*this);
 	m_closed.store(true, std::memory_order_release);
+	Log(Level::Notice, "closed");
 }
 
 bool Muxer::BindEncoderStream(Encoder& encoder, void* avStream) noexcept {
@@ -229,6 +250,7 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 	encoder.m_out->Bind(encoder.Index(), *muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
 		muxer.m_in->Capacity(encoder.Index(), cap);
+	muxer.Log(Level::Debug, std::format("reserve encoder t={}", encoder.Index()));
 	return encoder;
 }
 
@@ -247,6 +269,7 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 	remuxer.m_out->Bind(remuxer.In(), *muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
 		muxer.m_in->Capacity(remuxer.In(), cap);
+	muxer.Log(Level::Debug, std::format("reserve remux t={}", remuxer.In()));
 	return remuxer;
 }
 
@@ -258,6 +281,7 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Muxer& muxer, const std::file
 		return muxer;
 	}
 	muxer.m_backend->BindPath(muxer, path);
+	muxer.Log(Level::Notice, std::format("path {}", path.string()));
 	return muxer;
 }
 
@@ -287,5 +311,6 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxe
 	}
 	muxer.m_origin = &demuxer;
 	muxer.m_backend->BindAttachments(muxer, demuxer.OriginFile());
+	muxer.Log(Level::Debug, "bound remux origin");
 	return muxer;
 }

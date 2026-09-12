@@ -38,13 +38,25 @@
 
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
+#include <StormByte/multimedia/property/duration.hxx>
 
+#include <format>
 #include <string>
 
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Logger::Level;
+
+namespace {
+	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
+		if (!value)
+			return "-";
+		return std::format("{}", value->Nanoseconds().count());
+	}
+}
 
 Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 : Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
@@ -61,6 +73,7 @@ void Remuxer::Open() noexcept {
 		Fail("remuxer origin is negative");
 		return;
 	}
+	Log(Level::Notice, std::format("open t={}", m_index));
 	Step::Open();
 }
 
@@ -79,6 +92,11 @@ void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
 		Fail("packet has no serial");
 		return;
 	}
+	if (Sparse(m_index))
+		Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
+			packet->Track(), *packet->Serial(), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts())));
+	MaybeThrottle(m_index);
 	m_out->Push(packet);
 }
 
@@ -97,5 +115,16 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& 
 	demuxer.m_out->Bind(remuxer.In(), *remuxer.m_in);
 	if (const std::size_t cap = remuxer.InputCeiling(); cap > 0)
 		remuxer.m_in->Capacity(remuxer.In(), cap);
+	demuxer.Log(Level::Debug, std::format("bind remuxer t={}", remuxer.In()));
 	return remuxer;
+}
+
+std::string Remuxer::Label() const noexcept {
+	if (m_plan) {
+		for (const auto& stream : m_plan->Source().Streams()) {
+			if (stream.Index() == m_index)
+				return "Remuxer(" + std::string(stream.Codec().Name()) + ")";
+		}
+	}
+	return "Remuxer(t=" + std::to_string(m_index) + ")";
 }

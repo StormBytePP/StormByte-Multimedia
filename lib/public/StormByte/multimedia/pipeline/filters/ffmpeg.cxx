@@ -47,6 +47,7 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <format>
 #include <limits>
 #include <utility>
 
@@ -58,6 +59,27 @@ using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Kinds;
 using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::ToString;
+using StormByte::Logger::Level;
+
+namespace {
+	int TrackOf(const StormByte::Multimedia::Pipeline::Item& item) noexcept {
+		if (item.Kind() == Kind::Frame)
+			return static_cast<const StormByte::Multimedia::Pipeline::Frame&>(item).Track();
+		return static_cast<const StormByte::Multimedia::Pipeline::Packet&>(item).Track();
+	}
+
+	std::uint64_t PartOf(const StormByte::Multimedia::Pipeline::Item& item) noexcept {
+		if (item.Kind() == Kind::Frame)
+			return static_cast<const StormByte::Multimedia::Pipeline::Frame&>(item).Part();
+		return static_cast<const StormByte::Multimedia::Pipeline::Packet&>(item).Part();
+	}
+
+	std::optional<std::uint64_t> SerialOf(const StormByte::Multimedia::Pipeline::Item& item) noexcept {
+		if (item.Kind() == Kind::Frame)
+			return static_cast<const StormByte::Multimedia::Pipeline::Frame&>(item).Serial();
+		return static_cast<const StormByte::Multimedia::Pipeline::Packet&>(item).Serial();
+	}
+}
 
 FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 	std::string name, Kinds receives, Kinds produces) noexcept
@@ -96,12 +118,14 @@ void FFmpeg::Hold(std::uint8_t n) noexcept {
 	}
 	m_hold = n == 0 ? std::numeric_limits<std::uint8_t>::max() : n;
 	m_heldFor = 0;
+	Log(Level::Debug, std::format("{} hold n={}", Name(), static_cast<unsigned>(m_hold)));
 	Park();
 }
 
 void FFmpeg::Release() noexcept {
 	if (!Held())
 		return;
+	Log(Level::Debug, std::format("{} release held={}", Name(), static_cast<unsigned>(m_heldFor)));
 	m_hold = 0;
 	m_heldFor = 0;
 	auto parked = std::move(m_queue);
@@ -151,6 +175,10 @@ void FFmpeg::Save(::AVFrame* raw) noexcept {
 	frame->m_backend->Handle().Reset(raw);
 	frame->m_backend->PayloadReady(false);
 	frame->m_backend->BindProperties(*frame);
+	if (Sparse(frame->Track()))
+		Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
+			Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
+	MaybeThrottle(frame->Track());
 }
 
 void FFmpeg::Save(::AVPacket* raw) noexcept {
@@ -161,10 +189,15 @@ void FFmpeg::Save(::AVPacket* raw) noexcept {
 		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
 	packet->m_backend->Handle().Reset(raw);
 	packet->m_backend->BindProperties(*packet);
+	if (Sparse(packet->Track()))
+		Log(Level::LowLevel, std::format("{} save packet t={} {}:{}",
+			Name(), packet->Track(), packet->Serial().value_or(0), packet->Part()));
+	MaybeThrottle(packet->Track());
 }
 
 void FFmpeg::Open() noexcept {
 	NameThread("STMM:FFmpeg:" + m_name);
+	Log(Level::Notice, Name() + " setup");
 	Clean();
 	Setup();
 }
@@ -189,6 +222,7 @@ void FFmpeg::Park() noexcept {
 void FFmpeg::CallLastChance() noexcept {
 	if (!m_current)
 		return;
+	Log(Level::Debug, Name() + " last-chance");
 	if (m_current->Kind() == Pipeline::Kind::Frame)
 		LastChance(static_cast<const Pipeline::Frame&>(*m_current));
 	else
@@ -197,6 +231,11 @@ void FFmpeg::CallLastChance() noexcept {
 
 void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 	m_current = std::move(item);
+	const int track = TrackOf(*m_current);
+	if (Sparse(track))
+		Log(Level::LowLevel, std::format("{} in t={} {}:{}",
+			Name(), track, SerialOf(*m_current).value_or(0), PartOf(*m_current)));
+	MaybeThrottle(track);
 	if (m_current->Kind() == Pipeline::Kind::Frame)
 		Process(static_cast<const Pipeline::Frame&>(*m_current));
 	else

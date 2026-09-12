@@ -48,12 +48,14 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 
 /**
  * @namespace StormByte::Multimedia::Buffer
@@ -89,7 +91,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @param to Consumer step.
 	 * @return @p to.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Step& operator>>(Step& from, Step& to) noexcept;
+	STORMBYTE_MULTIMEDIA_PUBLIC class Step& operator>>(Step& from, Step& to) noexcept;
 
 	/**
 	 * @enum State
@@ -149,6 +151,16 @@ namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Step
 	 * @brief One threaded stage with an input Sink and an output Sink.
+	 *
+	 * Log lines from @ref Log are `STMM <Label>: <text>`.
+	 * @ref Label defaults to the @ref Producer name. Leaves that
+	 * exist more than once override it (`Encoder(libx265)`).
+	 * The Logger prints the level; this class does not.
+	 *
+	 * Unit LowLevel lines use @ref Sparse so 20 of every 500
+	 * units of one track are printed. @ref MaybeThrottle writes
+	 * the skip warning once per window. @ref Pump times each
+	 * @ref Work and @ref DumpWork prints min/max at Finish.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -295,7 +307,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Marks Failed, closes both hoppers and wakes the worker.
 			 *
 			 * Bound neighbors unblock on hopper EoF. Does not join the
-			 * worker; the worker may be the caller.
+			 * worker; the worker may be the caller. Does not write a
+			 * log line; the owner of the job logs Error.
 			 *
 			 * @param reason Message.
 			 */
@@ -316,7 +329,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param log Shared logger. Prefer @c StormByte::Logger::ThreadedLog
 			 *        when several workers write. A plain @c Log is accepted
 			 *        for single-thread use. Empty pointer means no log.
-			 * @param name Stage name used as the log prefix.
+			 * @param name Stage name used as the default @ref Label.
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
 			 */
@@ -355,6 +368,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Body of the worker after Open returns.
+			 *
+			 * Times each @ref Work. Leaves that override Pump (Demuxer)
+			 * must call @ref RecordWork themselves if they want the same
+			 * summary.
 			 */
 			virtual void Pump() noexcept;
 
@@ -383,9 +400,43 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Stopping() const noexcept;
 
 			/**
-			 * @brief Writes one log line prefixed with @ref m_name.
+			 * @brief Adds one Work duration to the step summary.
+			 * @param microseconds Wall time of that Work call.
+			 */
+			void RecordWork(std::int64_t microseconds) noexcept;
+
+			/**
+			 * @brief Duration of the last timed Work, or 0.
+			 * @return Microseconds.
+			 */
+			std::int64_t LastWork() const noexcept;
+
+			/**
+			 * @brief Writes min/max Work time at Debug. No-op if none.
+			 */
+			void DumpWork() noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
+			 * @name Logging
+			 * @{
+			 */
+
+			/**
+			 * @brief Token after `STMM ` in every log line.
+			 * @return @ref Producer name (`Encoder`) unless a leaf overrides
+			 *         it (`Encoder(libx265)`). Called on every @ref Log.
+			 */
+			virtual std::string Label() const noexcept;
+
+			/**
+			 * @brief Writes one log line as `STMM <Label>: <message>`.
 			 * @param level StormByte::Logger::Level of this line.
 			 * @param message Already-formatted text (caller may use std::format).
+			 *        Must not include the level name; Logger prints that.
 			 *
 			 * No-op when @ref m_log is empty. Virtual so a leaf can
 			 * re-expose it to its backend (friendship is not inherited).
@@ -393,22 +444,61 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
 
 			/**
+			 * @brief Whether the next unit of origin/output track @p track
+			 *        should print a LowLevel line.
+			 * @param track Stream index on this step (origin index on
+			 *        Demuxer/Decoder/Remuxer, mux order on Encoder/Muxer).
+			 * @return true for the first @ref SparseKeep units of every
+			 *         @ref SparseWindow of @p track on this step.
+			 *
+			 * Increments the per-track counter of *this* step. Call
+			 * once per unit, then @ref MaybeThrottle with the same
+			 * @p track. Windows do not share a budget: twenty units
+			 * on t=0 do not consume t=1. A remux flood on one track
+			 * therefore cannot hide an encode lane on another.
+			 *
+			 * This is not a frame count and not an FFmpeg counter.
+			 */
+			bool Sparse(int track) noexcept;
+
+			/**
+			 * @brief One LowLevel line when the keep window of @p track ends.
+			 * @param track Same index just passed to @ref Sparse.
+			 *
+			 * Writes
+			 * `t=0: logged 20 units, next unit log in 480`
+			 * (the index changes). No-op on every other count.
+			 * The line exists so a quiet log is not read as end of
+			 * stream.
+			 */
+			void MaybeThrottle(int track) noexcept;
+
+			/**
 			 * @}
 			 */
 
-			std::shared_ptr<StormByte::Logger::Log> m_log;	///< Shared logger (ThreadedLog preferred)
-			enum Producer m_name;							///< Stage name for logs
-			std::unique_ptr<Buffer::Sink> m_in;			///< Input buckets
-			std::unique_ptr<Buffer::Sink> m_out;		///< Output buckets
-			Kinds m_receives;							///< Receives
-			Kinds m_produces;							///< Produces
+			static constexpr std::uint64_t SparseWindow = 500;	///< Units of one track per throttle cycle
+			static constexpr std::uint64_t SparseKeep = 20;		///< Units of one track logged per cycle
+			std::unordered_map<int, std::uint64_t> m_seen;		///< Units seen per track
+
+			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger (ThreadedLog preferred)
+			enum Producer m_name;								///< Default Label token
+			std::unique_ptr<Buffer::Sink> m_in;					///< Input buckets
+			std::unique_ptr<Buffer::Sink> m_out;				///< Output buckets
+			Kinds m_receives;									///< Receives
+			Kinds m_produces;									///< Produces
 
 		private:
-			std::shared_ptr<class Plan> m_plan;			///< Current plan
-			std::condition_variable m_wake;				///< Single consumer CV
-			std::mutex m_wait;							///< Mutex for m_wake
-			std::jthread m_worker;						///< Owned worker
-			std::atomic<State> m_state;					///< Lifecycle
-			std::optional<std::string> m_error;			///< Fail message
+			std::shared_ptr<class Plan> m_plan;					///< Current plan
+			std::condition_variable m_wake;						///< Single consumer CV
+			std::mutex m_wait;									///< Mutex for m_wake
+			std::jthread m_worker;								///< Owned worker
+			std::atomic<State> m_state;							///< Lifecycle
+			std::optional<std::string> m_error;					///< Fail message
+			std::uint64_t m_workN;								///< Timed Work calls
+			std::uint64_t m_waitN;								///< Wait() calls (throttle of wait/wake lines)
+			std::int64_t m_workMin;								///< Fastest Work, us
+			std::int64_t m_workMax;								///< Slowest Work, us
+			std::int64_t m_lastWork;							///< Last Work, us
 	};
 }

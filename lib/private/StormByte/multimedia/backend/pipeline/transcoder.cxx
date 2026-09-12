@@ -52,11 +52,22 @@
 #include <StormByte/multimedia/type.hxx>
 
 #include <chrono>
+#include <format>
+#include <string>
+#include <string_view>
 #include <thread>
 
 using namespace StormByte::Multimedia::Backend::Pipeline;
+using StormByte::Logger::Level;
 
 namespace {
+	void JobLog(const std::shared_ptr<StormByte::Logger::Log>& log,
+		Level level, std::string_view text) noexcept {
+		if (!log)
+			return;
+		*log << level << "STMM Transcoder: " << std::string(text) << std::endl;
+	}
+
 	const StormByte::Multimedia::Codec* LeafCodec(
 		const StormByte::Multimedia::Pipeline::Config::Base* config) noexcept {
 		if (const auto* video = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Video*>(config))
@@ -150,6 +161,8 @@ void Transcoder::WaitIfPaused() noexcept {
 
 void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop_token token) noexcept {
 	NameThread("STMM:Transcoder");
+	const auto started = std::chrono::steady_clock::now();
+	JobLog(job.Logger(), Level::Notice, "running");
 	job.OnConfigure();
 	if (Status.load(std::memory_order_acquire) == StormByte::Multimedia::Pipeline::Status::Error) {
 		job.OnError(job.Error().value_or("configure failed"));
@@ -157,6 +170,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	}
 	if (Stopping(*this, token)) {
 		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		JobLog(job.Logger(), Level::Notice, "aborted");
 		job.OnAborted();
 		return;
 	}
@@ -188,6 +202,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		}
 		else if (start == StormByte::Multimedia::Pipeline::Status::Aborted) {
 			Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+			JobLog(job.Logger(), Level::Notice, "aborted");
 			job.OnAborted();
 		}
 		else {
@@ -215,6 +230,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	}
 	if (Stopping(*this, token)) {
 		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		JobLog(job.Logger(), Level::Notice, "aborted");
 		job.OnAborted();
 		return;
 	}
@@ -350,6 +366,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	if (Stopping(*this, token)
 		&& Status.load(std::memory_order_acquire) != StormByte::Multimedia::Pipeline::Status::Error) {
 		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
+		JobLog(job.Logger(), Level::Notice, "aborted");
 		job.OnAborted();
 		return;
 	}
@@ -359,5 +376,8 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	}
 	job.SetProgress(100);
 	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);
+	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - started).count();
+	JobLog(job.Logger(), Level::Info, std::format("done tracks={} {}ms", Mapped.size(), ms));
 	job.OnDone();
 }

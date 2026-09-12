@@ -44,11 +44,22 @@
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/type.hxx>
 
+#include <format>
 #include <utility>
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
+using StormByte::Logger::Level;
+
+namespace {
+	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
+		if (!value)
+			return "-";
+		return std::format("{}", value->Nanoseconds().count());
+	}
+}
 
 Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, DecoderFlags flags) noexcept
@@ -85,6 +96,7 @@ void Decoder::CloseCue(Frame& frame, Property::Duration duration) noexcept {
 void Decoder::StampLineage(Frame& frame) noexcept {
 	frame.m_serial = m_serial;
 	frame.m_part = m_part++;
+	frame.m_dts = m_inDts;
 }
 
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
@@ -133,6 +145,9 @@ void Decoder::Open() noexcept {
 	Bind(std::move(backend));
 	m_serial.reset();
 	m_part = 0;
+	m_inDts.reset();
+	Log(Level::Notice, std::format("open t={} impl={}",
+		m_index, m_implementation.value_or("auto")));
 	Step::Open();
 }
 
@@ -156,6 +171,28 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 		return;
 	}
 
+	if (m_serial != packet->Serial()) {
+		m_serial = packet->Serial();
+		m_part = 0;
+		m_inDts = packet->Dts();
+	}
+
+	const bool talk = Sparse(packet->Track());
+	if (talk)
+		Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
+			packet->Track(), *packet->Serial(), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts())));
+	MaybeThrottle(packet->Track());
+
+	auto emit = [this, talk](std::shared_ptr<Frame> frame) {
+		StampLineage(*frame);
+		if (talk)
+			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+				frame->Track(), frame->Serial().value_or(0), frame->Part(),
+				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+		m_out->Push(std::move(frame));
+	};
+
 	while (!m_backend->Send(*this, packet)) {
 		if (Failed())
 			return;
@@ -166,13 +203,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 			Wait();
 			continue;
 		}
-		StampLineage(*frame);
-		m_out->Push(frame);
-	}
-
-	if (m_serial != packet->Serial()) {
-		m_serial = packet->Serial();
-		m_part = 0;
+		emit(std::move(frame));
 	}
 
 	for (;;) {
@@ -181,8 +212,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			break;
-		StampLineage(*frame);
-		m_out->Push(frame);
+		emit(std::move(frame));
 	}
 }
 
@@ -196,7 +226,19 @@ void Decoder::Finish() noexcept {
 		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
 		if (!frame)
 			return;
+		const bool talk = Sparse(m_index);
 		StampLineage(*frame);
-		m_out->Push(frame);
+		if (talk)
+			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+				frame->Track(), frame->Serial().value_or(0), frame->Part(),
+				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+		MaybeThrottle(m_index);
+		m_out->Push(std::move(frame));
 	}
+}
+
+std::string Decoder::Label() const noexcept {
+	if (m_implementation && !m_implementation->empty())
+		return "Decoder(" + *m_implementation + ")";
+	return "Decoder(t=" + std::to_string(m_index) + ")";
 }

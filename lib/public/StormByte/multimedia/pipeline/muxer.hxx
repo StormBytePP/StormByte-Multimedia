@@ -134,6 +134,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Muxer
 	 * @brief Writes interleaved packets to a destination container.
 	 *
+	 * Notice: destination path when bound, closed once.
+	 * LowLevel writes use @ref Step::Sparse / @ref Step::MaybeThrottle
+	 * keyed by packet track so remux and encode lanes keep their
+	 * own windows.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {

@@ -108,6 +108,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param audio Audio properties, if this is an audio frame.
 			 * @param serial Lineage id born at the demuxer for this origin track.
 			 * @param part Sub-id inside @p serial. Zero when the demuxed unit did not split.
+			 *
+			 * @ref Dts starts empty. @ref Decoder stamps it from the
+			 * packet that produced this frame. There is no public setter.
 			 */
 			Frame(int track, enum StormByte::Multimedia::Type type, enum Producer producer,
 				StormByte::Buffer::FIFO payload,
@@ -158,6 +161,20 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			inline const std::optional<Property::Duration>& Pts() const noexcept {
 				return m_pts;
+			}
+
+			/**
+			 * @brief Decode timestamp on the stream clock.
+			 *
+			 * Copied by @ref Decoder from the compressed packet that
+			 * produced this frame. Empty when that packet had no Dts,
+			 * or when the unit was not stamped. There is no public
+			 * setter; friendship writes @c m_dts.
+			 *
+			 * @return Dts, or empty.
+			 */
+			inline const std::optional<Property::Duration>& Dts() const noexcept {
+				return m_dts;
 			}
 
 			/**
@@ -327,6 +344,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
 			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
+			std::optional<Property::Duration> m_dts;					///< Decode timestamp from the source packet
 			std::optional<Property::Duration> m_duration;				///< Frame duration
 			std::optional<Property::Video> m_video;						///< Video properties
 			std::optional<Property::Audio> m_audio;						///< Audio properties

@@ -51,6 +51,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 #include <string_view>
 
 using StormByte::Logger::Level;
@@ -61,6 +62,13 @@ using namespace StormByte::Multimedia::Pipeline;
 
 namespace {
 	constexpr std::size_t InvalidSlot = std::numeric_limits<std::size_t>::max();
+
+	void JobLog(const std::shared_ptr<StormByte::Logger::Log>& log,
+		Level level, std::string_view text) noexcept {
+		if (!log)
+			return;
+		*log << level << "STMM Transcoder: " << std::string(text) << std::endl;
+	}
 
 	const StormByte::Multimedia::Stream* FindStream(const File& file, int index) noexcept {
 		for (const auto& stream : file.Streams()) {
@@ -115,8 +123,8 @@ Transcoder::Track::Track(Transcoder& owner, std::size_t slot) noexcept
 Transcoder::Track& Transcoder::Track::Remux() noexcept {
 	if (!m_owner || !m_owner->ValidSlot(m_slot))
 		return *this;
-	*m_owner->m_logger << Level::Debug << "track "
-		<< m_owner->m_backend->Mapped[m_slot].In << " marked remux" << std::endl;
+	JobLog(m_owner->m_logger, Level::Debug, "track "
+		+ std::to_string(m_owner->m_backend->Mapped[m_slot].In) + " marked remux");
 	return *this;
 }
 
@@ -136,8 +144,8 @@ Transcoder::Track& Transcoder::Track::Codec(const StormByte::Multimedia::Codec& 
 		audio->Codec(codec);
 	else if (auto* subtitle = AsSubtitle(slot.Config.get()))
 		subtitle->Codec(codec);
-	*m_owner->m_logger << Level::Debug << "track " << slot.In << " encode to "
-		<< std::string(codec.Name()) << std::endl;
+	JobLog(m_owner->m_logger, Level::Debug, "track " + std::to_string(slot.In)
+		+ " encode to " + std::string(codec.Name()));
 	return *this;
 }
 
@@ -222,12 +230,11 @@ Transcoder::Track& Transcoder::Track::Title(std::string title) noexcept {
 Transcoder::Transcoder(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept
 : m_logger(std::move(logger)), m_file(std::make_unique<File>(std::move(file))),
 	m_backend(std::make_unique<Backend::Pipeline::Transcoder>()) {
-	*m_logger << Level::LowLevel << "Transcoder::Transcoder" << std::endl;
+	JobLog(m_logger, Level::LowLevel, "created");
 }
 
 Transcoder::~Transcoder() noexcept {
-	if (m_logger)
-		*m_logger << Level::LowLevel << "Transcoder::~Transcoder" << std::endl;
+	JobLog(m_logger, Level::LowLevel, "destroy");
 	if (!m_backend)
 		return;
 	const auto status = m_backend->Status.load(std::memory_order_acquire);
@@ -245,8 +252,7 @@ void Transcoder::Fail(std::string reason) noexcept {
 	m_backend->Error = std::move(reason);
 	m_backend->Status.store(Status::Error, std::memory_order_release);
 	m_backend->RequestCancel();
-	if (m_logger)
-		*m_logger << Level::Error << *m_backend->Error << std::endl;
+	JobLog(m_logger, Level::Error, *m_backend->Error);
 }
 
 bool Transcoder::ValidSlot(std::size_t slot) const noexcept {
@@ -279,7 +285,7 @@ ExpectedTranscoder Transcoder::BindLoggerAndFile(std::shared_ptr<StormByte::Logg
 		return StormByte::Unexpected<TranscodeException>("logger is required");
 	if (!opened) {
 		const char* text = opened.error() ? opened.error()->what() : "file open failed";
-		*logger << Level::Error << text << std::endl;
+		JobLog(logger, Level::Error, text);
 		return StormByte::Unexpected<TranscodeException>(text);
 	}
 	return std::unique_ptr<Transcoder>(new Transcoder(std::move(logger), std::move(*opened)));
@@ -299,8 +305,8 @@ ExpectedTranscoder Transcoder::Open(std::shared_ptr<StormByte::Logger::Log> logg
 	if (!job)
 		return job;
 	(*job)->m_backend->Path = destination;
-	if (const auto& log = (*job)->m_logger)
-		*log << Level::Notice << "opened source " << (*job)->Source().Path().string() << std::endl;
+	JobLog((*job)->m_logger, Level::Notice,
+		"opened source " + (*job)->Source().Path().string());
 	return job;
 }
 
@@ -315,7 +321,7 @@ const std::shared_ptr<StormByte::Logger::Log>& Transcoder::Logger() const noexce
 }
 
 Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
-	*m_logger << Level::LowLevel << "Transcoder::AddTrack in=" << in << std::endl;
+	JobLog(m_logger, Level::LowLevel, "add-track in=" + std::to_string(in));
 	if (in < 0) {
 		Fail("origin index is negative");
 		return Track(*this, InvalidSlot);
@@ -363,8 +369,8 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 		slot.Config = std::make_unique<Config::Attachment>(*mime);
 	}
 	m_backend->Mapped.push_back(std::move(slot));
-	*m_logger << Level::Debug << "mapped " << KindName(kind) << " " << in
-		<< " -> order " << (m_backend->Mapped.size() - 1) << std::endl;
+	JobLog(m_logger, Level::Debug, "mapped " + KindName(kind) + " " + std::to_string(in)
+		+ " -> order " + std::to_string(m_backend->Mapped.size() - 1));
 	return Track(*this, m_backend->Mapped.size() - 1);
 }
 
@@ -402,7 +408,7 @@ Transcoder& Transcoder::Attachments(std::string_view mime) noexcept {
 }
 
 Transcoder& Transcoder::Ignore(int in) noexcept {
-	*m_logger << Level::LowLevel << "Transcoder::Ignore " << in << std::endl;
+	JobLog(m_logger, Level::LowLevel, "ignore " + std::to_string(in));
 	if (!FindStream(Source(), in)) {
 		Fail("source stream " + std::to_string(in) + " does not exist");
 		return *this;
@@ -413,12 +419,12 @@ Transcoder& Transcoder::Ignore(int in) noexcept {
 		mapped.end());
 	for (int i = 0; i < static_cast<int>(mapped.size()); ++i)
 		mapped[static_cast<std::size_t>(i)].Out = i;
-	*m_logger << Level::Debug << "ignore stream " << in << std::endl;
+	JobLog(m_logger, Level::Debug, "ignore stream " + std::to_string(in));
 	return *this;
 }
 
 Transcoder& Transcoder::Destination(const Container& container, std::filesystem::path path) noexcept {
-	*m_logger << Level::LowLevel << "Transcoder::Destination" << std::endl;
+	JobLog(m_logger, Level::LowLevel, "destination");
 	if (!container.HasAccess(Operation::Write)) {
 		Fail("container '" + std::string(container.Name()) + "' is not writable");
 		return *this;
@@ -430,6 +436,7 @@ Transcoder& Transcoder::Destination(const Container& container, std::filesystem:
 		return *this;
 	}
 	m_backend->Container = &container;
+	JobLog(m_logger, Level::Notice, "destination " + m_backend->Path.string());
 	return *this;
 }
 
@@ -450,6 +457,7 @@ void Transcoder::Pause() noexcept {
 		return;
 	m_backend->Paused.store(true, std::memory_order_release);
 	m_backend->Status.store(Status::Paused, std::memory_order_release);
+	JobLog(m_logger, Level::Notice, "paused");
 }
 
 void Transcoder::Resume() noexcept {
@@ -460,6 +468,7 @@ void Transcoder::Resume() noexcept {
 	m_backend->Paused.store(false, std::memory_order_release);
 	m_backend->Status.store(Status::Running, std::memory_order_release);
 	m_backend->PauseCv.notify_all();
+	JobLog(m_logger, Level::Notice, "resumed");
 }
 
 enum Status Transcoder::Status() const noexcept {
@@ -507,7 +516,9 @@ enum Status Transcoder::OnStart() noexcept {
 
 void Transcoder::OnPlan(const class Plan&) noexcept {}
 
-void Transcoder::OnSettled(const TrackSettled&) noexcept {}
+void Transcoder::OnSettled(const TrackSettled& row) noexcept {
+	JobLog(m_logger, Level::Debug, row.ToString());
+}
 
 void Transcoder::OnProgress(unsigned) noexcept {}
 

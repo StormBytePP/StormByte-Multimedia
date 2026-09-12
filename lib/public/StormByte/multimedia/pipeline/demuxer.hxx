@@ -102,6 +102,16 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Only tracks listed in the bound Plan enter the tube. An origin
 	 * stream omitted from Plan::add is never pushed.
 	 *
+	 * Notice: origin path at Open, eof once. Debug: bind to a decoder
+	 * and Work min/max at Finish. LowLevel unit lines use
+	 * @ref Step::Sparse / @ref Step::MaybeThrottle keyed by origin
+	 * track. Each Read+Push is timed with @ref Step::RecordWork
+	 * because this leaf overrides Pump.
+	 *
+	 * Wrap assigns the next @ref Packet::Serial for that origin
+	 * track and Part zero. That id is pipe lineage, not an FFmpeg
+	 * frame count.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
@@ -237,7 +247,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Assigns the next @ref Packet::Serial for @p track and
 			 * @ref Packet::Part zero. This is pipe lineage, not a
-			 * decoded-frame count.
+			 * decoded-frame count. Logs the unit at LowLevel when
+			 * @ref Step::Sparse allows it for @p track.
+			 *
+			 * @param track Origin stream index.
+			 * @param type Media type stamped on the packet.
+			 * @param payload Compressed bytes.
+			 * @param pts Presentation time.
+			 * @param dts Decode time.
+			 * @param duration Packet duration.
+			 * @param keyframe Whether this is a keyframe.
+			 * @return Public packet.
 			 */
 			std::shared_ptr<Packet> Wrap(
 				int track,

@@ -68,6 +68,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Remuxer
 	 * @brief Forwards compressed packets of one origin track to the muxer.
 	 *
+	 * Notice: origin index at Open. LowLevel forwards use
+	 * @ref Step::Sparse / @ref Step::MaybeThrottle keyed by
+	 * @ref In. The packet keeps the lineage born at the demuxer.
+	 *
+	 * @ref Label is `Remuxer(<origin codec>)` when a Plan is bound
+	 * and that stream exists, otherwise `Remuxer(t=<origin index>)`.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Remuxer final: public Step {
@@ -139,7 +146,23 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 		private:
+			/**
+			 * @name Logging
+			 * @{
+			 */
+
 			using Step::Log;
+
+			/**
+			 * @brief Token after `STMM ` for this remuxer.
+			 * @return `Remuxer(<origin codec name>)` when the Plan
+			 *         lists @ref In, otherwise `Remuxer(t=<index>)`.
+			 */
+			std::string Label() const noexcept override;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Marks Ready. No codec.

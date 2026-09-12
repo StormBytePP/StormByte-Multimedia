@@ -66,6 +66,7 @@ Frame::Frame(const Frame& other) noexcept
 : Item(other),
 	m_payload(other.m_payload),
 	m_pts(other.m_pts),
+	m_dts(other.m_dts),
 	m_duration(other.m_duration),
 	m_video(other.m_video),
 	m_audio(other.m_audio),
@@ -82,6 +83,7 @@ Frame::Frame(Frame&& other) noexcept
 : Item(std::move(other)),
 	m_payload(std::move(other.m_payload)),
 	m_pts(std::move(other.m_pts)),
+	m_dts(std::move(other.m_dts)),
 	m_duration(std::move(other.m_duration)),
 	m_video(std::move(other.m_video)),
 	m_audio(std::move(other.m_audio)),
@@ -102,6 +104,7 @@ Frame& Frame::operator=(const Frame& other) noexcept {
 	Item::operator=(other);
 	m_payload = other.m_payload;
 	m_pts = other.m_pts;
+	m_dts = other.m_dts;
 	m_duration = other.m_duration;
 	m_video = other.m_video;
 	m_audio = other.m_audio;
@@ -123,6 +126,7 @@ Frame& Frame::operator=(Frame&& other) noexcept {
 	Item::operator=(std::move(other));
 	m_payload = std::move(other.m_payload);
 	m_pts = std::move(other.m_pts);
+	m_dts = std::move(other.m_dts);
 	m_duration = std::move(other.m_duration);
 	m_video = std::move(other.m_video);
 	m_audio = std::move(other.m_audio);
@@ -140,6 +144,7 @@ void Frame::BecomeEmpty() noexcept {
 	Item::operator=(Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder));
 	m_payload = StormByte::Buffer::FIFO{};
 	m_pts.reset();
+	m_dts.reset();
 	m_duration.reset();
 	m_video.reset();
 	m_audio.reset();

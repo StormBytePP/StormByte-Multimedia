@@ -106,6 +106,20 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Decoder
 	 * @brief Decodes packets of one origin track into frames.
 	 *
+	 * Notice: opened implementation, once. LowLevel unit lines use
+	 * @ref Step::Sparse / @ref Step::MaybeThrottle keyed by origin
+	 * track. One incoming packet counts once: its frames share that
+	 * sample so 1 packet → N frames does not burn the window N times.
+	 * Step::Pump times each Work; Finish dumps min/max at Debug.
+	 *
+	 * Lineage: @ref StampLineage copies the last accepted packet
+	 * Serial onto each produced frame and advances Part. Dts of
+	 * that packet is copied onto @ref Frame::Dts. That is pipe
+	 * lineage, not a decoded-frame count.
+	 *
+	 * @ref Label is `Decoder(<implementation>)` after Open pins a
+	 * table row, otherwise `Decoder(t=<origin index>)`.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
@@ -274,7 +288,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			/**
+			 * @name Logging
+			 * @{
+			 */
+
 			using Step::Log;
+
+			/**
+			 * @brief Token after `STMM ` for this decoder.
+			 * @return `Decoder(<implementation>)` after Open selects a
+			 *         row, otherwise `Decoder(t=<origin index>)`.
+			 */
+			std::string Label() const noexcept override;
+
+			/**
+			 * @}
+			 */
 
 			/**
 			 * @brief Waits for the bound demuxer, then opens the codec.
@@ -326,12 +356,12 @@ namespace StormByte::Multimedia::Pipeline {
 			void CloseCue(Frame& frame, Property::Duration duration) noexcept;
 
 			/**
-			 * @brief Copies pipe lineage onto @p frame and advances Part.
+			 * @brief Copies pipe lineage and packet Dts onto @p frame.
 			 * @param frame Public unit produced by this decoder.
 			 */
 			void StampLineage(Frame& frame) noexcept;
 
-			static constexpr std::size_t Ceiling = 8;							///< Input hopper ceiling
+			static constexpr std::size_t Ceiling = 32;							///< Input hopper ceiling
 			int m_index;														///< Origin track
 			DecoderFlags m_flags;												///< Heuristics
 			std::optional<std::string> m_language;								///< Language tag
@@ -343,5 +373,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;				///< Decode backend
 			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted packet
 			std::uint64_t m_part;												///< Next Part inside m_serial
+			std::optional<Property::Duration> m_inDts;							///< Dts of the packet that opened m_serial
 	};
 }
