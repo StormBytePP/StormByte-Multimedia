@@ -28,8 +28,10 @@ elseif(WITH_VMAF STREQUAL "BUNDLED")
 		"-Denable_nvtx=false"
 		"-Denable_nvcc=false"
 	)
+	SET(VMAF_OPTS_WINDOWS)
 	if(WIN32)
 		list(APPEND VMAF_OPTIONS "-Dbundled_winpthreads=false")
+		SET(VMAF_OPTS_WINDOWS ";TOOLCHAIN=MSVC")
 	endif()
 	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
 		list(APPEND VMAF_OPTIONS "-Denable_avx512=true")
@@ -44,7 +46,7 @@ elseif(WITH_VMAF STREQUAL "BUNDLED")
 		"${VMAF_OPTIONS}"
 		"static"
 		"vmaf"
-		"SOURCE=libvmaf;GIT={RESET;PATCH=${VMAF_WINDOWS_PATH_FILE};TITLE=VMAF MSVC}"
+		"SOURCE=libvmaf;GIT={RESET;PATCH=${VMAF_WINDOWS_PATH_FILE};TITLE=VMAF MSVC}${VMAF_OPTS_WINDOWS}"
 	)
 	if(MSVC)
 		buildmaster_link(vmaf pthread-win32)
