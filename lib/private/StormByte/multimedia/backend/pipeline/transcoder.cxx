@@ -49,6 +49,7 @@
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <chrono>
 
@@ -230,7 +231,10 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 
 	int muxIndex = 0;
 	for (auto& slot : Mapped) {
-		ApplyMuxTags(mux, slot.Out, *slot.Config);
+		if (slot.Kind == StormByte::Multimedia::Type::Attachment)
+			continue;
+
+		ApplyMuxTags(mux, muxIndex, *slot.Config);
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
 			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remuxer>(slot.In);

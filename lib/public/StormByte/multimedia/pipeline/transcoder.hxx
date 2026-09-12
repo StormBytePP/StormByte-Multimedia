@@ -57,6 +57,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -180,8 +181,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			virtual std::string ToString() const;
 
-			int In = -1;												///< Origin stream index
-			int Out = -1;												///< Mux slot (order in Plan::Tracks)
+			int In = -1;												///< Origin stream or attachment slot
+			int Out = -1;												///< Index in Plan::Tracks after Add
 			Type Kind = Type::Unknown;									///< Media kind
 			const Codec* Source = nullptr;								///< Origin codec
 			const Codec* Destination = nullptr;							///< Opened encoder codec, or nullptr if remux
@@ -226,6 +227,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * the opened Encoder. One instance is one source and one
 	 * destination; another job is another instance.
 	 *
+	 * Mux order is the order of Video / Audio / Subtitle / Attachments
+	 * calls. There is no output-index argument.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Transcoder {
@@ -234,9 +238,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @class Track
 			 * @brief Fluent handle for one origin stream in this job.
 			 *
-			 * Writes the matching Config leaf. Mux order is the out
-			 * passed to Video / Audio / Subtitle, not a field here.
-			 * Call before Run.
+			 * Writes the matching Config leaf. Mux order is the order
+			 * of Add on this job, not a field here. Call before Run.
 			 *
 			 * @ingroup multimedia_pipeline
 			 */
@@ -503,28 +506,42 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Maps a video origin stream.
+			 * @brief Maps a video origin stream. Mux order is Add order.
 			 * @param in Origin stream index.
-			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
-			Track Video(int in, int out) noexcept;
+			Track Video(int in) noexcept;
 
 			/**
-			 * @brief Maps an audio origin stream.
+			 * @brief Maps an audio origin stream. Mux order is Add order.
 			 * @param in Origin stream index.
-			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
-			Track Audio(int in, int out) noexcept;
+			Track Audio(int in) noexcept;
 
 			/**
-			 * @brief Maps a subtitle origin stream.
+			 * @brief Maps a subtitle origin stream. Mux order is Add order.
 			 * @param in Origin stream index.
-			 * @param out Mux slot.
 			 * @return Fluent handle.
 			 */
-			Track Subtitle(int in, int out) noexcept;
+			Track Subtitle(int in) noexcept;
+
+			/**
+			 * @brief Keeps every attachment from the source File.
+			 * @return *this.
+			 *
+			 * Each source slot becomes a Plan track with
+			 * @ref Config::Attachment and the concrete MIME. Default
+			 * is drop (do not call this).
+			 */
+			Transcoder& Attachments() noexcept;
+
+			/**
+			 * @brief Keeps source attachments whose MIME equals @p mime.
+			 * @param mime Concrete MIME (`image/jpeg`). Not a wildcard.
+			 * @return *this.
+			 */
+			Transcoder& Attachments(std::string_view mime) noexcept;
 
 			/**
 			 * @brief Drops an origin stream (omit from the Plan).
@@ -714,13 +731,12 @@ namespace StormByte::Multimedia::Pipeline {
 				ExpectedFile opened) noexcept;
 
 			/**
-			 * @brief Maps one origin stream.
+			 * @brief Maps one origin stream. Mux slot is the next Add.
 			 * @param in Origin index.
-			 * @param out Mux slot.
 			 * @param kind Expected type.
 			 * @return Fluent track handle.
 			 */
-			Track AddTrack(int in, int out, Type kind) noexcept;
+			Track AddTrack(int in, Type kind) noexcept;
 
 			/**
 			 * @brief Records encoder open into a TrackSettled and fires OnSettled.

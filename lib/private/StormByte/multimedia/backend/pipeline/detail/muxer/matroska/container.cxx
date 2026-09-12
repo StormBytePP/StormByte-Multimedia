@@ -38,10 +38,13 @@
 
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/attachment.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/container.hxx>
+#include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #ifdef WINDOWS
@@ -145,6 +148,17 @@ namespace {
 			std::memcpy(dst, view.data(), view.size());
 		}
 		return raw;
+	}
+
+	bool PlanWantsAttachments(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
+		const auto& plan = owner.Plan();
+		if (!plan)
+			return false;
+		for (const auto& track : plan->Tracks()) {
+			if (track && track->Type() == StormByte::Multimedia::Type::Attachment)
+				return true;
+		}
+		return false;
 	}
 }
 
@@ -280,8 +294,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("cannot bind attachments after the header");
 			return false;
 		}
+		if (!PlanWantsAttachments(owner)) {
+			m_file = nullptr;
+			return true;
+		}
 		m_file = &file;
-		if (!file.Attachments().empty() && !owner.Destination().HasAccess(Access{Operation::Attach})) {
+		if (!owner.Destination().HasAccess(Access{Operation::Attach})) {
 			owner.Fail("destination container does not support attachments");
 			return false;
 		}

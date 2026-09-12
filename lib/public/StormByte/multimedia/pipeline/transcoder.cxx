@@ -41,6 +41,8 @@
 
 #include <StormByte/expected.hxx>
 #include <StormByte/logger/typedefs.hxx>
+#include <StormByte/multimedia/attachment.hxx>
+#include <StormByte/multimedia/pipeline/config/attachment.hxx>
 #include <StormByte/multimedia/pipeline/config/audio.hxx>
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/config/video.hxx>
@@ -49,6 +51,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <string_view>
 
 using StormByte::Logger::Level;
 using StormByte::Multimedia::ExpectedTranscoder;
@@ -81,6 +84,15 @@ namespace {
 
 	Config::Subtitle* AsSubtitle(Config::Base* config) noexcept {
 		return dynamic_cast<Config::Subtitle*>(config);
+	}
+
+	bool AlreadyMapped(const std::vector<StormByte::Multimedia::Backend::Pipeline::TranscoderSlot>& mapped,
+		int in, StormByte::Multimedia::Type kind) noexcept {
+		for (const auto& slot : mapped) {
+			if (slot.In == in && slot.Kind == kind)
+				return true;
+		}
+		return false;
 	}
 }
 
@@ -302,53 +314,91 @@ const std::shared_ptr<StormByte::Logger::Log>& Transcoder::Logger() const noexce
 	return m_logger;
 }
 
-Transcoder::Track Transcoder::AddTrack(int in, int out, Type kind) noexcept {
-	*m_logger << Level::LowLevel << "Transcoder::AddTrack in=" << in << " out=" << out << std::endl;
-	if (out < 0) {
-		Fail("destination order key is negative");
+Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
+	*m_logger << Level::LowLevel << "Transcoder::AddTrack in=" << in << std::endl;
+	if (in < 0) {
+		Fail("origin index is negative");
 		return Track(*this, InvalidSlot);
 	}
-	const Stream* stream = FindStream(Source(), in);
-	if (!stream) {
-		Fail("source stream " + std::to_string(in) + " does not exist");
-		return Track(*this, InvalidSlot);
-	}
-	if (stream->Type() != kind) {
-		Fail("stream " + std::to_string(in) + " is " + KindName(stream->Type())
-			+ ", " + KindName(kind) + "() requires " + KindName(kind));
-		return Track(*this, InvalidSlot);
-	}
-	for (const auto& slot : m_backend->Mapped) {
-		if (slot.Out == out) {
-			Fail("destination order key " + std::to_string(out) + " is already used");
+	if (kind != Type::Attachment) {
+		const Stream* stream = FindStream(Source(), in);
+		if (!stream) {
+			Fail("source stream " + std::to_string(in) + " does not exist");
+			return Track(*this, InvalidSlot);
+		}
+		if (stream->Type() != kind) {
+			Fail("stream " + std::to_string(in) + " is " + KindName(stream->Type())
+				+ ", " + KindName(kind) + "() requires " + KindName(kind));
 			return Track(*this, InvalidSlot);
 		}
 	}
+	else {
+		const auto& attachments = Source().Attachments();
+		if (static_cast<std::size_t>(in) >= attachments.size()) {
+			Fail("attachment slot " + std::to_string(in) + " does not exist");
+			return Track(*this, InvalidSlot);
+		}
+	}
+	if (AlreadyMapped(m_backend->Mapped, in, kind)) {
+		Fail("origin " + std::to_string(in) + " is already mapped");
+		return Track(*this, InvalidSlot);
+	}
+
 	Backend::Pipeline::TranscoderSlot slot;
 	slot.In = in;
-	slot.Out = out;
+	slot.Out = static_cast<int>(m_backend->Mapped.size());
 	slot.Kind = kind;
 	if (kind == Type::Video)
 		slot.Config = std::make_unique<Config::Video>();
 	else if (kind == Type::Audio)
 		slot.Config = std::make_unique<Config::Audio>();
-	else
+	else if (kind == Type::Subtitle)
 		slot.Config = std::make_unique<Config::Subtitle>();
+	else {
+		const auto& mime = Source().Attachments()[static_cast<std::size_t>(in)].MimeType();
+		if (!mime || mime->empty() || mime->find('*') != std::string::npos) {
+			Fail("attachment slot " + std::to_string(in) + " has no concrete MIME");
+			return Track(*this, InvalidSlot);
+		}
+		slot.Config = std::make_unique<Config::Attachment>(*mime);
+	}
 	m_backend->Mapped.push_back(std::move(slot));
-	*m_logger << Level::Debug << "mapped " << KindName(kind) << " " << in << " -> key " << out << std::endl;
+	*m_logger << Level::Debug << "mapped " << KindName(kind) << " " << in
+		<< " -> order " << (m_backend->Mapped.size() - 1) << std::endl;
 	return Track(*this, m_backend->Mapped.size() - 1);
 }
 
-Transcoder::Track Transcoder::Video(int in, int out) noexcept {
-	return AddTrack(in, out, Type::Video);
+Transcoder::Track Transcoder::Video(int in) noexcept {
+	return AddTrack(in, Type::Video);
 }
 
-Transcoder::Track Transcoder::Audio(int in, int out) noexcept {
-	return AddTrack(in, out, Type::Audio);
+Transcoder::Track Transcoder::Audio(int in) noexcept {
+	return AddTrack(in, Type::Audio);
 }
 
-Transcoder::Track Transcoder::Subtitle(int in, int out) noexcept {
-	return AddTrack(in, out, Type::Subtitle);
+Transcoder::Track Transcoder::Subtitle(int in) noexcept {
+	return AddTrack(in, Type::Subtitle);
+}
+
+Transcoder& Transcoder::Attachments() noexcept {
+	const auto& attachments = Source().Attachments();
+	for (int i = 0; i < static_cast<int>(attachments.size()); ++i)
+		AddTrack(i, Type::Attachment);
+	return *this;
+}
+
+Transcoder& Transcoder::Attachments(std::string_view mime) noexcept {
+	if (mime.empty() || mime.find('*') != std::string_view::npos) {
+		Fail("attachment MIME must be concrete");
+		return *this;
+	}
+	const auto& attachments = Source().Attachments();
+	for (int i = 0; i < static_cast<int>(attachments.size()); ++i) {
+		const auto& have = attachments[static_cast<std::size_t>(i)].MimeType();
+		if (have && *have == mime)
+			AddTrack(i, Type::Attachment);
+	}
+	return *this;
 }
 
 Transcoder& Transcoder::Ignore(int in) noexcept {
@@ -361,6 +411,8 @@ Transcoder& Transcoder::Ignore(int in) noexcept {
 	mapped.erase(std::remove_if(mapped.begin(), mapped.end(),
 		[in](const Backend::Pipeline::TranscoderSlot& slot) { return slot.In == in; }),
 		mapped.end());
+	for (int i = 0; i < static_cast<int>(mapped.size()); ++i)
+		mapped[static_cast<std::size_t>(i)].Out = i;
 	*m_logger << Level::Debug << "ignore stream " << in << std::endl;
 	return *this;
 }

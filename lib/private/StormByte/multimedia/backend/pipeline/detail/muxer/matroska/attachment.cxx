@@ -38,11 +38,14 @@
 
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/attachment.hxx>
 #include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
 #include <cstring>
 #include <span>
+#include <unordered_set>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -69,6 +72,19 @@ namespace {
 			return AV_CODEC_ID_PNG;
 		return AV_CODEC_ID_NONE;
 	}
+
+	std::unordered_set<int> WantedSlots(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
+		std::unordered_set<int> slots;
+		const auto& plan = owner.Plan();
+		if (!plan)
+			return slots;
+		for (const auto& track : plan->Tracks()) {
+			if (!track || track->Type() != StormByte::Multimedia::Type::Attachment)
+				continue;
+			slots.insert(track->In());
+		}
+		return slots;
+	}
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
@@ -76,6 +92,11 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 		AVFormatContext* ctx, const File& file) noexcept {
 		if (!ctx)
 			return true;
+
+		const auto wanted = WantedSlots(owner);
+		if (wanted.empty())
+			return true;
+
 		const auto& attachments = file.Attachments();
 		if (attachments.empty())
 			return true;
@@ -83,7 +104,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("destination container does not support attachments");
 			return false;
 		}
-		for (const auto& attachment : attachments) {
+
+		for (int slot : wanted) {
+			if (slot < 0 || static_cast<std::size_t>(slot) >= attachments.size()) {
+				owner.Fail("attachment slot out of range");
+				return false;
+			}
+			const auto& attachment = attachments[static_cast<std::size_t>(slot)];
 			AVStream* stream = avformat_new_stream(ctx, nullptr);
 			if (!stream) {
 				owner.Fail("avformat_new_stream failed for attachment");
