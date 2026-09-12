@@ -192,5 +192,5 @@ jobs:
     with:
       doc_target: StormByteMultimediaDoc
       extra-cmake-options: -DENABLE_DOC=ON -DWITH_STORMBYTE=BUNDLED -DWITH_FFMPEG=SYSTEM -DWITH_VMAF=BUNDLED
-      extra-install: "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev libvmaf-dev"
+      extra-install: "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev nasm"
       docs_output_dir: ./_site

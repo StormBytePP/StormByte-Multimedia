@@ -3,12 +3,19 @@ option(ENABLE_DOC "Enable documentation generation with Doxygen" OFF)
 if(ENABLE_DOC)
 	find_package(Doxygen REQUIRED)
 
+	set(_ffmpeg_hxx
+		"${CMAKE_BINARY_DIR}/lib/public/StormByte/multimedia/pipeline/filters/ffmpeg.hxx")
+
 	# Doxygen basic settings
 	set(DOXYGEN_PROJECT_NAME "${PROJECT_NAME}")
 	set(DOXYGEN_PROJECT_NUMBER "${PROJECT_VERSION}")
 	set(DOXYGEN_PROJECT_BRIEF "${PROJECT_DESCRIPTION}")
 	set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
 	set(DOXYGEN_USE_MDFILE_AS_MAINPAGE "${CMAKE_SOURCE_DIR}/README.md")
+	set(DOXYGEN_INCLUDE_PATH
+		"${CMAKE_SOURCE_DIR}/lib/public"
+		"${CMAKE_BINARY_DIR}/lib/public"
+	)
 
 	# Exclude .cxx files
 	set(DOXYGEN_EXCLUDE_PATTERNS "*.cxx")
@@ -22,8 +29,9 @@ if(ENABLE_DOC)
 	# Add documentation target
 	doxygen_add_docs(
 		StormByteMultimediaDoc
-		"${CMAKE_SOURCE_DIR}/lib/public/StormByte" # Input directory
-		"${CMAKE_SOURCE_DIR}/README.md" # Explicitly include README.md
+		"${CMAKE_SOURCE_DIR}/lib/public/StormByte"
+		"${CMAKE_SOURCE_DIR}/README.md"
+		"${_ffmpeg_hxx}"
 		COMMENT "Generate HTML pages"
 	)
 endif()
