@@ -39,7 +39,9 @@
 #include <StormByte/multimedia/pipeline/filters/video/watermark.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <utility>
@@ -55,11 +57,6 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 namespace {
-	/*
-	* Still-image decoder from the logo file extension.
-	* Unknown extensions fall back to MJPEG so a misnamed file
-	* still has a chance; DecodeLogo Fail()s if that decode dies.
-	*/
 	const ::AVCodec* CodecFromPath(const std::filesystem::path& path) noexcept {
 		std::string ext = path.extension().string();
 		for (char& c : ext)
@@ -75,18 +72,12 @@ namespace {
 		return avcodec_find_decoder(AV_CODEC_ID_MJPEG);
 	}
 
-	/* One 8-bit luma sample. `src` is always AV_PIX_FMT_GRAY8 here. */
 	int SampleY8(const ::AVFrame* src, int x, int y) noexcept {
 		if (!src->data[0] || x < 0 || y < 0 || x >= src->width || y >= src->height)
 			return 0;
 		return src->data[0][y * src->linesize[0] + x];
 	}
 
-	/*
-	* Mean luma of a row, subsampled (~64 samples).
-	* Fast enough to run on every held frame; good enough to tell
-	* a black bar from picture.
-	*/
 	int RowMeanY8(const ::AVFrame* src, int row) noexcept {
 		unsigned sum = 0;
 		const int step = src->width > 64 ? src->width / 64 : 1;
@@ -98,7 +89,6 @@ namespace {
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
-	/* Same idea on a column (pillarbox). */
 	int ColMeanY8(const ::AVFrame* src, int col) noexcept {
 		unsigned sum = 0;
 		const int step = src->height > 64 ? src->height / 64 : 1;
@@ -110,23 +100,119 @@ namespace {
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
-	/*
-	* Walk inward from an edge while the row/column mean stays
-	* at or below `black`. `limit` caps how far we trust a bar
-	* (letterbox ≤ 20% of height, pillarbox ≤ 12.5% of width).
-	*/
-	int ScanBar(int limit, int black, const auto& meanAt) noexcept {
+	int ScanBar(int limit, int cap, const auto& meanAt) noexcept {
 		int bar = 0;
-		while (bar < limit && meanAt(bar) <= black)
-			++bar;
-		return bar;
+		int noise = 0;
+		while (bar < limit) {
+			const int mean = meanAt(bar);
+			if (mean <= cap) {
+				noise = 0;
+				++bar;
+				continue;
+			}
+			if (mean <= cap + 8 && noise < 2) {
+				++noise;
+				++bar;
+				continue;
+			}
+			break;
+		}
+		return bar - noise;
 	}
 
-	/*
-	* Logo top-left in frame pixels.
-	* Point: absolute, ignore bars.
-	* Anchor: (x0,y0,aw,ah) is the active picture after bars.
-	*/
+	std::pair<int, int> PairBars(int a, int b) noexcept {
+		const int lo = std::min(a, b);
+		const int hi = std::max(a, b);
+		if (lo < 4)
+			return {0, 0};
+		if (hi > 0 && lo * 3 < hi)
+			return {lo, lo};
+		return {a, b};
+	}
+
+	void ApplyLut(::AVFrame* gray, const std::array<uint8_t, 256>& lut) noexcept {
+		if (!gray || !gray->data[0])
+			return;
+		for (int y = 0; y < gray->height; ++y) {
+			uint8_t* row = gray->data[0] + y * gray->linesize[0];
+			for (int x = 0; x < gray->width; ++x)
+				row[x] = lut[row[x]];
+		}
+	}
+
+	std::array<uint8_t, 256> StretchLut(int lo, int hi) noexcept {
+		std::array<uint8_t, 256> lut {};
+		if (hi <= lo) {
+			for (int i = 0; i < 256; ++i)
+				lut[static_cast<std::size_t>(i)] = static_cast<uint8_t>(i);
+			return lut;
+		}
+		for (int i = 0; i < 256; ++i) {
+			if (i <= lo)
+				lut[static_cast<std::size_t>(i)] = 0;
+			else if (i >= hi)
+				lut[static_cast<std::size_t>(i)] = 255;
+			else
+				lut[static_cast<std::size_t>(i)] = static_cast<uint8_t>(((i - lo) * 255) / (hi - lo));
+		}
+		return lut;
+	}
+
+	std::array<uint8_t, 256> GammaLut(double gamma) noexcept {
+		std::array<uint8_t, 256> lut {};
+		for (int i = 0; i < 256; ++i)
+			lut[static_cast<std::size_t>(i)] = static_cast<uint8_t>(
+				std::clamp(std::pow(static_cast<double>(i) / 255.0, gamma) * 255.0, 0.0, 255.0));
+		return lut;
+	}
+
+	struct Probe {
+		int top = 0;
+		int bottom = 0;
+		int left = 0;
+		int right = 0;
+	};
+
+	Probe Measure(::AVFrame* gray) noexcept {
+		Probe out;
+		const int midY = RowMeanY8(gray, gray->height / 2);
+		const int midX = ColMeanY8(gray, gray->width / 2);
+		const int edgeTop = RowMeanY8(gray, 0);
+		const int edgeBot = RowMeanY8(gray, gray->height - 1);
+		const int edgeLeft = ColMeanY8(gray, 0);
+		const int edgeRight = ColMeanY8(gray, gray->width - 1);
+		const int picture = std::max(midY, midX);
+		const int maxY = gray->height / 3;
+		const int maxX = gray->width / 4;
+
+		const int edgeY = std::min(edgeTop, edgeBot);
+		if (picture >= edgeY + 16) {
+			const int cap = edgeY + std::max(10, (picture - edgeY) / 4);
+			out.top = ScanBar(maxY, cap, [&](int i) { return RowMeanY8(gray, i); });
+			out.bottom = ScanBar(maxY, cap,
+				[&](int i) { return RowMeanY8(gray, gray->height - 1 - i); });
+			const auto pair = PairBars(out.top, out.bottom);
+			out.top = pair.first;
+			out.bottom = pair.second;
+		}
+
+		const int edgeX = std::min(edgeLeft, edgeRight);
+		if (picture >= edgeX + 16) {
+			const int cap = edgeX + std::max(10, (picture - edgeX) / 4);
+			out.left = ScanBar(maxX, cap, [&](int i) { return ColMeanY8(gray, i); });
+			out.right = ScanBar(maxX, cap,
+				[&](int i) { return ColMeanY8(gray, gray->width - 1 - i); });
+			const auto pair = PairBars(out.left, out.right);
+			out.left = pair.first;
+			out.right = pair.second;
+		}
+		return out;
+	}
+
+	bool Boxed(const Probe& p) noexcept {
+		return (p.top > 4 && p.bottom > 4) || (p.left > 4 && p.right > 4);
+	}
+
 	std::pair<int, int> Place(int logoW, int logoH,
 		const std::optional<Anchor>& anchor,
 		const std::optional<StormByte::Multimedia::Property::Point>& point,
@@ -150,7 +236,6 @@ namespace {
 		return {x, y};
 	}
 
-	/* Straight alpha blend of the logo onto an RGBA frame. */
 	void Blend(uint8_t* dst, int dstLinesize, int frameW, int frameH,
 		const uint8_t* logo, int logoW, int logoH, int x, int y, unsigned opacity) noexcept {
 		const int alphaScale = static_cast<int>(opacity);
@@ -362,10 +447,6 @@ bool Watermark::DecodeLogo() noexcept {
 	return true;
 }
 
-/*
-* HDR / 10-bit / YUV frames cannot be probed on data[0].
-* Convert once to GRAY8 and cache SwsContext while size+format hold.
-*/
 ::AVFrame* Watermark::Luma(::AVFrame* src) noexcept {
 	if (!src || src->width <= 0 || src->height <= 0)
 		return nullptr;
@@ -414,75 +495,65 @@ bool Watermark::DecodeLogo() noexcept {
 	return m_luma;
 }
 
-/*
-* One probe. false = ignore this frame (too small / full slate).
-* Bars accumulate with max() so a later frame can only grow them.
-* m_stable counts consecutive frames that did not grow a letterbox pair.
-*/
 bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 	::AVFrame* gray = Luma(src);
 	if (!gray || gray->width < 16 || gray->height < 16)
 		return false;
 
-	constexpr int black = 12;
-	const int maxY = gray->height / 5;
-	const int maxX = gray->width / 8;
-	const int midY = RowMeanY8(gray, gray->height / 2);
-	const int midX = ColMeanY8(gray, gray->width / 2);
-	const int edgeTop = RowMeanY8(gray, 0);
-	const int edgeBot = RowMeanY8(gray, gray->height - 1);
+	Probe found = Measure(gray);
 
-	if (midY < 8 && midX < 8 && edgeTop < 8 && edgeBot < 8)
+	if (!Boxed(found)) {
+		const int edge = std::min({
+			RowMeanY8(gray, 0),
+			RowMeanY8(gray, gray->height - 1),
+			ColMeanY8(gray, 0),
+			ColMeanY8(gray, gray->width - 1)
+		});
+		const int core = std::max(
+			RowMeanY8(gray, gray->height / 2),
+			ColMeanY8(gray, gray->width / 2));
+		if (core > edge) {
+			ApplyLut(gray, StretchLut(edge, core));
+			found = Measure(gray);
+		}
+	}
+
+	if (!Boxed(found)) {
+		ApplyLut(gray, GammaLut(0.45));
+		found = Measure(gray);
+	}
+
+	if (!Boxed(found))
 		return false;
 
-	const int top = ScanBar(maxY, black,
-		[&](int i) { return RowMeanY8(gray, i); });
-	const int bottom = ScanBar(maxY, black,
-		[&](int i) { return RowMeanY8(gray, gray->height - 1 - i); });
-	const int left = ScanBar(maxX, black,
-		[&](int i) { return ColMeanY8(gray, i); });
-	const int right = ScanBar(maxX, black,
-		[&](int i) { return ColMeanY8(gray, gray->width - 1 - i); });
+	const bool same = found.top <= m_barTop && found.bottom <= m_barBottom
+		&& found.left <= m_barLeft && found.right <= m_barRight;
 
-	int useTop = top;
-	int useBottom = bottom;
-	if (midY < black + 16) {
-		useTop = 0;
-		useBottom = 0;
+	if (found.top > 0 && found.bottom > 0) {
+		if (m_barTop == 0) {
+			m_barTop = found.top;
+			m_barBottom = found.bottom;
+		}
+		else {
+			m_barTop = std::min(m_barTop, found.top);
+			m_barBottom = std::min(m_barBottom, found.bottom);
+		}
 	}
-	else if (useTop > 8 && useBottom <= 8)
-		useBottom = useTop;
-	else if (useBottom > 8 && useTop <= 8)
-		useTop = useBottom;
-	else if (useTop > 8 && useBottom > 8) {
-		const int d = std::abs(useTop - useBottom);
-		if (d * 2 > std::max(useTop, useBottom))
-			useTop = useBottom = std::min(useTop, useBottom);
-	}
-	else {
-		useTop = 0;
-		useBottom = 0;
+	if (found.left > 0 && found.right > 0) {
+		if (m_barLeft == 0) {
+			m_barLeft = found.left;
+			m_barRight = found.right;
+		}
+		else {
+			m_barLeft = std::min(m_barLeft, found.left);
+			m_barRight = std::min(m_barRight, found.right);
+		}
 	}
 
-	int useLeft = left;
-	int useRight = right;
-	if (useLeft <= 8 || useRight <= 8 || midX < black + 16) {
-		useLeft = 0;
-		useRight = 0;
-	}
-
-	const bool same = useTop <= m_barTop && useBottom <= m_barBottom
-		&& useLeft <= m_barLeft && useRight <= m_barRight;
-	m_barTop = std::max(m_barTop, useTop);
-	m_barBottom = std::max(m_barBottom, useBottom);
-	m_barLeft = std::max(m_barLeft, useLeft);
-	m_barRight = std::max(m_barRight, useRight);
-	if (useTop > 8 && useBottom > 8) {
-		if (same)
-			++m_stable;
-		else
-			m_stable = 0;
-	}
+	if (same)
+		++m_stable;
+	else
+		m_stable = 0;
 	return true;
 }
 
@@ -492,31 +563,13 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 
 	::AVFrame* src = AVFrame();
 
-	/*
-     * Anchor placement is relative to the active picture, not the
-     * full frame. Letterbox / pillarbox width is unknown on frame 0
-     * (many films stay black for 1–2 s). Painting immediately would
-     * either put the logo inside the bars or leave the first N frames
-     * without a mark while we wait.
-     *
-     * Hold(ProbeMax) parks every video unit here until the bars are
-     * known. ProbeBars still runs on each parked unit. When a
-     * letterbox pair is stable — or LastChance fires at the ceiling
-     * / route EOF — set m_released and Release(). Release replays
-     * the parked units through Process; those calls skip this block
-     * and Paint from frame 0 with the measured offset (or 0 if there
-     * were no bars).
-     *
-     * Do not branch on HeldFor(): the ceiling belongs to LastChance.
-     * Point placement skips this block; the coordinate is already
-     * in frame pixels.
-     */
 	if (m_anchor && !m_point && !m_released) {
 		if (!Held())
 			Hold(ProbeMax);
 		const bool usable = ProbeBars(src);
-		const bool letterbox = m_barTop > 8 && m_barBottom > 8;
-		if (usable && letterbox && m_stable >= 8) {
+		const bool boxed = (m_barTop > 4 && m_barBottom > 4)
+			|| (m_barLeft > 4 && m_barRight > 4);
+		if (usable && boxed && m_stable >= 8) {
 			m_released = true;
 			Release();
 			return;
@@ -530,20 +583,8 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 }
 
 void Watermark::LastChance(const Pipeline::Frame&) noexcept {
-    /*
-     * Pipeline::Filter::FFmpeg calls this instead of overflowing
-     * the Hold queue, and again if the route ends while still Held.
-     * Keep a measured letterbox; otherwise pad = 0 (true BottomRight).
-     * Must Release() or the job Fails.
-     */
-    if (!(m_barTop > 8 && m_barBottom > 8)) {
-        m_barTop = 0;
-        m_barBottom = 0;
-        m_barLeft = 0;
-        m_barRight = 0;
-    }
-    m_released = true;
-    Release();
+	m_released = true;
+	Release();
 }
 
 void Watermark::Paint() noexcept {
