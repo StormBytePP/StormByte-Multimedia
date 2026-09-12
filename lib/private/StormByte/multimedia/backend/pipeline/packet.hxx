@@ -38,8 +38,11 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/visibility.h>
+
+#include <optional>
 
 namespace StormByte::Multimedia::Pipeline {
 	class Packet;
@@ -56,6 +59,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * @class Packet
 	 * @brief Holder of one compressed access unit for the public Packet facade.
 	 *
+	 * May also own a deep copy of the producer @c AVCodecParameters
+	 * (extradata included). Analytics encode-look uses that copy
+	 * to open a decoder without a format context.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Packet {
@@ -71,7 +78,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			Packet() noexcept = default;
 
 			/**
-			 * @brief Deep copy (cloned FFmpeg packet).
+			 * @brief Deep copy (cloned FFmpeg packet and parameters).
 			 * @param other Source holder.
 			 */
 			Packet(const Packet& other) noexcept;
@@ -88,7 +95,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			~Packet() noexcept = default;
 
 			/**
-			 * @brief Deep copy assignment (cloned FFmpeg packet).
+			 * @brief Deep copy assignment (cloned FFmpeg packet and parameters).
 			 * @param other Source holder.
 			 * @return *this.
 			 */
@@ -139,6 +146,41 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 
 			/**
+			 * @name Parameters
+			 * @{
+			 */
+
+			/**
+			 * @brief Codec parameters stamped by the producer, if any.
+			 * @return Pointer valid while this holder lives, or nullptr.
+			 */
+			inline const StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters* Parameters() const noexcept {
+				if (!m_params)
+					return nullptr;
+				return &*m_params;
+			}
+
+			/**
+			 * @brief Codec parameters stamped by the producer, if any.
+			 * @return Pointer valid while this holder lives, or nullptr.
+			 */
+			inline StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters* Parameters() noexcept {
+				if (!m_params)
+					return nullptr;
+				return &*m_params;
+			}
+
+			/**
+			 * @brief Deep-copies @p params onto this holder.
+			 * @param params Source parameters. Empty clears the stamp.
+			 */
+			void Parameters(std::optional<StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters> params) noexcept;
+
+			/**
+			 * @}
+			 */
+
+			/**
 			 * @brief Hook after Replace. No high-level bag on a Packet.
 			 * @param packet Public unit that owns this holder.
 			 */
@@ -146,5 +188,6 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 
 		private:
 			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_handle;	///< FFmpeg packet
+			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters> m_params;	///< Producer codecpar
 	};
 }

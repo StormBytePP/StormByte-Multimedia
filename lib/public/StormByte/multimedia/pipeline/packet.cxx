@@ -46,7 +46,8 @@ using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 
 Packet::Packet() noexcept
-: Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer), m_keyFrame(false), m_part(0) {}
+: Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer),
+	m_keyFrame(false), m_codec(nullptr), m_part(0) {}
 
 Packet::Packet(int track, enum Type type, enum Producer producer, StormByte::Buffer::FIFO payload,
 	std::optional<Property::Duration> pts,
@@ -54,12 +55,14 @@ Packet::Packet(int track, enum Type type, enum Producer producer, StormByte::Buf
 	std::optional<Property::Duration> duration,
 	bool key_frame,
 	std::vector<SideData> attachments,
+	const StormByte::Multimedia::Codec* codec,
 	std::uint64_t serial,
 	std::uint64_t part) noexcept
 : Item(track, type, Kind::Packet, producer),
 	m_payload(std::move(payload)),
 	m_pts(std::move(pts)), m_dts(std::move(dts)), m_duration(std::move(duration)),
 	m_keyFrame(key_frame), m_attachments(std::move(attachments)),
+	m_codec(codec),
 	m_serial(serial), m_part(part) {}
 
 Packet::Packet(const Packet& other) noexcept
@@ -70,6 +73,7 @@ Packet::Packet(const Packet& other) noexcept
 	m_duration(other.m_duration),
 	m_keyFrame(other.m_keyFrame),
 	m_attachments(other.m_attachments),
+	m_codec(other.m_codec),
 	m_serial(other.m_serial),
 	m_part(other.m_part) {
 	if (other.m_backend)
@@ -84,6 +88,7 @@ Packet::Packet(Packet&& other) noexcept
 	m_duration(std::move(other.m_duration)),
 	m_keyFrame(other.m_keyFrame),
 	m_attachments(std::move(other.m_attachments)),
+	m_codec(other.m_codec),
 	m_serial(other.m_serial),
 	m_part(other.m_part),
 	m_backend(std::move(other.m_backend)) {
@@ -102,6 +107,7 @@ Packet& Packet::operator=(const Packet& other) noexcept {
 	m_duration = other.m_duration;
 	m_keyFrame = other.m_keyFrame;
 	m_attachments = other.m_attachments;
+	m_codec = other.m_codec;
 	m_serial = other.m_serial;
 	m_part = other.m_part;
 	if (other.m_backend)
@@ -121,6 +127,7 @@ Packet& Packet::operator=(Packet&& other) noexcept {
 	m_duration = std::move(other.m_duration);
 	m_keyFrame = other.m_keyFrame;
 	m_attachments = std::move(other.m_attachments);
+	m_codec = other.m_codec;
 	m_serial = other.m_serial;
 	m_part = other.m_part;
 	m_backend = std::move(other.m_backend);
@@ -137,6 +144,7 @@ void Packet::BecomeEmpty() noexcept {
 	m_keyFrame = false;
 	m_attachments.clear();
 	m_attachments.shrink_to_fit();
+	m_codec = nullptr;
 	m_serial.reset();
 	m_part = 0;
 	m_backend.reset();

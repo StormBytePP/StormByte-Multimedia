@@ -36,8 +36,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <tables/encoder/table.hxx>
 
@@ -221,6 +225,18 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 		}
 	}
 
+	auto holder = std::make_unique<Packet>();
+	holder->Handle(raw.Ref());
+	if (owner.m_backend) {
+		if (const auto* ctx = owner.m_backend->Context(); ctx) {
+			::AVCodecParameters* par = avcodec_parameters_alloc();
+			if (par && avcodec_parameters_from_context(par, ctx) >= 0)
+				holder->Parameters(StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters(par));
+			if (par)
+				avcodec_parameters_free(&par);
+		}
+	}
+
 	return owner.Wrap(
 		type, index,
 		StormByte::Buffer::FIFO{std::move(bytes)},
@@ -228,7 +244,8 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 		TicksToPts(raw.Dts(), timeBase),
 		TicksToDuration(raw.Duration(), timeBase),
 		(raw.Flags() & AV_PKT_FLAG_KEY) != 0,
-		std::move(attachments));
+		std::move(attachments),
+		std::move(holder));
 }
 
 std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipeline::Encoder& owner,

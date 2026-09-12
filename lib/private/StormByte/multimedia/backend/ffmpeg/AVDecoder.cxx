@@ -57,7 +57,7 @@ FFmpeg::AVDecoder::~AVDecoder() noexcept {
 	Free();
 }
 
-FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept {
+FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::OpenRaw(AVCodec* codec, const AVCodecParameters& params, int stream_index) noexcept {
 	if (!codec || !params.Get())
 		return Unexpected<DecoderError>("Invalid codec or parameters");
 
@@ -80,12 +80,21 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 
 	AVDecoder dec(ctx);
 	dec.m_stream_index = stream_index;
+	return dec;
+}
 
+FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept {
+	auto opened = OpenRaw(codec, params, stream_index);
+	if (!opened)
+		return opened;
 	auto bsf = fmt.Mp4ToAnnexB(params.Get()->codec_id, stream_index, params);
 	if (bsf)
-		dec.m_bsf_pipeline.Add(std::move(*bsf));
+		opened->m_bsf_pipeline.Add(std::move(*bsf));
+	return opened;
+}
 
-	return dec;
+FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecParameters& params, int stream_index) noexcept {
+	return OpenRaw(codec, params, stream_index);
 }
 
 FFmpeg::OperationResult FFmpeg::AVDecoder::SendPacket(AVPacket& pkt) noexcept {

@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
@@ -60,6 +61,25 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Packet / BSF filters may sit between Demuxer and Remuxer.
 	 * Frame / Process filters on that stretch fail at @ref Close.
 	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
+	 *
+	 * Analytics is not a process node. Close wires Process from
+	 * origin to destination, Tees the origin Decoder onto the first
+	 * Analytics (decode look), and builds a private encode-look
+	 * Decoder from the Encoder bitstream. That Decoder is not a
+	 * public API: Route owns it, stamps @ref Producer::Encoder on
+	 * its frames, and Binds them onto the same Analytics. The last
+	 * Analytics @c m_out is @ref Buffer::Sink::Drain.
+	 * A raw tube and Transcoder use this same Close.
+	 *
+	 * Muxer closed is not the end of this Route. The encode look
+	 * lags the Encoder. @ref Reports before @ref Idle is true
+	 * has no pooled Analytics mean. A hand-built tube must wait
+	 * @ref Idle (or destroy the Route) before reading Reports.
+	 * Transcoder waits the same way before OnDone.
+	 *
+	 * The Tee hopper ceiling is items in transit. Analytics that
+	 * pops and clones into its own queues must bound those queues
+	 * itself.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -89,19 +109,21 @@ namespace StormByte::Multimedia::Pipeline {
 			Route(Route&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. Halts owned filters and look Decoders.
 			 */
 			~Route() noexcept;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source route.
+			 * @return *this.
 			 */
 			Route& operator=(const Route& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Route to take.
+			 * @return *this.
 			 */
 			Route& operator=(Route&& other) noexcept = delete;
 
@@ -128,15 +150,31 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param origin Producer step.
 			 * @param destination Consumer step.
 			 *
-			 * O(1) at the ends. Uses @c Bind(track, …). Does not launch.
-			 * If @p destination is a @ref Remuxer and this route holds a
-			 * Frame / Process filter, the remuxer fails.
+			 * O(1) at the ends. Uses @c Bind(track, …) for Process.
+			 * Analytics is Teed off the origin Decoder and fed encode
+			 * frames by a Route-owned look Decoder on @p destination.
+			 * Last Analytics m_out is Drained. Does not launch the
+			 * look Decoder beyond its own constructor.
 			 */
 			void Close(Step& origin, Step& destination) noexcept;
 
 			/**
+			 * @brief Whether every owned worker has left Ready.
+			 * @return true when all filters and look Decoders are
+			 *         Stopped or Failed.
+			 *
+			 * False while Analytics is still pairing looks. Wait
+			 * this before @ref Reports on a hand-built tube.
+			 */
+			bool Idle() const noexcept;
+
+			/**
 			 * @brief Reports of every kept filter.
 			 * @return One entry per owned filter, in Add order.
+			 *
+			 * Snapshots current leaf state. Analytics that has not
+			 * run Eof yet returns Failed / empty scores even if
+			 * pairs already went to the metric. Call after @ref Idle.
 			 */
 			std::vector<Filter::Report> Reports() const noexcept;
 
@@ -146,25 +184,25 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Process chain and analytics chain of one @ref Kind.
 			 */
 			struct STORMBYTE_MULTIMEDIA_PRIVATE Lane {
-				Filter::FFmpeg* FirstProcess = nullptr;		///< Head of process
-				Filter::FFmpeg* LastProcess = nullptr;		///< Tail of process
-				Filter::FFmpeg* FirstAnalytics = nullptr;	///< Head of analytics
-				Filter::FFmpeg* LastAnalytics = nullptr;	///< Tail of analytics
+				Filter::FFmpeg* FirstProcess = nullptr;
+				Filter::FFmpeg* LastProcess = nullptr;
+				Filter::FFmpeg* FirstAnalytics = nullptr;
+				Filter::FFmpeg* LastAnalytics = nullptr;
 
 				/**
-				 * @brief First node of this lane.
-				 * @return Process head, else analytics head, else null.
+				 * @brief First process node of this lane.
+				 * @return Process head, or null. Analytics is not in the tube.
 				 */
 				Filter::FFmpeg* First() const noexcept {
-					return FirstProcess != nullptr ? FirstProcess : FirstAnalytics;
+					return FirstProcess;
 				}
 
 				/**
-				 * @brief Last node of this lane.
-				 * @return Analytics tail, else process tail, else null.
+				 * @brief Last process node of this lane.
+				 * @return Process tail, or null. Analytics is not in the tube.
 				 */
 				Filter::FFmpeg* Last() const noexcept {
-					return LastAnalytics != nullptr ? LastAnalytics : LastProcess;
+					return LastProcess;
 				}
 			};
 
@@ -173,12 +211,30 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param lane Process / analytics of one Kind.
 			 * @param filter Node to append.
 			 * @param analytics true if @p filter is Analytics.
+			 *
+			 * Analytics nodes chain to each other only. They do
+			 * not Bind after LastProcess.
 			 */
 			void Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept;
 
-			int m_track;											///< Origin stream index
-			Lane m_frames;											///< @ref Kind::Frame
-			Lane m_packets;											///< @ref Kind::Packet
-			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;	///< Owned filters, Add order
+			/**
+			 * @brief Tees the origin Decoder onto the analytics head.
+			 * @param origin Decode-side producer.
+			 * @param lane Lane whose FirstAnalytics is the tap.
+			 */
+			void TapDecode(Step& origin, Lane& lane) noexcept;
+
+			/**
+			 * @brief Builds the encode-look Decoder and binds it to Analytics.
+			 * @param destination Encoder (packet producer).
+			 * @param lane Lane whose FirstAnalytics receives the look frames.
+			 */
+			void TapEncode(Step& destination, Lane& lane) noexcept;
+
+			int m_track;													///< Origin stream index
+			Lane m_frames;													///< Frame process + analytics
+			Lane m_packets;													///< Packet process + analytics
+			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;			///< Owned leaves, Add order
+			std::vector<std::unique_ptr<Decoder>> m_looks;					///< Route-owned encode-look decoders
 	};
 }

@@ -115,6 +115,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   Pump may pop m_in and call Work. There is no separate
 	 *   "running" value: pumping is what a Ready worker does, not
 	 *   a new phase. Fail or Stop may still fire from here.
+	 *   When the input hopper reaches Eof and Pump returns without
+	 *   Stop(), Launch moves Ready → Stopped. That is how a stage
+	 *   ends in a live tube (Analytics after the last look, Muxer
+	 *   after the last packet). Route::Idle and Transcoder wait
+	 *   that Stopped before Reports / OnDone.
 	 *
 	 * Stopping
 	 *   Stop() was called, or Halt() from a destructor. Hoppers
@@ -123,8 +128,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   failure; Finish may still run.
 	 *
 	 * Stopped
-	 *   The worker has left. Hoppers stay Eof. The tube is not
-	 *   reused: there is no restart back to Created.
+	 *   The worker has left. Hoppers stay Eof. Reached from
+	 *   Stopping after Halt/Stop, or from Ready after a natural
+	 *   hopper Eof. The tube is not reused: there is no restart
+	 *   back to Created.
 	 *
 	 * Failed
 	 *   Fail() latched a reason. Hoppers are Eof. Terminal, like
@@ -133,7 +140,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   through Stopping.
 	 *
 	 * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
-	 * Ready→Stopping, Ready→Failed, Stopping→Stopped.
+	 * Ready→Stopping, Ready→Failed, Ready→Stopped, Stopping→Stopped.
 	 * Failed and Stopped do not leave.
 	 *
 	 * Source EOF is not a State. Demuxer keeps m_eof next to this.
@@ -161,6 +168,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * units of one track are printed. @ref MaybeThrottle writes
 	 * the skip warning once per window. @ref Pump times each
 	 * @ref Work and @ref DumpWork prints min/max at Finish.
+	 *
+	 * @ref Look is the encode-look hook. Default is a no-op.
+	 * Encoder overrides it and deep-copies encoded packets into
+	 * the look decoder sink. It is not a public Encoder API and
+	 * it is not a Tee of @ref m_out. @ref Route::TapEncode calls
+	 * it through this Step hook.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -365,6 +378,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Input is Sink EoF and the last Pop was empty.
 			 */
 			virtual void Finish() noexcept;
+
+			/**
+			 * @brief Encode-look side channel. Default no-op.
+			 * @param sink Look decoder @c m_in.
+			 *
+			 * Encoder overrides and deep-copies each encoded packet
+			 * into @p sink. Other leaves leave this empty. Not a Tee
+			 * of @ref m_out. @ref Route::TapEncode calls this hook;
+			 * there is no public Encoder method for it.
+			 */
+			virtual void Look(StormByte::Multimedia::Buffer::Sink& sink) noexcept;
 
 			/**
 			 * @brief Body of the worker after Open returns.

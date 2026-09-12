@@ -374,6 +374,30 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		job.OnError(job.Error().value_or("transcode failed"));
 		return;
 	}
+
+	/*
+	* Muxer closed is the file on disk, not Analytics Eof. The
+	* encode look still drains. Wait Route::Idle so Reports()
+	* after OnDone sees the pooled score. Same rule as a hand
+	* tube: do not read Reports until Idle.
+	*/
+	while (!Stopping(*this, token)) {
+		bool idle = true;
+		for (const auto& lane : lanes) {
+			if (lane.Frames && !lane.Frames->Idle())
+				idle = false;
+			if (lane.Packets && !lane.Packets->Idle())
+				idle = false;
+		}
+		for (const auto& route : remuxRoutes) {
+			if (route && !route->Idle())
+				idle = false;
+		}
+		if (idle)
+			break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
+
 	job.SetProgress(100);
 	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);
 	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(

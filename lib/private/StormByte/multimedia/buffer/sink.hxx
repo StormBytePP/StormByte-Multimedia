@@ -61,11 +61,11 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
-	class Item;			///< Tube facade. Defined in pipeline/item.hxx
-	class Route;		///< Defined in pipeline/route.hxx
-	class Router;		///< Defined in pipeline/router.hxx
-	class Step;			///< Defined in pipeline/step.hxx
-	class Transcoder;	///< Defined in pipeline/transcoder.hxx
+	class Item;
+	class Route;
+	class Router;
+	class Step;
+	class Transcoder;
 
 	Step& operator>>(Step& from, Step& to) noexcept;
 }
@@ -89,13 +89,25 @@ namespace StormByte::Multimedia::Buffer {
 	 * Starts with zero buckets. Bind creates or shares a hopper
 	 * under @p key. The tube uses Pipeline::Item::Track as the key.
 	 *
-	 * Push(key) waits on @c m_wired until that bucket exists or
-	 * the Sink is closed. A closed Sink with no bucket for that
-	 * key discards the push. Hopper::Push still waits if Capacity
-	 * is set and the bucket is Full.
+	 * Tee copies each Push of a key into a new hopper on another
+	 * Sink. Bind shares one hopper; Tee never shares. Capacity
+	 * applies only to the main bucket. Taps are unbounded and use
+	 * Hopper::PushUncapped so Analytics cannot stall the tube.
+	 * Eof marks main hoppers and every tap owned by this Sink.
+	 *
+	 * Push(key) waits on @c m_wired until that bucket exists, the
+	 * Sink is closed, or @ref Drain is set. A closed or drained
+	 * Sink with no bucket for that key discards the push.
+	 * Hopper::Push still waits if Capacity is set and the bucket
+	 * is Full.
+	 *
+	 * Drain is not Eof. Bind after Drain still creates a hopper;
+	 * later Push of that key enqueues. Use Drain on a terminal
+	 * producer (last Analytics) so Push does not wait for a
+	 * consumer that will never Bind.
 	 *
 	 * Pop waits on @c m_wired until at least one bucket exists or
-	 * the Sink is closed. Bind and Notify never block.
+	 * the Sink is closed. Bind, Tee, Drain and Notify never block.
 	 *
 	 * Eof closes the Sink even with zero buckets, marks every
 	 * existing hopper, and wakes Bind waiters. A Bind after Eof
@@ -104,7 +116,8 @@ namespace StormByte::Multimedia::Buffer {
 	 * EoF with zero buckets is true only when the Sink is closed.
 	 *
 	 * A bucket has no Fail. Capacity / Size / Full for a missing
-	 * key are noop / 0 / false.
+	 * key are noop / 0 / false. Those three look at main buckets
+	 * only, not taps.
 	 *
 	 * Copy and move are deleted (mutex and wired CV).
 	 *
@@ -191,8 +204,10 @@ namespace StormByte::Multimedia::Buffer {
 			 * @param key Bucket key.
 			 * @param item Unit to enqueue. Empty pointers are discarded.
 			 *
-			 * Waits until the bucket exists or the Sink is closed.
-			 * Closed and no bucket: discards @p item.
+			 * Waits until the bucket exists, the Sink is closed, or
+			 * @ref Drain is set. Closed or drained and no bucket:
+			 * discards @p item. Then copies @p item to every Tee of
+			 * this key (uncapped).
 			 */
 			void Push(int key, std::shared_ptr<StormByte::Multimedia::Pipeline::Item> item) noexcept;
 
@@ -200,7 +215,7 @@ namespace StormByte::Multimedia::Buffer {
 			 * @brief Closes the Sink and marks every hopper Hopper::Eof.
 			 *
 			 * Wakes Push/Pop waiters on m_wired. Zero buckets still
-			 * close the Sink.
+			 * close the Sink. Marks main hoppers and every tap.
 			 */
 			void Eof() noexcept;
 
@@ -217,7 +232,8 @@ namespace StormByte::Multimedia::Buffer {
 			 * @brief Shares every existing hopper with consumer.
 			 * @param consumer Input sink of the consumer.
 			 *
-			 * Does not create buckets. Zero buckets: no-op.
+			 * Does not create buckets. Zero buckets: no-op. A key
+			 * that already has a Tee to @p consumer is skipped.
 			 */
 			void Bind(Sink& consumer);
 
@@ -229,9 +245,54 @@ namespace StormByte::Multimedia::Buffer {
 			 * Wakes Push/Pop waiters for that bucket. If either
 			 * Sink is already closed, the hopper is Eof. Hopper
 			 * starts unbounded; call Capacity(key, n) after Bind
-			 * if needed.
+			 * if needed. No-op if this pair+key is already a Tee.
 			 */
 			void Bind(int key, Sink& consumer);
+
+			/**
+			 * @brief Copies each Push of @p key into a new hopper on @p consumer.
+			 * @param key Bucket key (track).
+			 * @param consumer Input sink of the tap.
+			 *
+			 * Does not share the main hopper. Bind already on this
+			 * pair+key: no-op. Tee already on this pair+key: no-op.
+			 * A second Tee from another producer onto the same
+			 * consumer appends another hopper to that consumer's
+			 * pop order.
+			 *
+			 * Tap hoppers are unbounded. Capacity on the main
+			 * bucket still applies to the tube Push.
+			 */
+			void Tee(int key, Sink& consumer) noexcept;
+
+			/**
+			 * @brief Tee every bucket already on this Sink.
+			 * @param consumer Input sink of the tap.
+			 *
+			 * Zero buckets: no-op. A later Bind of a new key does
+			 * not auto-tee; call Tee(key, consumer) again.
+			 */
+			void Tee(Sink& consumer) noexcept;
+
+			/**
+			 * @brief Terminal producer: Push without a bucket is drop.
+			 *
+			 * Does not close the Sink and does not mark hoppers Eof.
+			 * Bind after Drain still creates a hopper; Push of that
+			 * key then enqueues. Wakes Push waiters so a Push that
+			 * arrived before Drain can discard.
+			 *
+			 * The tube must not Drain a Sink that still waits for
+			 * Bind (Encoder, Muxer). Last Analytics may: nobody
+			 * will Bind its m_out.
+			 */
+			void Drain() noexcept;
+
+			/**
+			 * @brief Whether @ref Drain was called.
+			 * @return true after Drain.
+			 */
+			bool Draining() const noexcept;
 
 			/**
 			 * @brief Points every hopper at the consumer CV.
@@ -260,7 +321,7 @@ namespace StormByte::Multimedia::Buffer {
 			 * @param key Bucket key.
 			 * @param capacity Max items. 0 is unbounded.
 			 *
-			 * No-op if the bucket does not exist.
+			 * No-op if the bucket does not exist. Does not change taps.
 			 */
 			void Capacity(int key, std::size_t capacity) noexcept;
 
@@ -303,7 +364,8 @@ namespace StormByte::Multimedia::Buffer {
 			 *
 			 * Blocks while there are zero buckets and the Sink is
 			 * not closed. Ignored when there is one bucket. select
-			 * sees [0, bucket-count), not keys.
+			 * sees [0, bucket-count), not keys. Count includes
+			 * teed hoppers on this sink.
 			 */
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Item> Pop(const Select& select) noexcept;
 
@@ -313,7 +375,8 @@ namespace StormByte::Multimedia::Buffer {
 			 *         hopper is Hopper::EoF and empty. Closed with
 			 *         zero buckets is true.
 			 *
-			 * There is no per-key EoF. Does not pop.
+			 * There is no per-key EoF. Does not pop. Looks at main
+			 * hoppers and incoming taps.
 			 */
 			bool EoF() const noexcept;
 
@@ -331,6 +394,16 @@ namespace StormByte::Multimedia::Buffer {
 
 		private:
 			/**
+			 * @class Tap
+			 * @brief One extra hopper filled by Push of @ref key.
+			 */
+			struct Tap {
+				int key = -1;
+				Sink* consumer = nullptr;
+				std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>> hopper;
+			};
+
+			/**
 			 * @brief Creates the hopper for key if missing.
 			 * @param key Bucket key.
 			 * @return Shared hopper. Caller holds m_mutex.
@@ -338,7 +411,7 @@ namespace StormByte::Multimedia::Buffer {
 			std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>> Ensure(int key);
 
 			/**
-			 * @brief Rebuilds the pop order from m_buckets.
+			 * @brief Rebuilds the pop order from m_buckets and m_tapIn.
 			 *
 			 * Caller holds m_mutex.
 			 */
@@ -357,12 +430,25 @@ namespace StormByte::Multimedia::Buffer {
 			 */
 			std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>> Bucket(int key) const;
 
-			mutable std::mutex m_mutex;				///< Guards the map
+			/**
+			 * @brief Whether this producer already Tees @p key to @p consumer.
+			 * @param key Track key.
+			 * @param consumer Tap destination.
+			 * @return true if a Tap with that pair exists.
+			 *
+			 * Caller holds both mutexes or this Sink mutex.
+			 */
+			bool HasTap(int key, const Sink& consumer) const noexcept;
+
+			mutable std::mutex m_mutex;				///< Guards the map and taps
 			std::condition_variable m_wired;		///< Waits for Bind of a bucket
-			std::map<int, std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_buckets;	///< key → hopper
-			std::vector<std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_order;		///< Stable pop order
-			std::atomic<std::size_t> m_rr;			///< Round-robin cursor
-			std::atomic<std::condition_variable*> m_consumer;	///< Consumer CV; Notify sets it
-			std::atomic<bool> m_closed;				///< Set by Eof; Bind after this yields Eof hoppers
+			std::map<int, std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_buckets;
+			std::vector<std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_order;
+			std::vector<Tap> m_taps;
+			std::vector<std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_tapIn;
+			std::atomic<std::size_t> m_rr;
+			std::atomic<std::condition_variable*> m_consumer;
+			std::atomic<bool> m_closed;
+			std::atomic<bool> m_drain;				///< Push without bucket discards
 	};
 }

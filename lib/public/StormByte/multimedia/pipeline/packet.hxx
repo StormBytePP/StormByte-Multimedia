@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -63,8 +64,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * In libav that is an @c AVPacket: compressed bytes for one
 	 * picture, one audio block or one subtitle event. In Multimedia
 	 * it is what packet filters, @ref Remuxer and @ref Muxer see —
-	 * origin track, timestamps, payload and side data — without
-	 * opening a codec.
+	 * origin track, timestamps, payload, side data and the Registry
+	 * @ref StormByte::Multimedia::Codec of that AU. The Packet does
+	 * not open a codec.
 	 *
 	 * @see Item
 	 * @see Frame
@@ -93,7 +95,7 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Builds a packet.
 			 * @param track Origin container stream index.
-			 * @param type Media of this access unit. Not Copy.
+			 * @param type Media of this access unit.
 			 * @param producer Step that created this unit.
 			 * @param payload Owned compressed bytes.
 			 * @param pts Presentation timestamp, if known.
@@ -101,8 +103,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param duration Packet duration, if known.
 			 * @param key_frame Whether this is a key frame.
 			 * @param attachments Side-data blobs that must reach the muxer.
+			 * @param codec Registry codec of this AU, or nullptr.
 			 * @param serial Lineage id born at the demuxer for this origin track.
 			 * @param part Sub-id inside @p serial. Zero when the demuxed unit did not split.
+			 *
+			 * Encoder stamps the destination codec. Demuxer stamps
+			 * the source stream codec. There is no public setter.
 			 */
 			Packet(int track, enum Type type, enum Producer producer,
 				StormByte::Buffer::FIFO payload,
@@ -111,6 +117,7 @@ namespace StormByte::Multimedia::Pipeline {
 				std::optional<Property::Duration> duration,
 				bool key_frame,
 				std::vector<SideData> attachments,
+				const StormByte::Multimedia::Codec* codec,
 				std::uint64_t serial,
 				std::uint64_t part) noexcept;
 
@@ -214,6 +221,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
+			 * @name Codec
+			 * @{
+			 */
+
+			/**
+			 * @brief Registry codec of this access unit.
+			 * @return Pointer owned by Registry, or nullptr on the sentinel.
+			 */
+			inline const StormByte::Multimedia::Codec* Codec() const noexcept {
+				return m_codec;
+			}
+
+			/**
+			 * @}
+			 */
+
+			/**
 			 * @name Payload
 			 * @{
 			 */
@@ -297,6 +321,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Duration> m_duration;					///< Packet duration
 			bool m_keyFrame;												///< Key frame
 			std::vector<SideData> m_attachments;							///< Packet side data
+			const StormByte::Multimedia::Codec* m_codec;					///< Registry codec, or nullptr
 			std::optional<std::uint64_t> m_serial;							///< Lineage id born at demux
 			std::uint64_t m_part;											///< Sub-id inside serial
 			std::unique_ptr<Backend::Pipeline::Packet> m_backend;			///< Backend holder

@@ -41,7 +41,6 @@
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
-#include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -52,17 +51,9 @@
 #include <memory>
 #include <string>
 
-extern "C" {
-	struct AVFrame;
-	struct AVPacket;
-}
+struct AVFrame;
+struct AVPacket;
 
-/**
- * @namespace StormByte::Multimedia::Pipeline
- * @brief Demux / decode / filter / encode / mux types.
- *
- * @ingroup multimedia_pipeline
- */
 namespace StormByte::Multimedia::Pipeline {
 	class Route;
 }
@@ -82,15 +73,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * time: one failed node aborts the whole job.
 	 *
 	 * Construct the leaf with a shared logger and a short name
-	 * (`resize`). @ref Name is `Media()/name`.
+	 * (`scale`). @ref Name is `Media()/name`.
 	 *
 	 * The kinds the leaf consumes and emits are
 	 * @ref StormByte::Multimedia::Pipeline::Step::Receives and
 	 * @ref StormByte::Multimedia::Pipeline::Step::Produces. They are
-	 * fixed at construction. The short constructor of @ref Process,
-	 * @ref Packet and @ref Analytics fills the usual single-kind
-	 * mask. A leaf that handles both Frame and Packet uses the
-	 * longer constructor of that same facade.
+	 * fixed at construction. The short constructor of @ref Process
+	 * and @ref Packet fills the usual single-kind mask. The short
+	 * constructor of @ref Analytics receives Frame and produces
+	 * Frame. Both looks arrive as Frame.
 	 *
 	 * @par Headers and libav
 	 * StormByte-Multimedia does not install or export libav / libsw
@@ -136,6 +127,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @ref StormByte::Multimedia::Pipeline::Step::Receives,
 	 * @ref StormByte::Multimedia::Pipeline::Step::Produces and
 	 * the @ref Process overload that matches those masks.
+	 * An @ref Analytics plugin implements
+	 * @ref Process(const Pipeline::Frame&) only.
 	 * Protected: @ref Log, @ref AVFrame, @ref AVPacket, @ref Save,
 	 * @ref Hold, @ref Release, @ref LastChance, @ref Fail,
 	 * @ref Held, @ref HeldFor, @ref Eof.
@@ -254,12 +247,21 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Frame body. Default no-op.
 			 * @param frame Unit in the tube. Never null.
+			 *
+			 * On @ref Analytics this is both looks. Read
+			 * @ref StormByte::Multimedia::Pipeline::Item::Producer:
+			 * Decoder is the frame after decode. Encoder is the
+			 * same lineage after encode, already decoded and ready
+			 * to observe. Match units with Serial / Part / Dts.
 			 */
 			virtual void Process(const Pipeline::Frame& frame) noexcept;
 
 			/**
 			 * @brief Packet body. Default no-op.
 			 * @param packet Unit in the tube. Never null.
+			 *
+			 * @ref Packet leaves implement this. @ref Analytics
+			 * does not receive packets.
 			 */
 			virtual void Process(const Pipeline::Packet& packet) noexcept;
 
@@ -285,7 +287,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Named plugin. There is no empty constructor.
 			 * @param log Shared logger. Prefer ThreadedLog. Empty means no log.
-			 * @param name Short leaf name (`resize`).
+			 * @param name Short leaf name (`scale`).
 			 * @param receives Kinds this filter consumes.
 			 * @param produces Kinds this filter emits.
 			 *
@@ -412,6 +414,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Process one unit. Save or passthrough. Park if Held.
 			 * @param item Never empty.
+			 *
+			 * Analytics only sees Frame.
 			 */
 			void Work(std::shared_ptr<Pipeline::Item> item) noexcept override;
 
@@ -448,7 +452,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @brief Mutates decoded frames. May also take packets.
 	 *
 	 * Inherit this for a video / audio / subtitle filter that
-	 * rewrites planes (watermark, resize, tonemap). The short
+	 * rewrites planes (watermark, scale, tonemap). The short
 	 * constructor sets Receives and Produces to
 	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
 	 * also handles packets uses the longer constructor.
@@ -495,7 +499,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Named process node. Frame to Frame.
 			 * @param log Shared logger. Empty pointer means no log.
-			 * @param name Short leaf name (`resize`).
+			 * @param name Short leaf name.
 			 */
 			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
@@ -505,9 +509,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @param name Short leaf name.
 			 * @param receives Kinds this leaf consumes.
 			 * @param produces Kinds this leaf emits.
-			 *
-			 * Use when the leaf is Frame and Packet (a BSF plus a
-			 * plane rewrite). Route reads these masks at Close.
 			 */
 			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
@@ -515,16 +516,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 	/**
 	 * @class Packet
-	 * @brief Mutates compressed packets. May also take frames.
+	 * @brief Mutates compressed packets.
 	 *
-	 * Inherit this for a bitstream filter (Annex-B, caption inject).
-	 * The short constructor sets Receives and Produces to
-	 * @ref StormByte::Multimedia::Pipeline::Kind::Packet. A leaf that
-	 * also handles frames uses the longer constructor.
-	 * Implement @ref FFmpeg::Process(const Pipeline::Packet&) and,
-	 * if the mask includes Frame,
-	 * @ref FFmpeg::Process(const Pipeline::Frame&). Use @ref AVPacket
-	 * / @ref AVFrame and @ref Save.
+	 * Inherit this for a bitstream filter. The short constructor
+	 * sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Packet.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
@@ -582,22 +578,26 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @class Analytics
 	 * @brief Measures units. Does not rewrite them.
 	 *
-	 * Last node of its Kind stretch: @ref StormByte::Multimedia::Pipeline::Route
-	 * detects this type with @c dynamic_cast and wires it after every
-	 * @ref Process / @ref Packet on that lane. @ref Save is deleted.
+	 * Not a node on the encode critical path. Route Tees the
+	 * origin Decoder onto this Step (decode look) and feeds a
+	 * second look that is already a decoded Frame taken from
+	 * the Encoder bitstream. The plugin does not open a decoder
+	 * and does not see packets.
 	 *
-	 * The short constructor sets Receives and Produces to
-	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
-	 * measures packets (or both) uses the longer constructor.
+	 * Implement @ref Process(const Pipeline::Frame&) only.
+	 * @ref StormByte::Multimedia::Pipeline::Item::Producer is
+	 * Decoder on the pre-encode look and Encoder on the
+	 * post-encode look. Match units with Serial / Part / Dts.
+	 * There is no Pass getter.
 	 *
-	 * @ref Process runs once per unit on that lane. When the same
-	 * unit is seen again (a second look after a Hold replay, or a
-	 * second stretch the job feeds), the unit's pass getter tells
-	 * first look from second look. Implement @ref Report for the
-	 * numbers the job reads at the end.
+	 * The short constructor Receives Frame and Produces Frame
+	 * so a chain of Analytics can Bind. The last node is Drained.
 	 *
-	 * There is no method named Analytics on this class: that would
-	 * be a constructor.
+	 * @ref Save is deleted. @ref Report holds the numbers the
+	 * job reads at EoF. A low score is not Fail.
+	 *
+	 * There is no method named Analytics on this class: that
+	 * would be a constructor.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Analytics: public FFmpeg {
 		public:
@@ -634,9 +634,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 		protected:
 			/**
-			 * @brief Named analytics node. Frame to Frame.
+			 * @brief Named analytics node.
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param name Short leaf name.
+			 *
+			 * Receives Frame. Produces Frame.
 			 */
 			Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 

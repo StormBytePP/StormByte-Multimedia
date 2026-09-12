@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -164,6 +165,28 @@ void Encoder::Tune(std::string name) noexcept {
 	m_tune = std::move(name);
 }
 
+void Encoder::Look(StormByte::Multimedia::Buffer::Sink& sink) noexcept {
+	if (!m_lookOut)
+		m_lookOut = std::make_unique<StormByte::Multimedia::Buffer::Sink>();
+	m_lookOut->Bind(m_index, sink);
+}
+
+void Encoder::Emit(std::shared_ptr<Packet> packet) noexcept {
+	if (!packet)
+		return;
+	// Do not Tee m_out and do not share this Packet with the look decoder.
+	// Decoder::Send and Muxer both Extract() the Packet FIFO; FIFO is one
+	// consumer. SharedFIFO is still a single cursor — two threads Extract
+	// or Read the same AU and one of them blocks forever (look Send hung
+	// after OpenLook). Sink must stay type-erased for the Buffer move.
+	// Encoder is already a Packet friend; the private copy ctor deep-copies
+	// payload and the bound AVPacket/codecpar. Mux keeps the original.
+	// make_shared cannot call that ctor; Wrap already uses the same new.
+	if (m_lookOut)
+		m_lookOut->Push(m_index, std::shared_ptr<Packet>(new Packet(*packet)));
+	m_out->Push(std::move(packet));
+}
+
 std::shared_ptr<Packet> Encoder::Wrap(
 	enum StormByte::Multimedia::Type type, int index,
 	StormByte::Buffer::FIFO payload,
@@ -171,7 +194,8 @@ std::shared_ptr<Packet> Encoder::Wrap(
 	std::optional<Property::Duration> dts,
 	std::optional<Property::Duration> duration,
 	bool keyFrame,
-	std::vector<SideData> attachments) noexcept {
+	std::vector<SideData> attachments,
+	std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
 	if (!m_serial) {
 		Fail("encoder packet has no serial");
 		return {};
@@ -179,12 +203,15 @@ std::shared_ptr<Packet> Encoder::Wrap(
 	if (m_talk)
 		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={} key={}",
 			index, *m_serial, m_part, Ns(pts), Ns(dts), Ns(duration), keyFrame ? 1 : 0));
-	return std::shared_ptr<Packet>(new Packet(
+	auto packet = std::shared_ptr<Packet>(new Packet(
 		index, type, Producer::Encoder,
 		std::move(payload),
 		std::move(pts), std::move(dts), std::move(duration),
 		keyFrame, std::move(attachments),
+		m_codec,
 		*m_serial, m_part));
+	packet->Bind(std::move(backend));
+	return packet;
 }
 
 bool Encoder::MuxBindStream(void* avStream) noexcept {
@@ -271,7 +298,7 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 			std::this_thread::yield();
 			continue;
 		}
-		m_out->Push(packet);
+		Emit(std::move(packet));
 	}
 
 	m_serial = frame->Serial();
@@ -283,24 +310,26 @@ void Encoder::Work(std::shared_ptr<Item> item) noexcept {
 		std::shared_ptr<Packet> packet = m_backend->Take();
 		if (!packet)
 			break;
-		m_out->Push(packet);
+		Emit(std::move(packet));
 	}
 }
 
 void Encoder::Finish() noexcept {
-	if (Failed() || !m_backend)
-		return;
-	m_talk = Sparse(m_index);
-	MaybeThrottle(m_index);
-	m_backend->Flush(*this);
-	for (;;) {
-		if (Failed())
-			return;
-		std::shared_ptr<Packet> packet = m_backend->Take();
-		if (!packet)
-			return;
-		m_out->Push(packet);
+	if (!Failed() && m_backend) {
+		m_talk = Sparse(m_index);
+		MaybeThrottle(m_index);
+		m_backend->Flush(*this);
+		for (;;) {
+			if (Failed())
+				break;
+			std::shared_ptr<Packet> packet = m_backend->Take();
+			if (!packet)
+				break;
+			Emit(std::move(packet));
+		}
 	}
+	if (m_lookOut)
+		m_lookOut->Eof();
 }
 
 std::string Encoder::Label() const noexcept {

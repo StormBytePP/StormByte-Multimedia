@@ -45,7 +45,7 @@ using StormByte::Multimedia::Buffer::Hopper;
 using StormByte::Multimedia::Buffer::Sink;
 
 Sink::Sink() noexcept
-: m_rr(0), m_consumer(nullptr), m_closed(false) {}
+: m_rr(0), m_consumer(nullptr), m_closed(false), m_drain(false) {}
 
 Sink::~Sink() noexcept {
 	m_wired.notify_all();
@@ -61,20 +61,27 @@ void Sink::Push(int key, std::shared_ptr<Item> item) noexcept {
 	if (!item)
 		return;
 	std::shared_ptr<Hopper<std::shared_ptr<Item>>> hopper;
+	std::vector<std::shared_ptr<Hopper<std::shared_ptr<Item>>>> taps;
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this, key] {
 			return m_closed.load(std::memory_order_acquire)
+				|| m_drain.load(std::memory_order_acquire)
 				|| m_buckets.find(key) != m_buckets.end();
 		});
-		if (m_closed.load(std::memory_order_acquire)
-			&& m_buckets.find(key) == m_buckets.end())
+		if (m_buckets.find(key) == m_buckets.end())
 			return;
 		hopper = m_buckets[key];
+		for (const auto& tap : m_taps) {
+			if (tap.key == key && tap.hopper)
+				taps.push_back(tap.hopper);
+		}
 	}
 	if (!hopper)
 		return;
-	hopper->Push(std::move(item));
+	hopper->Push(item);
+	for (auto& tap : taps)
+		tap->Push(item);
 }
 
 void Sink::Eof() noexcept {
@@ -82,6 +89,13 @@ void Sink::Eof() noexcept {
 	const auto hoppers = Order();
 	for (auto& hopper : hoppers)
 		hopper->Eof();
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (auto& tap : m_taps) {
+			if (tap.hopper)
+				tap.hopper->Eof();
+		}
+	}
 	m_wired.notify_all();
 	if (auto* cv = m_consumer.load(std::memory_order_acquire); cv)
 		cv->notify_all();
@@ -93,6 +107,8 @@ void Sink::Bind(Sink& consumer) {
 		|| consumer.m_closed.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
 	for (auto& [key, hopper] : m_buckets) {
+		if (HasTap(key, consumer))
+			continue;
 		if (closed)
 			hopper->Eof();
 		if (cv != nullptr)
@@ -111,6 +127,8 @@ void Sink::Bind(int key, Sink& consumer) {
 	const bool closed = m_closed.load(std::memory_order_acquire)
 		|| consumer.m_closed.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
+	if (HasTap(key, consumer))
+		return;
 	auto hopper = Ensure(key);
 	if (closed)
 		hopper->Eof();
@@ -122,6 +140,51 @@ void Sink::Bind(int key, Sink& consumer) {
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
 	m_wired.notify_all();
+}
+
+void Sink::Tee(int key, Sink& consumer) noexcept {
+	std::condition_variable* cv = consumer.m_consumer.load(std::memory_order_acquire);
+	const bool closed = m_closed.load(std::memory_order_acquire)
+		|| consumer.m_closed.load(std::memory_order_acquire);
+	std::scoped_lock lock(m_mutex, consumer.m_mutex);
+	if (HasTap(key, consumer))
+		return;
+	auto found = consumer.m_buckets.find(key);
+	if (found != consumer.m_buckets.end()) {
+		auto mine = m_buckets.find(key);
+		if (mine != m_buckets.end() && found->second == mine->second)
+			return;
+	}
+	auto hopper = std::make_shared<Hopper<std::shared_ptr<Item>>>();
+	if (closed)
+		hopper->Eof();
+	if (cv != nullptr)
+		hopper->Notify(*cv);
+	m_taps.push_back(Tap{key, &consumer, hopper});
+	consumer.m_tapIn.push_back(hopper);
+	consumer.RebuildOrder();
+	consumer.m_wired.notify_all();
+}
+
+void Sink::Tee(Sink& consumer) noexcept {
+	std::vector<int> keys;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		keys.reserve(m_buckets.size());
+		for (const auto& [key, hopper] : m_buckets)
+			keys.push_back(key);
+	}
+	for (int key : keys)
+		Tee(key, consumer);
+}
+
+void Sink::Drain() noexcept {
+	m_drain.store(true, std::memory_order_release);
+	m_wired.notify_all();
+}
+
+bool Sink::Draining() const noexcept {
+	return m_drain.load(std::memory_order_acquire);
 }
 
 void Sink::Notify(std::condition_variable& consumer) noexcept {
@@ -139,10 +202,14 @@ std::size_t Sink::Capacity(int key) const noexcept {
 }
 
 void Sink::Capacity(int key, std::size_t capacity) noexcept {
-	const auto hopper = Bucket(key);
-	if (!hopper)
-		return;
-	hopper->Capacity(capacity);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto found = m_buckets.find(key);
+	if (found != m_buckets.end() && found->second)
+		found->second->Capacity(capacity);
+	for (auto& hopper : m_tapIn) {
+		if (hopper)
+			hopper->Capacity(capacity);
+	}
 }
 
 std::size_t Sink::Size(int key) const noexcept {
@@ -234,8 +301,10 @@ std::shared_ptr<Hopper<std::shared_ptr<Item>>> Sink::Ensure(int key) {
 
 void Sink::RebuildOrder() {
 	m_order.clear();
-	m_order.reserve(m_buckets.size());
+	m_order.reserve(m_buckets.size() + m_tapIn.size());
 	for (auto& [key, hopper] : m_buckets)
+		m_order.push_back(hopper);
+	for (auto& hopper : m_tapIn)
 		m_order.push_back(hopper);
 }
 
@@ -250,4 +319,12 @@ std::shared_ptr<Hopper<std::shared_ptr<Item>>> Sink::Bucket(int key) const {
 	if (found == m_buckets.end())
 		return {};
 	return found->second;
+}
+
+bool Sink::HasTap(int key, const Sink& consumer) const noexcept {
+	for (const auto& tap : m_taps) {
+		if (tap.consumer == &consumer && tap.key == key)
+			return true;
+	}
+	return false;
 }

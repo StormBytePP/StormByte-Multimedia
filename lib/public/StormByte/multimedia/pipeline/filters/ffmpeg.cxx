@@ -36,8 +36,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/buffer/sink.hxx>
@@ -57,7 +55,6 @@ using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
 using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Kinds;
-using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::ToString;
 using StormByte::Logger::Level;
 
@@ -78,6 +75,10 @@ namespace {
 		if (item.Kind() == Kind::Frame)
 			return static_cast<const StormByte::Multimedia::Pipeline::Frame&>(item).Serial();
 		return static_cast<const StormByte::Multimedia::Pipeline::Packet&>(item).Serial();
+	}
+
+	bool IsAnalytics(const FFmpeg& node) noexcept {
+		return dynamic_cast<const Analytics*>(&node) != nullptr;
 	}
 }
 
@@ -131,13 +132,18 @@ void FFmpeg::Release() noexcept {
 	auto parked = std::move(m_queue);
 	for (auto& item : parked) {
 		m_current = item;
+		if (IsAnalytics(*this)) {
+			Work(m_current);
+			continue;
+		}
 		if (m_current->Kind() == Pipeline::Kind::Frame)
 			Process(static_cast<const Pipeline::Frame&>(*m_current));
 		else
 			Process(static_cast<const Pipeline::Packet&>(*m_current));
 		if (Failed())
 			return;
-		m_out->Push(std::move(m_current));
+		if (m_current)
+			m_out->Push(std::move(m_current));
 	}
 	m_current.reset();
 }
@@ -200,6 +206,9 @@ void FFmpeg::Open() noexcept {
 	Log(Level::Notice, Name() + " setup");
 	Clean();
 	Setup();
+	if (Failed())
+		return;
+	Step::Open();
 }
 
 void FFmpeg::LastChance(const Pipeline::Frame&) noexcept {}
@@ -225,7 +234,7 @@ void FFmpeg::CallLastChance() noexcept {
 	Log(Level::Debug, Name() + " last-chance");
 	if (m_current->Kind() == Pipeline::Kind::Frame)
 		LastChance(static_cast<const Pipeline::Frame&>(*m_current));
-	else
+	else if (!IsAnalytics(*this))
 		LastChance(static_cast<const Pipeline::Packet&>(*m_current));
 }
 
@@ -236,6 +245,17 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 		Log(Level::LowLevel, std::format("{} in t={} {}:{}",
 			Name(), track, SerialOf(*m_current).value_or(0), PartOf(*m_current)));
 	MaybeThrottle(track);
+
+	if (IsAnalytics(*this)) {
+		if (m_current->Kind() == Pipeline::Kind::Frame)
+			Process(static_cast<const Pipeline::Frame&>(*m_current));
+		if (Failed())
+			return;
+		if (m_current)
+			m_out->Push(std::move(m_current));
+		return;
+	}
+
 	if (m_current->Kind() == Pipeline::Kind::Frame)
 		Process(static_cast<const Pipeline::Frame&>(*m_current));
 	else
@@ -286,7 +306,9 @@ Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 : FFmpeg(std::move(log), std::move(name), receives, produces) {}
 
 Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
-: FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
+: FFmpeg(std::move(log), std::move(name),
+	Kinds{Kind::Frame},
+	Kinds{Kind::Frame}) {}
 
 Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 	Kinds receives, Kinds produces) noexcept

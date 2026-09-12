@@ -53,6 +53,8 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 using StormByte::Logger::Level;
 using StormByte::Multimedia::ExpectedTranscoder;
@@ -492,6 +494,19 @@ std::optional<unsigned> Transcoder::Progress() const noexcept {
 	if (!m_backend || !m_backend->HasProgress.load(std::memory_order_acquire))
 		return std::nullopt;
 	return m_backend->Progress.load(std::memory_order_acquire);
+}
+
+std::vector<std::pair<std::string, Filter::Report>> Transcoder::Reports() const noexcept {
+	std::vector<std::pair<std::string, Filter::Report>> out;
+	if (!m_backend)
+		return out;
+	for (const auto& filter : m_backend->Analytics) {
+		auto* analytics = dynamic_cast<Filter::Analytics*>(filter.get());
+		if (!analytics)
+			continue;
+		out.emplace_back(analytics->Name(), analytics->Report());
+	}
+	return out;
 }
 
 Transcoder::operator bool() const noexcept {

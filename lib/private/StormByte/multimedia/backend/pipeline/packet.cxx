@@ -39,16 +39,23 @@
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <utility>
+
 using namespace StormByte::Multimedia::Backend::Pipeline;
 
 Packet::Packet(const Packet& other) noexcept
-: m_handle(other.m_handle) {}
+: m_handle(other.m_handle), m_params(other.m_params) {}
 
 Packet& Packet::operator=(const Packet& other) noexcept {
 	if (this == &other)
 		return *this;
 	m_handle = other.m_handle;
+	m_params = other.m_params;
 	return *this;
+}
+
+void Packet::Parameters(std::optional<StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters> params) noexcept {
+	m_params = std::move(params);
 }
 
 void Packet::BindProperties(StormByte::Multimedia::Pipeline::Packet& packet) noexcept {

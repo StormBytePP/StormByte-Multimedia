@@ -96,7 +96,8 @@ namespace StormByte::Multimedia::Buffer {
 	 * instantiate or include this header.
 	 *
 	 * One producer thread, one consumer thread. Fan-out is Sink
-	 * (N buckets, one per origin track), not this type.
+	 * (N buckets, one per origin track), not this type. Sink::Tee
+	 * uses @ref PushUncapped so a tap cannot stall the tube.
 	 *
 	 * The queue is a mutex plus @c std::queue. A lock-free body is
 	 * a later Buffer change; these method names stay.
@@ -206,7 +207,7 @@ namespace StormByte::Multimedia::Buffer {
 			 * Safe at any time. Lowering does not drop queued items;
 			 * the next @ref Push waits until @ref Size is below the
 			 * new ceiling. Call from Bind before the first Push when
-			 * possible.
+			 * possible. Does not apply to @ref PushUncapped.
 			 */
 			void Capacity(std::size_t capacity) noexcept {
 				m_cap.store(capacity, std::memory_order_release);
@@ -261,6 +262,25 @@ namespace StormByte::Multimedia::Buffer {
 							|| m_items.size() < cap
 							|| m_eof.load(std::memory_order_acquire);
 					});
+					if (m_eof.load(std::memory_order_acquire))
+						return;
+					m_items.push(std::move(item));
+				}
+				SignalConsumer();
+			}
+
+			/**
+			 * @brief Enqueues without waiting on Capacity.
+			 * @param item Pointer to push. Empty pointers are discarded.
+			 *
+			 * After Eof the item is not queued. Sink::Tee uses this
+			 * so a tap cannot stall the main tube.
+			 */
+			void PushUncapped(T item) noexcept {
+				if (!item)
+					return;
+				{
+					std::lock_guard<std::mutex> lock(m_mutex);
 					if (m_eof.load(std::memory_order_acquire))
 						return;
 					m_items.push(std::move(item));

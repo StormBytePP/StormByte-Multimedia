@@ -104,6 +104,20 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			static ExpectedAVDecoder Open(AVCodec* codec, const AVCodecParameters& params, const AVFormatContext& fmt, int stream_index) noexcept;
 
 			/**
+			 * @brief Opens a decoder from codec and parameters. No BSF.
+			 * @param codec Decoder codec.
+			 * @param params Stream codec parameters.
+			 * @param stream_index Stream index this decoder serves
+			 *        (must match AVPacket::StreamIndex on SendPacket).
+			 * @return Decoder or DecoderError.
+			 *
+			 * For Analytics encode-look: packets already left the
+			 * Encoder, so mp4→Annex-B is not applied. Use the
+			 * four-argument Open when the parent format is known.
+			 */
+			static ExpectedAVDecoder Open(AVCodec* codec, const AVCodecParameters& params, int stream_index) noexcept;
+
+			/**
 			 * @brief Sends a packet (after BSF) to the decoder.
 			 * @param pkt Packet for this stream.
 			 * @return Operation result.
@@ -163,6 +177,15 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @param ctx Opened codec context.
 			 */
 			explicit AVDecoder(AVCodecContext* ctx) noexcept;
+
+			/**
+			 * @brief Allocates, copies params and avcodec_open2.
+			 * @param codec Decoder codec.
+			 * @param params Stream codec parameters.
+			 * @param stream_index Bound stream index.
+			 * @return Decoder or DecoderError. BSF is empty.
+			 */
+			static ExpectedAVDecoder OpenRaw(AVCodec* codec, const AVCodecParameters& params, int stream_index) noexcept;
 
 			/**
 			 * @brief Frees the codec context.

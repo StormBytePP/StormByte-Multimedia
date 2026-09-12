@@ -36,8 +36,14 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -48,6 +54,11 @@
 
 #include <format>
 #include <utility>
+
+extern "C" {
+	#include <libavcodec/avcodec.h>
+	#include <libavutil/rational.h>
+}
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
@@ -64,7 +75,14 @@ namespace {
 Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, DecoderFlags flags) noexcept
 : Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
-	m_index(track), m_flags(flags), m_part(0) {
+	m_index(track), m_flags(flags), m_part(0), m_look(false) {
+	Launch();
+}
+
+Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+	int track, EncodeLook) noexcept
+: Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+	m_index(track), m_flags{}, m_part(0), m_look(true) {
 	Launch();
 }
 
@@ -99,6 +117,11 @@ void Decoder::StampLineage(Frame& frame) noexcept {
 	frame.m_dts = m_inDts;
 }
 
+void Decoder::StampLook(Frame& frame) noexcept {
+	if (m_look)
+		frame.m_producer = Producer::Encoder;
+}
+
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
 	m_backend = std::move(backend);
 	m_capabilities = Features{};
@@ -120,8 +143,47 @@ void Decoder::AttachOrigin(Demuxer& demuxer) noexcept {
 	Wake().notify_all();
 }
 
+bool Decoder::OpenLook(const Packet& packet) noexcept {
+	if (!packet.m_backend || !packet.m_backend->Parameters()) {
+		Fail("encode look packet has no codec parameters");
+		return false;
+	}
+	const auto& params = *packet.m_backend->Parameters();
+	const auto* codec = avcodec_find_decoder(static_cast<AVCodecID>(params.CodecId()));
+	if (!codec) {
+		Fail("encode look decoder not found");
+		return false;
+	}
+	auto opened = Backend::FFmpeg::AVDecoder::Open(
+		const_cast<AVCodec*>(codec), params, m_index);
+	if (!opened) {
+		Fail(opened.error()->what());
+		return false;
+	}
+	const AVRational timeBase{1, 1000000000};
+	if (packet.Type() == Type::Video) {
+		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Video>(
+			std::move(*opened), timeBase, std::nullopt));
+	}
+	else if (packet.Type() == Type::Audio) {
+		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Audio>(
+			std::move(*opened), timeBase, std::nullopt));
+	}
+	else {
+		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Subtitle>(
+			std::move(*opened), timeBase));
+	}
+	Log(Level::Debug, std::format("look open t={}", m_index));
+	return static_cast<bool>(m_backend);
+}
+
 void Decoder::Open() noexcept {
 	NameThread("STMM:Decode:" + std::to_string(m_index));
+	if (m_look) {
+		Log(Level::Notice, std::format("look t={}", m_index));
+		Step::Open();
+		return;
+	}
 	while (!Stopping() && m_origin == nullptr)
 		Wait();
 	if (Stopping())
@@ -155,13 +217,17 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	NameThread("STMM:Decode:" + std::to_string(m_index));
 	if (Failed())
 		return;
-	if (!m_backend) {
-		Fail("decoder is not open");
-		return;
-	}
 	auto packet = std::dynamic_pointer_cast<Packet>(item);
 	if (!packet) {
 		Fail("decoder expected a packet");
+		return;
+	}
+	if (m_look && !m_backend) {
+		if (!OpenLook(*packet))
+			return;
+	}
+	if (!m_backend) {
+		Fail("decoder is not open");
 		return;
 	}
 	if (packet->Track() != m_index)
@@ -186,6 +252,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 
 	auto emit = [this, talk](std::shared_ptr<Frame> frame) {
 		StampLineage(*frame);
+		StampLook(*frame);
 		if (talk)
 			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
 				frame->Track(), frame->Serial().value_or(0), frame->Part(),
@@ -228,6 +295,7 @@ void Decoder::Finish() noexcept {
 			return;
 		const bool talk = Sparse(m_index);
 		StampLineage(*frame);
+		StampLook(*frame);
 		if (talk)
 			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
 				frame->Track(), frame->Serial().value_or(0), frame->Part(),
@@ -238,6 +306,8 @@ void Decoder::Finish() noexcept {
 }
 
 std::string Decoder::Label() const noexcept {
+	if (m_look)
+		return "Decoder(look t=" + std::to_string(m_index) + ")";
 	if (m_implementation && !m_implementation->empty())
 		return "Decoder(" + *m_implementation + ")";
 	return "Decoder(t=" + std::to_string(m_index) + ")";

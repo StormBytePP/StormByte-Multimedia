@@ -47,6 +47,7 @@
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <chrono>
@@ -62,6 +63,16 @@ namespace {
 		if (!value)
 			return "-";
 		return std::format("{}", value->Nanoseconds().count());
+	}
+
+	const Codec* CodecOf(const Plan* plan, int track) noexcept {
+		if (!plan)
+			return nullptr;
+		for (const auto& stream : plan->Source().Streams()) {
+			if (stream.Index() == track)
+				return &stream.Codec();
+		}
+		return nullptr;
 	}
 }
 
@@ -138,6 +149,7 @@ std::shared_ptr<Packet> Demuxer::Wrap(
 		std::move(duration),
 		keyframe,
 		std::vector<SideData>{},
+		CodecOf(m_plan.get(), track),
 		serial,
 		0));
 }

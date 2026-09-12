@@ -58,7 +58,7 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline {
-	class Decoder;	///< Decode backend behind @ref StormByte::Multimedia::Pipeline::Decoder.
+	class Decoder;
 }
 
 /**
@@ -71,13 +71,14 @@ namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
 	class Frame;
+	class Route;
 
 	/**
 	 * @enum DecoderFlag
 	 * @brief Decoder behaviour bits. Empty mask is passthrough.
 	 */
 	enum class DecoderFlag: std::uint8_t {
-		HeuristicsHDR10 = 1u << 0	///< Fill HDR10::DEFAULT when colorimetry is HDR10 without MDM
+		HeuristicsHDR10 = 1u << 0
 	};
 
 	/**
@@ -120,11 +121,20 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Label is `Decoder(<implementation>)` after Open pins a
 	 * table row, otherwise `Decoder(t=<origin index>)`.
 	 *
+	 * Encode-look mode is not a public constructor. Route builds it
+	 * when an Analytics filter needs a post-encode recon. That
+	 * decoder has no Demuxer: it opens from the first Packet's
+	 * codec parameters (the same 3-arg AVDecoder::Open used without
+	 * a format context). Frames it emits carry
+	 * @ref Producer::Encoder so Analytics can pair them with the
+	 * origin decode look. The public ctor never enters this mode.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
 		friend class Backend::Pipeline::Decoder;
 		friend class Demuxer;
+		friend class Route;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
 		public:
@@ -138,39 +148,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param track Origin stream index.
 			 * @param flags Heuristics / future bits. Empty = passthrough.
+			 *
+			 * Origin mode. Frames carry @ref Producer::Decoder.
+			 * Open waits for demuxer >> decoder.
 			 */
 			explicit Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 				int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
-			/**
-			 * @brief Copy constructor.
-			 * @param other Source decoder.
-			 */
 			Decoder(const Decoder& other) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Decoder to take.
-			 */
 			Decoder(Decoder&& other) noexcept = delete;
-
-			/**
-			 * @brief Destructor.
-			 */
 			~Decoder() noexcept override;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param other Source decoder.
-			 * @return *this.
-			 */
 			Decoder& operator=(const Decoder& other) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Decoder to take.
-			 * @return *this.
-			 */
 			Decoder& operator=(Decoder&& other) noexcept = delete;
 
 			/**
@@ -289,25 +277,37 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
-			 * @name Logging
-			 * @{
+			 * @class EncodeLook
+			 * @brief Tag. Only Route constructs a look decoder.
 			 */
+			struct EncodeLook {};
+
+			/**
+			 * @brief Post-encode recon for Analytics.
+			 * @param log Shared logger.
+			 * @param track Origin stream index (same as the Encoder).
+			 * @param tag Encode-look tag.
+			 *
+			 * Not callable from user code. Open does not wait for a
+			 * Demuxer. The first Packet that carries codec parameters
+			 * opens the backend. Produced frames are stamped
+			 * @ref Producer::Encoder. Label stays Decoder(look).
+			 */
+			Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+				int track, EncodeLook tag) noexcept;
 
 			using Step::Log;
 
 			/**
 			 * @brief Token after `STMM ` for this decoder.
-			 * @return `Decoder(<implementation>)` after Open selects a
-			 *         row, otherwise `Decoder(t=<origin index>)`.
+			 * @return `Decoder(look)` in encode-look mode, otherwise
+			 *         `Decoder(<implementation>)` or `Decoder(t=<index>)`.
 			 */
 			std::string Label() const noexcept override;
 
 			/**
-			 * @}
-			 */
-
-			/**
-			 * @brief Waits for the bound demuxer, then opens the codec.
+			 * @brief Origin: waits for the demuxer and opens the codec.
+			 *        Look: becomes Ready; the codec opens on first Packet.
 			 */
 			void Open() noexcept override;
 
@@ -361,18 +361,32 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void StampLineage(Frame& frame) noexcept;
 
-			static constexpr std::size_t Ceiling = 32;							///< Input hopper ceiling
-			int m_index;														///< Origin track
-			DecoderFlags m_flags;												///< Heuristics
-			std::optional<std::string> m_language;								///< Language tag
-			std::optional<std::string> m_title;									///< Title tag
-			std::optional<std::string> m_implementation;						///< Pinned decoder name
-			Features m_require;													///< Extra required bits
-			Features m_capabilities;											///< Opened capabilities
-			Demuxer* m_origin = nullptr;										///< Bound demuxer
-			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;				///< Decode backend
-			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted packet
-			std::uint64_t m_part;												///< Next Part inside m_serial
-			std::optional<Property::Duration> m_inDts;							///< Dts of the packet that opened m_serial
+			/**
+			 * @brief Opens the look backend from a Packet's codecpar.
+			 * @param packet First encode Packet that carries parameters.
+			 * @return true if the backend is open.
+			 */
+			bool OpenLook(const Packet& packet) noexcept;
+
+			/**
+			 * @brief Stamps Producer::Encoder on a look frame.
+			 * @param frame Frame just received from the backend.
+			 */
+			void StampLook(Frame& frame) noexcept;
+
+			static constexpr std::size_t Ceiling = 32;
+			int m_index;
+			DecoderFlags m_flags;
+			std::optional<std::string> m_language;
+			std::optional<std::string> m_title;
+			std::optional<std::string> m_implementation;
+			Features m_require;
+			Features m_capabilities;
+			Demuxer* m_origin = nullptr;
+			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;
+			std::optional<std::uint64_t> m_serial;
+			std::uint64_t m_part;
+			std::optional<Property::Duration> m_inDts;
+			bool m_look = false;	///< Route encode-look; frames stamp Encoder
 	};
 }

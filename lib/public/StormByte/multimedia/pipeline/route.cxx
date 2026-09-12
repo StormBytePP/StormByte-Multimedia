@@ -37,12 +37,20 @@
  */
 
 #include <StormByte/multimedia/buffer/sink.hxx>
+#include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
+
+namespace {
+	bool Dead(const Step& step) noexcept {
+		const State state = step.Status();
+		return state == State::Stopped || state == State::Failed;
+	}
+}
 
 Route::Route(int track) noexcept
 : m_track(track) {}
@@ -86,6 +94,8 @@ void Route::Close(Step& origin, Step& destination) noexcept {
 		return;
 	}
 	for (const auto& filter : m_filters) {
+		if (dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr)
+			continue;
 		if (!filter->Receives().Has(stretch)) {
 			destination.Fail(filter->Name() + " does not cover this stretch");
 			return;
@@ -114,6 +124,31 @@ void Route::Close(Step& origin, Step& destination) noexcept {
 	}
 	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
 		destination.m_in->Capacity(m_track, cap);
+
+	TapDecode(origin, m_frames);
+	TapEncode(destination, m_frames);
+	if (m_frames.FirstAnalytics != nullptr) {
+		if (const std::size_t cap = m_frames.FirstAnalytics->InputCeiling(); cap > 0)
+			m_frames.FirstAnalytics->m_in->Capacity(m_track, cap);
+	}
+
+	if (m_frames.LastAnalytics != nullptr)
+		m_frames.LastAnalytics->m_out->Drain();
+	if (m_packets.LastAnalytics != nullptr
+		&& m_packets.LastAnalytics != m_frames.LastAnalytics)
+		m_packets.LastAnalytics->m_out->Drain();
+}
+
+bool Route::Idle() const noexcept {
+	for (const auto& filter : m_filters) {
+		if (filter && !Dead(*filter))
+			return false;
+	}
+	for (const auto& look : m_looks) {
+		if (look && !Dead(*look))
+			return false;
+	}
+	return true;
 }
 
 std::vector<Filter::Report> Route::Reports() const noexcept {
@@ -129,8 +164,6 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
 	if (analytics) {
 		if (lane.LastAnalytics != nullptr)
 			lane.LastAnalytics->m_out->Bind(m_track, *filter.m_in);
-		else if (lane.LastProcess != nullptr)
-			lane.LastProcess->m_out->Bind(m_track, *filter.m_in);
 		if (lane.FirstAnalytics == nullptr)
 			lane.FirstAnalytics = &filter;
 		lane.LastAnalytics = &filter;
@@ -141,6 +174,22 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
 	if (lane.FirstProcess == nullptr)
 		lane.FirstProcess = &filter;
 	lane.LastProcess = &filter;
-	if (lane.FirstAnalytics != nullptr)
-		filter.m_out->Bind(m_track, *lane.FirstAnalytics->m_in);
+}
+
+void Route::TapDecode(Step& origin, Lane& lane) noexcept {
+	if (lane.FirstAnalytics == nullptr)
+		return;
+	lane.FirstAnalytics->m_in->Notify(lane.FirstAnalytics->Wake());
+	origin.m_out->Tee(m_track, *lane.FirstAnalytics->m_in);
+}
+
+void Route::TapEncode(Step& destination, Lane& lane) noexcept {
+	if (lane.FirstAnalytics == nullptr)
+		return;
+	std::unique_ptr<Decoder> look(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
+	look->m_in->Notify(look->Wake());
+	lane.FirstAnalytics->m_in->Notify(lane.FirstAnalytics->Wake());
+	destination.Look(*look->m_in);
+	look->m_out->Bind(m_track, *lane.FirstAnalytics->m_in);
+	m_looks.push_back(std::move(look));
 }

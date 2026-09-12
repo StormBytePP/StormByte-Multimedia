@@ -13,5 +13,4 @@ buildmaster_component(
 	"pthread"
 	"GIT={RESET;PATCH={${PTHREAD_WIN32_PATCHES}};TITLE=pthread unversioned name}"
 )
-buildmaster_group_add(ff-deps pthread-win32)
-register_dependency(pthread-win32)
+

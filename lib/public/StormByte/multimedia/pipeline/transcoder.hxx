@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
@@ -229,6 +230,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Mux order is the order of Video / Audio / Subtitle / Attachments
 	 * calls. There is no output-index argument.
+	 *
+	 * Analytics attach with @ref Filter. After the job reaches
+	 * Status::Done, @ref Reports returns the same snapshots a hand
+	 * tube reads with @ref Filter::Analytics::Report on the leaf
+	 * pointer. The Notice line from a leaf is log, not the API.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -631,6 +637,21 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return 0..100, or empty before the first tick.
 			 */
 			std::optional<unsigned> Progress() const noexcept;
+
+			/**
+			 * @brief Analytics snapshots in attach order.
+			 * @return Pair of leaf @ref Filter::FFmpeg::Name and
+			 *         @ref Filter::Report.
+			 *
+			 * Same contract as calling
+			 * @ref Filter::Analytics::Report on a leaf the caller
+			 * kept when wiring Route by hand. Snapshots only; the
+			 * leaves stay owned by the job. Meaningful after
+			 * Status::Done (Eof has pooled). Before Eof the status
+			 * may be None or Failed. A low score is still Ok.
+			 * Notice lines from a leaf are log, not this API.
+			 */
+			std::vector<std::pair<std::string, Filter::Report>> Reports() const noexcept;
 
 			/**
 			 * @brief true if not failed.

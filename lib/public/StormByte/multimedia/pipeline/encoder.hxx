@@ -64,6 +64,7 @@
  */
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Encoder;	///< Encode backend behind @ref StormByte::Multimedia::Pipeline::Encoder.
+	class Packet;	///< Packet holder behind the public Packet.
 }
 
 /**
@@ -91,6 +92,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * @ref Label is `Encoder(libx265)` when an implementation is
 	 * pinned or selected, otherwise `Encoder(<registry name>)`.
+	 *
+	 * Encode-look is @ref Step::Look. This class overrides it
+	 * privately. It is not a Tee of @ref m_out and it is not a
+	 * public Encoder method.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -427,6 +432,15 @@ namespace StormByte::Multimedia::Pipeline {
 			void Finish() noexcept override;
 
 			/**
+			 * @brief Encode-look side channel. Deep-copies each encoded packet into @p sink.
+			 * @param sink Look decoder @c m_in.
+			 *
+			 * Overrides the Step no-op. Not a Tee of @ref m_out.
+			 * @ref Route::TapEncode calls the Step hook.
+			 */
+			void Look(StormByte::Multimedia::Buffer::Sink& sink) noexcept override;
+
+			/**
 			 * @brief Builds an encoded packet. Called from the encode backend.
 			 * @param type Destination codec type.
 			 * @param index Mux destination order key.
@@ -436,12 +450,15 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param duration Packet duration.
 			 * @param keyFrame Whether this is a keyframe.
 			 * @param attachments Mapped packet side data.
+			 * @param backend Holder with the libav packet and codecpar.
 			 * @return Packet with Producer::Encoder. Empty if no lineage is latched.
 			 *
 			 * Copies @ref Frame::Serial and @ref Frame::Part of the last
 			 * accepted frame. This is pipe lineage, not a packet count.
 			 * Logs flattened pts/dts at LowLevel when the current Work
 			 * is inside the Sparse window of @ref Index.
+			 * Binds @p backend so Analytics can open a decoder from
+			 * codecpar (extradata included).
 			 */
 			std::shared_ptr<Packet> Wrap(
 				enum StormByte::Multimedia::Type type, int index,
@@ -450,7 +467,8 @@ namespace StormByte::Multimedia::Pipeline {
 				std::optional<Property::Duration> dts,
 				std::optional<Property::Duration> duration,
 				bool keyFrame,
-				std::vector<SideData> attachments) noexcept;
+				std::vector<SideData> attachments,
+				std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
 
 			/**
 			 * @brief Copies codecpar / time_base onto a mux stream.
@@ -473,6 +491,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const void* FrameHandle(const Frame& frame) noexcept;
 
+			/**
+			 * @brief Deep-copies @p packet to the look sink, then pushes the original to @ref m_out.
+			 * @param packet Encoded unit. Empty pointers are ignored.
+			 */
+			void Emit(std::shared_ptr<Packet> packet) noexcept;
+
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			int m_index;														///< Mux destination order key
 			const Codec* m_codec;												///< Destination codec
@@ -490,5 +514,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted frame
 			std::uint64_t m_part;												///< Part of the last accepted frame
 			bool m_talk;														///< Sparse window of the current Work
+			std::unique_ptr<StormByte::Multimedia::Buffer::Sink> m_lookOut;		///< Encode-look producer; not m_out
 	};
 }

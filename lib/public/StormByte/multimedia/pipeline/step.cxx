@@ -162,6 +162,8 @@ void Step::Work(std::shared_ptr<Item>) noexcept {}
 
 void Step::Finish() noexcept {}
 
+void Step::Look(StormByte::Multimedia::Buffer::Sink&) noexcept {}
+
 std::string Step::Label() const noexcept {
 	return std::string(ToString(m_name));
 }
@@ -253,9 +255,19 @@ void Step::Launch() noexcept {
 			return;
 		Pump();
 		m_out->Eof();
+		/*
+		* Natural hopper Eof leaves the stage in Ready. Stop() is
+		* only Halt/dtor. Route::Idle and Transcoder wait Stopped
+		* before Reports; without Ready→Stopped that wait never
+		* ends (mux closed, VMAF already pooled).
+		*/
 		State expected = State::Stopping;
-		m_state.compare_exchange_strong(expected, State::Stopped,
-			std::memory_order_acq_rel, std::memory_order_acquire);
+		if (!m_state.compare_exchange_strong(expected, State::Stopped,
+				std::memory_order_acq_rel, std::memory_order_acquire)) {
+			expected = State::Ready;
+			m_state.compare_exchange_strong(expected, State::Stopped,
+				std::memory_order_acq_rel, std::memory_order_acquire);
+		}
 		Log(Level::LowLevel, "stopped");
 	});
 }
@@ -267,8 +279,12 @@ void Step::Halt() noexcept {
 		m_worker.join();
 	}
 	State expected = State::Stopping;
-	m_state.compare_exchange_strong(expected, State::Stopped,
-		std::memory_order_acq_rel, std::memory_order_acquire);
+	if (!m_state.compare_exchange_strong(expected, State::Stopped,
+			std::memory_order_acq_rel, std::memory_order_acquire)) {
+		expected = State::Ready;
+		m_state.compare_exchange_strong(expected, State::Stopped,
+			std::memory_order_acq_rel, std::memory_order_acquire);
+	}
 }
 
 Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
