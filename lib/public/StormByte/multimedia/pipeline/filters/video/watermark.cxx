@@ -43,6 +43,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <fstream>
 #include <utility>
 
@@ -322,6 +323,16 @@ void Watermark::Clean() noexcept {
 	DropScale();
 }
 
+void Watermark::DisableLogo(std::string_view why) noexcept {
+	Log(StormByte::Logger::Level::Warning,
+		std::format("Video/watermark disabled: {}", why));
+	m_opacity = 0;
+	m_bytes.clear();
+	m_rgba.clear();
+	m_logoWidth = 0;
+	m_logoHeight = 0;
+}
+
 void Watermark::Setup() noexcept {
 	if (m_opacity == 0)
 		return;
@@ -335,13 +346,13 @@ bool Watermark::LoadFile() noexcept {
 
 	std::ifstream in(m_path, std::ios::binary);
 	if (!in) {
-		Fail("cannot open " + m_path.string());
+		DisableLogo("cannot open " + m_path.string());
 		return false;
 	}
 	in.seekg(0, std::ios::end);
 	const auto size = in.tellg();
 	if (size <= 0) {
-		Fail("empty logo");
+		DisableLogo("empty logo");
 		return false;
 	}
 	in.seekg(0, std::ios::beg);
@@ -349,7 +360,7 @@ bool Watermark::LoadFile() noexcept {
 	in.read(reinterpret_cast<char*>(m_bytes.data()), size);
 	if (!in) {
 		m_bytes.clear();
-		Fail("failed to read " + m_path.string());
+		DisableLogo("failed to read " + m_path.string());
 		return false;
 	}
 	return true;
@@ -364,14 +375,14 @@ bool Watermark::DecodeLogo() noexcept {
 
 	const ::AVCodec* codec = CodecFromPath(m_path);
 	if (!codec) {
-		Fail("no decoder for logo");
+		DisableLogo("no decoder for logo");
 		return false;
 	}
 
 	::AVCodecContext* ctx = avcodec_alloc_context3(codec);
 	if (!ctx || avcodec_open2(ctx, codec, nullptr) < 0) {
 		avcodec_free_context(&ctx);
-		Fail("failed to open logo decoder");
+		DisableLogo("failed to open logo decoder");
 		return false;
 	}
 
@@ -381,7 +392,7 @@ bool Watermark::DecodeLogo() noexcept {
 		av_packet_free(&pkt);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("out of memory");
+		DisableLogo("out of memory decoding logo");
 		return false;
 	}
 
@@ -395,7 +406,7 @@ bool Watermark::DecodeLogo() noexcept {
 	if (!ok || decoded->width <= 0 || decoded->height <= 0) {
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("failed to decode logo");
+		DisableLogo("failed to decode logo");
 		return false;
 	}
 
@@ -403,7 +414,7 @@ bool Watermark::DecodeLogo() noexcept {
 	if (!rgba) {
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("out of memory");
+		DisableLogo("out of memory decoding logo");
 		return false;
 	}
 	rgba->format = AV_PIX_FMT_RGBA;
@@ -413,7 +424,7 @@ bool Watermark::DecodeLogo() noexcept {
 		av_frame_free(&rgba);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("failed to allocate RGBA logo");
+		DisableLogo("failed to allocate RGBA logo");
 		return false;
 	}
 
@@ -428,7 +439,7 @@ bool Watermark::DecodeLogo() noexcept {
 		av_frame_free(&rgba);
 		av_frame_free(&decoded);
 		avcodec_free_context(&ctx);
-		Fail("failed to convert logo to RGBA");
+		DisableLogo("failed to convert logo to RGBA");
 		return false;
 	}
 	sws_freeContext(sws);
@@ -590,6 +601,8 @@ void Watermark::LastChance(const Pipeline::Frame&) noexcept {
 }
 
 void Watermark::Paint() noexcept {
+	if (m_opacity == 0)
+		return;
 	if (!DecodeLogo())
 		return;
 
@@ -609,14 +622,14 @@ void Watermark::Paint() noexcept {
 	const int aw = m_point ? src->width : src->width - m_barLeft - m_barRight;
 	const int ah = m_point ? src->height : src->height - m_barTop - m_barBottom;
 	if (aw <= 0 || ah <= 0) {
-		Fail("active picture is empty");
+		DisableLogo("active picture is empty");
 		return;
 	}
 
 	const auto [x, y] = Place(m_logoWidth, m_logoHeight, m_anchor, m_point,
 		m_margin, x0, y0, aw, ah);
 	if (x < x0 || y < y0 || x + m_logoWidth > x0 + aw || y + m_logoHeight > y0 + ah) {
-		Fail("logo does not fit in the active picture");
+		DisableLogo("logo does not fit in the active picture");
 		return;
 	}
 

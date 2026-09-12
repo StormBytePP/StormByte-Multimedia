@@ -49,6 +49,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
@@ -83,8 +84,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @class Watermark
 	 * @brief Overlays a still image on decoded video. Real Hold example.
 	 *
-	 * Opacity 0 is a no-op. The logo is never cropped: if it does not
-	 * fit the active picture, @ref FFmpeg::Fail runs.
+	 * Opacity 0 is a no-op. A missing, empty, undecodable or oversized
+	 * logo does not @ref FFmpeg::Fail the job: the filter logs a Warning,
+	 * sets opacity to 0 and becomes a passthrough. @ref FFmpeg::Fail is
+	 * reserved for a broken video unit from the tube.
 	 *
 	 * @par Hold (anchor placement only)
 	 * Movies often show a black slate before letterbox bars appear.
@@ -215,6 +218,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Reads the logo file for the coming run.
+			 *
+			 * A missing file logs a Warning and disables the overlay.
+			 * It does not Fail the step.
 			 */
 			void Setup() noexcept override;
 
@@ -243,14 +249,24 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			static constexpr std::uint8_t ProbeMax = 200;	///< Hold ceiling in units
 
 			/**
+			 * @brief Turns the overlay off without failing the tube.
+			 * @param why Warning text after @c Video/watermark disabled:.
+			 *
+			 * Sets @ref m_opacity to 0 and drops logo buffers. Later
+			 * @ref Process / @ref Paint become no-ops. Frames still
+			 * leave the filter.
+			 */
+			void DisableLogo(std::string_view why) noexcept;
+
+			/**
 			 * @brief Reads @ref m_path into @ref m_bytes.
-			 * @return false if @ref Fail was called.
+			 * @return false if the logo was disabled.
 			 */
 			bool LoadFile() noexcept;
 
 			/**
 			 * @brief Decodes @ref m_bytes into @ref m_rgba on first use.
-			 * @return false if @ref Fail was called.
+			 * @return false if the logo was disabled.
 			 */
 			bool DecodeLogo() noexcept;
 
@@ -270,6 +286,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Paints the logo and @ref FFmpeg::Save.
+			 *
+			 * An oversized logo calls @ref DisableLogo, not Fail.
 			 */
 			void Paint() noexcept;
 
