@@ -41,7 +41,12 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <string>
 #include <utility>
+
+extern "C" {
+	struct AVFrame;
+}
 
 namespace StormByte::Multimedia::Pipeline {
 	class Frame;
@@ -171,8 +176,26 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 			void BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexcept;
 
+			/**
+			 * @brief Install @p raw, run Content extras, wrap properties.
+			 * @param owner Public unit (Type() selects the Content leaf).
+			 * @param raw Libav frame allocated by the caller. Ownership transfers.
+			 *
+			 * Content sees only raw pointers. Coupled extras that cannot
+			 * be remapped are dropped; @ref Warning describes that. This
+			 * does not Fail the tube.
+			 */
+			void Put(StormByte::Multimedia::Pipeline::Frame& owner, ::AVFrame* raw) noexcept;
+
+			/**
+			 * @brief Why Content dropped extras on the last @ref Put.
+			 * @return Empty when extras were kept or remapped.
+			 */
+			const std::string& Warning() const noexcept;
+
 		private:
 			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_handle;	///< FFmpeg frame
 			bool m_payloadReady = false;								///< true after Payload materialised planes
+			std::string m_warning;										///< Last Content drop reason
 	};
 }

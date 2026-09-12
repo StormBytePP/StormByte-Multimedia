@@ -172,9 +172,9 @@ void FFmpeg::Save(::AVFrame* raw) noexcept {
 		return;
 	if (!frame->m_backend)
 		frame->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
-	frame->m_backend->Handle().Reset(raw);
-	frame->m_backend->PayloadReady(false);
-	frame->m_backend->BindProperties(*frame);
+	frame->m_backend->Put(*frame, raw);
+	if (!frame->m_backend->Warning().empty())
+		Log(Level::Warning, std::format("{}: {}", Name(), frame->m_backend->Warning()));
 	if (Sparse(frame->Track()))
 		Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
 			Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));

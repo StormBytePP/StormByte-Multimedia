@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/content.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
@@ -98,4 +99,19 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 		default:
 			break;
 	}
+}
+
+void Frame::Put(StormByte::Multimedia::Pipeline::Frame& owner, ::AVFrame* raw) noexcept {
+	m_warning.clear();
+	const ::AVFrame* before = m_handle.Get();
+	auto content = Content::For(owner.Type());
+	content->Put(before, raw);
+	m_warning = content->Warning();
+	m_handle.Reset(raw);
+	m_payloadReady = false;
+	BindProperties(owner);
+}
+
+const std::string& Frame::Warning() const noexcept {
+	return m_warning;
 }

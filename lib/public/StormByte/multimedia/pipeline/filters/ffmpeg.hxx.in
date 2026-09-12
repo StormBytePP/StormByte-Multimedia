@@ -382,6 +382,16 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @param raw libav frame allocated by the plugin against
 			 *        FFmpeg @STORMBYTE_FFMPEG_VERSION@ (libavcodec major
 			 *        @STORMBYTE_LIBAVCODEC_MAJOR@).
+			 *
+			 * Serial, Part and timing stay on the StormByte Frame.
+			 * The backend holder runs Content::For(Type) on the raw
+			 * pair, then Reset and BindProperties. The plugin does
+			 * not pass a geometry hint.
+			 *
+			 * Content may drop coupled extras that would lie after
+			 * the new card (HDR10+ windows, audio downmix). That is
+			 * not @ref Fail. @ref Log writes @c Level::Warning with
+			 * the holder's reason.
 			 */
 			void Save(::AVFrame* raw) noexcept;
 
