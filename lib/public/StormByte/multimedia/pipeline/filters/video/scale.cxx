@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/pipeline/filters/video/resize.hxx>
+#include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
 extern "C" {
 	#include <libavutil/frame.h>
@@ -49,28 +49,28 @@ using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 /*
 * Process leaf. Route::Add only accepts Process / Packet / Analytics.
 *
-* Construction names the node ("resize") so logs and Report dumps
+* Construction names the node ("scale") so logs and Report dumps
 * can tell filters apart. Do not Launch() here: Route::Add does.
 */
-Resize::Resize(std::shared_ptr<StormByte::Logger::Log> log,
+Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
-: Filter::Process(std::move(log), "resize"),
+: Filter::Process(std::move(log), "scale"),
 	m_width(resolution.Width()), m_height(resolution.Height()) {}
 
-Resize::Resize(std::shared_ptr<StormByte::Logger::Log> log,
+Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	std::uint32_t width, std::uint32_t height) noexcept
-: Filter::Process(std::move(log), "resize"),
+: Filter::Process(std::move(log), "scale"),
 	m_width(width), m_height(height) {}
 
-enum StormByte::Multimedia::Type Resize::Media() const noexcept {
+enum StormByte::Multimedia::Type Scale::Media() const noexcept {
 	return StormByte::Multimedia::Type::Video;
 }
 
-void Resize::Clean() noexcept {}
+void Scale::Clean() noexcept {}
 
-void Resize::Setup() noexcept {}
+void Scale::Setup() noexcept {}
 
-void Resize::Process(const Pipeline::Frame&) noexcept {
+void Scale::Process(const Pipeline::Frame&) noexcept {
 	/* Gate already matched Kind::Frame + Video. AVFrame() is the live backend. */
 	::AVFrame* src = AVFrame();
 	if (!src || src->width <= 0 || src->height <= 0) {

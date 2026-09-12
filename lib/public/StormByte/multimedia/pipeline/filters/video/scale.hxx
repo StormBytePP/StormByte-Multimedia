@@ -52,11 +52,11 @@
  * @brief Video process filters.
  *
  * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in, out).Filter<Resize>(log, w, h).
+ * Attach with @c job.Video(in, out).Filter<Scale>(log, w, h).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
-	 * @class Resize
+	 * @class Scale
 	 * @brief Scales a decoded video frame with libswscale.
 	 *
 	 * Minimal Process filter: @ref Media is Video, @ref Clean and
@@ -74,7 +74,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Resize: public Filter::Process {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Scale: public Filter::Process {
 		public:
 			/**
 			 * @name Lifecycle
@@ -86,7 +86,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param resolution Target resolution.
 			 */
-			Resize(std::shared_ptr<StormByte::Logger::Log> log,
+			Scale(std::shared_ptr<StormByte::Logger::Log> log,
 				const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
 
 			/**
@@ -95,39 +95,39 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @param width Target width, or 0.
 			 * @param height Target height, or 0.
 			 */
-			Resize(std::shared_ptr<StormByte::Logger::Log> log,
+			Scale(std::shared_ptr<StormByte::Logger::Log> log,
 				std::uint32_t width, std::uint32_t height) noexcept;
 
 			/**
 			 * @brief Copy constructor.
 			 * @param other Source filter.
 			 */
-			Resize(const Resize& other) = delete;
+			Scale(const Scale& other) = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param other Filter to take.
 			 */
-			Resize(Resize&& other) noexcept = delete;
+			Scale(Scale&& other) noexcept = delete;
 
 			/**
 			 * @brief Destructor.
 			 */
-			~Resize() noexcept override = default;
+			~Scale() noexcept override = default;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param other Source filter.
 			 * @return *this.
 			 */
-			Resize& operator=(const Resize& other) = delete;
+			Scale& operator=(const Scale& other) = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param other Filter to take.
 			 * @return *this.
 			 */
-			Resize& operator=(Resize&& other) noexcept = delete;
+			Scale& operator=(Scale&& other) noexcept = delete;
 
 			/**
 			 * @}
