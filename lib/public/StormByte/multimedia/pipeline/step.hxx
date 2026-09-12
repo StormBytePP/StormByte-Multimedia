@@ -46,6 +46,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -89,6 +90,61 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC Step& operator>>(Step& from, Step& to) noexcept;
 
 	/**
+	 * @enum State
+	 * @brief Lifecycle of one Step. Values are mutually exclusive.
+	 *
+	 * This is the state of *this* stage, not of the job and not of
+	 * the bound neighbor. A neighbor learns that this stage is dead
+	 * because the shared hopper is Eof, not by reading this enum.
+	 *
+	 * Created
+	 *   Constructor finished. The object is usable: Plan can be
+	 *   bound, operator>> can wire hoppers, Stop/Fail are legal.
+	 *   Open has not returned. Pump must not take units from m_in.
+	 *   Launch has usually already spawned the worker; the worker
+	 *   is blocked inside Open (waiting for a Plan, an origin,
+	 *   a path, …). This is the only state in which Open may run
+	 *   to completion.
+	 *
+	 * Ready
+	 *   Step::Open returned. The backend (if any) can take work.
+	 *   Pump may pop m_in and call Work. There is no separate
+	 *   "running" value: pumping is what a Ready worker does, not
+	 *   a new phase. Fail or Stop may still fire from here.
+	 *
+	 * Stopping
+	 *   Stop() was called, or Halt() from a destructor. Hoppers
+	 *   are Eof and waiters are notified. The worker has not
+	 *   joined yet. Pump and Open must return. This is not a
+	 *   failure; Finish may still run.
+	 *
+	 * Stopped
+	 *   The worker has left. Hoppers stay Eof. The tube is not
+	 *   reused: there is no restart back to Created.
+	 *
+	 * Failed
+	 *   Fail() latched a reason. Hoppers are Eof. Terminal, like
+	 *   Stopped, but Error() is set. May be entered from Created
+	 *   (Open never succeeded) or from Ready. Does not pass
+	 *   through Stopping.
+	 *
+	 * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
+	 * Ready→Stopping, Ready→Failed, Stopping→Stopped.
+	 * Failed and Stopped do not leave.
+	 *
+	 * Source EOF is not a State. Demuxer keeps m_eof next to this.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	enum class State: std::uint8_t {
+		Created,
+		Ready,
+		Stopping,
+		Stopped,
+		Failed
+	};
+
+	/**
 	 * @class Step
 	 * @brief One threaded stage with an input Sink and an output Sink.
 	 *
@@ -101,7 +157,7 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Route;
 		friend class Router;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-		friend Demuxer& operator>>(Plan&& plan, Demuxer& demuxer) noexcept;
+		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
 		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
 		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
 		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
@@ -183,10 +239,25 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 			/**
-			 * @brief Whether Open has finished without Fail.
-			 * @return true after Step::Open.
+			 * @brief Current lifecycle value.
+			 * @return State of this step only.
+			 */
+			State Status() const noexcept;
+
+			/**
+			 * @brief Whether Open has finished without Fail or Stop.
+			 * @return true iff Status is Ready.
 			 */
 			bool Ready() const noexcept;
+
+			/**
+			 * @brief Asks the worker to leave and closes both hoppers.
+			 *
+			 * Neighbors unblock on hopper EoF. Does not join; the
+			 * worker may be the caller. Idempotent. A mounted tube
+			 * is not restarted after Stop.
+			 */
+			void Stop() noexcept;
 
 			/**
 			 * @brief Ceiling of this step's input hopper.
@@ -208,7 +279,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether this step has failed.
-			 * @return true after Fail.
+			 * @return true iff Status is Failed.
 			 */
 			bool Failed() const noexcept;
 
@@ -219,7 +290,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @brief Marks a hard error, closes both hoppers and wakes the worker.
+			 * @brief Marks Failed, closes both hoppers and wakes the worker.
 			 *
 			 * Bound neighbors unblock on hopper EoF. Does not join the
 			 * worker; the worker may be the caller.
@@ -239,7 +310,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Idle step. Sinks start at zero buckets.
+			 * @brief Step in State::Created. Sinks start at zero buckets.
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
 			 */
@@ -255,7 +326,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Prepare-once hook. Marks Ready and wakes waiters.
+			 * @brief Prepare-once hook. Moves Created → Ready and wakes waiters.
 			 *
 			 * Leaves that override Open must call Step::Open at the end
 			 * after their backend is usable. Must be noexcept. On error
@@ -280,17 +351,17 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void Pump() noexcept;
 
 			/**
-			 * @brief Sleeps on Wake until hopper Ready, Fail or stop.
+			 * @brief Sleeps on Wake until hopper Ready, Failed or Stopping.
 			 */
 			void Wait() noexcept;
 
 			/**
-			 * @brief Starts the worker: Open, then Pump if not Failed.
+			 * @brief Starts the worker: Open, then Pump if still Ready.
 			 */
 			void Launch() noexcept;
 
 			/**
-			 * @brief Stops the worker and joins it.
+			 * @brief Stop and join the worker.
 			 *
 			 * Safe to call more than once. Leaves call this from their
 			 * destructor before releasing a backend the worker still uses.
@@ -298,8 +369,8 @@ namespace StormByte::Multimedia::Pipeline {
 			void Halt() noexcept;
 
 			/**
-			 * @brief Worker must return (destructor stop or Fail).
-			 * @return true if Pump should exit.
+			 * @brief Worker must return (Stop, Halt or Fail).
+			 * @return true if Status is Stopping, Stopped or Failed.
 			 */
 			bool Stopping() const noexcept;
 
@@ -317,9 +388,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::condition_variable m_wake;				///< Single consumer CV
 			std::mutex m_wait;							///< Mutex for m_wake
 			std::jthread m_worker;						///< Owned worker
-			std::atomic<bool> m_failed;					///< Fail latched
-			std::atomic<bool> m_stop;					///< Destructor requested stop
-			std::atomic<bool> m_ready;					///< Open finished
+			std::atomic<State> m_state;					///< Lifecycle
 			std::optional<std::string> m_error;			///< Fail message
 	};
 }

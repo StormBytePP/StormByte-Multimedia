@@ -45,7 +45,7 @@ using StormByte::Multimedia::Buffer::Hopper;
 using StormByte::Multimedia::Buffer::Sink;
 
 Sink::Sink() noexcept
-: m_rr(0), m_consumer(nullptr) {}
+: m_rr(0), m_consumer(nullptr), m_closed(false) {}
 
 Sink::~Sink() noexcept {
 	m_wired.notify_all();
@@ -64,27 +64,43 @@ void Sink::Push(int key, std::shared_ptr<Item> item) noexcept {
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this, key] {
-			return m_buckets.find(key) != m_buckets.end();
+			return m_closed.load(std::memory_order_acquire)
+				|| m_buckets.find(key) != m_buckets.end();
 		});
+		if (m_closed.load(std::memory_order_acquire)
+			&& m_buckets.find(key) == m_buckets.end())
+			return;
 		hopper = m_buckets[key];
 	}
+	if (!hopper)
+		return;
 	hopper->Push(std::move(item));
 }
 
 void Sink::Eof() noexcept {
+	m_closed.store(true, std::memory_order_release);
 	const auto hoppers = Order();
 	for (auto& hopper : hoppers)
 		hopper->Eof();
+	m_wired.notify_all();
+	if (auto* cv = m_consumer.load(std::memory_order_acquire); cv)
+		cv->notify_all();
 }
 
 void Sink::Bind(Sink& consumer) {
 	std::condition_variable* cv = consumer.m_consumer.load(std::memory_order_acquire);
+	const bool closed = m_closed.load(std::memory_order_acquire)
+		|| consumer.m_closed.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
 	for (auto& [key, hopper] : m_buckets) {
+		if (closed)
+			hopper->Eof();
 		if (cv != nullptr)
 			hopper->Notify(*cv);
 		consumer.m_buckets[key] = hopper;
 	}
+	if (closed)
+		consumer.m_closed.store(true, std::memory_order_release);
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
 	m_wired.notify_all();
@@ -92,11 +108,17 @@ void Sink::Bind(Sink& consumer) {
 
 void Sink::Bind(int key, Sink& consumer) {
 	std::condition_variable* cv = consumer.m_consumer.load(std::memory_order_acquire);
+	const bool closed = m_closed.load(std::memory_order_acquire)
+		|| consumer.m_closed.load(std::memory_order_acquire);
 	std::scoped_lock lock(m_mutex, consumer.m_mutex);
 	auto hopper = Ensure(key);
+	if (closed)
+		hopper->Eof();
 	if (cv != nullptr)
 		hopper->Notify(*cv);
 	consumer.m_buckets[key] = hopper;
+	if (closed)
+		consumer.m_closed.store(true, std::memory_order_release);
 	consumer.RebuildOrder();
 	consumer.m_wired.notify_all();
 	m_wired.notify_all();
@@ -146,10 +168,12 @@ std::shared_ptr<Item> Sink::Pop(const Select& select) noexcept {
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		m_wired.wait(lock, [this] {
-			return !m_order.empty();
+			return m_closed.load(std::memory_order_acquire) || !m_order.empty();
 		});
 		hoppers = m_order;
 	}
+	if (hoppers.empty())
+		return {};
 	if (hoppers.size() == 1)
 		return hoppers.front()->Pop();
 
@@ -171,7 +195,7 @@ std::shared_ptr<Item> Sink::Pop(const Select& select) noexcept {
 bool Sink::EoF() const noexcept {
 	const auto hoppers = Order();
 	if (hoppers.empty())
-		return false;
+		return m_closed.load(std::memory_order_acquire);
 	for (const auto& hopper : hoppers) {
 		if (!hopper->EoF())
 			return false;
@@ -184,7 +208,7 @@ bool Sink::EoF() const noexcept {
 bool Sink::Ready() const noexcept {
 	const auto hoppers = Order();
 	if (hoppers.empty())
-		return false;
+		return m_closed.load(std::memory_order_acquire);
 	bool drained = true;
 	for (const auto& hopper : hoppers) {
 		if (!hopper->Empty())

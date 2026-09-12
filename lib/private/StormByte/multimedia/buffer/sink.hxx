@@ -65,7 +65,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Route;		///< Defined in pipeline/route.hxx
 	class Router;		///< Defined in pipeline/router.hxx
 	class Step;			///< Defined in pipeline/step.hxx
-	class Transcode;	///< Defined in pipeline/transcode.hxx
+	class Transcoder;	///< Defined in pipeline/transcoder.hxx
 
 	Step& operator>>(Step& from, Step& to) noexcept;
 }
@@ -89,18 +89,19 @@ namespace StormByte::Multimedia::Buffer {
 	 * Starts with zero buckets. Bind creates or shares a hopper
 	 * under @p key. The tube uses Pipeline::Item::Track as the key.
 	 *
-	 * Push(key) waits on @c m_wired until that bucket exists, then
-	 * Hopper::Push (which waits if Capacity is set and the bucket
-	 * is Full). Pop waits on @c m_wired until at least one bucket
-	 * exists; it does not wait for an item (the consumer CV does).
-	 * Bind and Notify never block.
+	 * Push(key) waits on @c m_wired until that bucket exists or
+	 * the Sink is closed. A closed Sink with no bucket for that
+	 * key discards the push. Hopper::Push still waits if Capacity
+	 * is set and the bucket is Full.
 	 *
-	 * Push(pointer) forwards to Push(key, pointer) with the item's
-	 * Track() as key.
+	 * Pop waits on @c m_wired until at least one bucket exists or
+	 * the Sink is closed. Bind and Notify never block.
 	 *
-	 * EoF with zero buckets is false (nothing wired). Eof marks
-	 * hoppers that already exist; a late Bind is a new hopper
-	 * without EoF.
+	 * Eof closes the Sink even with zero buckets, marks every
+	 * existing hopper, and wakes Bind waiters. A Bind after Eof
+	 * creates an already-Eof hopper.
+	 *
+	 * EoF with zero buckets is true only when the Sink is closed.
 	 *
 	 * A bucket has no Fail. Capacity / Size / Full for a missing
 	 * key are noop / 0 / false.
@@ -113,7 +114,7 @@ namespace StormByte::Multimedia::Buffer {
 		friend class StormByte::Multimedia::Pipeline::Route;
 		friend class StormByte::Multimedia::Pipeline::Router;
 		friend class StormByte::Multimedia::Pipeline::Step;
-		friend class StormByte::Multimedia::Pipeline::Transcode;
+		friend class StormByte::Multimedia::Pipeline::Transcoder;
 		friend StormByte::Multimedia::Pipeline::Step&
 			StormByte::Multimedia::Pipeline::operator>>(
 				StormByte::Multimedia::Pipeline::Step& from,
@@ -135,7 +136,7 @@ namespace StormByte::Multimedia::Buffer {
 			 */
 
 			/**
-			 * @brief Zero buckets. Read/write wait for Bind.
+			 * @brief Zero buckets. Read/write wait for Bind or Eof.
 			 */
 			Sink() noexcept;
 
@@ -190,14 +191,16 @@ namespace StormByte::Multimedia::Buffer {
 			 * @param key Bucket key.
 			 * @param item Unit to enqueue. Empty pointers are discarded.
 			 *
-			 * Waits until the bucket exists, then Hopper::Push.
+			 * Waits until the bucket exists or the Sink is closed.
+			 * Closed and no bucket: discards @p item.
 			 */
 			void Push(int key, std::shared_ptr<StormByte::Multimedia::Pipeline::Item> item) noexcept;
 
 			/**
-			 * @brief Marks every existing hopper Hopper::Eof.
+			 * @brief Closes the Sink and marks every hopper Hopper::Eof.
 			 *
-			 * Does not wait for missing keys. Zero buckets: no-op.
+			 * Wakes Push/Pop waiters on m_wired. Zero buckets still
+			 * close the Sink.
 			 */
 			void Eof() noexcept;
 
@@ -223,8 +226,10 @@ namespace StormByte::Multimedia::Buffer {
 			 * @param key Bucket key.
 			 * @param consumer Input sink of the consumer.
 			 *
-			 * Wakes Push/Pop waiters for that bucket. Hopper starts
-			 * unbounded; call Capacity(key, n) after Bind if needed.
+			 * Wakes Push/Pop waiters for that bucket. If either
+			 * Sink is already closed, the hopper is Eof. Hopper
+			 * starts unbounded; call Capacity(key, n) after Bind
+			 * if needed.
 			 */
 			void Bind(int key, Sink& consumer);
 
@@ -286,7 +291,8 @@ namespace StormByte::Multimedia::Buffer {
 			 * @brief Pops one item. No key argument.
 			 * @return Next pointer, or empty. Empty plus EoF is end.
 			 *
-			 * Blocks while there are zero buckets.
+			 * Blocks while there are zero buckets and the Sink is
+			 * not closed.
 			 */
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Item> Pop() noexcept;
 
@@ -295,15 +301,17 @@ namespace StormByte::Multimedia::Buffer {
 			 * @param select Index chooser. Empty: round-robin.
 			 * @return Next pointer, or empty.
 			 *
-			 * Blocks while there are zero buckets. Ignored when there
-			 * is one bucket. select sees [0, bucket-count), not keys.
+			 * Blocks while there are zero buckets and the Sink is
+			 * not closed. Ignored when there is one bucket. select
+			 * sees [0, bucket-count), not keys.
 			 */
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Item> Pop(const Select& select) noexcept;
 
 			/**
-			 * @brief Whether every existing bucket is Hopper::EoF and empty.
-			 * @return false when there are zero buckets. Otherwise true
-			 *         when the consumer may treat this sink as finished.
+			 * @brief Whether the consumer may treat this sink as finished.
+			 * @return true if the Sink is closed and every existing
+			 *         hopper is Hopper::EoF and empty. Closed with
+			 *         zero buckets is true.
 			 *
 			 * There is no per-key EoF. Does not pop.
 			 */
@@ -313,7 +321,7 @@ namespace StormByte::Multimedia::Buffer {
 			 * @brief Whether the consumer waiter may return.
 			 * @return true if a Pop would see an item, or EoF.
 			 *
-			 * Zero buckets: false. Does not pop.
+			 * Zero buckets: true only if the Sink is closed.
 			 */
 			bool Ready() const noexcept;
 
@@ -355,5 +363,6 @@ namespace StormByte::Multimedia::Buffer {
 			std::vector<std::shared_ptr<Hopper<std::shared_ptr<StormByte::Multimedia::Pipeline::Item>>>> m_order;		///< Stable pop order
 			std::atomic<std::size_t> m_rr;			///< Round-robin cursor
 			std::atomic<std::condition_variable*> m_consumer;	///< Consumer CV; Notify sets it
+			std::atomic<bool> m_closed;				///< Set by Eof; Bind after this yields Eof hoppers
 	};
 }

@@ -41,33 +41,58 @@
 
 using namespace StormByte::Multimedia::Pipeline;
 
+namespace {
+	bool Terminal(State state) noexcept {
+		return state == State::Failed || state == State::Stopped;
+	}
+}
+
 Step::Step(Kinds receives, Kinds produces) noexcept
 : m_in(std::make_unique<Buffer::Sink>()),
 	m_out(std::make_unique<Buffer::Sink>()),
 	m_receives(receives),
 	m_produces(produces),
-	m_failed(false),
-	m_stop(false),
-	m_ready(false) {}
+	m_state(State::Created) {}
 
 Step::~Step() noexcept {
 	Halt();
 }
 
+State Step::Status() const noexcept {
+	return m_state.load(std::memory_order_acquire);
+}
+
 void Step::Fail(std::string reason) noexcept {
 	m_error = std::move(reason);
-	m_failed.store(true, std::memory_order_release);
+	State current = m_state.load(std::memory_order_acquire);
+	while (!Terminal(current)) {
+		if (m_state.compare_exchange_weak(current, State::Failed,
+				std::memory_order_acq_rel, std::memory_order_acquire))
+			break;
+	}
 	m_in->Eof();
 	m_out->Eof();
 	m_wake.notify_all();
 }
 
 bool Step::Failed() const noexcept {
-	return m_failed.load(std::memory_order_acquire);
+	return Status() == State::Failed;
 }
 
 bool Step::Ready() const noexcept {
-	return m_ready.load(std::memory_order_acquire);
+	return Status() == State::Ready;
+}
+
+void Step::Stop() noexcept {
+	State current = m_state.load(std::memory_order_acquire);
+	while (current == State::Created || current == State::Ready) {
+		if (m_state.compare_exchange_weak(current, State::Stopping,
+				std::memory_order_acq_rel, std::memory_order_acquire))
+			break;
+	}
+	m_in->Eof();
+	m_out->Eof();
+	m_wake.notify_all();
 }
 
 std::size_t Step::InputCeiling() const noexcept {
@@ -75,7 +100,8 @@ std::size_t Step::InputCeiling() const noexcept {
 }
 
 bool Step::Stopping() const noexcept {
-	return m_stop.load(std::memory_order_acquire) || Failed();
+	const State state = Status();
+	return state == State::Stopping || state == State::Stopped || state == State::Failed;
 }
 
 const std::optional<std::string>& Step::Error() const noexcept {
@@ -94,7 +120,9 @@ void Step::Wait() noexcept {
 }
 
 void Step::Open() noexcept {
-	m_ready.store(true, std::memory_order_release);
+	State expected = State::Created;
+	m_state.compare_exchange_strong(expected, State::Ready,
+		std::memory_order_acq_rel, std::memory_order_acquire);
 	m_wake.notify_all();
 }
 
@@ -132,18 +160,21 @@ void Step::Launch() noexcept {
 			return;
 		Pump();
 		m_out->Eof();
+		State expected = State::Stopping;
+		m_state.compare_exchange_strong(expected, State::Stopped,
+			std::memory_order_acq_rel, std::memory_order_acquire);
 	});
 }
 
 void Step::Halt() noexcept {
-	m_stop.store(true, std::memory_order_release);
-	m_in->Eof();
-	m_out->Eof();
-	m_wake.notify_all();
+	Stop();
 	if (m_worker.joinable()) {
 		m_worker.request_stop();
 		m_worker.join();
 	}
+	State expected = State::Stopping;
+	m_state.compare_exchange_strong(expected, State::Stopped,
+		std::memory_order_acq_rel, std::memory_order_acquire);
 }
 
 Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
