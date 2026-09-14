@@ -342,6 +342,23 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void BecomeEmpty() noexcept;
 
+			/**
+			 * @brief Deep copy for @ref Step::Emit (analytics tap).
+			 * @return New unit; Serial, Part, timing and backend are copied.
+			 *
+			 * Not a public API. Uses the private copy constructor.
+			 */
+			PointerType Clone() const override;
+
+			/**
+			 * @brief Moves this unit into a new owning pointer.
+			 * @return Pointer to the relocated unit; *this becomes the empty sentinel.
+			 *
+			 * Not a public API. Uses the private move constructor.
+			 * @ref Step::Emit does not call this.
+			 */
+			PointerType Move() override;
+
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
 			std::optional<Property::Duration> m_pts;					///< Presentation timestamp
 			std::optional<Property::Duration> m_dts;					///< Decode timestamp from the source packet

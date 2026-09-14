@@ -170,3 +170,11 @@ StormByte::Buffer::FIFO& Frame::Payload() noexcept {
 void Frame::Bind(std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept {
 	m_backend = std::move(backend);
 }
+
+Frame::PointerType Frame::Clone() const {
+	return PointerType(new Frame(*this));
+}
+
+Frame::PointerType Frame::Move() {
+	return PointerType(new Frame(std::move(*this)));
+}

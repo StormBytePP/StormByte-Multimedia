@@ -153,3 +153,11 @@ void Packet::BecomeEmpty() noexcept {
 void Packet::Bind(std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
 	m_backend = std::move(backend);
 }
+
+Packet::PointerType Packet::Clone() const {
+	return PointerType(new Packet(*this));
+}
+
+Packet::PointerType Packet::Move() {
+	return PointerType(new Packet(std::move(*this)));
+}

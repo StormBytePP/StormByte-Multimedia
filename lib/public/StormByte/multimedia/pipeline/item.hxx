@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/clonable.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -68,6 +69,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Frame;
 	class Muxer;
 	class Packet;
+	class Step;
 
 	/**
 	 * @namespace Filter
@@ -85,7 +87,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Item {
+	class STORMBYTE_MULTIMEDIA_PUBLIC Item: protected Clonable<Item, std::shared_ptr<Item>> {
 		friend class Backend::Pipeline::Frame;
 		friend class Backend::Pipeline::Packet;
 		friend class Decoder;
@@ -95,6 +97,7 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Frame;
 		friend class Muxer;
 		friend class Packet;
+		friend class Step;
 
 		public:
 			/**
