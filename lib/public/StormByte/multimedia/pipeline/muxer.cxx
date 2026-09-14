@@ -39,7 +39,6 @@
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/container.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/backend/pipeline/muxer.hxx>
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
@@ -173,7 +172,7 @@ void Muxer::Open() noexcept {
 	Step::Open();
 }
 
-void Muxer::Work(std::shared_ptr<Item> item) noexcept {
+void Muxer::Work(Item::PointerType item) noexcept {
 	NameThread("STMM:Muxer");
 
 	if (Failed() || !m_backend)
@@ -207,12 +206,10 @@ void Muxer::Work(std::shared_ptr<Item> item) noexcept {
 		}
 	}
 
-	if (Sparse(track))
-		Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
-			track, packet->Serial().value_or(0), packet->Part(),
-			Ns(packet->Pts()), Ns(packet->Dts()),
-			m_positionNs.load(std::memory_order_acquire)));
-	MaybeThrottle(track);
+	Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
+		track, packet->Serial().value_or(0), packet->Part(),
+		Ns(packet->Pts()), Ns(packet->Dts()),
+		m_positionNs.load(std::memory_order_acquire)));
 }
 
 void Muxer::Finish() noexcept {
@@ -239,7 +236,7 @@ bool Muxer::RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept {
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = encoder.m_plan;
-	muxer.m_in->Notify(muxer.Wake());
+	muxer.m_in.Notify(muxer.Wake());
 	if (muxer.Failed() || encoder.Failed())
 		return encoder;
 	if (!muxer.m_backend) {
@@ -247,9 +244,9 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 		return encoder;
 	}
 	muxer.m_backend->ReserveEncoder(muxer, encoder);
-	encoder.m_out->Bind(encoder.Index(), *muxer.m_in);
+	encoder.m_out.Bind(encoder.Index(), muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
-		muxer.m_in->Capacity(encoder.Index(), cap);
+		muxer.m_in.Capacity(encoder.Index(), cap);
 	muxer.Log(Level::Debug, std::format("reserve encoder t={}", encoder.Index()));
 	return encoder;
 }
@@ -257,7 +254,7 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = remuxer.m_plan;
-	muxer.m_in->Notify(muxer.Wake());
+	muxer.m_in.Notify(muxer.Wake());
 	if (muxer.Failed() || remuxer.Failed())
 		return remuxer;
 	if (!muxer.m_backend) {
@@ -266,9 +263,9 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 	}
 	if (!muxer.m_backend->ReserveRemux(muxer, remuxer.In()))
 		return remuxer;
-	remuxer.m_out->Bind(remuxer.In(), *muxer.m_in);
+	remuxer.m_out.Bind(remuxer.In(), muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
-		muxer.m_in->Capacity(remuxer.In(), cap);
+		muxer.m_in.Capacity(remuxer.In(), cap);
 	muxer.Log(Level::Debug, std::format("reserve remux t={}", remuxer.In()));
 	return remuxer;
 }

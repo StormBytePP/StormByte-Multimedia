@@ -38,6 +38,7 @@
 
 #pragma once
 
+#include <StormByte/buffer/sink.hxx>
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
@@ -55,15 +56,6 @@
 #include <string>
 #include <string_view>
 #include <thread>
-#include <unordered_map>
-
-/**
- * @namespace StormByte::Multimedia::Buffer
- * @brief Private tube queues.
- */
-namespace StormByte::Multimedia::Buffer {
-	class Sink;
-}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -86,6 +78,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Demuxer fan-out is not this operator. A demuxer binds one origin
 	 * index at a time from the leaf operator>>.
+	 *
+	 * Does not bind the analytics tap.
 	 *
 	 * @param from Producer step.
 	 * @param to Consumer step.
@@ -157,22 +151,22 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Step
-	 * @brief One threaded stage with an input Sink and an output Sink.
+	 * @brief One threaded stage with an input @ref ItemSink, an output
+	 *        @ref ItemSink and an analytics tap @ref ItemSink.
 	 *
-	 * Log lines from @ref Log are `STMM <Label>: <text>`.
-	 * @ref Label defaults to the @ref Producer name. Leaves that
-	 * exist more than once override it (`Encoder(libx265)`).
-	 * The Logger prints the level; this class does not.
+	 * Log lines use Logger component `STMM` and group @ref Label.
+	 * Volume is a Logger throttle on that component/group, not a
+	 * per-step counter.
 	 *
-	 * Unit LowLevel lines use @ref Sparse so 20 of every 500
-	 * units of one track are printed. @ref MaybeThrottle writes
-	 * the skip warning once per window. @ref Pump times each
-	 * @ref Work and @ref DumpWork prints min/max at Finish.
+	 * @ref Emit clones into @ref m_tap and then pushes the original
+	 * to @ref m_out so a later @c Save cannot race the analytics look.
+	 * @ref m_tap is constructed @c Drain: an unbound key drops the
+	 * clone. @ref Route binds the tap before the origin emits.
 	 *
 	 * @ref Look is the encode-look hook. Default is a no-op.
 	 * Encoder overrides it and deep-copies encoded packets into
 	 * the look decoder sink. It is not a public Encoder API and
-	 * it is not a Tee of @ref m_out. @ref Route::TapEncode calls
+	 * it is not a copy of @ref m_out. @ref Route::TapEncode calls
 	 * it through this Step hook.
 	 *
 	 * @ingroup multimedia_pipeline
@@ -278,7 +272,7 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Ready() const noexcept;
 
 			/**
-			 * @brief Asks the worker to leave and closes both hoppers.
+			 * @brief Asks the worker to leave and closes all hoppers.
 			 *
 			 * Neighbors unblock on hopper EoF. Does not join; the
 			 * worker may be the caller. Idempotent. A mounted tube
@@ -317,7 +311,7 @@ namespace StormByte::Multimedia::Pipeline {
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			 * @brief Marks Failed, closes both hoppers and wakes the worker.
+			 * @brief Marks Failed, closes all hoppers and wakes the worker.
 			 *
 			 * Bound neighbors unblock on hopper EoF. Does not join the
 			 * worker; the worker may be the caller. Does not write a
@@ -332,6 +326,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		protected:
+			using ItemSink = StormByte::Buffer::Sink<Item::PointerType>;
+
 			/**
 			 * @name Construction
 			 * @{
@@ -342,9 +338,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param log Shared logger. Prefer @c StormByte::Logger::ThreadedLog
 			 *        when several workers write. A plain @c Log is accepted
 			 *        for single-thread use. Empty pointer means no log.
-			 * @param name Stage name used as the default @ref Label.
+			 * @param name Stage name used as the default @ref Label (Logger group).
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
+			 *
+			 * @ref m_tap is @c Drain so an unbound analytics Push
+			 * is dropped instead of waiting for @ref Route.
 			 */
 			Step(std::shared_ptr<StormByte::Logger::Log> log,
 				enum Producer name,
@@ -372,7 +371,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief One unit taken from m_in.
 			 * @param item Never empty.
 			 */
-			virtual void Work(std::shared_ptr<Item> item) noexcept;
+			virtual void Work(Item::PointerType item) noexcept;
 
 			/**
 			 * @brief Input is Sink EoF and the last Pop was empty.
@@ -384,11 +383,22 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param sink Look decoder @c m_in.
 			 *
 			 * Encoder overrides and deep-copies each encoded packet
-			 * into @p sink. Other leaves leave this empty. Not a Tee
+			 * into @p sink. Other leaves leave this empty. Not a copy
 			 * of @ref m_out. @ref Route::TapEncode calls this hook;
 			 * there is no public Encoder method for it.
 			 */
-			virtual void Look(StormByte::Multimedia::Buffer::Sink& sink) noexcept;
+			virtual void Look(ItemSink& sink) noexcept;
+
+			/**
+			 * @brief Clone into @ref m_tap, then push @p item to @ref m_out.
+			 * @param item Unit to emit. Empty is a no-op.
+			 *
+			 * Always clones when @p item is set. If @ref m_tap has no
+			 * hopper for that key, Drain drops the clone. Serial, Part
+			 * and timing stay on the copy. Call this instead of pushing
+			 * @ref m_out directly.
+			 */
+			void Emit(Item::PointerType item) noexcept;
 
 			/**
 			 * @brief Body of the worker after Open returns.
@@ -450,69 +460,42 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Token after `STMM ` in every log line.
+			 * @brief Logger group token for this step.
 			 * @return @ref Producer name (`Encoder`) unless a leaf overrides
 			 *         it (`Encoder(libx265)`). Called on every @ref Log.
 			 */
 			virtual std::string Label() const noexcept;
 
 			/**
-			 * @brief Writes one log line as `STMM <Label>: <message>`.
+			 * @brief Writes one log line with component @c STMM and group @ref Label.
 			 * @param level StormByte::Logger::Level of this line.
 			 * @param message Already-formatted text (caller may use std::format).
 			 *        Must not include the level name; Logger prints that.
 			 *
 			 * No-op when @ref m_log is empty. Virtual so a leaf can
 			 * re-expose it to its backend (friendship is not inherited).
+			 * Throttle belongs on the shared Logger, not here.
 			 */
 			virtual void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
-
-			/**
-			 * @brief Whether the next unit of origin/output track @p track
-			 *        should print a LowLevel line.
-			 * @param track Stream index on this step (origin index on
-			 *        Demuxer/Decoder/Remuxer, mux order on Encoder/Muxer).
-			 * @return true for the first @ref SparseKeep units of every
-			 *         @ref SparseWindow of @p track on this step.
-			 *
-			 * Increments the per-track counter of *this* step. Call
-			 * once per unit, then @ref MaybeThrottle with the same
-			 * @p track. Windows do not share a budget: twenty units
-			 * on t=0 do not consume t=1. A remux flood on one track
-			 * therefore cannot hide an encode lane on another.
-			 *
-			 * This is not a frame count and not an FFmpeg counter.
-			 */
-			bool Sparse(int track) noexcept;
-
-			/**
-			 * @brief One LowLevel line when the keep window of @p track ends.
-			 * @param track Same index just passed to @ref Sparse.
-			 *
-			 * Writes
-			 * `t=0: logged 20 units, next unit log in 480`
-			 * (the index changes). No-op on every other count.
-			 * The line exists so a quiet log is not read as end of
-			 * stream.
-			 */
-			void MaybeThrottle(int track) noexcept;
 
 			/**
 			 * @}
 			 */
 
-			static constexpr std::uint64_t SparseWindow = 500;	///< Units of one track per throttle cycle
-			static constexpr std::uint64_t SparseKeep = 20;		///< Units of one track logged per cycle
-			std::unordered_map<int, std::uint64_t> m_seen;		///< Units seen per track
-
 			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger (ThreadedLog preferred)
-			enum Producer m_name;								///< Default Label token
-			std::unique_ptr<Buffer::Sink> m_in;					///< Input buckets
-			std::unique_ptr<Buffer::Sink> m_out;				///< Output buckets
+			enum Producer m_name;								///< Default Label / Logger group
+			ItemSink m_in;										///< Input buckets
+			ItemSink m_out;										///< Output buckets (process path)
+			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
 			Kinds m_receives;									///< Receives
 			Kinds m_produces;									///< Produces
 
 		private:
+			/**
+			 * @brief Eof on @ref m_in, @ref m_out and @ref m_tap.
+			 */
+			void CloseHoppers() noexcept;
+
 			std::shared_ptr<class Plan> m_plan;					///< Current plan
 			std::condition_variable m_wake;						///< Single consumer CV
 			std::mutex m_wait;									///< Mutex for m_wake
@@ -520,7 +503,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::atomic<State> m_state;							///< Lifecycle
 			std::optional<std::string> m_error;					///< Fail message
 			std::uint64_t m_workN;								///< Timed Work calls
-			std::uint64_t m_waitN;								///< Wait() calls (throttle of wait/wake lines)
 			std::int64_t m_workMin;								///< Fastest Work, us
 			std::int64_t m_workMax;								///< Slowest Work, us
 			std::int64_t m_lastWork;							///< Last Work, us

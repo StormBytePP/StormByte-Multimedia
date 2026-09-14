@@ -38,7 +38,6 @@
 
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/origin.hxx>
@@ -125,7 +124,7 @@ std::unique_ptr<Backend::Pipeline::Decoder> Demuxer::OpenDecoder(Decoder& decode
 	return m_backend->OpenDecoder(*this, decoder);
 }
 
-std::shared_ptr<Packet> Demuxer::Wrap(
+Packet::PointerType Demuxer::Wrap(
 	int track,
 	Type type,
 	StormByte::Buffer::FIFO payload,
@@ -134,12 +133,10 @@ std::shared_ptr<Packet> Demuxer::Wrap(
 	std::optional<Property::Duration> duration,
 	bool keyframe) noexcept {
 	const std::uint64_t serial = m_nextSerial[track]++;
-	if (Sparse(track))
-		Log(Level::LowLevel, std::format("t={} {} {}:0 pts={} dts={} dur={} key={} bytes={}",
-			track, ToString(type), serial, Ns(pts), Ns(dts), Ns(duration),
-			keyframe ? 1 : 0, payload.Size()));
-	MaybeThrottle(track);
-	return std::shared_ptr<Packet>(new Packet(
+	Log(Level::LowLevel, std::format("t={} {} {}:0 pts={} dts={} dur={} key={} bytes={}",
+		track, ToString(type), serial, Ns(pts), Ns(dts), Ns(duration),
+		keyframe ? 1 : 0, payload.Size()));
+	return Packet::PointerType(new Packet(
 		track,
 		type,
 		Producer::Demuxer,
@@ -189,7 +186,7 @@ void Demuxer::Pump() noexcept {
 		if (Stopping())
 			return;
 		const auto started = std::chrono::steady_clock::now();
-		std::shared_ptr<Packet> packet = m_backend->Read(*this);
+		Packet::PointerType packet = m_backend->Read(*this);
 		if (Failed())
 			return;
 		if (!packet) {
@@ -199,7 +196,7 @@ void Demuxer::Pump() noexcept {
 		}
 		if (const auto& pts = packet->Pts(); pts)
 			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-		m_out->Push(packet);
+		Emit(std::move(packet));
 		RecordWork(std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - started).count());
 	}
@@ -230,10 +227,10 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Decoder& 
 	}
 
 	decoder.AttachOrigin(demuxer);
-	decoder.m_in->Notify(decoder.Wake());
-	demuxer.m_out->Bind(decoder.Index(), *decoder.m_in);
+	decoder.m_in.Notify(decoder.Wake());
+	demuxer.m_out.Bind(decoder.Index(), decoder.m_in);
 	if (const std::size_t cap = decoder.InputCeiling(); cap > 0)
-		decoder.m_in->Capacity(decoder.Index(), cap);
+		decoder.m_in.Capacity(decoder.Index(), cap);
 	demuxer.Log(Level::Debug, std::format("bind decoder t={}", decoder.Index()));
 	return decoder;
 }

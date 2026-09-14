@@ -236,6 +236,12 @@ namespace StormByte::Multimedia::Pipeline {
 	 * tube reads with @ref Filter::Analytics::Report on the leaf
 	 * pointer. The Notice line from a leaf is log, not the API.
 	 *
+	 * Open installs a Logger Window throttle (20 keep / 500 period)
+	 * on component STMM and Level::LowLevel, all groups. Error and
+	 * Fatal stay unthrottled. A shared logger keeps the rule for
+	 * the process. Hand-wired tubes that skip Transcoder must
+	 * install the same rule themselves.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Transcoder {

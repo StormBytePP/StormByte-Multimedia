@@ -62,14 +62,18 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Frame / Process filters on that stretch fail at @ref Close.
 	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
 	 *
-	 * Analytics is not a process node. Close wires Process from
-	 * origin to destination, Tees the origin Decoder onto the first
-	 * Analytics (decode look), and builds a private encode-look
-	 * Decoder from the Encoder bitstream. That Decoder is not a
-	 * public API: Route owns it, stamps @ref Producer::Encoder on
-	 * its frames, and Binds them onto the same Analytics. The last
-	 * Analytics @c m_out is @ref Buffer::Sink::Drain.
+	 * Analytics is not a process node. @ref Close wires Process from
+	 * origin to destination, binds @c origin.m_tap onto the first
+	 * Analytics (decode look; a deep copy from @ref Step::Emit), and
+	 * builds a private encode-look Decoder from the Encoder bitstream.
+	 * That Decoder is not a public API: Route owns it, stamps
+	 * @ref Producer::Encoder on its frames, and Binds them onto the
+	 * same Analytics. The last Analytics @c m_out is
+	 * @c StormByte::Buffer::Sink::Drain.
 	 * A raw tube and Transcoder use this same Close.
+	 *
+	 * Bind the tap before the origin emits. A late Bind misses every
+	 * unit already dropped by Drain on @c m_tap.
 	 *
 	 * Muxer closed is not the end of this Route. The encode look
 	 * lags the Encoder. @ref Reports before @ref Idle is true
@@ -77,9 +81,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Idle (or destroy the Route) before reading Reports.
 	 * Transcoder waits the same way before OnDone.
 	 *
-	 * The Tee hopper ceiling is items in transit. Analytics that
-	 * pops and clones into its own queues must bound those queues
-	 * itself.
+	 * Analytics that pops and clones into its own queues must bound
+	 * those queues itself. @c InputCeiling on the first Analytics
+	 * applies to the shared tap hopper after Bind.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -142,6 +146,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param filter Filter instance for this track.
 			 *
 			 * A leaf that is not Process, Packet or Analytics fails the filter.
+			 * Launch starts the worker; the worker waits on @c m_in until
+			 * @ref Close binds a hopper. Do not let the origin Emit before Close.
 			 */
 			void Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
@@ -151,9 +157,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param destination Consumer step.
 			 *
 			 * O(1) at the ends. Uses @c Bind(track, …) for Process.
-			 * Analytics is Teed off the origin Decoder and fed encode
+			 * Analytics is bound to @c origin.m_tap and fed encode
 			 * frames by a Route-owned look Decoder on @p destination.
-			 * Last Analytics m_out is Drained. Does not launch the
+			 * Last Analytics @c m_out is Drained. Does not launch the
 			 * look Decoder beyond its own constructor.
 			 */
 			void Close(Step& origin, Step& destination) noexcept;
@@ -218,9 +224,12 @@ namespace StormByte::Multimedia::Pipeline {
 			void Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept;
 
 			/**
-			 * @brief Tees the origin Decoder onto the analytics head.
-			 * @param origin Decode-side producer.
-			 * @param lane Lane whose FirstAnalytics is the tap.
+			 * @brief Binds @c origin.m_tap onto the analytics head.
+			 * @param origin Decode-side producer. Must not have started Emit.
+			 * @param lane Lane whose FirstAnalytics is the tap consumer.
+			 *
+			 * No-op when the lane has no Analytics. Does not share
+			 * @c origin.m_out. The copy is @ref Step::Emit.
 			 */
 			void TapDecode(Step& origin, Lane& lane) noexcept;
 

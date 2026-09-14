@@ -42,8 +42,19 @@
 #include <StormByte/expected.hxx>
 #include <StormByte/multimedia/pipeline/exception.hxx>
 #include <StormByte/multimedia/visibility.h>
+#include <StormByte/type_traits.hxx>
 
 #include <cstdint>
+#include <memory>
+
+/**
+ * @namespace StormByte::Buffer
+ * @brief Hopper and Sink live in StormByte-Buffer. Forward only here.
+ */
+namespace StormByte::Buffer {
+	template<Type::MoveConstructible T>
+	class Sink;
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline

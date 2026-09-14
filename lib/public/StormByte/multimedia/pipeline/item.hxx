@@ -100,6 +100,8 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Step;
 
 		public:
+			using StormByte::Clonable<Item, std::shared_ptr<Item>>::PointerType;
+			
 			/**
 			 * @name Lifecycle
 			 * @{

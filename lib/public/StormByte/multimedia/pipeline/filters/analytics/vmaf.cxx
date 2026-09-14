@@ -101,17 +101,6 @@ namespace {
 	}
 }
 
-/*
-* Analytics leaf. Route::Add only accepts Process / Packet / Analytics.
-*
-* Construction names the node ("vmaf") so logs and Report dumps
-* can tell filters apart. Do not Launch() here: Route::Add does.
-*
-* Two looks arrive on the same Process: Producer::Decoder is the
-* reference, Producer::Encoder is the distorted reconstruct.
-* Clone the raw AVFrame; Work will Drain the StormByte Frame
-* after this returns.
-*/
 VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),
 	m_modelName(std::move(model)),
@@ -276,16 +265,9 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 		return;
 	}
 	++m_scored;
-	if (Sparse(0))
-		Log(Level::LowLevel, std::format("{} scored index={} n={}", Name(), index, m_scored));
-	MaybeThrottle(0);
+	Log(Level::LowLevel, std::format("{} scored index={} n={}", Name(), index, m_scored));
 }
 
-/*
-* Index only advances when libvmaf accepted the pair. A gap
-* makes vmaf_score_pooled walk empty slots and fail the Report
-* after hundreds of good scores.
-*/
 void VMAF::Drain() noexcept {
 	while (!m_ref.empty() && !m_dist.empty()) {
 		::AVFrame* ref = m_ref.front();
@@ -324,10 +306,8 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		m_ref.push_back(clone);
 	else
 		m_dist.push_back(clone);
-	if (Sparse(frame.Track()))
-		Log(Level::LowLevel, std::format("{} park producer={} ref={} dist={}",
-			Name(), static_cast<int>(frame.Producer()), m_ref.size(), m_dist.size()));
-	MaybeThrottle(frame.Track());
+	Log(Level::LowLevel, std::format("{} park producer={} ref={} dist={}",
+		Name(), static_cast<int>(frame.Producer()), m_ref.size(), m_dist.size()));
 	Drain();
 }
 

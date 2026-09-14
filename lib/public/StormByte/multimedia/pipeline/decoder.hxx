@@ -71,6 +71,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
 	class Frame;
+	class Packet;
 	class Route;
 
 	/**
@@ -107,16 +108,18 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Decoder
 	 * @brief Decodes packets of one origin track into frames.
 	 *
-	 * Notice: opened implementation, once. LowLevel unit lines use
-	 * @ref Step::Sparse / @ref Step::MaybeThrottle keyed by origin
-	 * track. One incoming packet counts once: its frames share that
-	 * sample so 1 packet → N frames does not burn the window N times.
-	 * Step::Pump times each Work; Finish dumps min/max at Debug.
+	 * Notice: opened implementation, once. LowLevel unit lines
+	 * always; the shared logger throttles. Step::Pump times each
+	 * Work; Finish dumps min/max at Debug.
 	 *
 	 * Lineage: @ref StampLineage copies the last accepted packet
 	 * Serial onto each produced frame and advances Part. Dts of
 	 * that packet is copied onto @ref Frame::Dts. That is pipe
 	 * lineage, not a decoded-frame count.
+	 *
+	 * Origin frames leave through @ref Step::Emit (analytics tap
+	 * clone, then process). Encode-look frames also Emit; their
+	 * Producer is Encoder.
 	 *
 	 * @ref Label is `Decoder(<implementation>)` after Open pins a
 	 * table row, otherwise `Decoder(t=<origin index>)`.
@@ -124,10 +127,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Encode-look mode is not a public constructor. Route builds it
 	 * when an Analytics filter needs a post-encode recon. That
 	 * decoder has no Demuxer: it opens from the first Packet's
-	 * codec parameters (the same 3-arg AVDecoder::Open used without
-	 * a format context). Frames it emits carry
-	 * @ref Producer::Encoder so Analytics can pair them with the
-	 * origin decode look. The public ctor never enters this mode.
+	 * codec parameters. The public ctor never enters this mode.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -312,10 +312,10 @@ namespace StormByte::Multimedia::Pipeline {
 			void Open() noexcept override;
 
 			/**
-			 * @brief Decodes one packet and pushes frames to m_out.
+			 * @brief Decodes one packet and @ref Step::Emit s frames.
 			 * @param item Incoming packet.
 			 */
-			void Work(std::shared_ptr<Item> item) noexcept override;
+			void Work(Item::PointerType item) noexcept override;
 
 			/**
 			 * @brief Flushes the codec after input EoF.

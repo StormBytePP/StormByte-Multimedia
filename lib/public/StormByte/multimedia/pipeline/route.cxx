@@ -36,7 +36,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
@@ -108,35 +107,35 @@ void Route::Close(Step& origin, Step& destination) noexcept {
 	Filter::FFmpeg* const frameLast = m_frames.Last();
 
 	if (packetLast != nullptr && frameFirst != nullptr)
-		packetLast->m_out->Bind(m_track, *frameFirst->m_in);
+		packetLast->m_out.Bind(m_track, frameFirst->m_in);
 
 	Filter::FFmpeg* first = packetFirst != nullptr ? packetFirst : frameFirst;
 	Filter::FFmpeg* last = frameLast != nullptr ? frameLast : packetLast;
 
-	destination.m_in->Notify(destination.Wake());
+	destination.m_in.Notify(destination.Wake());
 	if (first == nullptr) {
-		origin.m_out->Bind(m_track, *destination.m_in);
+		origin.m_out.Bind(m_track, destination.m_in);
 	}
 	else {
-		first->m_in->Notify(first->Wake());
-		origin.m_out->Bind(m_track, *first->m_in);
-		last->m_out->Bind(m_track, *destination.m_in);
+		first->m_in.Notify(first->Wake());
+		origin.m_out.Bind(m_track, first->m_in);
+		last->m_out.Bind(m_track, destination.m_in);
 	}
 	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
-		destination.m_in->Capacity(m_track, cap);
+		destination.m_in.Capacity(m_track, cap);
 
 	TapDecode(origin, m_frames);
 	TapEncode(destination, m_frames);
 	if (m_frames.FirstAnalytics != nullptr) {
 		if (const std::size_t cap = m_frames.FirstAnalytics->InputCeiling(); cap > 0)
-			m_frames.FirstAnalytics->m_in->Capacity(m_track, cap);
+			m_frames.FirstAnalytics->m_in.Capacity(m_track, cap);
 	}
 
 	if (m_frames.LastAnalytics != nullptr)
-		m_frames.LastAnalytics->m_out->Drain();
+		m_frames.LastAnalytics->m_out.Drain();
 	if (m_packets.LastAnalytics != nullptr
 		&& m_packets.LastAnalytics != m_frames.LastAnalytics)
-		m_packets.LastAnalytics->m_out->Drain();
+		m_packets.LastAnalytics->m_out.Drain();
 }
 
 bool Route::Idle() const noexcept {
@@ -160,17 +159,17 @@ std::vector<Filter::Report> Route::Reports() const noexcept {
 }
 
 void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
-	filter.m_in->Notify(filter.Wake());
+	filter.m_in.Notify(filter.Wake());
 	if (analytics) {
 		if (lane.LastAnalytics != nullptr)
-			lane.LastAnalytics->m_out->Bind(m_track, *filter.m_in);
+			lane.LastAnalytics->m_out.Bind(m_track, filter.m_in);
 		if (lane.FirstAnalytics == nullptr)
 			lane.FirstAnalytics = &filter;
 		lane.LastAnalytics = &filter;
 		return;
 	}
 	if (lane.LastProcess != nullptr)
-		lane.LastProcess->m_out->Bind(m_track, *filter.m_in);
+		lane.LastProcess->m_out.Bind(m_track, filter.m_in);
 	if (lane.FirstProcess == nullptr)
 		lane.FirstProcess = &filter;
 	lane.LastProcess = &filter;
@@ -179,17 +178,17 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
 void Route::TapDecode(Step& origin, Lane& lane) noexcept {
 	if (lane.FirstAnalytics == nullptr)
 		return;
-	lane.FirstAnalytics->m_in->Notify(lane.FirstAnalytics->Wake());
-	origin.m_out->Tee(m_track, *lane.FirstAnalytics->m_in);
+	lane.FirstAnalytics->m_in.Notify(lane.FirstAnalytics->Wake());
+	origin.m_tap.Bind(m_track, lane.FirstAnalytics->m_in);
 }
 
 void Route::TapEncode(Step& destination, Lane& lane) noexcept {
 	if (lane.FirstAnalytics == nullptr)
 		return;
 	std::unique_ptr<Decoder> look(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
-	look->m_in->Notify(look->Wake());
-	lane.FirstAnalytics->m_in->Notify(lane.FirstAnalytics->Wake());
-	destination.Look(*look->m_in);
-	look->m_out->Bind(m_track, *lane.FirstAnalytics->m_in);
+	look->m_in.Notify(look->Wake());
+	lane.FirstAnalytics->m_in.Notify(lane.FirstAnalytics->Wake());
+	destination.Look(look->m_in);
+	look->m_out.Bind(m_track, lane.FirstAnalytics->m_in);
 	m_looks.push_back(std::move(look));
 }

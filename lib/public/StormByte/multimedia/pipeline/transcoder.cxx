@@ -40,6 +40,8 @@
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 
 #include <StormByte/expected.hxx>
+#include <StormByte/logger/log.hxx>
+#include <StormByte/logger/manipulators.hxx>
 #include <StormByte/logger/typedefs.hxx>
 #include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/pipeline/config/attachment.hxx>
@@ -69,7 +71,23 @@ namespace {
 		Level level, std::string_view text) noexcept {
 		if (!log)
 			return;
-		*log << level << "STMM Transcoder: " << std::string(text) << std::endl;
+		*log << StormByte::Logger::component("STMM")
+			<< StormByte::Logger::group("Transcoder")
+			<< level << std::string(text) << std::endl;
+	}
+
+	void InstallTubeLog(const std::shared_ptr<StormByte::Logger::Log>& log) noexcept {
+		if (!log)
+			return;
+		using StormByte::Logger::ThrottlePolicy;
+		using StormByte::Logger::component;
+		using StormByte::Logger::group;
+		log->Throttle(
+			component("STMM"),
+			Level::LowLevel,
+			group(""),
+			0.0, 0,
+			ThrottlePolicy::Window, 20, 500);
 	}
 
 	const StormByte::Multimedia::Stream* FindStream(const File& file, int index) noexcept {
@@ -285,6 +303,7 @@ ExpectedTranscoder Transcoder::BindLoggerAndFile(std::shared_ptr<StormByte::Logg
 	ExpectedFile opened) noexcept {
 	if (!logger)
 		return StormByte::Unexpected<TranscodeException>("logger is required");
+	InstallTubeLog(logger);
 	if (!opened) {
 		const char* text = opened.error() ? opened.error()->what() : "file open failed";
 		JobLog(logger, Level::Error, text);

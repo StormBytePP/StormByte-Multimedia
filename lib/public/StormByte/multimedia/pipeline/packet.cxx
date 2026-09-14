@@ -136,7 +136,10 @@ Packet& Packet::operator=(Packet&& other) noexcept {
 }
 
 void Packet::BecomeEmpty() noexcept {
-	Item::operator=(Item(-1, Type::Unknown, Kind::Packet, Producer::Demuxer));
+	m_track = -1;
+	m_type = Type::Unknown;
+	m_kind = Kind::Packet;
+	m_producer = Producer::Demuxer;
 	m_payload = StormByte::Buffer::FIFO{};
 	m_pts.reset();
 	m_dts.reset();
@@ -154,10 +157,10 @@ void Packet::Bind(std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
 	m_backend = std::move(backend);
 }
 
-Packet::PointerType Packet::Clone() const {
-	return PointerType(new Packet(*this));
+Item::PointerType Packet::Clone() const {
+	return Item::PointerType(new Packet(*this));
 }
 
-Packet::PointerType Packet::Move() {
-	return PointerType(new Packet(std::move(*this)));
+Item::PointerType Packet::Move() {
+	return Item::PointerType(new Packet(std::move(*this)));
 }

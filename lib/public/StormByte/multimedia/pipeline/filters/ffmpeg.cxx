@@ -38,7 +38,6 @@
 
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -143,7 +142,7 @@ void FFmpeg::Release() noexcept {
 		if (Failed())
 			return;
 		if (m_current)
-			m_out->Push(std::move(m_current));
+			Emit(std::move(m_current));
 	}
 	m_current.reset();
 }
@@ -181,10 +180,8 @@ void FFmpeg::Save(::AVFrame* raw) noexcept {
 	frame->m_backend->Put(*frame, raw);
 	if (!frame->m_backend->Warning().empty())
 		Log(Level::Warning, std::format("{}: {}", Name(), frame->m_backend->Warning()));
-	if (Sparse(frame->Track()))
-		Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
-			Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
-	MaybeThrottle(frame->Track());
+	Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
+		Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
 }
 
 void FFmpeg::Save(::AVPacket* raw) noexcept {
@@ -195,10 +192,8 @@ void FFmpeg::Save(::AVPacket* raw) noexcept {
 		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
 	packet->m_backend->Handle().Reset(raw);
 	packet->m_backend->BindProperties(*packet);
-	if (Sparse(packet->Track()))
-		Log(Level::LowLevel, std::format("{} save packet t={} {}:{}",
-			Name(), packet->Track(), packet->Serial().value_or(0), packet->Part()));
-	MaybeThrottle(packet->Track());
+	Log(Level::LowLevel, std::format("{} save packet t={} {}:{}",
+		Name(), packet->Track(), packet->Serial().value_or(0), packet->Part()));
 }
 
 void FFmpeg::Open() noexcept {
@@ -238,13 +233,10 @@ void FFmpeg::CallLastChance() noexcept {
 		LastChance(static_cast<const Pipeline::Packet&>(*m_current));
 }
 
-void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
+void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 	m_current = std::move(item);
-	const int track = TrackOf(*m_current);
-	if (Sparse(track))
-		Log(Level::LowLevel, std::format("{} in t={} {}:{}",
-			Name(), track, SerialOf(*m_current).value_or(0), PartOf(*m_current)));
-	MaybeThrottle(track);
+	Log(Level::LowLevel, std::format("{} in t={} {}:{}",
+		Name(), TrackOf(*m_current), SerialOf(*m_current).value_or(0), PartOf(*m_current)));
 
 	if (IsAnalytics(*this)) {
 		if (m_current->Kind() == Pipeline::Kind::Frame)
@@ -252,7 +244,7 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 		if (Failed())
 			return;
 		if (m_current)
-			m_out->Push(std::move(m_current));
+			Emit(std::move(m_current));
 		return;
 	}
 
@@ -276,7 +268,7 @@ void FFmpeg::Work(std::shared_ptr<Pipeline::Item> item) noexcept {
 		}
 	}
 	if (m_current)
-		m_out->Push(std::move(m_current));
+		Emit(std::move(m_current));
 }
 
 void FFmpeg::Finish() noexcept {

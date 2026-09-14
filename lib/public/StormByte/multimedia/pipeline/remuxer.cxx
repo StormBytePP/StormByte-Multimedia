@@ -36,7 +36,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
@@ -77,7 +76,7 @@ void Remuxer::Open() noexcept {
 	Step::Open();
 }
 
-void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
+void Remuxer::Work(Item::PointerType item) noexcept {
 	NameThread("STMM:Remuxer:" + std::to_string(m_index));
 	if (Failed())
 		return;
@@ -92,12 +91,10 @@ void Remuxer::Work(std::shared_ptr<Item> item) noexcept {
 		Fail("packet has no serial");
 		return;
 	}
-	if (Sparse(m_index))
-		Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
-			packet->Track(), *packet->Serial(), packet->Part(),
-			Ns(packet->Pts()), Ns(packet->Dts())));
-	MaybeThrottle(m_index);
-	m_out->Push(packet);
+	Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
+		packet->Track(), *packet->Serial(), packet->Part(),
+		Ns(packet->Pts()), Ns(packet->Dts())));
+	Emit(std::move(packet));
 }
 
 void Remuxer::Finish() noexcept {}
@@ -111,10 +108,10 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& 
 		remuxer.Fail(demuxer.Error().value_or("demuxer failed"));
 		return remuxer;
 	}
-	remuxer.m_in->Notify(remuxer.Wake());
-	demuxer.m_out->Bind(remuxer.In(), *remuxer.m_in);
+	remuxer.m_in.Notify(remuxer.Wake());
+	demuxer.m_out.Bind(remuxer.In(), remuxer.m_in);
 	if (const std::size_t cap = remuxer.InputCeiling(); cap > 0)
-		remuxer.m_in->Capacity(remuxer.In(), cap);
+		remuxer.m_in.Capacity(remuxer.In(), cap);
 	demuxer.Log(Level::Debug, std::format("bind remuxer t={}", remuxer.In()));
 	return remuxer;
 }

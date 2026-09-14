@@ -52,6 +52,10 @@ namespace StormByte::Multimedia {
 	/**
 	 * @class Exception
 	 * @brief Base exception for the Multimedia module.
+	 *
+	 * The first argument is the subsystem tag (`File`, `Codec`).
+	 * It is wrapped in @c StormByte::Component so Base 1.1 does not
+	 * treat it as the format string.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Exception: public StormByte::Exception {
 		public:
@@ -64,7 +68,8 @@ namespace StormByte::Multimedia {
 			 */
 			template <typename... Args>
 			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
-			StormByte::Exception("Multimedia::" + component, fmt, std::forward<Args>(args)...) {}
+			StormByte::Exception(StormByte::Component("Multimedia::" + component),
+				fmt, std::forward<Args>(args)...) {}
 
 			/**
 			 * @brief Copy constructor.

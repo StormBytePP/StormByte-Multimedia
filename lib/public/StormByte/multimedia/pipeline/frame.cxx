@@ -141,7 +141,10 @@ Frame& Frame::operator=(Frame&& other) noexcept {
 }
 
 void Frame::BecomeEmpty() noexcept {
-	Item::operator=(Item(-1, Type::Unknown, Kind::Frame, Producer::Decoder));
+	m_track = -1;
+	m_type = Type::Unknown;
+	m_kind = Kind::Frame;
+	m_producer = Producer::Decoder;
 	m_payload = StormByte::Buffer::FIFO{};
 	m_pts.reset();
 	m_dts.reset();
@@ -171,10 +174,10 @@ void Frame::Bind(std::unique_ptr<Backend::Pipeline::Frame> backend) noexcept {
 	m_backend = std::move(backend);
 }
 
-Frame::PointerType Frame::Clone() const {
-	return PointerType(new Frame(*this));
+Item::PointerType Frame::Clone() const {
+	return Item::PointerType(new Frame(*this));
 }
 
-Frame::PointerType Frame::Move() {
-	return PointerType(new Frame(std::move(*this)));
+Item::PointerType Frame::Move() {
+	return Item::PointerType(new Frame(std::move(*this)));
 }

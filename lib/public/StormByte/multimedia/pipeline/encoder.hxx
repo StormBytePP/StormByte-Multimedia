@@ -83,19 +83,20 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Encodes frames of one output track into packets.
 	 *
 	 * Notice: destination codec when the backend first opens.
-	 * LowLevel unit lines use @ref Step::Sparse /
-	 * @ref Step::MaybeThrottle keyed by mux output index
-	 * (@ref Index). One incoming frame counts once; packets
-	 * produced in that Work share the sample. Pts/Dts on Wrap
-	 * are the flattened encoder clock (the line that catches a
-	 * bad DTS flatten). Step::Pump times each Work.
+	 * LowLevel unit lines are always written; the shared logger
+	 * throttles. One incoming frame counts once; packets produced
+	 * in that Work share the sample. Pts/Dts on Wrap are the
+	 * flattened encoder clock (the line that catches a bad DTS
+	 * flatten). Step::Pump times each Work.
 	 *
 	 * @ref Label is `Encoder(libx265)` when an implementation is
 	 * pinned or selected, otherwise `Encoder(<registry name>)`.
 	 *
 	 * Encode-look is @ref Step::Look. This class overrides it
-	 * privately. It is not a Tee of @ref m_out and it is not a
-	 * public Encoder method.
+	 * privately. It is not @ref m_out and it is not
+	 * @ref Step::Emit 's analytics tap. The look packet is a
+	 * deep copy: Muxer and the look decoder both Extract the
+	 * Packet FIFO; one cursor cannot serve two consumers.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -421,10 +422,10 @@ namespace StormByte::Multimedia::Pipeline {
 			void Open() noexcept override;
 
 			/**
-			 * @brief Encodes one frame and pushes packets to m_out.
+			 * @brief Encodes one frame and @ref Emit s packets.
 			 * @param item Incoming frame.
 			 */
-			void Work(std::shared_ptr<Item> item) noexcept override;
+			void Work(Item::PointerType item) noexcept override;
 
 			/**
 			 * @brief Flushes the codec after input EoF.
@@ -435,10 +436,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Encode-look side channel. Deep-copies each encoded packet into @p sink.
 			 * @param sink Look decoder @c m_in.
 			 *
-			 * Overrides the Step no-op. Not a Tee of @ref m_out.
-			 * @ref Route::TapEncode calls the Step hook.
+			 * Overrides the Step no-op. Not @ref m_out and not
+			 * @ref Step::Emit. @ref Route::TapEncode calls this hook.
 			 */
-			void Look(StormByte::Multimedia::Buffer::Sink& sink) noexcept override;
+			void Look(ItemSink& sink) noexcept override;
 
 			/**
 			 * @brief Builds an encoded packet. Called from the encode backend.
@@ -455,12 +456,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Copies @ref Frame::Serial and @ref Frame::Part of the last
 			 * accepted frame. This is pipe lineage, not a packet count.
-			 * Logs flattened pts/dts at LowLevel when the current Work
-			 * is inside the Sparse window of @ref Index.
+			 * Logs flattened pts/dts at LowLevel.
 			 * Binds @p backend so Analytics can open a decoder from
 			 * codecpar (extradata included).
 			 */
-			std::shared_ptr<Packet> Wrap(
+			Packet::PointerType Wrap(
 				enum StormByte::Multimedia::Type type, int index,
 				StormByte::Buffer::FIFO payload,
 				std::optional<Property::Duration> pts,
@@ -492,10 +492,14 @@ namespace StormByte::Multimedia::Pipeline {
 			const void* FrameHandle(const Frame& frame) noexcept;
 
 			/**
-			 * @brief Deep-copies @p packet to the look sink, then pushes the original to @ref m_out.
+			 * @brief Deep-copies @p packet to the look sink, then
+			 *        @ref StormByte::Multimedia::Pipeline::Step::Emit s the original.
 			 * @param packet Encoded unit. Empty pointers are ignored.
+			 *
+			 * Not @ref Step::Emit. Hides that name on purpose: look
+			 * copy must happen before the mux packet moves.
 			 */
-			void Emit(std::shared_ptr<Packet> packet) noexcept;
+			void Emit(Packet::PointerType packet) noexcept;
 
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			int m_index;														///< Mux destination order key
@@ -513,7 +517,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;				///< Encode backend
 			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted frame
 			std::uint64_t m_part;												///< Part of the last accepted frame
-			bool m_talk;														///< Sparse window of the current Work
-			std::unique_ptr<StormByte::Multimedia::Buffer::Sink> m_lookOut;		///< Encode-look producer; not m_out
+			ItemSink m_lookOut;													///< Encode-look producer; not m_out
 	};
 }

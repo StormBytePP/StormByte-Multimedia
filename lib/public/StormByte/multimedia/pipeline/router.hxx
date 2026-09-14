@@ -56,9 +56,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * owner that will call @ref Route::Reports at EoF.
 	 *
 	 * Remux without packet filters: @c Bind(track, demuxer, muxer),
-	 * which is @c from.m_out->Bind(track, to.m_in). Every hopper
+	 * which is @c from.m_out.Bind(track, to.m_in). Every hopper
 	 * already on @p from: @c Bind(demuxer, muxer), which is
-	 * @c from.m_out->Bind(to.m_in). A filtered track uses
+	 * @c from.m_out.Bind(to.m_in). A filtered track uses
 	 * @ref Route::Close instead of this type.
 	 *
 	 * @ingroup multimedia_pipeline

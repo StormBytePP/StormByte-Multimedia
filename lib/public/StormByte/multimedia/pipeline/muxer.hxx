@@ -135,9 +135,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Writes interleaved packets to a destination container.
 	 *
 	 * Notice: destination path when bound, closed once.
-	 * LowLevel writes use @ref Step::Sparse / @ref Step::MaybeThrottle
-	 * keyed by packet track so remux and encode lanes keep their
-	 * own windows.
+	 * LowLevel writes always; the shared logger throttles.
+	 * Remux and encode lanes share this worker.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -281,7 +280,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Writes one packet to the container.
 			 * @param item Incoming packet.
 			 */
-			void Work(std::shared_ptr<Item> item) noexcept override;
+			void Work(Item::PointerType item) noexcept override;
 
 			/**
 			 * @brief Flushes leftover packets and the trailer.

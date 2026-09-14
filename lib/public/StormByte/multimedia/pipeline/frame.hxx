@@ -82,6 +82,8 @@ namespace StormByte::Multimedia::Pipeline {
 		friend Frame& operator>>(Frame& frame, Encoder& encoder) noexcept;
 
 		public:
+			using PointerType = std::shared_ptr<Frame>;
+
 			/**
 			 * @name Construction
 			 * @{
@@ -348,7 +350,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Not a public API. Uses the private copy constructor.
 			 */
-			PointerType Clone() const override;
+			Item::PointerType Clone() const override;
 
 			/**
 			 * @brief Moves this unit into a new owning pointer.
@@ -357,7 +359,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * Not a public API. Uses the private move constructor.
 			 * @ref Step::Emit does not call this.
 			 */
-			PointerType Move() override;
+			Item::PointerType Move() override;
 
 			StormByte::Buffer::FIFO m_payload;							///< Sample / subtitle bytes
 			std::optional<Property::Duration> m_pts;					///< Presentation timestamp

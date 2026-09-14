@@ -110,14 +110,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * writes. An empty pointer is a silent no-op, not a Fail.
 	 *
 	 * @ref Log is protected so a leaf can write from @ref Process,
-	 * @ref Hold or @ref LastChance. The line is prefixed with
-	 * `Filter`. Levels are @c StormByte::Logger::Level
-	 * (`LowLevel`, `Debug`, `Warning`, `Notice`, `Info`, `Error`,
-	 * `Fatal`). The print floor is set by whoever built the logger,
-	 * not by this class. Format the text before the call
-	 * (`std::format`). Logging is not @ref Fail and is not a
-	 * measurement; @ref Analytics still reports numbers via
-	 * @ref Report.
+	 * @ref Hold or @ref LastChance. Component is @c STMM and group
+	 * is @ref StormByte::Multimedia::Pipeline::Step::Label
+	 * (`Filter`, or a leaf override). Levels are
+	 * @c StormByte::Logger::Level (`LowLevel`, `Debug`, `Warning`,
+	 * `Notice`, `Info`, `Error`, `Fatal`). The print floor and
+	 * throttle are set on the shared logger, not by this class.
+	 * Format the text before the call (`std::format`). Logging is
+	 * not @ref Fail and is not a measurement; @ref Analytics still
+	 * reports numbers via @ref Report.
 	 *
 	 * Full logger API:
 	 * <a href="https://dev.stormbyte.org/StormByte-Logger/">StormByte-Logger</a>.
@@ -135,7 +136,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * The plugin does not see Sink, Hopper, Bind, Route or Router.
 	 *
 	 * Inherits @ref StormByte::Multimedia::Pipeline::Step as
-	 * protected: one pair of Sink objects, one CV, one thread.
+	 * protected: input, output and analytics-tap ItemSink, one CV,
+	 * one thread. Process output goes through
+	 * @ref StormByte::Multimedia::Pipeline::Step::Emit.
 	 * The worker launches from @ref StormByte::Multimedia::Pipeline::Route::Add.
 	 *
 	 * @par Hold
@@ -151,13 +154,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * @ref Release ends the Hold and runs @ref Process again on
 	 * every parked unit (now with the state the probe computed),
-	 * then pushes them to the output sink in that same call.
-	 * @ref Step sends EoF on the sink after @ref Finish returns,
-	 * so a Release from LastChance during Finish still flushes.
+	 * then @ref StormByte::Multimedia::Pipeline::Step::Emit s them
+	 * in that same call. @ref Step sends EoF on the sinks after
+	 * @ref Finish returns, so a Release from LastChance during
+	 * Finish still flushes.
 	 *
 	 * @par Mutation
 	 * Effect of a mutation is @ref Save inside @ref Work.
-	 * @ref Analytics deletes @ref Save.
+	 * @ref Analytics deletes @ref Save. @ref Save mutates the
+	 * process unit after the origin tap has already cloned.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -324,7 +329,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Ends the Hold and replays parked units through
-			 *        @ref Process, then pushes them to the output sink.
+			 *        @ref Process, then @ref StormByte::Multimedia::Pipeline::Step::Emit s them.
 			 *
 			 * Runs in the same call (not on the next Work). No-op if
 			 * not @ref Held. Set probe state before calling this.
@@ -415,16 +420,17 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Process one unit. Save or passthrough. Park if Held.
 			 * @param item Never empty.
 			 *
-			 * Analytics only sees Frame.
+			 * Analytics only sees Frame. Leaves the tube via
+			 * @ref StormByte::Multimedia::Pipeline::Step::Emit.
 			 */
-			void Work(std::shared_ptr<Pipeline::Item> item) noexcept override;
+			void Work(Pipeline::Item::PointerType item) noexcept override;
 
 			/**
 			 * @brief If Held, @ref LastChance on the last parked unit.
 			 *        Still Held afterwards is Fail. Then @ref Eof.
 			 *
 			 * @ref Release from LastChance flushes the queue before
-			 * this returns. @ref Step then sends EoF on the sink.
+			 * this returns. @ref Step then sends EoF on the sinks.
 			 */
 			void Finish() noexcept override;
 
@@ -441,8 +447,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			void CallLastChance() noexcept;
 
 			std::string m_name;											///< Leaf name
-			std::shared_ptr<Pipeline::Item> m_current;					///< Unit of this Work call
-			std::deque<std::shared_ptr<Pipeline::Item>> m_queue;			///< Thread-local Hold
+			Pipeline::Item::PointerType m_current;						///< Unit of this Work call
+			std::deque<Pipeline::Item::PointerType> m_queue;			///< Thread-local Hold
 			std::uint8_t m_hold;										///< Ceiling; 0 = not Held
 			std::uint8_t m_heldFor;										///< Parked count
 	};
@@ -578,8 +584,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @class Analytics
 	 * @brief Measures units. Does not rewrite them.
 	 *
-	 * Not a node on the encode critical path. Route Tees the
-	 * origin Decoder onto this Step (decode look) and feeds a
+	 * Not a node on the encode critical path. Route binds
+	 * @c origin.m_tap onto this Step (decode look; the copy is
+	 * @ref StormByte::Multimedia::Pipeline::Step::Emit) and feeds a
 	 * second look that is already a decoded Frame taken from
 	 * the Encoder bitstream. The plugin does not open a decoder
 	 * and does not see packets.
@@ -590,11 +597,19 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * post-encode look. Match units with Serial / Part / Dts.
 	 * There is no Pass getter.
 	 *
+	 * Decode and encode looks share one @c m_in. A Hold would
+	 * park both looks in one FIFO and break pairing. Buffer
+	 * unmatched frames in the plugin (map by Serial / Part).
+	 *
 	 * The short constructor Receives Frame and Produces Frame
 	 * so a chain of Analytics can Bind. The last node is Drained.
+	 * Output still goes through
+	 * @ref StormByte::Multimedia::Pipeline::Step::Emit; the tap
+	 * of this node is unused (Drain).
 	 *
-	 * @ref Save is deleted. @ref Report holds the numbers the
-	 * job reads at EoF. A low score is not Fail.
+	 * @ref Save, @ref Hold, @ref Release, @ref Held, @ref HeldFor
+	 * and @ref LastChance are deleted. @ref Eof, @ref Clean,
+	 * @ref Setup and @ref Report remain. A low score is not Fail.
 	 *
 	 * There is no method named Analytics on this class: that
 	 * would be a constructor.
@@ -653,15 +668,63 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
-			 * @brief Deleted. Analytics does not mutate the backend.
-			 * @param raw Unused.
+			 * @brief Deleted. Analytics does not rewrite planes.
+			 *
+			 * Mutation belongs on @ref Process. Both looks must keep
+			 * the backend they arrived with so Serial / Part pairing
+			 * stays honest.
 			 */
 			void Save(::AVFrame* raw) noexcept = delete;
 
 			/**
-			 * @brief Deleted. Analytics does not mutate the backend.
-			 * @param raw Unused.
+			 * @brief Deleted. Analytics does not see packets.
 			 */
 			void Save(::AVPacket* raw) noexcept = delete;
+
+			/**
+			 * @brief Deleted. Analytics does not park the tube.
+			 *
+			 * Decode and encode looks share one hopper. Hold would
+			 * mix them in a single FIFO. Keep unmatched frames in
+			 * the plugin, keyed by Serial / Part.
+			 */
+			void Hold(std::uint8_t n) noexcept = delete;
+
+			/**
+			 * @brief Deleted. There is no Hold to end.
+			 */
+			void Release() noexcept = delete;
+
+			/**
+			 * @brief Deleted. Analytics is never inside a Hold.
+			 */
+			bool Held() const noexcept = delete;
+
+			/**
+			 * @brief Deleted. Analytics does not park units.
+			 */
+			std::uint8_t HeldFor() const noexcept = delete;
+
+			/**
+			 * @brief Unused on Analytics.
+			 *
+			 * Hold / LastChance belong to Process on the encode
+			 * path. Analytics must not park: decode look and encode
+			 * look share this hopper, and a Hold would mix them.
+			 * The base virtual cannot be deleted, so this override
+			 * is a documented no-op.
+			 * @param frame Ignored.
+			 */
+			void LastChance(const Pipeline::Frame& frame) noexcept override {
+				(void)frame;
+			}
+
+			/**
+			 * @brief Unused on Analytics. Packets never arrive here.
+			 * @param packet Ignored.
+			 */
+			void LastChance(const Pipeline::Packet& packet) noexcept override {
+				(void)packet;
+			}
 	};
 }

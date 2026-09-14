@@ -68,9 +68,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Remuxer
 	 * @brief Forwards compressed packets of one origin track to the muxer.
 	 *
-	 * Notice: origin index at Open. LowLevel forwards use
-	 * @ref Step::Sparse / @ref Step::MaybeThrottle keyed by
-	 * @ref In. The packet keeps the lineage born at the demuxer.
+	 * Notice: origin index at Open. LowLevel forwards always;
+	 * the shared logger throttles. The packet keeps the lineage
+	 * born at the demuxer.
 	 *
 	 * @ref Label is `Remuxer(<origin codec>)` when a Plan is bound
 	 * and that stream exists, otherwise `Remuxer(t=<origin index>)`.
@@ -170,13 +170,13 @@ namespace StormByte::Multimedia::Pipeline {
 			void Open() noexcept override;
 
 			/**
-			 * @brief Forwards one packet of In to m_out.
+			 * @brief Forwards one packet of In via @ref Step::Emit.
 			 * @param item Incoming packet.
 			 *
 			 * The packet keeps the @ref Packet::Serial born at the demuxer.
 			 * Missing lineage is a pipe error, not a drop.
 			 */
-			void Work(std::shared_ptr<Item> item) noexcept override;
+			void Work(Item::PointerType item) noexcept override;
 
 			/**
 			 * @brief No codec to flush.

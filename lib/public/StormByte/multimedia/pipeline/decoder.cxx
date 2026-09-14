@@ -44,7 +44,6 @@
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/buffer/sink.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
@@ -213,7 +212,7 @@ void Decoder::Open() noexcept {
 	Step::Open();
 }
 
-void Decoder::Work(std::shared_ptr<Item> item) noexcept {
+void Decoder::Work(Item::PointerType item) noexcept {
 	NameThread("STMM:Decode:" + std::to_string(m_index));
 	if (Failed())
 		return;
@@ -243,27 +242,23 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 		m_inDts = packet->Dts();
 	}
 
-	const bool talk = Sparse(packet->Track());
-	if (talk)
-		Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
-			packet->Track(), *packet->Serial(), packet->Part(),
-			Ns(packet->Pts()), Ns(packet->Dts())));
-	MaybeThrottle(packet->Track());
+	Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
+		packet->Track(), *packet->Serial(), packet->Part(),
+		Ns(packet->Pts()), Ns(packet->Dts())));
 
-	auto emit = [this, talk](std::shared_ptr<Frame> frame) {
+	auto emit = [this](Frame::PointerType frame) {
 		StampLineage(*frame);
 		StampLook(*frame);
-		if (talk)
-			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-				frame->Track(), frame->Serial().value_or(0), frame->Part(),
-				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		m_out->Push(std::move(frame));
+		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+			frame->Track(), frame->Serial().value_or(0), frame->Part(),
+			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+		Emit(std::move(frame));
 	};
 
 	while (!m_backend->Send(*this, packet)) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
+		Frame::PointerType frame = m_backend->Receive(*this);
 		if (Failed())
 			return;
 		if (!frame) {
@@ -276,7 +271,7 @@ void Decoder::Work(std::shared_ptr<Item> item) noexcept {
 	for (;;) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
+		Frame::PointerType frame = m_backend->Receive(*this);
 		if (!frame)
 			break;
 		emit(std::move(frame));
@@ -290,18 +285,15 @@ void Decoder::Finish() noexcept {
 	for (;;) {
 		if (Failed())
 			return;
-		std::shared_ptr<Frame> frame = m_backend->Receive(*this);
+		Frame::PointerType frame = m_backend->Receive(*this);
 		if (!frame)
 			return;
-		const bool talk = Sparse(m_index);
 		StampLineage(*frame);
 		StampLook(*frame);
-		if (talk)
-			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-				frame->Track(), frame->Serial().value_or(0), frame->Part(),
-				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		MaybeThrottle(m_index);
-		m_out->Push(std::move(frame));
+		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+			frame->Track(), frame->Serial().value_or(0), frame->Part(),
+			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+		Emit(std::move(frame));
 	}
 }
 
