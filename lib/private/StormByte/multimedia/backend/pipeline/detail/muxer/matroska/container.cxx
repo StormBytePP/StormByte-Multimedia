@@ -73,6 +73,7 @@ using StormByte::Multimedia::Type;
 namespace {
 	const AVRational NanoTimeBase{1, 1000000000};
 	constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
+	constexpr std::int64_t InterleaveSlotUs = 40LL * 1000;
 
 	std::int64_t NsToTicks(std::int64_t ns, AVRational time_base) noexcept {
 		if (time_base.num <= 0 || time_base.den <= 0)
@@ -340,6 +341,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			return !owner.Failed();
 		if (!m_ctx)
 			return true;
+		if (!owner.Armed())
+			return true;
 		if (m_tracks.empty())
 			return true;
 		for (const auto& [index, track] : m_tracks) {
@@ -436,8 +439,18 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (par->codec_type == AVMEDIA_TYPE_VIDEO)
 				hasVideo = true;
 		}
-		if (hasAudio && hasVideo)
-			m_ctx->max_interleave_delta = 120LL * 1000 * 1000;
+		if (hasAudio && hasVideo) {
+			const auto cap = owner.InputCeiling();
+			const auto depth = cap == 0 ? 1 : cap;
+			m_ctx->max_interleave_delta =
+				static_cast<std::int64_t>(depth) * 2 * InterleaveSlotUs;
+		}
+		else if (hasAudio || hasVideo) {
+			const auto cap = owner.InputCeiling();
+			const auto depth = cap == 0 ? 1 : cap;
+			m_ctx->max_interleave_delta =
+				static_cast<std::int64_t>(depth) * InterleaveSlotUs;
+		}
 
 		AVDictionary* opts = nullptr;
 		av_dict_set(&opts, "default_mode", "passthrough", 0);

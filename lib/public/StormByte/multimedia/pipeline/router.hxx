@@ -53,14 +53,26 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Muxer;
+
 	/**
 	 * @class Router
-	 * @brief Owns Routes and closes them together.
+	 * @brief Owns Routes and closes the output graph toward a Muxer.
 	 *
-	 * Advanced API. Chain @ref Add for each Route, then
-	 * @ref Close once. @ref Bind remains for hops that have
-	 * no Route (unfiltered remux already wired with
-	 * @c operator>>).
+	 * Advanced API. Optional: a tube without filters does not need
+	 * a Router. If one is constructed, the Muxer is required
+	 * (`std::shared_ptr`, same contract as Route ends).
+	 *
+	 * An empty Muxer pointer is a configuration error and throws
+	 * @ref StormByte::Multimedia::Exception. There is no tube that
+	 * ends at nullptr.
+	 *
+	 * Chain @ref Add for each Route, then @ref Close once. Close
+	 * requires @ref Muxer::Armed. It does not invent
+	 * encoder/remuxer @c operator>> into the Muxer.
+	 *
+	 * The other Bind overloads stay for hops that have no Route
+	 * (unfiltered remux already wired with @c operator>>).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -72,9 +84,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Empty router.
+			 * @brief Router that closes toward @p muxer.
+			 * @param muxer Destination. Must not be empty.
+			 * @throws StormByte::Multimedia::Exception if @p muxer is empty.
 			 */
-			Router() noexcept = default;
+			explicit Router(std::shared_ptr<Muxer> muxer);
 
 			/**
 			 * @brief Copy constructor.
@@ -150,10 +164,15 @@ namespace StormByte::Multimedia::Pipeline {
 			Router& Add(std::unique_ptr<Route> route) noexcept;
 
 			/**
-			 * @brief Wires every owned Route.
+			 * @brief Closes the graph: Muxer must be Armed, then each Route.
 			 *
-			 * Call once, after every @ref Add. Each Route Close
-			 * binds Process and Analytics taps for that track.
+			 * Call once, after every @ref Add and after every
+			 * encoder/remuxer @c operator>> into the Muxer.
+			 *
+			 * If the Muxer is not @ref Muxer::Armed, it is Failed.
+			 * Route Close still runs so taps are not left half-wired.
+			 *
+			 * Zero Routes still requires Armed.
 			 */
 			void Close() noexcept;
 
@@ -174,6 +193,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		private:
+			std::shared_ptr<Muxer> m_muxer;					///< Destination
 			std::vector<std::unique_ptr<Route>> m_routes;	///< Owned tracks
 	};
 }

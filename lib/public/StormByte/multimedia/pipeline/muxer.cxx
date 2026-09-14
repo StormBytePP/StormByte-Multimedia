@@ -88,6 +88,12 @@ namespace {
 			return "-";
 		return std::format("{}", value->Nanoseconds().count());
 	}
+
+	bool Muxable(enum StormByte::Multimedia::Type type) noexcept {
+		return type == StormByte::Multimedia::Type::Video
+			|| type == StormByte::Multimedia::Type::Audio
+			|| type == StormByte::Multimedia::Type::Subtitle;
+	}
 }
 
 Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
@@ -95,7 +101,9 @@ Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
 : Step(std::move(log), Producer::Muxer, Kinds{Kind::Packet}, Kinds{}),
 	m_container(&container),
 	m_origin(nullptr),
-	m_closed(false), m_positionNs(-1) {
+	m_closed(false),
+	m_reserved(0),
+	m_positionNs(-1) {
 	if (!container.HasAccess(Access{Operation::Write})) {
 		Fail("container does not allow write");
 		return;
@@ -134,6 +142,30 @@ std::optional<Property::Duration> Muxer::Position() const noexcept {
 
 const Container& Muxer::Destination() const noexcept {
 	return *m_container;
+}
+
+std::size_t Muxer::ExpectedSlots() const noexcept {
+	if (!m_plan)
+		return 0;
+	std::size_t n = 0;
+	for (const auto& track : m_plan->Tracks()) {
+		if (!track)
+			continue;
+		if (Muxable(track->Type()))
+			++n;
+	}
+	return n;
+}
+
+bool Muxer::Armed() const noexcept {
+	const auto expected = ExpectedSlots();
+	if (expected == 0)
+		return false;
+	return m_reserved.load(std::memory_order_acquire) == expected;
+}
+
+bool Muxer::Ready() const noexcept {
+	return Step::Ready() && Armed();
 }
 
 std::optional<std::string> Muxer::Language(int output_index) const noexcept {
@@ -177,6 +209,16 @@ void Muxer::Work(Item::PointerType item) noexcept {
 
 	if (Failed() || !m_backend)
 		return;
+
+	if (!Armed()) {
+		std::unique_lock lock(m_wait);
+		m_wake.wait(lock, [this] {
+			return Failed() || Status() == State::Stopping || Armed();
+		});
+	}
+	if (Failed() || Status() == State::Stopping || !Armed())
+		return;
+
 	auto packet = std::dynamic_pointer_cast<Packet>(item);
 	if (!packet) {
 		Fail("muxer expected a packet");
@@ -191,12 +233,13 @@ void Muxer::Work(Item::PointerType item) noexcept {
 
 	const int track = packet->Track();
 	const auto type = packet->Type();
-	if (type == Type::Video || type == Type::Audio) {
+	if (type == StormByte::Multimedia::Type::Video
+		|| type == StormByte::Multimedia::Type::Audio) {
 		if (const auto& pts = packet->Pts(); pts) {
 			auto ns = pts->Nanoseconds().count();
 			if (const auto& dur = packet->Duration(); dur)
 				ns += dur->Nanoseconds().count();
-			if (type == Type::Video)
+			if (type == StormByte::Multimedia::Type::Video)
 				m_positionNs.store(ns, std::memory_order_release);
 			else {
 				const std::int64_t current = m_positionNs.load(std::memory_order_acquire);
@@ -247,7 +290,10 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 	encoder.m_out.Bind(encoder.Index(), muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
 		muxer.m_in.Capacity(encoder.Index(), cap);
+	muxer.m_reserved.fetch_add(1, std::memory_order_acq_rel);
 	muxer.Log(Level::Debug, std::format("reserve encoder t={}", encoder.Index()));
+	if (muxer.Armed())
+		muxer.Wake().notify_all();
 	return encoder;
 }
 
@@ -266,7 +312,10 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 	remuxer.m_out.Bind(remuxer.In(), muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
 		muxer.m_in.Capacity(remuxer.In(), cap);
+	muxer.m_reserved.fetch_add(1, std::memory_order_acq_rel);
 	muxer.Log(Level::Debug, std::format("reserve remux t={}", remuxer.In()));
+	if (muxer.Armed())
+		muxer.Wake().notify_all();
 	return remuxer;
 }
 

@@ -138,6 +138,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * LowLevel writes always; the shared logger throttles.
 	 * Remux and encode lanes share this worker.
 	 *
+	 * Does not write the container header until @ref Armed is true.
+	 * @ref Ready is Status Ready and @ref Armed.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
@@ -224,6 +227,27 @@ namespace StormByte::Multimedia::Pipeline {
 			const Container& Destination() const noexcept;
 
 			/**
+			 * @brief Whether every muxable Plan track has a reserved hopper.
+			 *
+			 * Counts Video, Audio and Subtitle entries in @ref Plan::Tracks.
+			 * Attachments are written at header time and are not hoppers.
+			 * true when reserved slots equal that count. false with no Plan,
+			 * or while @c operator>> is still running.
+			 *
+			 * Does not Fail. @ref Router::Close calls this after the graph
+			 * is closed and Fails the Muxer if it is still false.
+			 *
+			 * @return Arming state of the output graph.
+			 */
+			bool Armed() const noexcept;
+
+			/**
+			 * @brief Open finished without Fail or Stop, and @ref Armed.
+			 * @return Step Status is Ready and every muxable Plan track is reserved.
+			 */
+			bool Ready() const noexcept override;
+
+			/**
 			 * @brief Ceiling of the muxer input hopper.
 			 * @return Max queued packets. Never 0.
 			 */
@@ -304,6 +328,12 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			bool RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept;
 
+			/**
+			 * @brief Video / Audio / Subtitle entries in the bound Plan.
+			 * @return 0 when there is no Plan.
+			 */
+			std::size_t ExpectedSlots() const noexcept;
+
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			const Container* m_container;										///< Destination container
 			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
@@ -311,6 +341,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::map<int, std::string> m_language;								///< Per-output language
 			std::map<int, std::string> m_title;									///< Per-output title
 			std::atomic<bool> m_closed;											///< Set by Finish / Fail
+			std::atomic<std::size_t> m_reserved;
 			std::atomic<std::int64_t> m_positionNs;								///< Last written Pts, or -1
 	};
 }

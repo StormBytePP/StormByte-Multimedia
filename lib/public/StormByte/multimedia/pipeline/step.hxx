@@ -266,10 +266,15 @@ namespace StormByte::Multimedia::Pipeline {
 			State Status() const noexcept;
 
 			/**
-			 * @brief Whether Open has finished without Fail or Stop.
-			 * @return true iff Status is Ready.
+			 * @brief Whether this step can take work.
+			 *
+			 * Default: Status is Ready (Open finished without Fail or Stop).
+			 * Muxer also requires @ref Muxer::Armed so header write and
+			 * Pump do not start while @c operator>> is still reserving.
+			 *
+			 * @return true when the stage is open for work.
 			 */
-			bool Ready() const noexcept;
+			virtual bool Ready() const noexcept;
 
 			/**
 			 * @brief Asks the worker to leave and closes all hoppers.

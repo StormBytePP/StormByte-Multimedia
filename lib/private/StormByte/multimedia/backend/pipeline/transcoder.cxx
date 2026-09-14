@@ -237,7 +237,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	StormByte::Multimedia::Pipeline::Router router;
+	StormByte::Multimedia::Pipeline::Router router(mux);
 
 	struct EncodeLane {
 		int In = -1;

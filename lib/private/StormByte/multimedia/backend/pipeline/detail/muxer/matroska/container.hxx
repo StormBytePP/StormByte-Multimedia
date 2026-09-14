@@ -208,7 +208,11 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			int Resolve(int track) const noexcept;
 
 			/**
-			 * @brief Writes header when every reserved encoder is open.
+			 * @brief Writes the header when @ref Muxer::Armed and every reserved encoder is open.
+			 *
+			 * Packets that arrive earlier stay in @c m_queue. Interleave
+			 * window is @c InputCeiling() * 40 ms in AV_TIME_BASE units.
+			 *
 			 * @param owner Public muxer.
 			 * @return false if owner.Fail() was called.
 			 */

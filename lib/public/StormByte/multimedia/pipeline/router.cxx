@@ -36,9 +36,17 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/exception.hxx>
+#include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/router.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
+
+Router::Router(std::shared_ptr<Muxer> muxer)
+: m_muxer(std::move(muxer)) {
+	if (!m_muxer)
+		throw StormByte::Multimedia::Exception("Router", "muxer is empty");
+}
 
 void Router::Bind(Step& from, Step& to) noexcept {
 	to.m_in.Notify(to.Wake());
@@ -57,6 +65,8 @@ Router& Router::Add(std::unique_ptr<Route> route) noexcept {
 }
 
 void Router::Close() noexcept {
+	if (!m_muxer->Failed() && !m_muxer->Armed())
+		m_muxer->Fail("muxer is not armed; missing encoder or remuxer >> muxer");
 	for (auto& route : m_routes) {
 		if (route)
 			route->Close();
