@@ -179,16 +179,30 @@ void Route::TapDecode(Step& origin, Lane& lane) noexcept {
 	if (lane.FirstAnalytics == nullptr)
 		return;
 	lane.FirstAnalytics->m_in.Notify(lane.FirstAnalytics->Wake());
-	origin.m_tap.Bind(m_track, lane.FirstAnalytics->m_in);
+	if (origin.Produces().Has(Kind::Frame)) {
+		origin.m_tap.Bind(m_track, lane.FirstAnalytics->m_in);
+		return;
+	}
+	if (!origin.Produces().Has(Kind::Packet))
+		return;
+	std::unique_ptr<Decoder> look(new Decoder(origin.m_log, m_track, Decoder::SourceLook{}));
+	look->m_in.Notify(look->Wake());
+	origin.m_lookOut.Bind(m_track, look->m_in);
+	look->m_out.Bind(m_track, lane.FirstAnalytics->m_in);
+	m_looks.push_back(std::move(look));
 }
 
 void Route::TapEncode(Step& destination, Lane& lane) noexcept {
 	if (lane.FirstAnalytics == nullptr)
 		return;
-	std::unique_ptr<Decoder> look(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
+	std::unique_ptr<Decoder> look;
+	if (destination.m_name == Producer::Remuxer)
+		look.reset(new Decoder(destination.m_log, m_track, Decoder::RemuxLook{}));
+	else
+		look.reset(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
 	look->m_in.Notify(look->Wake());
 	lane.FirstAnalytics->m_in.Notify(lane.FirstAnalytics->Wake());
 	destination.Look(look->m_in);
-	look->m_out.Bind(m_track, lane.FirstAnalytics->m_in);
+	lane.FirstAnalytics->m_in.Bind(m_track, look->m_out);
 	m_looks.push_back(std::move(look));
 }

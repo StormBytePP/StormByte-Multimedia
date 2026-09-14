@@ -118,16 +118,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * lineage, not a decoded-frame count.
 	 *
 	 * Origin frames leave through @ref Step::Emit (analytics tap
-	 * clone, then process). Encode-look frames also Emit; their
-	 * Producer is Encoder.
+	 * clone, then process). Dest-look frames also Emit; their
+	 * Producer is the stage that fed the look (@ref Producer::Encoder
+	 * or @ref Producer::Remuxer). Source-look frames keep
+	 * @ref Producer::Decoder.
 	 *
 	 * @ref Label is `Decoder(<implementation>)` after Open pins a
-	 * table row, otherwise `Decoder(t=<origin index>)`.
+	 * table row, otherwise `Decoder(t=<origin index>)`. Look mode
+	 * is `Decoder(look encode|remux|src t=<index>)`.
 	 *
-	 * Encode-look mode is not a public constructor. Route builds it
-	 * when an Analytics filter needs a post-encode recon. That
-	 * decoder has no Demuxer: it opens from the first Packet's
-	 * codec parameters. The public ctor never enters this mode.
+	 * Look modes are not public constructors. Route builds them
+	 * when Analytics needs pictures from a packet stretch. Those
+	 * decoders have no Demuxer: they open from the first Packet's
+	 * codec parameters. The public ctor never enters look mode.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -155,10 +158,35 @@ namespace StormByte::Multimedia::Pipeline {
 			explicit Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 				int track, DecoderFlags flags = DecoderFlags{}) noexcept;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param other Source decoder.
+			 */
 			Decoder(const Decoder& other) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Decoder to take.
+			 */
 			Decoder(Decoder&& other) noexcept = delete;
+
+			/**
+			 * @brief Destructor.
+			 */
 			~Decoder() noexcept override;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param other Source decoder.
+			 * @return *this.
+			 */
 			Decoder& operator=(const Decoder& other) = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Decoder to take.
+			 * @return *this.
+			 */
 			Decoder& operator=(Decoder&& other) noexcept = delete;
 
 			/**
@@ -278,30 +306,69 @@ namespace StormByte::Multimedia::Pipeline {
 		private:
 			/**
 			 * @class EncodeLook
-			 * @brief Tag. Only Route constructs a look decoder.
+			 * @brief Tag. Dest look after an Encoder. Only Route constructs it.
 			 */
 			struct EncodeLook {};
 
 			/**
+			 * @class RemuxLook
+			 * @brief Tag. Dest look after a Remuxer. Only Route constructs it.
+			 */
+			struct RemuxLook {};
+
+			/**
+			 * @class SourceLook
+			 * @brief Tag. Packet-origin look. Only Route constructs it.
+			 */
+			struct SourceLook {};
+
+			/**
 			 * @brief Post-encode recon for Analytics.
 			 * @param log Shared logger.
-			 * @param track Origin stream index (same as the Encoder).
+			 * @param track Origin stream index (same as Encoder).
 			 * @param tag Encode-look tag.
 			 *
 			 * Not callable from user code. Open does not wait for a
 			 * Demuxer. The first Packet that carries codec parameters
 			 * opens the backend. Produced frames are stamped
-			 * @ref Producer::Encoder. Label stays Decoder(look).
+			 * @ref Producer::Encoder. Label is Decoder(look encode).
 			 */
 			Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 				int track, EncodeLook tag) noexcept;
+
+			/**
+			 * @brief Post-remux recon for Analytics.
+			 * @param log Shared logger.
+			 * @param track Origin stream index (same as Remuxer).
+			 * @param tag Remux-look tag.
+			 *
+			 * Not callable from user code. Same open path as
+			 * @ref EncodeLook. Produced frames are stamped
+			 * @ref Producer::Remuxer. Label is Decoder(look remux).
+			 */
+			Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+				int track, RemuxLook tag) noexcept;
+
+			/**
+			 * @brief Packet-origin recon for Analytics (Demuxer remux stretch).
+			 * @param log Shared logger.
+			 * @param track Origin stream index.
+			 * @param tag Source-look tag.
+			 *
+			 * Not callable from user code. Same open path as
+			 * @ref EncodeLook (codecpar on first Packet). Produced
+			 * frames keep @ref Producer::Decoder.
+			 */
+			Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+				int track, SourceLook tag) noexcept;
 
 			using Step::Log;
 
 			/**
 			 * @brief Token after `STMM ` for this decoder.
-			 * @return `Decoder(look)` in encode-look mode, otherwise
-			 *         `Decoder(<implementation>)` or `Decoder(t=<index>)`.
+			 * @return `Decoder(look encode|remux|src t=<index>)` in look
+			 *         mode, otherwise `Decoder(<implementation>)` or
+			 *         `Decoder(t=<index>)`.
 			 */
 			std::string Label() const noexcept override;
 
@@ -363,30 +430,35 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Opens the look backend from a Packet's codecpar.
-			 * @param packet First encode Packet that carries parameters.
+			 * @param packet First look Packet that carries parameters.
 			 * @return true if the backend is open.
 			 */
 			bool OpenLook(const Packet& packet) noexcept;
 
 			/**
-			 * @brief Stamps Producer::Encoder on a look frame.
+			 * @brief Stamps dest-look Producer on @p frame.
 			 * @param frame Frame just received from the backend.
+			 *
+			 * Encode-look → @ref Producer::Encoder.
+			 * Remux-look → @ref Producer::Remuxer.
+			 * Source-look stays @ref Producer::Decoder.
 			 */
 			void StampLook(Frame& frame) noexcept;
 
-			static constexpr std::size_t Ceiling = 32;
-			int m_index;
-			DecoderFlags m_flags;
-			std::optional<std::string> m_language;
-			std::optional<std::string> m_title;
-			std::optional<std::string> m_implementation;
-			Features m_require;
-			Features m_capabilities;
-			Demuxer* m_origin = nullptr;
-			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;
-			std::optional<std::uint64_t> m_serial;
-			std::uint64_t m_part;
-			std::optional<Property::Duration> m_inDts;
-			bool m_look = false;	///< Route encode-look; frames stamp Encoder
+			static constexpr std::size_t Ceiling = 32;				///< Input hopper ceiling
+			int m_index;											///< Origin stream index
+			DecoderFlags m_flags;									///< Heuristic bits
+			std::optional<std::string> m_language;					///< Origin language tag
+			std::optional<std::string> m_title;						///< Origin title tag
+			std::optional<std::string> m_implementation;			///< Pinned decoder name
+			Features m_require;										///< Extra required bits
+			Features m_capabilities;								///< Opened row bits
+			Demuxer* m_origin = nullptr;							///< Origin demuxer, origin mode
+			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;	///< Decode backend
+			std::optional<std::uint64_t> m_serial;					///< Last packet Serial
+			std::uint64_t m_part;									///< Part within Serial
+			std::optional<Property::Duration> m_inDts;				///< Dts of last packet
+			bool m_look = false;									///< Opens from Packet codecpar
+			std::optional<Producer> m_lookStamp;					///< Dest-look Producer, or empty
 	};
 }

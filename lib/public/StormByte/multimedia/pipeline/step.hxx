@@ -401,6 +401,18 @@ namespace StormByte::Multimedia::Pipeline {
 			void Emit(Item::PointerType item) noexcept;
 
 			/**
+			 * @brief Deep-copies @p item through @ref Item::Clone.
+			 * @param item Unit to clone.
+			 * @return Owning pointer, or empty if @p item cannot clone.
+			 *
+			 * Packet/Frame copy constructors stay private. Looks and
+			 * the analytics tap must go through this helper (or
+			 * @ref Emit) so a leaf Step does not need to be a friend
+			 * of the unit types.
+			 */
+			Item::PointerType CloneItem(const Item& item) const noexcept;
+
+			/**
 			 * @brief Body of the worker after Open returns.
 			 *
 			 * Times each @ref Work. Leaves that override Pump (Demuxer)
@@ -487,6 +499,7 @@ namespace StormByte::Multimedia::Pipeline {
 			ItemSink m_in;										///< Input buckets
 			ItemSink m_out;										///< Output buckets (process path)
 			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
+			ItemSink m_lookOut;									///< Packet-look producer for Demuxer remux stretch
 			Kinds m_receives;									///< Receives
 			Kinds m_produces;									///< Produces
 

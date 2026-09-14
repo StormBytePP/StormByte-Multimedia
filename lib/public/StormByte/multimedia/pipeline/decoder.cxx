@@ -73,14 +73,28 @@ namespace {
 
 Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, DecoderFlags flags) noexcept
-: Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+:	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags(flags), m_part(0), m_look(false) {
 	Launch();
 }
 
 Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, EncodeLook) noexcept
-: Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+:	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+	m_index(track), m_flags{}, m_part(0), m_look(true), m_lookStamp(Producer::Encoder) {
+	Launch();
+}
+
+Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+	int track, RemuxLook) noexcept
+:	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
+	m_index(track), m_flags{}, m_part(0), m_look(true), m_lookStamp(Producer::Remuxer) {
+	Launch();
+}
+
+Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
+	int track, SourceLook) noexcept
+:	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags{}, m_part(0), m_look(true) {
 	Launch();
 }
@@ -117,8 +131,8 @@ void Decoder::StampLineage(Frame& frame) noexcept {
 }
 
 void Decoder::StampLook(Frame& frame) noexcept {
-	if (m_look)
-		frame.m_producer = Producer::Encoder;
+	if (m_lookStamp)
+		frame.m_producer = *m_lookStamp;
 }
 
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
@@ -144,13 +158,13 @@ void Decoder::AttachOrigin(Demuxer& demuxer) noexcept {
 
 bool Decoder::OpenLook(const Packet& packet) noexcept {
 	if (!packet.m_backend || !packet.m_backend->Parameters()) {
-		Fail("encode look packet has no codec parameters");
+		Fail("look packet has no codec parameters");
 		return false;
 	}
 	const auto& params = *packet.m_backend->Parameters();
 	const auto* codec = avcodec_find_decoder(static_cast<AVCodecID>(params.CodecId()));
 	if (!codec) {
-		Fail("encode look decoder not found");
+		Fail("look decoder not found");
 		return false;
 	}
 	auto opened = Backend::FFmpeg::AVDecoder::Open(
@@ -298,8 +312,13 @@ void Decoder::Finish() noexcept {
 }
 
 std::string Decoder::Label() const noexcept {
-	if (m_look)
-		return "Decoder(look t=" + std::to_string(m_index) + ")";
+	if (m_look) {
+		if (m_lookStamp == Producer::Encoder)
+			return "Decoder(look encode t=" + std::to_string(m_index) + ")";
+		if (m_lookStamp == Producer::Remuxer)
+			return "Decoder(look remux t=" + std::to_string(m_index) + ")";
+		return "Decoder(look src t=" + std::to_string(m_index) + ")";
+	}
 	if (m_implementation && !m_implementation->empty())
 		return "Decoder(" + *m_implementation + ")";
 	return "Decoder(t=" + std::to_string(m_index) + ")";

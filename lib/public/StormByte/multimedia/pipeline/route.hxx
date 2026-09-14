@@ -63,23 +63,26 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
 	 *
 	 * Analytics is not a process node. @ref Close wires Process from
-	 * origin to destination, binds @c origin.m_tap onto the first
-	 * Analytics (decode look; a deep copy from @ref Step::Emit), and
-	 * builds a private encode-look Decoder from the Encoder bitstream.
-	 * That Decoder is not a public API: Route owns it, stamps
-	 * @ref Producer::Encoder on its frames, and Binds them onto the
-	 * same Analytics. The last Analytics @c m_out is
+	 * origin to destination. Frame origins bind @c origin.m_tap onto
+	 * the first Analytics (decode look; a deep copy from
+	 * @ref Step::Emit). Packet origins (Demuxer on a remux stretch)
+	 * spawn a Route-owned Decoder on that tap so Analytics still
+	 * sees frames with @ref Producer::Decoder. Destination packet
+	 * producers (Encoder or Remuxer) expose @ref Step::Look; Route
+	 * builds an encode-look Decoder that stamps
+	 * @ref Producer::Encoder and Binds onto the same Analytics
+	 * hopper. The last Analytics @c m_out is
 	 * @c StormByte::Buffer::Sink::Drain.
 	 * A raw tube and Transcoder use this same Close.
 	 *
 	 * Bind the tap before the origin emits. A late Bind misses every
 	 * unit already dropped by Drain on @c m_tap.
 	 *
-	 * Muxer closed is not the end of this Route. The encode look
-	 * lags the Encoder. @ref Reports before @ref Idle is true
-	 * has no pooled Analytics mean. A hand-built tube must wait
-	 * @ref Idle (or destroy the Route) before reading Reports.
-	 * Transcoder waits the same way before OnDone.
+	 * Muxer closed is not the end of this Route. The dest look
+	 * lags. @ref Reports before @ref Idle is true has no pooled
+	 * Analytics mean. A hand-built tube must wait @ref Idle (or
+	 * destroy the Route) before reading Reports. Transcoder waits
+	 * the same way before OnDone.
 	 *
 	 * Analytics that pops and clones into its own queues must bound
 	 * those queues itself. @c InputCeiling on the first Analytics
@@ -157,10 +160,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param destination Consumer step.
 			 *
 			 * O(1) at the ends. Uses @c Bind(track, …) for Process.
-			 * Analytics is bound to @c origin.m_tap and fed encode
-			 * frames by a Route-owned look Decoder on @p destination.
-			 * Last Analytics @c m_out is Drained. Does not launch the
-			 * look Decoder beyond its own constructor.
+			 * Analytics receives a source look (origin frames via
+			 * @c m_tap, or a Decoder on origin packets) and a dest
+			 * look via @p destination.Look. Last Analytics @c m_out
+			 * is Drained. Does not launch the look Decoder beyond
+			 * its own constructor.
 			 */
 			void Close(Step& origin, Step& destination) noexcept;
 
@@ -224,19 +228,26 @@ namespace StormByte::Multimedia::Pipeline {
 			void Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept;
 
 			/**
-			 * @brief Binds @c origin.m_tap onto the analytics head.
-			 * @param origin Decode-side producer. Must not have started Emit.
-			 * @param lane Lane whose FirstAnalytics is the tap consumer.
+			 * @brief Feeds Analytics with the source look.
+			 * @param origin Producer. Must not have started Emit.
+			 * @param lane Lane whose FirstAnalytics is the consumer.
 			 *
-			 * No-op when the lane has no Analytics. Does not share
-			 * @c origin.m_out. The copy is @ref Step::Emit.
+			 * No-op when the lane has no Analytics. Frame producers
+			 * bind @c origin.m_tap. Packet producers spawn a Decoder
+			 * on that tap (@ref Producer::Decoder frames). Does not
+			 * share @c origin.m_out.
 			 */
 			void TapDecode(Step& origin, Lane& lane) noexcept;
 
 			/**
-			 * @brief Builds the encode-look Decoder and binds it to Analytics.
-			 * @param destination Encoder (packet producer).
-			 * @param lane Lane whose FirstAnalytics receives the look frames.
+			 * @brief Feeds Analytics with the destination look.
+			 * @param destination Encoder or Remuxer (packet producer).
+			 * @param lane Lane whose FirstAnalytics receives look frames.
+			 *
+			 * Builds an encode-look Decoder (@ref Producer::Encoder
+			 * frames). Calls @p destination.Look. Shares the existing
+			 * Analytics hopper onto the look output so a second Bind
+			 * does not replace the source tap.
 			 */
 			void TapEncode(Step& destination, Lane& lane) noexcept;
 
@@ -244,6 +255,6 @@ namespace StormByte::Multimedia::Pipeline {
 			Lane m_frames;													///< Frame process + analytics
 			Lane m_packets;													///< Packet process + analytics
 			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;			///< Owned leaves, Add order
-			std::vector<std::unique_ptr<Decoder>> m_looks;					///< Route-owned encode-look decoders
+			std::vector<std::unique_ptr<Decoder>> m_looks;					///< Route-owned source and dest look decoders
 	};
 }

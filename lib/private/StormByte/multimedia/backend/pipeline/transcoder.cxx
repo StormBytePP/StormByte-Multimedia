@@ -263,10 +263,16 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				job.OnError(job.Error().value_or("mux"));
 				return;
 			}
-			if (!slot.Filters.empty()) {
+			const bool videoAnalytics = slot.Kind == StormByte::Multimedia::Type::Video
+				&& !Analytics.empty();
+			if (!slot.Filters.empty() || videoAnalytics) {
 				auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
 				for (const auto& filter : slot.Filters)
 					route->Add(filter);
+				if (videoAnalytics) {
+					for (const auto& filter : Analytics)
+						route->Add(filter);
+				}
 				route->Close(demux, *remux);
 				remuxRoutes.push_back(std::move(route));
 			}
@@ -289,8 +295,10 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
 			for (const auto& filter : slot.Filters)
 				frames->Add(filter);
-			for (const auto& filter : Analytics)
-				frames->Add(filter);
+			if (slot.Kind == StormByte::Multimedia::Type::Video) {
+				for (const auto& filter : Analytics)
+					frames->Add(filter);
+			}
 			frames->Close(*decoder, *encoder);
 			auto packets = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
 			packets->Close(*encoder, mux);
@@ -377,7 +385,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 
 	/*
 	* Muxer closed is the file on disk, not Analytics Eof. The
-	* encode look still drains. Wait Route::Idle so Reports()
+	* dest look still drains. Wait Route::Idle so Reports()
 	* after OnDone sees the pooled score. Same rule as a hand
 	* tube: do not read Reports until Idle.
 	*/

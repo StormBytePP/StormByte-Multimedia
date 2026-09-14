@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -72,6 +73,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * the shared logger throttles. The packet keeps the lineage
 	 * born at the demuxer.
 	 *
+	 * Dest-look is @ref Look / @ref m_lookOut, the same side
+	 * channel Encoder uses. Not @ref m_out and not @ref m_tap.
+	 * The look packet is a deep copy so Muxer and the look
+	 * decoder do not share a Packet FIFO cursor.
+	 *
 	 * @ref Label is `Remuxer(<origin codec>)` when a Plan is bound
 	 * and that stream exists, otherwise `Remuxer(t=<origin index>)`.
 	 *
@@ -80,6 +86,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Remuxer final: public Step {
 		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
 		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+		friend class Route;
 
 		public:
 			/**
@@ -170,7 +177,7 @@ namespace StormByte::Multimedia::Pipeline {
 			void Open() noexcept override;
 
 			/**
-			 * @brief Forwards one packet of In via @ref Step::Emit.
+			 * @brief Forwards one packet of In via @ref Emit.
 			 * @param item Incoming packet.
 			 *
 			 * The packet keeps the @ref Packet::Serial born at the demuxer.
@@ -179,11 +186,30 @@ namespace StormByte::Multimedia::Pipeline {
 			void Work(Item::PointerType item) noexcept override;
 
 			/**
-			 * @brief No codec to flush.
+			 * @brief Eofs @ref m_lookOut after the last forward.
+			 *
+			 * Do not Eof @ref m_tap. The dest look reads @ref m_lookOut.
 			 */
 			void Finish() noexcept override;
 
+			/**
+			 * @brief Dest-look side channel. Shares @ref m_lookOut with @p sink.
+			 * @param sink Look decoder @c m_in.
+			 *
+			 * Same contract as Encoder::Look. @ref Route::TapEncode
+			 * calls this on a remux stretch.
+			 */
+			void Look(ItemSink& sink) noexcept override;
+
+			/**
+			 * @brief Deep-copies @p packet to @ref m_lookOut, then
+			 *        @ref Step::Emit s the original.
+			 * @param packet Forwarded unit. Empty pointers are ignored.
+			 */
+			void Emit(Packet::PointerType packet) noexcept;
+
 			static constexpr std::size_t Ceiling = 32;	///< Input hopper ceiling
 			int m_index;								///< Origin stream index
+			ItemSink m_lookOut;							///< Dest-look producer; Drain until Look
 	};
 }

@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/origin.hxx>
@@ -78,6 +79,9 @@ namespace {
 Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 : Step(std::move(log), Producer::Demuxer, Kinds{}, Kinds{Kind::Packet}),
 	m_eof(false), m_positionNs(-1) {
+	// Unbound keys must drop. Route only Binds the look track.
+	// Without Drain, the next audio/subtitle packet blocks Push forever.
+	m_lookOut.Drain();
 	Launch();
 }
 
@@ -131,12 +135,13 @@ Packet::PointerType Demuxer::Wrap(
 	std::optional<Property::Duration> pts,
 	std::optional<Property::Duration> dts,
 	std::optional<Property::Duration> duration,
-	bool keyframe) noexcept {
+	bool keyframe,
+	std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
 	const std::uint64_t serial = m_nextSerial[track]++;
 	Log(Level::LowLevel, std::format("t={} {} {}:0 pts={} dts={} dur={} key={} bytes={}",
 		track, ToString(type), serial, Ns(pts), Ns(dts), Ns(duration),
 		keyframe ? 1 : 0, payload.Size()));
-	return Packet::PointerType(new Packet(
+	auto packet = Packet::PointerType(new Packet(
 		track,
 		type,
 		Producer::Demuxer,
@@ -149,6 +154,9 @@ Packet::PointerType Demuxer::Wrap(
 		CodecOf(m_plan.get(), track),
 		serial,
 		0));
+	if (backend)
+		packet->Bind(std::move(backend));
+	return packet;
 }
 
 void Demuxer::Open() noexcept {
@@ -191,11 +199,13 @@ void Demuxer::Pump() noexcept {
 			return;
 		if (!packet) {
 			ReachedEof();
+			m_lookOut.Eof();
 			DumpWork();
 			return;
 		}
 		if (const auto& pts = packet->Pts(); pts)
 			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
+		m_lookOut.Push(packet->Track(), Packet::PointerType(new Packet(*packet)));
 		Emit(std::move(packet));
 		RecordWork(std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - started).count());
@@ -204,6 +214,7 @@ void Demuxer::Pump() noexcept {
 
 void Demuxer::Finish() noexcept {
 	ReachedEof();
+	m_lookOut.Eof();
 	DumpWork();
 }
 

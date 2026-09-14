@@ -58,13 +58,26 @@ namespace {
 }
 
 Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
-: Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
+:	Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
 	m_index(in) {
+	m_lookOut.Drain();
 	Launch();
 }
 
 Remuxer::~Remuxer() noexcept {
 	Halt();
+}
+
+void Remuxer::Look(ItemSink& sink) noexcept {
+	m_lookOut.Bind(m_index, sink);
+}
+
+void Remuxer::Emit(Packet::PointerType packet) noexcept {
+	if (!packet)
+		return;
+	if (auto copy = CloneItem(*packet))
+		m_lookOut.Push(m_index, std::move(copy));
+	Step::Emit(std::move(packet));
 }
 
 void Remuxer::Open() noexcept {
@@ -97,7 +110,9 @@ void Remuxer::Work(Item::PointerType item) noexcept {
 	Emit(std::move(packet));
 }
 
-void Remuxer::Finish() noexcept {}
+void Remuxer::Finish() noexcept {
+	m_lookOut.Eof();
+}
 
 Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept {
 	if (remuxer.Failed())

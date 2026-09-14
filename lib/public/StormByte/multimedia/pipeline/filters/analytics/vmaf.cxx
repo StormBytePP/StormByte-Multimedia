@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/pipeline/filters/analytics/vmaf.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
+#include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <algorithm>
@@ -57,6 +58,7 @@ extern "C" {
 
 using StormByte::Multimedia::Pipeline::Filter::Video::VMAF;
 using StormByte::Multimedia::Pipeline::Producer;
+using StormByte::Multimedia::Pipeline::ToString;
 using StormByte::Multimedia::Type;
 using StormByte::Logger::Level;
 
@@ -94,6 +96,17 @@ namespace {
 		return 12;
 	}
 
+	const char* PixName(const ::AVFrame* raw) noexcept {
+		if (!raw)
+			return "?";
+		const char* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(raw->format));
+		return name ? name : "?";
+	}
+
+	bool DistLook(Producer producer) noexcept {
+		return producer == Producer::Encoder || producer == Producer::Remuxer;
+	}
+
 	void CopyPlane(const uint8_t* src, int srcStride, uint8_t* dst, ptrdiff_t dstStride,
 		int bytes, int height) noexcept {
 		for (int y = 0; y < height; ++y)
@@ -101,6 +114,22 @@ namespace {
 	}
 }
 
+/*
+* Analytics leaf. Route::Add only accepts Process / Packet / Analytics.
+*
+* Construction names the node ("vmaf") so logs and Report dumps
+* can tell filters apart. Do not Launch() here: Route::Add does.
+*
+* Two looks arrive on the same Process: Producer::Decoder is the
+* reference, Producer::Encoder or Producer::Remuxer is the distorted
+* reconstruct. Clone the raw AVFrame; Work will Drain the StormByte
+* Frame after this returns.
+*
+* Pairing is presentation FIFO, not Serial and not container PTS.
+*
+* Debug is the bugreport level: first looks, latch, ignore, paced
+* scored count, eof. Per-frame park/score stays at LowLevel.
+*/
 VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),
 	m_modelName(std::move(model)),
@@ -152,7 +181,7 @@ void VMAF::Setup() noexcept {
 	cfg.n_threads = std::max(1u, std::thread::hardware_concurrency());
 	cfg.n_subsample = 1;
 	if (vmaf_init(&m_vmaf, cfg) != 0) {
-		Log(Level::Warning, Name() + " vmaf_init failed");
+		Log(Level::Error, Name() + " vmaf_init failed");
 		m_failed = true;
 		return;
 	}
@@ -160,16 +189,17 @@ void VMAF::Setup() noexcept {
 	modelCfg.name = "vmaf";
 	modelCfg.flags = VMAF_MODEL_FLAGS_DEFAULT;
 	if (vmaf_model_load(&m_model, &modelCfg, m_modelName.c_str()) != 0) {
-		Log(Level::Warning, std::format("{} vmaf_model_load({}) failed", Name(), m_modelName));
+		Log(Level::Error, std::format("{} vmaf_model_load({}) failed", Name(), m_modelName));
 		m_failed = true;
 		return;
 	}
 	if (vmaf_use_features_from_model(m_vmaf, m_model) != 0) {
-		Log(Level::Warning, Name() + " vmaf_use_features_from_model failed");
+		Log(Level::Error, Name() + " vmaf_use_features_from_model failed");
 		m_failed = true;
 		return;
 	}
-	Log(Level::Debug, std::format("{} libvmaf ready threads={}", Name(), cfg.n_threads));
+	Log(Level::Debug, std::format("{} libvmaf ready threads={} subsample={}",
+		Name(), cfg.n_threads, cfg.n_subsample));
 }
 
 bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
@@ -239,6 +269,12 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 	if (m_width == 0) {
 		m_width = ref->width;
 		m_height = ref->height;
+		Log(Level::Debug, std::format(
+			"{} first pair index={} latch={}x{} ref_fmt={} ref_bpc={} ref_pts={} dist={}x{} dist_fmt={} dist_bpc={} dist_pts={}",
+			Name(), index, m_width, m_height,
+			PixName(ref), Bpc(ref), ref->pts,
+			dist->width, dist->height,
+			PixName(dist), Bpc(dist), dist->pts));
 		if (dist->width != m_width || dist->height != m_height)
 			Log(Level::Notice, std::format("{} geometry ref={}x{} dist={}x{}, scaling dist",
 				Name(), m_width, m_height, dist->width, dist->height));
@@ -265,9 +301,15 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 		return;
 	}
 	++m_scored;
-	Log(Level::LowLevel, std::format("{} scored index={} n={}", Name(), index, m_scored));
+	Log(Level::LowLevel, std::format("{} scored index={} n={} ref_pts={} dist_pts={}",
+		Name(), index, m_scored, ref->pts, dist->pts));
 }
 
+/*
+* Index only advances when libvmaf accepted the pair. A gap
+* makes vmaf_score_pooled walk empty slots and fail the Report
+* after hundreds of good scores.
+*/
 void VMAF::Drain() noexcept {
 	while (!m_ref.empty() && !m_dist.empty()) {
 		::AVFrame* ref = m_ref.front();
@@ -288,33 +330,44 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		return;
 	if (frame.Type() != Type::Video)
 		return;
+	const Producer producer = frame.Producer();
+	if (producer != Producer::Decoder && !DistLook(producer)) {
+		Log(Level::Debug, std::format("{} ignore producer={}", Name(), ToString(producer)));
+		return;
+	}
 	const ::AVFrame* raw = AVFrame();
 	if (!raw) {
 		Log(Level::Warning, std::format("{} frame has no backend producer={}",
-			Name(), static_cast<int>(frame.Producer())));
+			Name(), ToString(producer)));
 		return;
 	}
-	if (frame.Producer() != Producer::Decoder
-		&& frame.Producer() != Producer::Encoder)
-		return;
 	::AVFrame* clone = av_frame_clone(raw);
 	if (!clone) {
 		Log(Level::Warning, Name() + " av_frame_clone failed");
 		return;
 	}
-	if (frame.Producer() == Producer::Decoder)
+	if (producer == Producer::Decoder) {
+		if (m_scored == 0 && m_ref.empty())
+			Log(Level::Debug, std::format("{} first ref {}x{} fmt={} bpc={} pts={}",
+				Name(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
 		m_ref.push_back(clone);
-	else
+	}
+	else {
+		if (m_scored == 0 && m_dist.empty())
+			Log(Level::Debug, std::format("{} first dist producer={} {}x{} fmt={} bpc={} pts={}",
+				Name(), ToString(producer),
+				raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
 		m_dist.push_back(clone);
+	}
 	Log(Level::LowLevel, std::format("{} park producer={} ref={} dist={}",
-		Name(), static_cast<int>(frame.Producer()), m_ref.size(), m_dist.size()));
+		Name(), ToString(producer), m_ref.size(), m_dist.size()));
 	Drain();
 }
 
 void VMAF::Eof() noexcept {
 	Drain();
-	Log(Level::Debug, std::format("{} eof scored={} ref={} dist={} failed={}",
-		Name(), m_scored, m_ref.size(), m_dist.size(), m_failed));
+	Log(Level::Debug, std::format("{} eof scored={} ref={} dist={} failed={} latch={}x{}",
+		Name(), m_scored, m_ref.size(), m_dist.size(), m_failed, m_width, m_height));
 	if (!m_ref.empty() || !m_dist.empty())
 		Log(Level::Warning, std::format("{} leftover looks ref={} dist={}",
 			Name(), m_ref.size(), m_dist.size()));
@@ -323,7 +376,7 @@ void VMAF::Eof() noexcept {
 		vmaf_read_pictures(m_vmaf, nullptr, nullptr, 0);
 	if (m_failed || !m_vmaf || !m_model || m_scored == 0) {
 		if (!m_failed)
-			Log(Level::Warning, std::format("{} no scored pairs", Name()));
+			Log(Level::Error, std::format("{} no scored pairs", Name()));
 		m_failed = true;
 		return;
 	}
@@ -332,7 +385,7 @@ void VMAF::Eof() noexcept {
 	const unsigned last = m_scored - 1;
 	if (vmaf_score_pooled(m_vmaf, m_model, VMAF_POOL_METHOD_MEAN, &mean, 0, last) != 0
 		|| vmaf_score_pooled(m_vmaf, m_model, VMAF_POOL_METHOD_MIN, &mn, 0, last) != 0) {
-		Log(Level::Warning, Name() + " vmaf_score_pooled failed");
+		Log(Level::Error, Name() + " vmaf_score_pooled failed");
 		m_failed = true;
 		return;
 	}

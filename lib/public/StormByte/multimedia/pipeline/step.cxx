@@ -85,6 +85,7 @@ void Step::CloseHoppers() noexcept {
 
 void Step::Fail(std::string reason) noexcept {
 	m_error = std::move(reason);
+	Log(Level::Error, *m_error);
 	State current = m_state.load(std::memory_order_acquire);
 	while (!Terminal(current)) {
 		if (m_state.compare_exchange_weak(current, State::Failed,
@@ -168,6 +169,10 @@ void Step::Emit(Item::PointerType item) noexcept {
 	m_out.Push(key, std::move(item));
 }
 
+Item::PointerType Step::CloneItem(const Item& item) const noexcept {
+	return item.Clone();
+}
+
 std::string Step::Label() const noexcept {
 	return std::string(ToString(m_name));
 }
@@ -202,6 +207,18 @@ void Step::DumpWork() noexcept {
 		m_workN, m_workMin, m_workMax));
 }
 
+/**
+ * Drain the process/encode hopper only.
+ *
+ * Do not Eof @c m_tap here. Route shares that hopper with the
+ * encode look and Analytics. The source Decoder finishes before
+ * the look; Eof on the tap would close VMAF while reconstructed
+ * frames are still arriving (leftover refs, scored=0).
+ *
+ * The look Decoder Eofs its @c m_out (same hopper) when it
+ * finishes. Fail/Stop still call @ref CloseHoppers, which does
+ * Eof the tap.
+ */
 void Step::Pump() noexcept {
 	for (;;) {
 		if (Stopping())
@@ -226,7 +243,6 @@ void Step::Pump() noexcept {
 		RecordWork(us);
 	}
 	m_out.Eof();
-	m_tap.Eof();
 }
 
 void Step::Launch() noexcept {
@@ -241,7 +257,6 @@ void Step::Launch() noexcept {
 			return;
 		Pump();
 		m_out.Eof();
-		m_tap.Eof();
 		State expected = State::Stopping;
 		if (!m_state.compare_exchange_strong(expected, State::Stopped,
 				std::memory_order_acq_rel, std::memory_order_acquire)) {

@@ -46,6 +46,7 @@
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -59,6 +60,7 @@
 #include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -218,6 +220,14 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 			bytes.assign(raw, raw + size);
 		}
 
+		auto holder = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
+		for (const auto& stream : m_ctx->format->Streams()) {
+			if (stream.Index() != index)
+				continue;
+			holder->Parameters(stream.CodecParameters());
+			break;
+		}
+
 		auto packet = owner.Wrap(
 			index,
 			KindOf(*m_ctx->format, index),
@@ -225,7 +235,8 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 			TicksToPts(m_ctx->scratch.Pts(), tb),
 			TicksToPts(m_ctx->scratch.Dts(), tb),
 			TicksToDuration(m_ctx->scratch.Duration(), tb),
-			(m_ctx->scratch.Flags() & AV_PKT_FLAG_KEY) != 0
+			(m_ctx->scratch.Flags() & AV_PKT_FLAG_KEY) != 0,
+			std::move(holder)
 		);
 		m_ctx->scratch.Unref();
 		return packet;

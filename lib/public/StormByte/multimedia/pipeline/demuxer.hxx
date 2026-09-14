@@ -249,6 +249,11 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @ref Packet::Part zero. This is pipe lineage, not a
 			 * decoded-frame count. Logs the unit at LowLevel.
 			 *
+			 * @p backend must carry a deep copy of the origin
+			 * @c AVCodecParameters (extradata included). Analytics
+			 * packet-looks open a decoder from that stamp. A packet
+			 * without parameters is not a look unit.
+			 *
 			 * @param track Origin stream index.
 			 * @param type Media type stamped on the packet.
 			 * @param payload Compressed bytes.
@@ -256,6 +261,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param dts Decode time.
 			 * @param duration Packet duration.
 			 * @param keyframe Whether this is a keyframe.
+			 * @param backend Holder with codecpar. May be empty only
+			 *        if no look will consume this packet.
 			 * @return Public packet.
 			 */
 			Packet::PointerType Wrap(
@@ -265,7 +272,8 @@ namespace StormByte::Multimedia::Pipeline {
 				std::optional<Property::Duration> pts,
 				std::optional<Property::Duration> dts,
 				std::optional<Property::Duration> duration,
-				bool keyframe) noexcept;
+				bool keyframe,
+				std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
 
 			std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;	///< Format backend
 			bool m_eof;												///< End of source
