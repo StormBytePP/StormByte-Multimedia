@@ -48,11 +48,13 @@
 #include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
+#include <StormByte/multimedia/pipeline/router.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <chrono>
 #include <format>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -211,20 +213,20 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	StormByte::Multimedia::Pipeline::Demuxer demux(job.Logger());
-	StormByte::Multimedia::Pipeline::Muxer mux(job.Logger(), *Container);
-	mux >> Path;
-	std::move(*built) >> demux;
-	job.m_plan = demux.Plan();
-	demux >> mux;
+	auto demux = std::make_shared<StormByte::Multimedia::Pipeline::Demuxer>(job.Logger());
+	auto mux = std::make_shared<StormByte::Multimedia::Pipeline::Muxer>(job.Logger(), *Container);
+	*mux >> Path;
+	std::move(*built) >> *demux;
+	job.m_plan = demux->Plan();
+	*demux >> *mux;
 
-	if (demux.Failed()) {
-		job.Fail(demux.Error().value_or("demux open failed"));
+	if (demux->Failed()) {
+		job.Fail(demux->Error().value_or("demux open failed"));
 		job.OnError(job.Error().value_or("demux"));
 		return;
 	}
-	if (mux.Failed()) {
-		job.Fail(mux.Error().value_or("mux open failed"));
+	if (mux->Failed()) {
+		job.Fail(mux->Error().value_or("mux open failed"));
 		job.OnError(job.Error().value_or("mux"));
 		return;
 	}
@@ -235,83 +237,83 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
+	StormByte::Multimedia::Pipeline::Router router;
+
 	struct EncodeLane {
 		int In = -1;
-		std::unique_ptr<StormByte::Multimedia::Pipeline::Decoder> Decoder;
-		std::unique_ptr<StormByte::Multimedia::Pipeline::Encoder> Encoder;
-		std::unique_ptr<StormByte::Multimedia::Pipeline::Route> Frames;
-		std::unique_ptr<StormByte::Multimedia::Pipeline::Route> Packets;
+		std::shared_ptr<StormByte::Multimedia::Pipeline::Decoder> Decoder;
+		std::shared_ptr<StormByte::Multimedia::Pipeline::Encoder> Encoder;
 	};
 	std::vector<EncodeLane> lanes;
-	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Remuxer>> remuxes;
-	std::vector<std::unique_ptr<StormByte::Multimedia::Pipeline::Route>> remuxRoutes;
+	std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Remuxer>> remuxes;
 
 	int muxIndex = 0;
 	for (auto& slot : Mapped) {
 		if (slot.Kind == StormByte::Multimedia::Type::Attachment)
 			continue;
 
-		ApplyMuxTags(mux, muxIndex, *slot.Config);
+		ApplyMuxTags(*mux, muxIndex, *slot.Config);
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
-			auto remux = std::make_unique<StormByte::Multimedia::Pipeline::Remuxer>(
+			auto remux = std::make_shared<StormByte::Multimedia::Pipeline::Remuxer>(
 				job.Logger(), slot.In);
-			demux >> *remux;
-			*remux >> mux;
-			if (mux.Failed() || remux->Failed()) {
-				job.Fail(mux.Error().value_or(remux->Error().value_or("remux reserve failed")));
+			*demux >> *remux;
+			*remux >> *mux;
+			if (mux->Failed() || remux->Failed()) {
+				job.Fail(mux->Error().value_or(remux->Error().value_or("remux reserve failed")));
 				job.OnError(job.Error().value_or("mux"));
 				return;
 			}
 			const bool videoAnalytics = slot.Kind == StormByte::Multimedia::Type::Video
 				&& !Analytics.empty();
 			if (!slot.Filters.empty() || videoAnalytics) {
-				auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
+				auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
+					slot.In, demux, remux);
 				for (const auto& filter : slot.Filters)
 					route->Add(filter);
 				if (videoAnalytics) {
 					for (const auto& filter : Analytics)
 						route->Add(filter);
 				}
-				route->Close(demux, *remux);
-				remuxRoutes.push_back(std::move(route));
+				router.Add(std::move(route));
 			}
 			remuxes.push_back(std::move(remux));
 		}
 		else {
-			auto decoder = std::make_unique<StormByte::Multimedia::Pipeline::Decoder>(
+			auto decoder = std::make_shared<StormByte::Multimedia::Pipeline::Decoder>(
 				job.Logger(), slot.In);
-			auto encoder = std::make_unique<StormByte::Multimedia::Pipeline::Encoder>(
+			auto encoder = std::make_shared<StormByte::Multimedia::Pipeline::Encoder>(
 				job.Logger(), muxIndex, *codec);
 			ApplyEncoder(*encoder, *slot.Config);
-			demux >> *decoder;
-			*encoder >> mux;
-			if (decoder->Failed() || encoder->Failed() || mux.Failed()) {
+			*demux >> *decoder;
+			*encoder >> *mux;
+			if (decoder->Failed() || encoder->Failed() || mux->Failed()) {
 				job.Fail(decoder->Error().value_or(encoder->Error().value_or(
-					mux.Error().value_or("encode reserve failed"))));
+					mux->Error().value_or("encode reserve failed"))));
 				job.OnError(job.Error().value_or("encode"));
 				return;
 			}
-			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
+			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
+				slot.In, decoder, encoder);
 			for (const auto& filter : slot.Filters)
 				frames->Add(filter);
 			if (slot.Kind == StormByte::Multimedia::Type::Video) {
 				for (const auto& filter : Analytics)
 					frames->Add(filter);
 			}
-			frames->Close(*decoder, *encoder);
-			auto packets = std::make_unique<StormByte::Multimedia::Pipeline::Route>(slot.In);
-			packets->Close(*encoder, mux);
+			auto packets = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
+				slot.In, encoder, mux);
+			router.Add(std::move(frames)).Add(std::move(packets));
 			EncodeLane lane;
 			lane.In = slot.In;
 			lane.Decoder = std::move(decoder);
 			lane.Encoder = std::move(encoder);
-			lane.Frames = std::move(frames);
-			lane.Packets = std::move(packets);
 			lanes.push_back(std::move(lane));
 		}
 		++muxIndex;
 	}
+
+	router.Close();
 
 	job.SetProgress(0);
 	const auto total = job.Source().Duration();
@@ -322,12 +324,12 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		WaitIfPaused();
 		if (Stopping(*this, token))
 			break;
-		if (demux.Failed()) {
-			job.Fail(demux.Error().value_or("demux failed"));
+		if (demux->Failed()) {
+			job.Fail(demux->Error().value_or("demux failed"));
 			break;
 		}
-		if (mux.Failed()) {
-			job.Fail(mux.Error().value_or("mux failed"));
+		if (mux->Failed()) {
+			job.Fail(mux->Error().value_or("mux failed"));
 			break;
 		}
 		bool dead = false;
@@ -347,12 +349,12 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		}
 		if (dead)
 			break;
-		if (mux.Closed())
+		if (mux->Closed())
 			break;
 		if (total) {
 			const auto den = total->Nanoseconds().count();
 			if (den > 0) {
-				if (const auto pos = mux.Position()) {
+				if (const auto pos = mux->Position()) {
 					const auto num = pos->Nanoseconds().count();
 					if (num > maxNs)
 						maxNs = num;
@@ -383,28 +385,8 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	/*
-	* Muxer closed is the file on disk, not Analytics Eof. The
-	* dest look still drains. Wait Route::Idle so Reports()
-	* after OnDone sees the pooled score. Same rule as a hand
-	* tube: do not read Reports until Idle.
-	*/
-	while (!Stopping(*this, token)) {
-		bool idle = true;
-		for (const auto& lane : lanes) {
-			if (lane.Frames && !lane.Frames->Idle())
-				idle = false;
-			if (lane.Packets && !lane.Packets->Idle())
-				idle = false;
-		}
-		for (const auto& route : remuxRoutes) {
-			if (route && !route->Idle())
-				idle = false;
-		}
-		if (idle)
-			break;
+	while (!Stopping(*this, token) && !router.Idle())
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	}
 
 	job.SetProgress(100);
 	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);

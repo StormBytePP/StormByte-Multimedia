@@ -38,8 +38,13 @@
 
 #pragma once
 
+#include <StormByte/multimedia/pipeline/filters/report.hxx>
+#include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
+
+#include <memory>
+#include <vector>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -50,16 +55,12 @@
 namespace StormByte::Multimedia::Pipeline {
 	/**
 	 * @class Router
-	 * @brief Wires sinks. Holds no filters, no reports and no progress.
+	 * @brief Owns Routes and closes them together.
 	 *
-	 * After @ref Bind the router is disposable. Routes live on the
-	 * owner that will call @ref Route::Reports at EoF.
-	 *
-	 * Remux without packet filters: @c Bind(track, demuxer, muxer),
-	 * which is @c from.m_out.Bind(track, to.m_in). Every hopper
-	 * already on @p from: @c Bind(demuxer, muxer), which is
-	 * @c from.m_out.Bind(to.m_in). A filtered track uses
-	 * @ref Route::Close instead of this type.
+	 * Advanced API. Chain @ref Add for each Route, then
+	 * @ref Close once. @ref Bind remains for hops that have
+	 * no Route (unfiltered remux already wired with
+	 * @c operator>>).
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -135,5 +136,44 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @}
 			 */
+
+			/**
+			 * @name Routes
+			 * @{
+			 */
+
+			/**
+			 * @brief Takes ownership of @p route.
+			 * @param route Route to close later. Empty is ignored.
+			 * @return *this.
+			 */
+			Router& Add(std::unique_ptr<Route> route) noexcept;
+
+			/**
+			 * @brief Wires every owned Route.
+			 *
+			 * Call once, after every @ref Add. Each Route Close
+			 * binds Process and Analytics taps for that track.
+			 */
+			void Close() noexcept;
+
+			/**
+			 * @brief Whether every owned Route is idle.
+			 * @return true when every Route reports Idle.
+			 */
+			bool Idle() const noexcept;
+
+			/**
+			 * @brief Reports of every owned Route, in Add order.
+			 * @return Concatenated Route reports.
+			 */
+			std::vector<Filter::Report> Reports() const noexcept;
+
+			/**
+			 * @}
+			 */
+
+		private:
+			std::vector<std::unique_ptr<Route>> m_routes;	///< Owned tracks
 	};
 }

@@ -49,3 +49,35 @@ void Router::Bind(int track, Step& from, Step& to) noexcept {
 	to.m_in.Notify(to.Wake());
 	from.m_out.Bind(track, to.m_in);
 }
+
+Router& Router::Add(std::unique_ptr<Route> route) noexcept {
+	if (route)
+		m_routes.push_back(std::move(route));
+	return *this;
+}
+
+void Router::Close() noexcept {
+	for (auto& route : m_routes) {
+		if (route)
+			route->Close();
+	}
+}
+
+bool Router::Idle() const noexcept {
+	for (const auto& route : m_routes) {
+		if (route && !route->Idle())
+			return false;
+	}
+	return true;
+}
+
+std::vector<Filter::Report> Router::Reports() const noexcept {
+	std::vector<Filter::Report> reports;
+	for (const auto& route : m_routes) {
+		if (!route)
+			continue;
+		auto part = route->Reports();
+		reports.insert(reports.end(), part.begin(), part.end());
+	}
+	return reports;
+}

@@ -51,8 +51,12 @@ namespace {
 	}
 }
 
-Route::Route(int track) noexcept
-: m_track(track) {}
+Route::Route(int track,
+	std::shared_ptr<Step> origin,
+	std::shared_ptr<Step> destination) noexcept
+: m_track(track),
+	m_origin(std::move(origin)),
+	m_destination(std::move(destination)) {}
 
 Route::~Route() noexcept = default;
 
@@ -60,15 +64,15 @@ int Route::Track() const noexcept {
 	return m_track;
 }
 
-void Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
+Route& Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	if (!filter)
-		return;
+		return *this;
 
 	if (!dynamic_cast<Filter::Process*>(filter.get())
 		&& !dynamic_cast<Filter::Packet*>(filter.get())
 		&& !dynamic_cast<Filter::Analytics*>(filter.get())) {
 		filter->Fail("inherit Process, Packet or Analytics; FFmpeg is not a leaf");
-		return;
+		return *this;
 	}
 
 	const Kinds receives = filter->Receives();
@@ -84,9 +88,15 @@ void Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 
 	m_filters.push_back(std::move(filter));
 	m_filters.back()->Launch();
+	return *this;
 }
 
-void Route::Close(Step& origin, Step& destination) noexcept {
+void Route::Close() noexcept {
+	if (!m_origin || !m_destination)
+		return;
+	Step& origin = *m_origin;
+	Step& destination = *m_destination;
+
 	const Kinds stretch = origin.Produces() & destination.Receives();
 	if (stretch == Kinds{}) {
 		destination.Fail("route stretch has no overlapping kinds");

@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 /**
@@ -54,43 +55,41 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Router;
+
 	/**
 	 * @class Route
-	 * @brief Owns the filter chain of one origin track and wires it.
+	 * @brief Owns the filter chain of one origin track and two ends.
+	 *
+	 * Advanced API. Construct origin and destination as
+	 * @c std::shared_ptr<Step>. Multimedia recommends
+	 * @c std::make_shared so the last owner destroys the Step.
 	 *
 	 * Packet / BSF filters may sit between Demuxer and Remuxer.
-	 * Frame / Process filters on that stretch fail at @ref Close.
-	 * Encode lanes use Frame and Packet filters between Decoder and Encoder.
+	 * Frame / Process filters on that stretch fail at Close.
+	 * Encode lanes use Frame and Packet filters between Decoder
+	 * and Encoder.
 	 *
-	 * Analytics is not a process node. @ref Close wires Process from
-	 * origin to destination. Frame origins bind @c origin.m_tap onto
-	 * the first Analytics (decode look; a deep copy from
-	 * @ref Step::Emit). Packet origins (Demuxer on a remux stretch)
-	 * spawn a Route-owned Decoder on that tap so Analytics still
-	 * sees frames with @ref Producer::Decoder. Destination packet
-	 * producers (Encoder or Remuxer) expose @ref Step::Look; Route
-	 * builds an encode-look Decoder that stamps
-	 * @ref Producer::Encoder and Binds onto the same Analytics
-	 * hopper. The last Analytics @c m_out is
+	 * Analytics is not a process node. Close wires Process from
+	 * origin to destination. Frame origins bind @c origin.m_tap
+	 * onto the first Analytics (decode look; a deep copy from
+	 * @ref Step::Emit). Packet origins spawn a Route-owned
+	 * Decoder so Analytics still sees frames with
+	 * @ref Producer::Decoder. Destination packet producers
+	 * expose @ref Step::Look. The last Analytics @c m_out is
 	 * @c StormByte::Buffer::Sink::Drain.
-	 * A raw tube and Transcoder use this same Close.
 	 *
-	 * Bind the tap before the origin emits. A late Bind misses every
-	 * unit already dropped by Drain on @c m_tap.
+	 * Close is private: add Routes to a @ref Router and call
+	 * @ref Router::Close. Bind the tap before the origin emits.
 	 *
-	 * Muxer closed is not the end of this Route. The dest look
-	 * lags. @ref Reports before @ref Idle is true has no pooled
-	 * Analytics mean. A hand-built tube must wait @ref Idle (or
-	 * destroy the Route) before reading Reports. Transcoder waits
-	 * the same way before OnDone.
-	 *
-	 * Analytics that pops and clones into its own queues must bound
-	 * those queues itself. @c InputCeiling on the first Analytics
-	 * applies to the shared tap hopper after Bind.
+	 * Muxer closed is not the end of this Route. Wait @ref Idle
+	 * before @ref Reports.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Route {
+		friend class Router;
+
 		public:
 			/**
 			 * @name Lifecycle
@@ -98,10 +97,17 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Route for one origin track.
+			 * @brief Route for one origin track and its two ends.
 			 * @param track Origin stream index.
+			 * @param origin Producer (Decoder / Demuxer). Must not be empty.
+			 * @param destination Consumer (Encoder / Remuxer / Muxer). Must not be empty.
+			 *
+			 * Both ends are real @c shared_ptr. The Step dies when
+			 * the last Route, Transcoder lane or caller drops it.
 			 */
-			explicit Route(int track) noexcept;
+			Route(int track,
+				std::shared_ptr<Step> origin,
+				std::shared_ptr<Step> destination) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -146,27 +152,27 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Takes ownership of @p filter, hooks it and launches it.
-			 * @param filter Filter instance for this track.
+			 * @param filter Process, Packet or Analytics leaf.
+			 * @return *this.
 			 *
-			 * A leaf that is not Process, Packet or Analytics fails the filter.
-			 * Launch starts the worker; the worker waits on @c m_in until
-			 * @ref Close binds a hopper. Do not let the origin Emit before Close.
+			 * A leaf that is not Process, Packet or Analytics fails
+			 * the filter. Launch starts the worker; the worker waits
+			 * on @c m_in until @ref Router::Close binds a hopper.
 			 */
-			void Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+			Route& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
 			/**
-			 * @brief Wires this track from @p origin to @p destination.
-			 * @param origin Producer step.
-			 * @param destination Consumer step.
-			 *
-			 * O(1) at the ends. Uses @c Bind(track, …) for Process.
-			 * Analytics receives a source look (origin frames via
-			 * @c m_tap, or a Decoder on origin packets) and a dest
-			 * look via @p destination.Look. Last Analytics @c m_out
-			 * is Drained. Does not launch the look Decoder beyond
-			 * its own constructor.
+			 * @brief Constructs a leaf of type @p T on this track.
+			 * @tparam T Process, Packet or Analytics leaf.
+			 * @tparam Args Constructor arguments.
+			 * @param args Forwarded to @p T.
+			 * @return *this.
 			 */
-			void Close(Step& origin, Step& destination) noexcept;
+			template<typename T, typename... Args>
+			Route& Add(Args&&... args) noexcept {
+				return Add(std::shared_ptr<Filter::FFmpeg>(
+					std::make_shared<T>(std::forward<Args>(args)...)));
+			}
 
 			/**
 			 * @brief Whether every owned worker has left Ready.
@@ -182,13 +188,21 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Reports of every kept filter.
 			 * @return One entry per owned filter, in Add order.
 			 *
-			 * Snapshots current leaf state. Analytics that has not
-			 * run Eof yet returns Failed / empty scores even if
-			 * pairs already went to the metric. Call after @ref Idle.
+			 * Call after @ref Idle.
 			 */
 			std::vector<Filter::Report> Reports() const noexcept;
 
 		private:
+			/**
+			 * @brief Wires this track from the stored origin to destination.
+			 *
+			 * Private: @ref Router is the only caller. O(1) at the
+			 * ends. Uses @c Bind(track, …) for Process. Analytics
+			 * receives a source look and a dest look via
+			 * destination.Look. Last Analytics @c m_out is Drained.
+			 */
+			void Close() noexcept;
+
 			/**
 			 * @class Lane
 			 * @brief Process chain and analytics chain of one @ref Kind.
@@ -245,13 +259,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param lane Lane whose FirstAnalytics receives look frames.
 			 *
 			 * Builds an encode-look Decoder (@ref Producer::Encoder
-			 * frames). Calls @p destination.Look. Shares the existing
-			 * Analytics hopper onto the look output so a second Bind
-			 * does not replace the source tap.
+			 * or @ref Producer::Remuxer frames). Calls
+			 * @p destination.Look. Shares the existing Analytics
+			 * hopper onto the look output so a second Bind does
+			 * not replace the source tap.
 			 */
 			void TapEncode(Step& destination, Lane& lane) noexcept;
 
 			int m_track;													///< Origin stream index
+			std::shared_ptr<Step> m_origin;									///< Producer end
+			std::shared_ptr<Step> m_destination;							///< Consumer end
 			Lane m_frames;													///< Frame process + analytics
 			Lane m_packets;													///< Packet process + analytics
 			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;			///< Owned leaves, Add order
