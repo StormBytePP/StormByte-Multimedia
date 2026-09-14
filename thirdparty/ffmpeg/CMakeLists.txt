@@ -144,14 +144,12 @@ else()
 				AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE))
 		list(APPEND FFMPEG_BM_OPTS "IPO=fat")
 	endif()
-	set(FFMPEG_PATCHES
-		"${CMAKE_CURRENT_LIST_DIR}/0001-meson-probe-cxx-archives-with-cpp-compiler.patch"
-		"${CMAKE_CURRENT_LIST_DIR}/0002-meson-libwebp-conf-set.patch"
-		"${CMAKE_CURRENT_LIST_DIR}/0003-meson-link-libm-only-when-lm-exists.patch"
-	)
-	list(APPEND FFMPEG_BM_OPTS
-		"GIT={RESET;PATCH={${FFMPEG_PATCHES}};TITLE=Meson configure probes}"
-	)
+	# Patches are no longer needed since MRs were accepted upstream
+	#set(FFMPEG_PATCHES "")
+	#list(APPEND FFMPEG_BM_OPTS
+	#	"GIT={RESET;PATCH={${FFMPEG_PATCHES}};TITLE=Meson configure probes}"
+	#)
+
 	list(JOIN FFMPEG_BM_OPTS ";" FFMPEG_BM_OPTSTR)
 
 	buildmaster_component(
