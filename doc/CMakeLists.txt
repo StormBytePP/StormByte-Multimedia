@@ -6,27 +6,61 @@ if(ENABLE_DOC)
 	set(_ffmpeg_hxx
 		"${CMAKE_BINARY_DIR}/lib/public/StormByte/multimedia/pipeline/filters/ffmpeg.hxx")
 
-	# Doxygen basic settings
 	set(DOXYGEN_PROJECT_NAME "${PROJECT_NAME}")
 	set(DOXYGEN_PROJECT_NUMBER "${PROJECT_VERSION}")
 	set(DOXYGEN_PROJECT_BRIEF "${PROJECT_DESCRIPTION}")
 	set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/docs")
 	set(DOXYGEN_USE_MDFILE_AS_MAINPAGE "${CMAKE_SOURCE_DIR}/README.md")
+
+	set(DOXYGEN_RECURSIVE YES)
+	set(DOXYGEN_FILE_PATTERNS "*.hxx" "*.h" "*.txx" "*.md")
+	set(DOXYGEN_EXCLUDE_PATTERNS
+		"*.cxx"
+		"*/thirdparty/*"
+	)
+
 	set(DOXYGEN_INCLUDE_PATH
 		"${CMAKE_SOURCE_DIR}/lib/public"
 		"${CMAKE_BINARY_DIR}/lib/public"
+		"${CMAKE_SOURCE_DIR}/thirdparty/StormByte/buffer/src/lib/public"
+		"${CMAKE_SOURCE_DIR}/thirdparty/StormByte/buffer/src/thirdparty/StormByte/logger/src/lib/public"
+		"${CMAKE_SOURCE_DIR}/thirdparty/StormByte/buffer/src/thirdparty/StormByte/logger/src/thirdparty/StormByte/base/src/lib/public"
+	)
+	set(DOXYGEN_STRIP_FROM_PATH "${CMAKE_SOURCE_DIR}")
+	set(DOXYGEN_STRIP_FROM_INC_PATH "${CMAKE_SOURCE_DIR}/lib/public")
+
+	set(DOXYGEN_ENABLE_PREPROCESSING YES)
+	set(DOXYGEN_MACRO_EXPANSION YES)
+	set(DOXYGEN_EXPAND_ONLY_PREDEF NO)
+	set(DOXYGEN_SEARCH_INCLUDES YES)
+	set(DOXYGEN_PREDEFINED
+		"STORMBYTE_MULTIMEDIA_PUBLIC="
+		"STORMBYTE_BUFFER_PUBLIC="
+		"STORMBYTE_LOGGER_PUBLIC="
+		"STORMBYTE_PUBLIC="
+		"WINDOWS="
+		"LINUX="
+		"MACOS="
+		"UNIX="
+		"CLANG="
+		"GCC="
+		"MSVC="
 	)
 
-	# Exclude .cxx files
-	set(DOXYGEN_EXCLUDE_PATTERNS "*.cxx")
+	set(DOXYGEN_EXTRACT_ALL YES)
+	set(DOXYGEN_EXTRACT_STATIC YES)
+	set(DOXYGEN_EXTRACT_LOCAL_CLASSES YES)
+	set(DOXYGEN_HIDE_UNDOC_MEMBERS NO)
+	set(DOXYGEN_JAVADOC_AUTOBRIEF YES)
+	set(DOXYGEN_BUILTIN_STL_SUPPORT YES)
+	set(DOXYGEN_MARKDOWN_SUPPORT YES)
 
-	# Doxygen output formats
 	set(DOXYGEN_GENERATE_HTML YES)
 	set(DOXYGEN_HTML_OUTPUT ".")
 	set(DOXYGEN_GENERATE_MAN NO)
 	set(DOXYGEN_GENERATE_LATEX NO)
+	set(DOXYGEN_QUIET YES)
 
-	# Add documentation target
 	doxygen_add_docs(
 		StormByteMultimediaDoc
 		"${CMAKE_SOURCE_DIR}/lib/public/StormByte"
