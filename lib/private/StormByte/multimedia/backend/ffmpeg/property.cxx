@@ -382,6 +382,7 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 				if (fps.num > 0 && fps.den > 0)
 					frameRate = Rate{fps.num, fps.den};
 			}
+
 			return Video{
 				Color{pix, range, space, primaries, transfer},
 				Resolution{
@@ -392,6 +393,7 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 				std::move(frameRate)
 			};
 		}
+
 		case AVMEDIA_TYPE_AUDIO: {
 			const int sampleRate = params.SampleRate();
 			const int channels = params.Channels();
@@ -410,6 +412,7 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 				std::move(profile)
 			};
 		}
+
 		default:
 			return std::monostate{};
 	}

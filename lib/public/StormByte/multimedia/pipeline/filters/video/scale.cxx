@@ -105,11 +105,13 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 		Fail("out of memory");
 		return;
 	}
+
 	if (av_frame_copy_props(out, src) < 0) {
 		av_frame_free(&out);
 		Fail("failed to copy frame properties");
 		return;
 	}
+
 	out->width = static_cast<int>(dstW);
 	out->height = static_cast<int>(dstH);
 	out->format = src->format;
@@ -128,6 +130,7 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 		Fail("swscale rejected this format");
 		return;
 	}
+
 	const int scaled = sws_scale(sws, src->data, src->linesize, 0, src->height,
 		out->data, out->linesize);
 	sws_freeContext(sws);

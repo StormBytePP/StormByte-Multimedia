@@ -83,6 +83,7 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 				frame.m_video->FrameRate());
 			break;
 		}
+
 		case Type::Audio: {
 			if (!frame.m_audio)
 				return;
@@ -96,6 +97,7 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 				frame.m_audio->Profile());
 			break;
 		}
+
 		default:
 			break;
 	}

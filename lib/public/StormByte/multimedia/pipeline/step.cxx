@@ -92,6 +92,7 @@ void Step::Fail(std::string reason) noexcept {
 				std::memory_order_acq_rel, std::memory_order_acquire))
 			break;
 	}
+
 	CloseHoppers();
 	m_wake.notify_all();
 }
@@ -114,6 +115,7 @@ void Step::Stop() noexcept {
 			break;
 		}
 	}
+
 	if (signaled)
 		Log(Level::LowLevel, "stop");
 	CloseHoppers();
@@ -229,19 +231,23 @@ void Step::Pump() noexcept {
 				Wait();
 				continue;
 			}
+
 			if (!Stopping()) {
 				Log(Level::LowLevel, "finish");
 				Finish();
 				DumpWork();
 			}
+
 			break;
 		}
+
 		const auto started = std::chrono::steady_clock::now();
 		Work(std::move(item));
 		const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - started).count();
 		RecordWork(us);
 	}
+
 	m_out.Eof();
 }
 
@@ -264,6 +270,7 @@ void Step::Launch() noexcept {
 			m_state.compare_exchange_strong(expected, State::Stopped,
 				std::memory_order_acq_rel, std::memory_order_acquire);
 		}
+
 		Log(Level::LowLevel, "stopped");
 	});
 }
@@ -274,6 +281,7 @@ void Step::Halt() noexcept {
 		m_worker.request_stop();
 		m_worker.join();
 	}
+
 	State expected = State::Stopping;
 	if (!m_state.compare_exchange_strong(expected, State::Stopped,
 			std::memory_order_acq_rel, std::memory_order_acquire)) {

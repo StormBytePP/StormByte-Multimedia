@@ -101,6 +101,7 @@ namespace {
 			if (stream.Index() == index)
 				return true;
 		}
+
 		return false;
 	}
 
@@ -115,6 +116,7 @@ namespace {
 				return Multimedia::Type::Audio;
 			return Multimedia::Type::Subtitle;
 		}
+
 		return Multimedia::Type::Unknown;
 	}
 }
@@ -164,6 +166,7 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::Open(
 				m_ctx->wanted.insert(slot->In());
 		}
 	}
+
 	for (const auto& stream : m_ctx->format->Streams())
 		m_ctx->timeBase[stream.Index()] = stream.TimeBase();
 
@@ -178,6 +181,7 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::Open(
 				avs->discard = AVDISCARD_ALL;
 		}
 	}
+
 	return true;
 }
 
@@ -195,6 +199,7 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 			owner.ReachedEof();
 			return {};
 		}
+
 		if (result == FFmpeg::OperationResult::TryAgain)
 			continue;
 		if (result != FFmpeg::OperationResult::Success) {
@@ -265,6 +270,7 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::OpenDecoder(
 		found = true;
 		break;
 	}
+
 	if (!found || !params.has_value()) {
 		decoder.Fail("stream index out of range");
 		return {};
@@ -283,11 +289,13 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::OpenDecoder(
 			std::move(opened.value()), timeBase,
 			std::get<Property::Video>(std::move(*mapped)));
 	}
+
 	if (mapped.has_value() && std::holds_alternative<Property::Audio>(*mapped)) {
 		return std::make_unique<Detail::Decoder::Audio>(
 			std::move(opened.value()), timeBase,
 			std::get<Property::Audio>(std::move(*mapped)));
 	}
+
 	return std::make_unique<Detail::Decoder::Subtitle>(
 		std::move(opened.value()), timeBase);
 }
@@ -311,9 +319,11 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::CloneStream(
 			avcodec_parameters_free(&params);
 			return false;
 		}
+
 		timeBase = stream.TimeBase();
 		return true;
 	}
+
 	return false;
 }
 

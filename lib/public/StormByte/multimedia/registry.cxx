@@ -61,12 +61,14 @@ namespace {
 				access |= Access(Operation::Write);
 				break;
 			}
+
 			const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(id);
 			if (desc && avcodec_find_encoder(desc->id) != nullptr) {
 				access |= Access(Operation::Write);
 				break;
 			}
 		}
+
 		return access;
 	}
 }
@@ -160,6 +162,7 @@ Access Registry::ProbeContainer(const Tables::Container::ContainerDef& def) cons
 		if (av_guess_format(id, nullptr, nullptr) != nullptr)
 			access |= Access(Operation::Write);
 	}
+
 	if (def.attachments)
 		access |= Access(Operation::Attach);
 	return access;
@@ -196,6 +199,7 @@ void Registry::Add(const Tables::Container::ContainerDef& def) noexcept {
 				break;
 			}
 		}
+
 		if (!dup)
 			stored.m_allowed.emplace_back(codec);
 	}

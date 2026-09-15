@@ -181,6 +181,7 @@ namespace {
 					AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(mdm), 0))
 				std::memcpy(sd->data, &mdm, sizeof(mdm));
 		}
+
 		if (hasLight) {
 			AVContentLightMetadata cll{};
 			cll.MaxCLL = static_cast<unsigned>(hdr10.LightLevel()->X());
@@ -196,6 +197,7 @@ namespace {
 			const auto& fps = *frame.Video()->FrameRate();
 			return AVRational{fps.Den(), fps.Num()};
 		}
+
 		return AVRational{1, 24};
 	}
 
@@ -218,6 +220,7 @@ namespace {
 			if (video.HDR10())
 				AddHdr10SideData(params.Get(), *video.HDR10());
 		}
+
 		const auto* raw = handle ? handle->Get() : nullptr;
 		if (raw) {
 			if (raw->format != AV_PIX_FMT_NONE)
@@ -227,6 +230,7 @@ namespace {
 			if (raw->height > 0)
 				params.Height(raw->height);
 		}
+
 		return params;
 	}
 }
@@ -278,6 +282,7 @@ bool Video::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 		owner.Fail("encoder destination is video but frame is not");
 		return false;
 	}
+
 	const auto* handle = FrameHandle(owner, frame);
 	if (!handle || !handle->Get()) {
 		owner.Fail("frame has no backend buffer");
@@ -309,6 +314,7 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		owner.Fail("empty frame");
 		return false;
 	}
+
 	if (!m_encoder && !Open(owner, *frame))
 		return false;
 	if (!m_encoder)
@@ -335,6 +341,7 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		if (raw->duration <= 0)
 			raw->duration = 1;
 	}
+
 	else
 		raw->duration = 1;
 
@@ -345,6 +352,7 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		owner.Fail("failed to send frame");
 		return false;
 	}
+
 	return true;
 }
 
@@ -359,6 +367,7 @@ bool Video::DrainOne(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 		owner.Fail("failed to receive packet");
 		return false;
 	}
+
 	StampOutgoing();
 	const auto* ctx = m_encoder->Get();
 	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
@@ -381,9 +390,11 @@ void Video::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 				break;
 			continue;
 		}
+
 		owner.Fail("failed to signal encoder EOF");
 		return;
 	}
+
 	while (DrainOne(owner))
 		;
 	m_flushed = true;
@@ -401,6 +412,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Video::Take() noexcept 
 			m_scratch.Unref();
 		}
 	}
+
 	if (m_pending.empty())
 		return {};
 	auto packet = std::move(m_pending.front());

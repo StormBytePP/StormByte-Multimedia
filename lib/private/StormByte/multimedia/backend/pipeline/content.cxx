@@ -58,6 +58,7 @@ std::unique_ptr<Content> Content::For(Type type) noexcept {
 		case Type::Unknown:
 			return std::make_unique<Passthrough>();
 	}
+
 	return std::make_unique<Passthrough>();
 }
 

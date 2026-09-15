@@ -85,6 +85,7 @@ void Remuxer::Open() noexcept {
 		Fail("remuxer origin is negative");
 		return;
 	}
+
 	Log(Level::Notice, std::format("open t={}", m_index));
 	Step::Open();
 }
@@ -98,12 +99,14 @@ void Remuxer::Work(Item::PointerType item) noexcept {
 		Fail("remuxer expected a packet");
 		return;
 	}
+
 	if (packet->Track() != m_index)
 		return;
 	if (!packet->Serial()) {
 		Fail("packet has no serial");
 		return;
 	}
+
 	Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
 		packet->Track(), *packet->Serial(), packet->Part(),
 		Ns(packet->Pts()), Ns(packet->Dts())));
@@ -123,6 +126,7 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& 
 		remuxer.Fail(demuxer.Error().value_or("demuxer failed"));
 		return remuxer;
 	}
+
 	remuxer.m_in.Notify(remuxer.Wake());
 	demuxer.m_out.Bind(remuxer.In(), remuxer.m_in);
 	if (const std::size_t cap = remuxer.InputCeiling(); cap > 0)
@@ -138,5 +142,6 @@ std::string Remuxer::Label() const noexcept {
 				return "Remuxer(" + std::string(stream.Codec().Name()) + ")";
 		}
 	}
+
 	return "Remuxer(t=" + std::to_string(m_index) + ")";
 }

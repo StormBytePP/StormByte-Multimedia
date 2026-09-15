@@ -110,6 +110,7 @@ namespace {
 			if (!best || row.preference < best->preference)
 				best = &row;
 		}
+
 		return best;
 	}
 
@@ -143,6 +144,7 @@ namespace {
 				break;
 			rest = rest.substr(cut + 1);
 		}
+
 		return out;
 	}
 
@@ -157,6 +159,7 @@ namespace {
 			out += '=';
 			out += value;
 		}
+
 		return out;
 	}
 
@@ -266,6 +269,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 			owner.Fail("encoder implementation is unavailable");
 			return std::nullopt;
 		}
+
 		const auto* listed = FindRow(stormName, pin);
 		if (!listed || !listed->features.Has(need)) {
 			owner.Fail("encoder implementation lacks required features");
@@ -286,18 +290,22 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 		owner.Fail("encoder implementation does not support CRF");
 		return std::nullopt;
 	}
+
 	if (owner.BitRate() && (!row || !HasKey(row->bitrate_key))) {
 		owner.Fail("encoder implementation does not support BitRate");
 		return std::nullopt;
 	}
+
 	if (owner.MaxBitRate() && (!row || !HasKey(row->maxrate_key))) {
 		owner.Fail("encoder implementation does not support MaxBitRate");
 		return std::nullopt;
 	}
+
 	if (owner.Preset() && (!row || !HasKey(row->preset_key))) {
 		owner.Fail("encoder implementation does not support Preset");
 		return std::nullopt;
 	}
+
 	if (owner.Tune() && (!row || !HasKey(row->style_key))) {
 		owner.Fail("encoder implementation does not support Tune");
 		return std::nullopt;
@@ -342,6 +350,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 			&& !fine.contains("pools") && !fine.contains("numa-pools"))
 			blob.emplace("pools", "*");
 	}
+
 	if (row && (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9")) {
 		if (!opts.contains("row-mt") && !fine.contains("row-mt"))
 			opts.emplace("row-mt", "1");
@@ -354,10 +363,12 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 			owner.Fail("FineTune conflicts with HDR signaling key '" + key + "'");
 			return std::nullopt;
 		}
+
 		if (opts.contains(key) && opts[key] != value) {
 			owner.Fail("FineTune conflicts with encoder setter key '" + key + "'");
 			return std::nullopt;
 		}
+
 		if (pack)
 			blob.emplace(key, value);
 		else
@@ -369,6 +380,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 		if (!packed.empty())
 			opts.emplace(row->tune_key, packed);
 	}
+
 	else {
 		for (const auto& [key, value] : blob)
 			opts.emplace(key, value);
@@ -387,6 +399,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 					params.Format(static_cast<int>(fmts[0]));
 				}
 			}
+
 			if (params.Get()) {
 				const void* layouts = nullptr;
 				int count = 0;
@@ -400,6 +413,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 							break;
 						}
 					}
+
 					if (!supported) {
 						const AVChannelLayout* best = &list[0];
 						const int have = params.Get()->ch_layout.nb_channels;
@@ -408,6 +422,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 								&& list[i].nb_channels >= best->nb_channels)
 								best = &list[i];
 						}
+
 						av_channel_layout_copy(&params.Get()->ch_layout, best);
 					}
 				}
@@ -431,6 +446,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 		out.Implementation(row->name);
 		out.Capabilities(row->features);
 	}
+
 	return out;
 }
 

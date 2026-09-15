@@ -63,6 +63,7 @@ FFmpeg::AVSubtitle& FFmpeg::AVSubtitle::operator=(AVSubtitle&& other) noexcept {
 		m_sub = other.m_sub;
 		other.m_sub = {};
 	}
+
 	return *this;
 }
 
@@ -100,6 +101,7 @@ std::string FFmpeg::AVSubtitle::Text() const noexcept {
 			out.push_back('\n');
 		out.append(text);
 	}
+
 	return out;
 }
 
@@ -114,6 +116,7 @@ void FFmpeg::AVSubtitle::FillText(std::string text, std::int64_t pts, std::uint3
 		m_sub.num_rects = 0;
 		return;
 	}
+
 	m_sub.rects[0] = static_cast<AVSubtitleRect*>(av_mallocz(sizeof(AVSubtitleRect)));
 	if (!m_sub.rects[0]) {
 		av_free(m_sub.rects);
@@ -121,10 +124,12 @@ void FFmpeg::AVSubtitle::FillText(std::string text, std::int64_t pts, std::uint3
 		m_sub.num_rects = 0;
 		return;
 	}
+
 	if (ass) {
 		m_sub.rects[0]->type = SUBTITLE_ASS;
 		m_sub.rects[0]->ass = av_strdup(text.c_str());
 	}
+
 	else {
 		m_sub.rects[0]->type = SUBTITLE_TEXT;
 		m_sub.rects[0]->text = av_strdup(text.c_str());

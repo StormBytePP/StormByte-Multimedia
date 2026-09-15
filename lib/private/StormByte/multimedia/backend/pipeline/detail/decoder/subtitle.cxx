@@ -104,8 +104,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				owner.Fail("failed to extract packet payload");
 				return false;
 			}
+
 			data = reinterpret_cast<const std::uint8_t*>(bytes.data());
 		}
+
 		if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet->KeyFrame())) {
 			owner.Fail("out of memory copying packet");
 			return false;
@@ -124,6 +126,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			owner.Fail("failed to decode subtitle");
 			return false;
 		}
+
 		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
 			return false;
 		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success)
@@ -146,6 +149,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				reinterpret_cast<const std::byte*>(text.data()),
 				reinterpret_cast<const std::byte*>(text.data()) + text.size());
 		}
+
 		else if (auto gray = OCR::GrayFromSubtitle(sub)) {
 			const std::size_t bytesN = gray->pixels.size();
 			bytes.resize(12 + bytesN);
@@ -198,6 +202,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				if (delta.count() > 0)
 					CloseCue(owner, *m_heldSubtitle, StormByte::Multimedia::Property::Duration{delta});
 			}
+
 			auto out = std::move(m_heldSubtitle);
 			if (hasCue)
 				m_heldSubtitle = std::move(incoming);
@@ -208,6 +213,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			m_heldSubtitle = std::move(incoming);
 			return {};
 		}
+
 		if (!hasCue)
 			return {};
 		return incoming;

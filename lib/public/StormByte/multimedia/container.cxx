@@ -64,8 +64,10 @@ bool Container::Allows(const CodecRefs& codecs) const noexcept {
 				break;
 			}
 		}
+
 		if (!found)
 			return false;
 	}
+
 	return true;
 }

@@ -205,6 +205,7 @@ void FFmpeg::AVFrame::WriteSideData(
 				type = AV_FRAME_DATA_SEI_UNREGISTERED;
 				break;
 		}
+
 		AVFrameSideData* side = av_frame_new_side_data(m_ptr, type, static_cast<int>(bytes.size()));
 		if (!side)
 			continue;

@@ -72,6 +72,7 @@ namespace {
 			if (stream.Index() == track)
 				return &stream.Codec();
 		}
+
 		return nullptr;
 	}
 }
@@ -125,6 +126,7 @@ std::unique_ptr<Backend::Pipeline::Decoder> Demuxer::OpenDecoder(Decoder& decode
 		decoder.Fail("demuxer is not open");
 		return {};
 	}
+
 	return m_backend->OpenDecoder(*this, decoder);
 }
 
@@ -167,6 +169,7 @@ void Demuxer::Open() noexcept {
 			return Stopping() || static_cast<bool>(m_plan);
 		});
 	}
+
 	if (Stopping() || !m_plan)
 		return;
 
@@ -203,6 +206,7 @@ void Demuxer::Pump() noexcept {
 			DumpWork();
 			return;
 		}
+
 		if (const auto& pts = packet->Pts(); pts)
 			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
 		m_lookOut.Push(packet->Track(), Packet::PointerType(new Packet(*packet)));

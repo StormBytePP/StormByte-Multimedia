@@ -160,10 +160,12 @@ void VMAF::Clean() noexcept {
 		vmaf_close(m_vmaf);
 		m_vmaf = nullptr;
 	}
+
 	if (m_model) {
 		vmaf_model_destroy(m_model);
 		m_model = nullptr;
 	}
+
 	m_width = 0;
 	m_height = 0;
 	m_index = 0;
@@ -185,6 +187,7 @@ void VMAF::Setup() noexcept {
 		m_failed = true;
 		return;
 	}
+
 	VmafModelConfig modelCfg{};
 	modelCfg.name = "vmaf";
 	modelCfg.flags = VMAF_MODEL_FLAGS_DEFAULT;
@@ -193,11 +196,13 @@ void VMAF::Setup() noexcept {
 		m_failed = true;
 		return;
 	}
+
 	if (vmaf_use_features_from_model(m_vmaf, m_model) != 0) {
 		Log(Level::Error, Name() + " vmaf_use_features_from_model failed");
 		m_failed = true;
 		return;
 	}
+
 	Log(Level::Debug, std::format("{} libvmaf ready threads={} subsample={}",
 		Name(), cfg.n_threads, cfg.n_subsample));
 }
@@ -222,6 +227,7 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 			vmaf_picture_unref(pic);
 			return false;
 		}
+
 		scaled->format = raw->format;
 		scaled->width = tw;
 		scaled->height = th;
@@ -230,6 +236,7 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 			vmaf_picture_unref(pic);
 			return false;
 		}
+
 		SwsContext* sws = sws_getContext(
 			raw->width, raw->height, static_cast<AVPixelFormat>(raw->format),
 			tw, th, static_cast<AVPixelFormat>(raw->format),
@@ -239,6 +246,7 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 			vmaf_picture_unref(pic);
 			return false;
 		}
+
 		sws_scale(sws, raw->data, raw->linesize, 0, raw->height, scaled->data, scaled->linesize);
 		sws_freeContext(sws);
 		src = scaled;
@@ -255,6 +263,7 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 			static_cast<uint8_t*>(pic->data[p]), pic->stride[p],
 			widthBytes, height);
 	}
+
 	av_frame_free(&scaled);
 	return true;
 }
@@ -266,6 +275,7 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 		Log(Level::Warning, Name() + " look has no picture size, skip pair");
 		return;
 	}
+
 	if (m_width == 0) {
 		m_width = ref->width;
 		m_height = ref->height;
@@ -279,11 +289,13 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 			Log(Level::Notice, std::format("{} geometry ref={}x{} dist={}x{}, scaling dist",
 				Name(), m_width, m_height, dist->width, dist->height));
 	}
+
 	else if (ref->width != m_width || ref->height != m_height) {
 		Log(Level::Warning, std::format("{} skip pair, ref size {}x{} latch {}x{}",
 			Name(), ref->width, ref->height, m_width, m_height));
 		return;
 	}
+
 	VmafPicture pref{};
 	VmafPicture pdist{};
 	if (!Fill(ref, m_width, m_height, &pref)
@@ -296,10 +308,12 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 		vmaf_picture_unref(&pdist);
 		return;
 	}
+
 	if (vmaf_read_pictures(m_vmaf, &pref, &pdist, index) != 0) {
 		Log(Level::Warning, Name() + " skip pair, vmaf_read_pictures failed");
 		return;
 	}
+
 	++m_scored;
 	Log(Level::LowLevel, std::format("{} scored index={} n={} ref_pts={} dist_pts={}",
 		Name(), index, m_scored, ref->pts, dist->pts));
@@ -335,23 +349,27 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		Log(Level::Debug, std::format("{} ignore producer={}", Name(), ToString(producer)));
 		return;
 	}
+
 	const ::AVFrame* raw = AVFrame();
 	if (!raw) {
 		Log(Level::Warning, std::format("{} frame has no backend producer={}",
 			Name(), ToString(producer)));
 		return;
 	}
+
 	::AVFrame* clone = av_frame_clone(raw);
 	if (!clone) {
 		Log(Level::Warning, Name() + " av_frame_clone failed");
 		return;
 	}
+
 	if (producer == Producer::Decoder) {
 		if (m_scored == 0 && m_ref.empty())
 			Log(Level::Debug, std::format("{} first ref {}x{} fmt={} bpc={} pts={}",
 				Name(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
 		m_ref.push_back(clone);
 	}
+
 	else {
 		if (m_scored == 0 && m_dist.empty())
 			Log(Level::Debug, std::format("{} first dist producer={} {}x{} fmt={} bpc={} pts={}",
@@ -359,6 +377,7 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 				raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
 		m_dist.push_back(clone);
 	}
+
 	Log(Level::LowLevel, std::format("{} park producer={} ref={} dist={}",
 		Name(), ToString(producer), m_ref.size(), m_dist.size()));
 	Drain();
@@ -380,6 +399,7 @@ void VMAF::Eof() noexcept {
 		m_failed = true;
 		return;
 	}
+
 	double mean = 0;
 	double mn = 0;
 	const unsigned last = m_scored - 1;
@@ -389,6 +409,7 @@ void VMAF::Eof() noexcept {
 		m_failed = true;
 		return;
 	}
+
 	m_mean = mean;
 	m_min = mn;
 	Log(Level::Notice, std::format("{} mean={:.3f} min={:.3f} n={} latch={}x{}",

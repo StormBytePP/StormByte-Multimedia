@@ -167,6 +167,7 @@ StormByte::Buffer::FIFO& Frame::Payload() noexcept {
 		m_payload = StormByte::Buffer::FIFO{std::move(bytes)};
 		m_backend->PayloadReady(true);
 	}
+
 	return m_payload;
 }
 

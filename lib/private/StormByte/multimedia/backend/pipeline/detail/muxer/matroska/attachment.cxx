@@ -83,6 +83,7 @@ namespace {
 				continue;
 			slots.insert(track->In());
 		}
+
 		return slots;
 	}
 }
@@ -110,12 +111,14 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				owner.Fail("attachment slot out of range");
 				return false;
 			}
+
 			const auto& attachment = attachments[static_cast<std::size_t>(slot)];
 			AVStream* stream = avformat_new_stream(ctx, nullptr);
 			if (!stream) {
 				owner.Fail("avformat_new_stream failed for attachment");
 				return false;
 			}
+
 			stream->codecpar->codec_type = AVMEDIA_TYPE_ATTACHMENT;
 			stream->codecpar->codec_id = AttachmentCodecId(attachment.MimeType());
 			if (attachment.FileName())
@@ -132,11 +135,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				owner.Fail("av_malloc failed for attachment");
 				return false;
 			}
+
 			std::memcpy(extra, view.data(), view.size());
 			std::memset(extra + view.size(), 0, static_cast<std::size_t>(AV_INPUT_BUFFER_PADDING_SIZE));
 			stream->codecpar->extradata = extra;
 			stream->codecpar->extradata_size = static_cast<int>(view.size());
 		}
+
 		return true;
 	}
 }

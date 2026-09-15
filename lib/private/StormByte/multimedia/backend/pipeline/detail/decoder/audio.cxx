@@ -111,8 +111,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				owner.Fail("failed to extract packet payload");
 				return false;
 			}
+
 			data = reinterpret_cast<const std::uint8_t*>(bytes.data());
 		}
+
 		if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet->KeyFrame())) {
 			owner.Fail("out of memory copying packet");
 			return false;
@@ -128,6 +130,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			owner.Fail("failed to send packet");
 			return false;
 		}
+
 		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
 			return false;
 		return true;
@@ -178,6 +181,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			owner.Fail("failed to signal decoder EOF");
 			return;
 		}
+
 		m_flushed = true;
 	}
 }

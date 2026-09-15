@@ -112,10 +112,12 @@ void FFmpeg::Hold(std::uint8_t n) noexcept {
 		Fail("Hold while already Held");
 		return;
 	}
+
 	if (!m_current) {
 		Fail("Hold without a unit");
 		return;
 	}
+
 	m_hold = n == 0 ? std::numeric_limits<std::uint8_t>::max() : n;
 	m_heldFor = 0;
 	Log(Level::Debug, std::format("{} hold n={}", Name(), static_cast<unsigned>(m_hold)));
@@ -135,6 +137,7 @@ void FFmpeg::Release() noexcept {
 			Work(m_current);
 			continue;
 		}
+
 		if (m_current->Kind() == Pipeline::Kind::Frame)
 			Process(static_cast<const Pipeline::Frame&>(*m_current));
 		else
@@ -144,6 +147,7 @@ void FFmpeg::Release() noexcept {
 		if (m_current)
 			Emit(std::move(m_current));
 	}
+
 	m_current.reset();
 }
 
@@ -219,6 +223,7 @@ void FFmpeg::Park() noexcept {
 		Fail("Hold exceeded");
 		return;
 	}
+
 	m_queue.push_back(m_current);
 	++m_heldFor;
 }
@@ -262,11 +267,13 @@ void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 				return;
 			}
 		}
+
 		else {
 			Park();
 			return;
 		}
 	}
+
 	if (m_current)
 		Emit(std::move(m_current));
 }
@@ -279,6 +286,7 @@ void FFmpeg::Finish() noexcept {
 		if (Held())
 			Fail("Hold + EoF without Release");
 	}
+
 	if (!Failed())
 		Eof();
 }

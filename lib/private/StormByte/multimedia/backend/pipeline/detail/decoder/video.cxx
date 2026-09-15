@@ -144,9 +144,11 @@ namespace {
 				out.emplace_back(name ? std::string(name) : std::string("unknown"),
 					StormByte::Buffer::FIFO{std::move(bytes)});
 			}
+
 			else
 				out.emplace_back(kind, StormByte::Buffer::FIFO{std::move(bytes)});
 		}
+
 		return out;
 	}
 
@@ -191,6 +193,7 @@ namespace {
 				if (plus || video.HDR10()->IsHDR10Plus())
 					kept.HDR10Plus(true);
 			}
+
 			return kept;
 		}
 
@@ -204,6 +207,7 @@ namespace {
 			out.HDR10Plus(plus);
 			return out;
 		}
+
 		return std::nullopt;
 	}
 }
@@ -233,8 +237,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				owner.Fail("failed to extract packet payload");
 				return false;
 			}
+
 			data = reinterpret_cast<const std::uint8_t*>(bytes.data());
 		}
+
 		if (!raw.Load(data, static_cast<int>(n), owner.Index(), packet->KeyFrame())) {
 			owner.Fail("out of memory copying packet");
 			return false;
@@ -250,6 +256,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			owner.Fail("failed to send packet");
 			return false;
 		}
+
 		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
 			return false;
 		return true;
@@ -311,6 +318,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				return;
 			}
 		}
+
 		m_flushed = true;
 	}
 }

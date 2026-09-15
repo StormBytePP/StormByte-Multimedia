@@ -115,6 +115,7 @@ namespace {
 			out.push_back(0xFF);
 			value -= 255;
 		}
+
 		out.push_back(static_cast<std::uint8_t>(value));
 	}
 
@@ -125,6 +126,7 @@ namespace {
 				out.push_back(0x03);
 				zeros = 0;
 			}
+
 			out.push_back(src[i]);
 			zeros = (src[i] == 0) ? zeros + 1 : 0;
 		}
@@ -165,6 +167,7 @@ namespace {
 			out.insert(out.end(), nal.begin(), nal.end());
 			out.insert(out.end(), src, src + srcSize);
 		}
+
 		else {
 			const auto len = static_cast<std::uint32_t>(nal.size());
 			out.push_back(static_cast<std::uint8_t>((len >> 24) & 0xFF));
@@ -254,6 +257,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 			avcodec_free_context(&ctx);
 			return Unexpected<FFmpeg::EncoderError>("Out of memory allocating subtitle header");
 		}
+
 		std::memcpy(ctx->subtitle_header, DefaultAssHeader, n + 1);
 		ctx->subtitle_header_size = static_cast<int>(n);
 	}
@@ -280,6 +284,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 		else
 			ctx->time_base = AVRational{1, 1000};
 	}
+
 	if (ctx->pkt_timebase.num <= 0 || ctx->pkt_timebase.den <= 0)
 		ctx->pkt_timebase = ctx->time_base;
 	if (ctx->codec_type == AVMEDIA_TYPE_VIDEO
@@ -364,12 +369,15 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept
 				pkt = std::move(tmp);
 				return OperationResult::Success;
 			}
+
 			if (filtered == OperationResult::TryAgain)
 				return OperationResult::EndOfFile;
 			return filtered;
 		}
+
 		return OperationResult::EndOfFile;
 	}
+
 	if (ret < 0)
 		return OperationResult::Error;
 
@@ -418,11 +426,13 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::SetEof() noexcept {
 		m_bsf_pipeline.SetEof();
 		return OperationResult::EndOfFile;
 	}
+
 	const int ret = avcodec_send_frame(m_ptr, nullptr);
 	if (ret == 0 || ret == AVERROR_EOF) {
 		m_bsf_pipeline.SetEof();
 		return (ret == 0) ? OperationResult::Success : OperationResult::EndOfFile;
 	}
+
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
 	return OperationResult::Error;

@@ -83,6 +83,7 @@ namespace {
 			if (commas == need)
 				return fields.substr(i + 1);
 		}
+
 		return {};
 	}
 
@@ -117,6 +118,7 @@ namespace {
 			if (!body.empty())
 				return std::string(body);
 		}
+
 		return std::string(in);
 	}
 
@@ -132,6 +134,7 @@ namespace {
 			else if (!tag)
 				out.push_back(c);
 		}
+
 		return out;
 	}
 
@@ -142,6 +145,7 @@ namespace {
 				text.erase(i + 1, 1);
 			}
 		}
+
 		return text;
 	}
 
@@ -155,8 +159,10 @@ namespace {
 				out += "\\N";
 				continue;
 			}
+
 			out.push_back(c);
 		}
+
 		return out;
 	}
 
@@ -295,6 +301,7 @@ bool Subtitle::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 		owner.Fail("encoder destination is subtitle but frame is not");
 		return false;
 	}
+
 	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params(nullptr);
 	auto opened = StormByte::Multimedia::Backend::Pipeline::Encoder::OpenCodec(
 		owner, std::move(params), AVRational{1, AV_TIME_BASE}, owner.Require());
@@ -336,11 +343,13 @@ void Subtitle::EmitHeld(StormByte::Multimedia::Pipeline::Encoder& owner,
 			m_heldPts = AV_NOPTS_VALUE;
 			return;
 		}
+
 		StampSubtitlePacket(m_scratch, m_heldPts, durationMs, tb);
 		m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(
 			owner, Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
 		m_scratch.Unref();
 	}
+
 	else {
 		if (WantsAssRect(impl))
 			text = WrapAss(std::move(text), m_heldStartNs, m_heldStartNs + durationNs);
@@ -353,6 +362,7 @@ void Subtitle::EmitHeld(StormByte::Multimedia::Pipeline::Encoder& owner,
 			m_heldPts = AV_NOPTS_VALUE;
 			return;
 		}
+
 		m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(
 			owner, Type::Subtitle, owner.Index(), m_scratch, m_timeBase, true));
 		m_scratch.Unref();
@@ -368,6 +378,7 @@ bool Subtitle::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		owner.Fail("empty frame");
 		return false;
 	}
+
 	if (!m_encoder && !Open(owner, *frame))
 		return false;
 	if (!m_encoder)
@@ -391,6 +402,7 @@ bool Subtitle::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 			owner.Fail(recognized.error() ? recognized.error()->what() : "OCR failed");
 			return false;
 		}
+
 		text = std::move(recognized.value());
 		if (text.empty())
 			return true;

@@ -91,6 +91,7 @@ Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
 			Fail("encoder destination type is not video, audio or subtitle");
 			return;
 	}
+
 	Launch();
 }
 
@@ -148,6 +149,7 @@ void Encoder::Preset(std::string name) noexcept {
 		m_preset.reset();
 		return;
 	}
+
 	m_preset = std::move(name);
 }
 
@@ -158,10 +160,12 @@ void Encoder::Tune(std::string name) noexcept {
 		Fail("Tune is not valid for this codec");
 		return;
 	}
+
 	if (name.empty()) {
 		m_tune.reset();
 		return;
 	}
+
 	m_tune = std::move(name);
 }
 
@@ -189,6 +193,7 @@ Packet::PointerType Encoder::Wrap(
 		Fail("encoder packet has no serial");
 		return {};
 	}
+
 	Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={} key={}",
 		index, *m_serial, m_part, Ns(pts), Ns(dts), Ns(duration), keyFrame ? 1 : 0));
 	auto packet = Packet::PointerType(new Packet(
@@ -222,16 +227,19 @@ bool Encoder::MuxBindStream(void* avStream) noexcept {
 			stream->avg_frame_rate = ctx->framerate;
 			stream->r_frame_rate = ctx->framerate;
 		}
+
 		else if (tb.num > 0 && tb.den > 0) {
 			stream->avg_frame_rate = AVRational{tb.den, tb.num};
 			stream->r_frame_rate = stream->avg_frame_rate;
 		}
+
 		int delay = ctx->has_b_frames;
 		if (delay <= 0 && (ctx->codec_id == AV_CODEC_ID_HEVC || ctx->codec_id == AV_CODEC_ID_H264))
 			delay = 2;
 		if (delay > 0)
 			stream->codecpar->video_delay = delay;
 	}
+
 	return true;
 }
 
@@ -248,6 +256,7 @@ void Encoder::Open() noexcept {
 		Fail("encoder has no backend");
 		return;
 	}
+
 	Step::Open();
 }
 
@@ -260,10 +269,12 @@ void Encoder::Work(Item::PointerType item) noexcept {
 		Fail("encoder expected a frame");
 		return;
 	}
+
 	if (!frame->Serial()) {
 		Fail("frame has no serial");
 		return;
 	}
+
 	const bool opening = !m_backend->IsOpen();
 	if (opening && !m_backend->Open(*this, *frame))
 		return;
@@ -283,6 +294,7 @@ void Encoder::Work(Item::PointerType item) noexcept {
 			std::this_thread::yield();
 			continue;
 		}
+
 		Emit(std::move(packet));
 	}
 
@@ -311,6 +323,7 @@ void Encoder::Finish() noexcept {
 			Emit(std::move(packet));
 		}
 	}
+
 	m_lookOut.Eof();
 }
 

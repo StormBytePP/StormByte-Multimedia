@@ -95,6 +95,7 @@ namespace {
 			if (stream.Index() == index)
 				return &stream;
 		}
+
 		return nullptr;
 	}
 
@@ -120,6 +121,7 @@ namespace {
 			if (slot.In == in && slot.Kind == kind)
 				return true;
 		}
+
 		return false;
 	}
 }
@@ -158,6 +160,7 @@ Transcoder::Track& Transcoder::Track::Codec(const StormByte::Multimedia::Codec& 
 			+ " is " + KindName(slot.Kind));
 		return *this;
 	}
+
 	if (auto* video = AsVideo(slot.Config.get()))
 		video->Codec(codec);
 	else if (auto* audio = AsAudio(slot.Config.get()))
@@ -286,6 +289,7 @@ void Transcoder::AttachFilter(std::size_t slot, std::shared_ptr<Filter::FFmpeg> 
 		Fail("Analytics attach on Transcoder::Filter, not Track::Filter");
 		return;
 	}
+
 	m_backend->Mapped[slot].Filters.push_back(std::move(filter));
 }
 
@@ -296,6 +300,7 @@ void Transcoder::AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcep
 		Fail("Track Process/Packet filters attach on Track::Filter");
 		return;
 	}
+
 	m_backend->Analytics.push_back(std::move(filter));
 }
 
@@ -309,6 +314,7 @@ ExpectedTranscoder Transcoder::BindLoggerAndFile(std::shared_ptr<StormByte::Logg
 		JobLog(logger, Level::Error, text);
 		return StormByte::Unexpected<TranscodeException>(text);
 	}
+
 	return std::unique_ptr<Transcoder>(new Transcoder(std::move(logger), std::move(*opened)));
 }
 
@@ -347,18 +353,21 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 		Fail("origin index is negative");
 		return Track(*this, InvalidSlot);
 	}
+
 	if (kind != Type::Attachment) {
 		const Stream* stream = FindStream(Source(), in);
 		if (!stream) {
 			Fail("source stream " + std::to_string(in) + " does not exist");
 			return Track(*this, InvalidSlot);
 		}
+
 		if (stream->Type() != kind) {
 			Fail("stream " + std::to_string(in) + " is " + KindName(stream->Type())
 				+ ", " + KindName(kind) + "() requires " + KindName(kind));
 			return Track(*this, InvalidSlot);
 		}
 	}
+
 	else {
 		const auto& attachments = Source().Attachments();
 		if (static_cast<std::size_t>(in) >= attachments.size()) {
@@ -366,6 +375,7 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 			return Track(*this, InvalidSlot);
 		}
 	}
+
 	if (AlreadyMapped(m_backend->Mapped, in, kind)) {
 		Fail("origin " + std::to_string(in) + " is already mapped");
 		return Track(*this, InvalidSlot);
@@ -387,8 +397,10 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 			Fail("attachment slot " + std::to_string(in) + " has no concrete MIME");
 			return Track(*this, InvalidSlot);
 		}
+
 		slot.Config = std::make_unique<Config::Attachment>(*mime);
 	}
+
 	m_backend->Mapped.push_back(std::move(slot));
 	JobLog(m_logger, Level::Debug, "mapped " + KindName(kind) + " " + std::to_string(in)
 		+ " -> order " + std::to_string(m_backend->Mapped.size() - 1));
@@ -419,12 +431,14 @@ Transcoder& Transcoder::Attachments(std::string_view mime) noexcept {
 		Fail("attachment MIME must be concrete");
 		return *this;
 	}
+
 	const auto& attachments = Source().Attachments();
 	for (int i = 0; i < static_cast<int>(attachments.size()); ++i) {
 		const auto& have = attachments[static_cast<std::size_t>(i)].MimeType();
 		if (have && *have == mime)
 			AddTrack(i, Type::Attachment);
 	}
+
 	return *this;
 }
 
@@ -434,6 +448,7 @@ Transcoder& Transcoder::Ignore(int in) noexcept {
 		Fail("source stream " + std::to_string(in) + " does not exist");
 		return *this;
 	}
+
 	auto& mapped = m_backend->Mapped;
 	mapped.erase(std::remove_if(mapped.begin(), mapped.end(),
 		[in](const Backend::Pipeline::TranscoderSlot& slot) { return slot.In == in; }),
@@ -450,12 +465,14 @@ Transcoder& Transcoder::Destination(const Container& container, std::filesystem:
 		Fail("container '" + std::string(container.Name()) + "' is not writable");
 		return *this;
 	}
+
 	if (!path.empty())
 		m_backend->Path = std::move(path);
 	if (m_backend->Path.empty()) {
 		Fail("destination path is empty");
 		return *this;
 	}
+
 	m_backend->Container = &container;
 	JobLog(m_logger, Level::Notice, "destination " + m_backend->Path.string());
 	return *this;
@@ -525,6 +542,7 @@ std::vector<std::pair<std::string, Filter::Report>> Transcoder::Reports() const 
 			continue;
 		out.emplace_back(analytics->Name(), analytics->Report());
 	}
+
 	return out;
 }
 

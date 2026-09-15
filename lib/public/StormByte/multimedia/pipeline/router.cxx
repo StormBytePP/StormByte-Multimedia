@@ -78,6 +78,7 @@ bool Router::Idle() const noexcept {
 		if (route && !route->Idle())
 			return false;
 	}
+
 	return true;
 }
 
@@ -89,5 +90,6 @@ std::vector<Filter::Report> Router::Reports() const noexcept {
 		auto part = route->Reports();
 		reports.insert(reports.end(), part.begin(), part.end());
 	}
+
 	return reports;
 }

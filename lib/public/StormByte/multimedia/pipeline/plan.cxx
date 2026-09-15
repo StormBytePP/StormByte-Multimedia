@@ -103,6 +103,7 @@ CheckResult Plan::Check() const {
 				if (attachment->MimeType().empty() || MimeHasWildcard(attachment->MimeType()))
 					return StormByte::Unexpected<PlanException>("attachment origin {} has invalid MIME type", in);
 			}
+
 			continue;
 		}
 
@@ -113,6 +114,7 @@ CheckResult Plan::Check() const {
 				break;
 			}
 		}
+
 		if (!stream)
 			return StormByte::Unexpected<PlanException>("track origin {} is not in source", in);
 		if (stream->Type() != type)
@@ -133,6 +135,7 @@ Demuxer& StormByte::Multimedia::Pipeline::operator>>(Plan&& plan, Demuxer& demux
 		if (!demuxer.m_plan)
 			demuxer.m_plan = std::make_shared<Plan>(std::move(plan));
 	}
+
 	demuxer.m_planPresent.notify_all();
 	return demuxer;
 }

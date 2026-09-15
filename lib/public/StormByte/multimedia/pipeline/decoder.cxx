@@ -161,31 +161,37 @@ bool Decoder::OpenLook(const Packet& packet) noexcept {
 		Fail("look packet has no codec parameters");
 		return false;
 	}
+
 	const auto& params = *packet.m_backend->Parameters();
 	const auto* codec = avcodec_find_decoder(static_cast<AVCodecID>(params.CodecId()));
 	if (!codec) {
 		Fail("look decoder not found");
 		return false;
 	}
+
 	auto opened = Backend::FFmpeg::AVDecoder::Open(
 		const_cast<AVCodec*>(codec), params, m_index);
 	if (!opened) {
 		Fail(opened.error()->what());
 		return false;
 	}
+
 	const AVRational timeBase{1, 1000000000};
 	if (packet.Type() == Type::Video) {
 		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Video>(
 			std::move(*opened), timeBase, std::nullopt));
 	}
+
 	else if (packet.Type() == Type::Audio) {
 		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Audio>(
 			std::move(*opened), timeBase, std::nullopt));
 	}
+
 	else {
 		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Subtitle>(
 			std::move(*opened), timeBase));
 	}
+
 	Log(Level::Debug, std::format("look open t={}", m_index));
 	return static_cast<bool>(m_backend);
 }
@@ -197,6 +203,7 @@ void Decoder::Open() noexcept {
 		Step::Open();
 		return;
 	}
+
 	while (!Stopping() && m_origin == nullptr)
 		Wait();
 	if (Stopping())
@@ -205,6 +212,7 @@ void Decoder::Open() noexcept {
 		Fail("decoder has no demuxer");
 		return;
 	}
+
 	while (!Stopping() && !m_origin->Failed() && !m_origin->Ready())
 		Wait();
 	if (Stopping())
@@ -235,14 +243,17 @@ void Decoder::Work(Item::PointerType item) noexcept {
 		Fail("decoder expected a packet");
 		return;
 	}
+
 	if (m_look && !m_backend) {
 		if (!OpenLook(*packet))
 			return;
 	}
+
 	if (!m_backend) {
 		Fail("decoder is not open");
 		return;
 	}
+
 	if (packet->Track() != m_index)
 		return;
 	if (!packet->Serial()) {
@@ -279,6 +290,7 @@ void Decoder::Work(Item::PointerType item) noexcept {
 			Wait();
 			continue;
 		}
+
 		emit(std::move(frame));
 	}
 
@@ -319,6 +331,7 @@ std::string Decoder::Label() const noexcept {
 			return "Decoder(look remux t=" + std::to_string(m_index) + ")";
 		return "Decoder(look src t=" + std::to_string(m_index) + ")";
 	}
+
 	if (m_implementation && !m_implementation->empty())
 		return "Decoder(" + *m_implementation + ")";
 	return "Decoder(t=" + std::to_string(m_index) + ")";

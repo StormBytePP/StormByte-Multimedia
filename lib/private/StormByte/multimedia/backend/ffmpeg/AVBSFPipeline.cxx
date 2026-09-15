@@ -51,6 +51,7 @@ AVBSFPipeline& AVBSFPipeline::operator=(AVBSFPipeline&& other) noexcept {
 		m_filters = std::move(other.m_filters);
 		other.m_filters.clear();
 	}
+
 	return *this;
 }
 

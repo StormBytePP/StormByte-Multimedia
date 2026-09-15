@@ -74,6 +74,7 @@ namespace {
 			if (std::tolower(left) != std::tolower(right))
 				return false;
 		}
+
 		return true;
 	}
 
@@ -108,6 +109,7 @@ Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
 		Fail("container does not allow write");
 		return;
 	}
+
 	const std::string_view name{container.Name()};
 	if (IsMatroskaFamily(name))
 		m_backend = std::make_unique<Backend::Pipeline::Detail::Muxer::Matroska::Container>();
@@ -115,6 +117,7 @@ Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
 		Fail("no muxer backend for destination container");
 		return;
 	}
+
 	Launch();
 }
 
@@ -154,6 +157,7 @@ std::size_t Muxer::ExpectedSlots() const noexcept {
 		if (Muxable(track->Type()))
 			++n;
 	}
+
 	return n;
 }
 
@@ -201,6 +205,7 @@ void Muxer::Open() noexcept {
 		Fail("muxer has no backend");
 		return;
 	}
+
 	Step::Open();
 }
 
@@ -216,6 +221,7 @@ void Muxer::Work(Item::PointerType item) noexcept {
 			return Failed() || Status() == State::Stopping || Armed();
 		});
 	}
+
 	if (Failed() || Status() == State::Stopping || !Armed())
 		return;
 
@@ -286,6 +292,7 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 		muxer.Fail("muxer has no backend");
 		return encoder;
 	}
+
 	muxer.m_backend->ReserveEncoder(muxer, encoder);
 	encoder.m_out.Bind(encoder.Index(), muxer.m_in);
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
@@ -307,6 +314,7 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 		muxer.Fail("muxer has no backend");
 		return remuxer;
 	}
+
 	if (!muxer.m_backend->ReserveRemux(muxer, remuxer.In()))
 		return remuxer;
 	remuxer.m_out.Bind(remuxer.In(), muxer.m_in);
@@ -326,6 +334,7 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Muxer& muxer, const std::file
 		muxer.Fail("muxer has no backend");
 		return muxer;
 	}
+
 	muxer.m_backend->BindPath(muxer, path);
 	muxer.Log(Level::Notice, std::format("path {}", path.string()));
 	return muxer;
@@ -338,6 +347,7 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(const File& file, Muxer& muxe
 		muxer.Fail("muxer has no backend");
 		return muxer;
 	}
+
 	muxer.m_backend->BindAttachments(muxer, file);
 	return muxer;
 }
@@ -351,10 +361,12 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxe
 		muxer.Fail("demuxer has no plan");
 		return muxer;
 	}
+
 	if (!muxer.m_backend) {
 		muxer.Fail("muxer has no backend");
 		return muxer;
 	}
+
 	muxer.m_origin = &demuxer;
 	muxer.m_backend->BindAttachments(muxer, demuxer.OriginFile());
 	muxer.Log(Level::Debug, "bound remux origin");

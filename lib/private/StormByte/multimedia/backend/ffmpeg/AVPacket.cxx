@@ -83,6 +83,7 @@ bool FFmpeg::AVPacket::Load(const std::uint8_t* data, int size, int stream_index
 		if (data)
 			std::memcpy(m_ptr->data, data, static_cast<std::size_t>(size));
 	}
+
 	m_ptr->stream_index = stream_index;
 	m_ptr->flags = key_frame ? AV_PKT_FLAG_KEY : 0;
 	m_ptr->pts = AV_NOPTS_VALUE;

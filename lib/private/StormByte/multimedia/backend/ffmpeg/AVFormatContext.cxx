@@ -162,6 +162,7 @@ FFmpeg::AVFormatContext& FFmpeg::AVFormatContext::operator=(AVFormatContext&& ot
 		AVPointer::operator=(std::move(other));
 		m_io = std::move(other.m_io);
 	}
+
 	return *this;
 }
 
@@ -211,6 +212,7 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer)
 		avio_context_free(&avio);
 		return Unexpected<DecoderError>("Could not allocate format context");
 	}
+
 	fmt_ctx->pb = avio;
 	fmt_ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
 
@@ -230,6 +232,7 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer)
 			av_free(pb->buffer);
 			avio_context_free(&pb);
 		}
+
 		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
 	}
 
@@ -283,6 +286,7 @@ void FFmpeg::AVFormatContext::HarvestSideData() noexcept {
 				}
 			}
 		}
+
 		packet.Unref();
 
 		bool done = true;
@@ -292,6 +296,7 @@ void FFmpeg::AVFormatContext::HarvestSideData() noexcept {
 				break;
 			}
 		}
+
 		if (done)
 			break;
 	}
@@ -397,6 +402,7 @@ void FFmpeg::AVFormatContext::Free() noexcept {
 		av_free(pb->buffer);
 		avio_context_free(&pb);
 	}
+
 	m_io.reset();
 	m_ptr = nullptr;
 }

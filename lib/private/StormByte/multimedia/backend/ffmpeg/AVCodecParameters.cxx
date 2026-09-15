@@ -62,6 +62,7 @@ FFmpeg::AVCodecParameters& FFmpeg::AVCodecParameters::operator=(const AVCodecPar
 		m_ptr = avcodec_parameters_alloc();
 		avcodec_parameters_copy(m_ptr, other.m_ptr);
 	}
+
 	return *this;
 }
 

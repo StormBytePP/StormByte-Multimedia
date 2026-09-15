@@ -97,6 +97,7 @@ namespace {
 			if (!video->FineTune().empty())
 				encoder.FineTune(video->FineTune());
 		}
+
 		else if (const auto* audio = dynamic_cast<const StormByte::Multimedia::Pipeline::Config::Audio*>(&config)) {
 			if (audio->BitRate())
 				encoder.BitRate(*audio->BitRate());
@@ -170,17 +171,20 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		job.OnError(job.Error().value_or("configure failed"));
 		return;
 	}
+
 	if (Stopping(*this, token)) {
 		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
 		JobLog(job.Logger(), Level::Notice, "aborted");
 		job.OnAborted();
 		return;
 	}
+
 	if (!Container || Path.empty() || !job.m_file) {
 		job.Fail("destination or source is not set");
 		job.OnError(job.Error().value_or("destination or source is not set"));
 		return;
 	}
+
 	for (const auto& slot : Mapped) {
 		if (!slot.Config) {
 			job.Fail("track origin " + std::to_string(slot.In) + " has no config");
@@ -202,14 +206,17 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				job.Fail("OnStart rejected the job");
 			job.OnError(job.Error().value_or("OnStart rejected the job"));
 		}
+
 		else if (start == StormByte::Multimedia::Pipeline::Status::Aborted) {
 			Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
 			JobLog(job.Logger(), Level::Notice, "aborted");
 			job.OnAborted();
 		}
+
 		else {
 			Status.store(StormByte::Multimedia::Pipeline::Status::Stopped, std::memory_order_release);
 		}
+
 		return;
 	}
 
@@ -225,11 +232,13 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		job.OnError(job.Error().value_or("demux"));
 		return;
 	}
+
 	if (mux->Failed()) {
 		job.Fail(mux->Error().value_or("mux open failed"));
 		job.OnError(job.Error().value_or("mux"));
 		return;
 	}
+
 	if (Stopping(*this, token)) {
 		Status.store(StormByte::Multimedia::Pipeline::Status::Aborted, std::memory_order_release);
 		JobLog(job.Logger(), Level::Notice, "aborted");
@@ -264,6 +273,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				job.OnError(job.Error().value_or("mux"));
 				return;
 			}
+
 			const bool videoAnalytics = slot.Kind == StormByte::Multimedia::Type::Video
 				&& !Analytics.empty();
 			if (!slot.Filters.empty() || videoAnalytics) {
@@ -275,10 +285,13 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 					for (const auto& filter : Analytics)
 						route->Add(filter);
 				}
+
 				router.Add(std::move(route));
 			}
+
 			remuxes.push_back(std::move(remux));
 		}
+
 		else {
 			auto decoder = std::make_shared<StormByte::Multimedia::Pipeline::Decoder>(
 				job.Logger(), slot.In);
@@ -293,6 +306,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				job.OnError(job.Error().value_or("encode"));
 				return;
 			}
+
 			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
 				slot.In, decoder, encoder);
 			for (const auto& filter : slot.Filters)
@@ -301,6 +315,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				for (const auto& filter : Analytics)
 					frames->Add(filter);
 			}
+
 			auto packets = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
 				slot.In, encoder, mux);
 			router.Add(std::move(frames)).Add(std::move(packets));
@@ -310,6 +325,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 			lane.Encoder = std::move(encoder);
 			lanes.push_back(std::move(lane));
 		}
+
 		++muxIndex;
 	}
 
@@ -328,10 +344,12 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 			job.Fail(demux->Error().value_or("demux failed"));
 			break;
 		}
+
 		if (mux->Failed()) {
 			job.Fail(mux->Error().value_or("mux failed"));
 			break;
 		}
+
 		bool dead = false;
 		for (auto& lane : lanes) {
 			if (lane.Decoder && lane.Decoder->Failed()) {
@@ -339,14 +357,17 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				dead = true;
 				break;
 			}
+
 			if (lane.Encoder && lane.Encoder->Failed()) {
 				job.Fail(lane.Encoder->Error().value_or("encoder failed"));
 				dead = true;
 				break;
 			}
+
 			if (lane.Encoder && *lane.Encoder)
 				job.MarkSettled(lane.In, *lane.Encoder);
 		}
+
 		if (dead)
 			break;
 		if (mux->Closed())
@@ -359,6 +380,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 					if (num > maxNs)
 						maxNs = num;
 				}
+
 				unsigned pct = static_cast<unsigned>((maxNs * 100) / den);
 				if (pct > 99)
 					pct = 99;
@@ -370,6 +392,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				}
 			}
 		}
+
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	}
 
@@ -380,6 +403,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		job.OnAborted();
 		return;
 	}
+
 	if (job.Failed()) {
 		job.OnError(job.Error().value_or("transcode failed"));
 		return;

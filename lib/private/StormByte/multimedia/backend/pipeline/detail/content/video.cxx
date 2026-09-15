@@ -224,5 +224,6 @@ void Video::Put(const ::AVFrame* before, ::AVFrame* after) noexcept {
 		x0 = 0;
 		y0 = 0;
 	}
+
 	MapWindowsToOrigin(*plus, in.width, in.height, x0, y0, out.width, out.height);
 }

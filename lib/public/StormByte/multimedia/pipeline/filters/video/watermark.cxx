@@ -87,6 +87,7 @@ namespace {
 			sum += static_cast<unsigned>(SampleY8(src, x, row));
 			++n;
 		}
+
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
@@ -98,6 +99,7 @@ namespace {
 			sum += static_cast<unsigned>(SampleY8(src, col, y));
 			++n;
 		}
+
 		return n ? static_cast<int>(sum / static_cast<unsigned>(n)) : 0;
 	}
 
@@ -111,13 +113,16 @@ namespace {
 				++bar;
 				continue;
 			}
+
 			if (mean <= cap + 8 && noise < 2) {
 				++noise;
 				++bar;
 				continue;
 			}
+
 			break;
 		}
+
 		return bar - noise;
 	}
 
@@ -148,6 +153,7 @@ namespace {
 				lut[static_cast<std::size_t>(i)] = static_cast<uint8_t>(i);
 			return lut;
 		}
+
 		for (int i = 0; i < 256; ++i) {
 			if (i <= lo)
 				lut[static_cast<std::size_t>(i)] = 0;
@@ -156,6 +162,7 @@ namespace {
 			else
 				lut[static_cast<std::size_t>(i)] = static_cast<uint8_t>(((i - lo) * 255) / (hi - lo));
 		}
+
 		return lut;
 	}
 
@@ -207,6 +214,7 @@ namespace {
 			out.left = pair.first;
 			out.right = pair.second;
 		}
+
 		return out;
 	}
 
@@ -234,6 +242,7 @@ namespace {
 			case Anchor::BottomCenter:	x = x0 + (aw - logoW) / 2; y = y0 + ah - logoH - margin; break;
 			case Anchor::BottomRight:	x = x0 + aw - logoW - margin; y = y0 + ah - logoH - margin; break;
 		}
+
 		return {x, y};
 	}
 
@@ -298,10 +307,12 @@ void Watermark::DropScale() noexcept {
 		sws_freeContext(static_cast<::SwsContext*>(m_swsLuma));
 		m_swsLuma = nullptr;
 	}
+
 	if (m_luma) {
 		av_frame_free(&m_luma);
 		m_luma = nullptr;
 	}
+
 	m_lumaW = 0;
 	m_lumaH = 0;
 	m_lumaFmt = AV_PIX_FMT_NONE;
@@ -349,12 +360,14 @@ bool Watermark::LoadFile() noexcept {
 		DisableLogo("cannot open " + m_path.string());
 		return false;
 	}
+
 	in.seekg(0, std::ios::end);
 	const auto size = in.tellg();
 	if (size <= 0) {
 		DisableLogo("empty logo");
 		return false;
 	}
+
 	in.seekg(0, std::ios::beg);
 	m_bytes.resize(static_cast<std::size_t>(size));
 	in.read(reinterpret_cast<char*>(m_bytes.data()), size);
@@ -363,6 +376,7 @@ bool Watermark::LoadFile() noexcept {
 		DisableLogo("failed to read " + m_path.string());
 		return false;
 	}
+
 	return true;
 }
 
@@ -417,6 +431,7 @@ bool Watermark::DecodeLogo() noexcept {
 		DisableLogo("out of memory decoding logo");
 		return false;
 	}
+
 	rgba->format = AV_PIX_FMT_RGBA;
 	rgba->width = decoded->width;
 	rgba->height = decoded->height;
@@ -442,6 +457,7 @@ bool Watermark::DecodeLogo() noexcept {
 		DisableLogo("failed to convert logo to RGBA");
 		return false;
 	}
+
 	sws_freeContext(sws);
 
 	m_logoWidth = rgba->width;
@@ -478,6 +494,7 @@ bool Watermark::DecodeLogo() noexcept {
 			Fail("out of memory");
 			return nullptr;
 		}
+
 		m_luma->format = AV_PIX_FMT_GRAY8;
 		m_luma->width = src->width;
 		m_luma->height = src->height;
@@ -486,6 +503,7 @@ bool Watermark::DecodeLogo() noexcept {
 			Fail("failed to allocate luma probe");
 			return nullptr;
 		}
+
 		m_swsLuma = sws_getContext(
 			src->width, src->height, static_cast<::AVPixelFormat>(src->format),
 			m_luma->width, m_luma->height, AV_PIX_FMT_GRAY8,
@@ -495,6 +513,7 @@ bool Watermark::DecodeLogo() noexcept {
 			Fail("failed to convert frame to luma");
 			return nullptr;
 		}
+
 		m_lumaW = src->width;
 		m_lumaH = src->height;
 		m_lumaFmt = src->format;
@@ -505,6 +524,7 @@ bool Watermark::DecodeLogo() noexcept {
 		Fail("failed to convert frame to luma");
 		return nullptr;
 	}
+
 	return m_luma;
 }
 
@@ -547,16 +567,19 @@ bool Watermark::ProbeBars(::AVFrame* src) noexcept {
 			m_barTop = found.top;
 			m_barBottom = found.bottom;
 		}
+
 		else {
 			m_barTop = std::min(m_barTop, found.top);
 			m_barBottom = std::min(m_barBottom, found.bottom);
 		}
 	}
+
 	if (found.left > 0 && found.right > 0) {
 		if (m_barLeft == 0) {
 			m_barLeft = found.left;
 			m_barRight = found.right;
 		}
+
 		else {
 			m_barLeft = std::min(m_barLeft, found.left);
 			m_barRight = std::min(m_barRight, found.right);
@@ -587,6 +610,7 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 			Release();
 			return;
 		}
+
 		if (Held())
 			return;
 		m_released = true;
@@ -611,6 +635,7 @@ void Watermark::Paint() noexcept {
 		Fail("missing video buffer");
 		return;
 	}
+
 	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<::AVPixelFormat>(src->format));
 	if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
 		Fail("watermark needs a software frame");
@@ -638,11 +663,13 @@ void Watermark::Paint() noexcept {
 		Fail("out of memory");
 		return;
 	}
+
 	if (av_frame_copy_props(out, src) < 0) {
 		av_frame_free(&out);
 		Fail("failed to copy frame properties");
 		return;
 	}
+
 	out->width = src->width;
 	out->height = src->height;
 	out->format = AV_PIX_FMT_RGBA;
@@ -664,6 +691,7 @@ void Watermark::Paint() noexcept {
 		Fail("failed to convert frame to RGBA");
 		return;
 	}
+
 	sws_freeContext(toRgba);
 
 	Blend(out->data[0], out->linesize[0], out->width, out->height,
@@ -677,12 +705,14 @@ void Watermark::Paint() noexcept {
 			Fail("out of memory");
 			return;
 		}
+
 		if (av_frame_copy_props(restored, src) < 0) {
 			av_frame_free(&restored);
 			av_frame_free(&out);
 			Fail("failed to copy frame properties");
 			return;
 		}
+
 		restored->width = src->width;
 		restored->height = src->height;
 		restored->format = src->format;
@@ -692,6 +722,7 @@ void Watermark::Paint() noexcept {
 			Fail("failed to allocate destination");
 			return;
 		}
+
 		::SwsContext* fromRgba = sws_getContext(
 			out->width, out->height, AV_PIX_FMT_RGBA,
 			restored->width, restored->height, static_cast<::AVPixelFormat>(restored->format),
@@ -705,6 +736,7 @@ void Watermark::Paint() noexcept {
 			Fail("failed to convert frame back");
 			return;
 		}
+
 		sws_freeContext(fromRgba);
 		av_frame_free(&out);
 		out = restored;

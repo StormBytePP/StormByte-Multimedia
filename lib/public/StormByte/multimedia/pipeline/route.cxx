@@ -102,6 +102,7 @@ void Route::Close() noexcept {
 		destination.Fail("route stretch has no overlapping kinds");
 		return;
 	}
+
 	for (const auto& filter : m_filters) {
 		if (dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr)
 			continue;
@@ -126,11 +127,13 @@ void Route::Close() noexcept {
 	if (first == nullptr) {
 		origin.m_out.Bind(m_track, destination.m_in);
 	}
+
 	else {
 		first->m_in.Notify(first->Wake());
 		origin.m_out.Bind(m_track, first->m_in);
 		last->m_out.Bind(m_track, destination.m_in);
 	}
+
 	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
 		destination.m_in.Capacity(m_track, cap);
 
@@ -153,10 +156,12 @@ bool Route::Idle() const noexcept {
 		if (filter && !Dead(*filter))
 			return false;
 	}
+
 	for (const auto& look : m_looks) {
 		if (look && !Dead(*look))
 			return false;
 	}
+
 	return true;
 }
 
@@ -178,6 +183,7 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
 		lane.LastAnalytics = &filter;
 		return;
 	}
+
 	if (lane.LastProcess != nullptr)
 		lane.LastProcess->m_out.Bind(m_track, filter.m_in);
 	if (lane.FirstProcess == nullptr)
@@ -193,6 +199,7 @@ void Route::TapDecode(Step& origin, Lane& lane) noexcept {
 		origin.m_tap.Bind(m_track, lane.FirstAnalytics->m_in);
 		return;
 	}
+
 	if (!origin.Produces().Has(Kind::Packet))
 		return;
 	std::unique_ptr<Decoder> look(new Decoder(origin.m_log, m_track, Decoder::SourceLook{}));

@@ -81,5 +81,6 @@ Features::operator std::string() const noexcept {
 			first = false;
 		result += ToString(feature);
 	}
+
 	return result;
 }

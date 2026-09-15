@@ -107,17 +107,20 @@ namespace {
 				av_packet_free(&raw);
 				return nullptr;
 			}
+
 			const auto view = UnreadSpan(fifo);
 			if (view.size() != size) {
 				av_packet_free(&raw);
 				return nullptr;
 			}
+
 			std::memcpy(raw->data, view.data(), size);
 			if (!fifo.Drop(size)) {
 				av_packet_free(&raw);
 				return nullptr;
 			}
 		}
+
 		if (packet.KeyFrame())
 			raw->flags |= AV_PKT_FLAG_KEY;
 
@@ -139,6 +142,7 @@ namespace {
 				default:
 					break;
 			}
+
 			if (type == AV_PKT_DATA_NB)
 				continue;
 			uint8_t* dst = av_packet_new_side_data(raw, type, view.size());
@@ -146,8 +150,10 @@ namespace {
 				av_packet_free(&raw);
 				return nullptr;
 			}
+
 			std::memcpy(dst, view.data(), view.size());
 		}
+
 		return raw;
 	}
 
@@ -159,6 +165,7 @@ namespace {
 			if (track && track->Type() == StormByte::Multimedia::Type::Attachment)
 				return true;
 		}
+
 		return false;
 	}
 }
@@ -204,10 +211,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("muxer destination is already bound");
 			return false;
 		}
+
 		if (path.empty()) {
 			owner.Fail("mux destination path is empty");
 			return false;
 		}
+
 		std::string url;
 		try {
 #ifdef WINDOWS
@@ -216,10 +225,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			url = path.string();
 #endif
 		}
+
 		catch (...) {
 			owner.Fail("could not convert destination path to UTF-8");
 			return false;
 		}
+
 		const auto ext = owner.Destination().Extension();
 		const std::string dummy = ext.empty() ? url : ("out." + std::string(ext));
 		const AVOutputFormat* oformat = av_guess_format(nullptr, dummy.c_str(), nullptr);
@@ -227,11 +238,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("could not guess output format from container");
 			return false;
 		}
+
 		AVFormatContext* ctx = nullptr;
 		if (avformat_alloc_output_context2(&ctx, const_cast<AVOutputFormat*>(oformat), nullptr, url.c_str()) < 0 || !ctx) {
 			owner.Fail("avformat_alloc_output_context2 failed");
 			return false;
 		}
+
 		m_ctx = ctx;
 		m_path = path;
 		if (!(ctx->oformat->flags & AVFMT_NOFILE)) {
@@ -240,6 +253,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				return false;
 			}
 		}
+
 		return WriteHeaderIfReady(owner);
 	}
 
@@ -249,14 +263,17 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("cannot add a track after the header");
 			return false;
 		}
+
 		if (encoder.Index() < 0) {
 			owner.Fail("encoder output index is invalid");
 			return false;
 		}
+
 		if (m_tracks.contains(encoder.Index())) {
 			owner.Fail("duplicate mux output index");
 			return false;
 		}
+
 		Track track;
 		track.encoder = &encoder;
 		track.language = owner.Language(encoder.Index());
@@ -271,15 +288,18 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("cannot add a track after the header");
 			return false;
 		}
+
 		if (inIndex < 0) {
 			owner.Fail("remux source stream is invalid");
 			return false;
 		}
+
 		const int out = static_cast<int>(m_tracks.size());
 		if (m_tracks.contains(out)) {
 			owner.Fail("duplicate mux output index");
 			return false;
 		}
+
 		Track track;
 		track.inIndex = inIndex;
 		track.language = owner.Language(out);
@@ -295,15 +315,18 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("cannot bind attachments after the header");
 			return false;
 		}
+
 		if (!PlanWantsAttachments(owner)) {
 			m_file = nullptr;
 			return true;
 		}
+
 		m_file = &file;
 		if (!owner.Destination().HasAccess(Access{Operation::Attach})) {
 			owner.Fail("destination container does not support attachments");
 			return false;
 		}
+
 		return true;
 	}
 
@@ -313,14 +336,17 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("empty packet");
 			return false;
 		}
+
 		if (Resolve(packet->Track()) < 0) {
 			owner.Fail("packet stream index is not a mux track");
 			return false;
 		}
+
 		if (!m_ctx) {
 			m_queue.push_back(packet);
 			return true;
 		}
+
 		if (!WriteHeaderIfReady(owner))
 			return false;
 		if (m_header) {
@@ -330,8 +356,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				if (!leftover || !WritePacket(owner, *leftover))
 					return false;
 			}
+
 			return WritePacket(owner, *packet);
 		}
+
 		m_queue.push_back(packet);
 		return true;
 	}
@@ -352,9 +380,11 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				owner.Fail("encoder failed");
 				return false;
 			}
+
 			if (!*track.encoder)
 				return true;
 		}
+
 		for (auto& [index, track] : m_tracks) {
 			if (track.encoder || track.params)
 				continue;
@@ -372,6 +402,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				owner.Fail("mux output indexes must be contiguous from 0");
 				return false;
 			}
+
 			++expected;
 			AVStream* stream = avformat_new_stream(m_ctx, nullptr);
 			if (!stream) {
@@ -384,21 +415,25 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 					owner.Fail("encoder context is empty");
 					return false;
 				}
+
 				if (owner.Language(index))
 					track.language = owner.Language(index);
 				if (owner.Title(index))
 					track.title = owner.Title(index);
 				av_dict_set(&stream->metadata, "ENCODER", track.encoder->EncoderTag().c_str(), 0);
 			}
+
 			else {
 				if (!track.params) {
 					owner.Fail("remux track has no codec parameters");
 					return false;
 				}
+
 				if (avcodec_parameters_copy(stream->codecpar, track.params) < 0) {
 					owner.Fail("avcodec_parameters_copy failed");
 					return false;
 				}
+
 				if (track.srcTb.num > 0 && track.srcTb.den > 0)
 					stream->time_base = track.srcTb;
 			}
@@ -413,6 +448,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 					stream->disposition |= AV_DISPOSITION_DEFAULT;
 					haveDefaultVideo = true;
 				}
+
 				if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && !haveDefaultAudio) {
 					stream->disposition |= AV_DISPOSITION_DEFAULT;
 					haveDefaultAudio = true;
@@ -439,12 +475,14 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (par->codec_type == AVMEDIA_TYPE_VIDEO)
 				hasVideo = true;
 		}
+
 		if (hasAudio && hasVideo) {
 			const auto cap = owner.InputCeiling();
 			const auto depth = cap == 0 ? 1 : cap;
 			m_ctx->max_interleave_delta =
 				static_cast<std::int64_t>(depth) * 2 * InterleaveSlotUs;
 		}
+
 		else if (hasAudio || hasVideo) {
 			const auto cap = owner.InputCeiling();
 			const auto depth = cap == 0 ? 1 : cap;
@@ -479,6 +517,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (!queued || !WritePacket(owner, *queued))
 				return false;
 		}
+
 		return true;
 	}
 
@@ -492,11 +531,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("packet stream index is not a mux track");
 			return false;
 		}
+
 		AVPacket* raw = MakeAvPacket(packet);
 		if (!raw) {
 			owner.Fail("could not allocate output packet");
 			return false;
 		}
+
 		auto& track = it->second;
 		raw->stream_index = track.avIndex;
 		const AVRational tb = track.timeBase;
@@ -519,6 +560,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (raw->dts == AV_NOPTS_VALUE)
 				raw->dts = raw->pts;
 		}
+
 		else {
 			if (raw->dts == AV_NOPTS_VALUE) {
 				if (track.lastDts != AV_NOPTS_VALUE)
@@ -526,6 +568,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				else if (raw->pts != AV_NOPTS_VALUE)
 					raw->dts = raw->pts;
 			}
+
 			else if (track.lastDts != AV_NOPTS_VALUE && raw->dts <= track.lastDts)
 				raw->dts = track.lastDts + 1;
 			if (raw->pts != AV_NOPTS_VALUE && raw->dts != AV_NOPTS_VALUE && raw->pts < raw->dts)
@@ -540,6 +583,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			owner.Fail("av_interleaved_write_frame failed: " + AvError(rc));
 			return false;
 		}
+
 		return true;
 	}
 
@@ -561,6 +605,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				owner.Fail("avcodec_parameters_alloc failed");
 				return;
 			}
+
 			params->codec_type = AVMEDIA_TYPE_SUBTITLE;
 			params->codec_id = AV_CODEC_ID_SUBRIP;
 			track.params = params;
@@ -578,6 +623,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 					return;
 			}
 		}
+
 		if (!m_header)
 			WriteHeaderIfReady(owner);
 		if (m_header && !m_trailer && m_ctx) {
@@ -594,6 +640,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			av_write_trailer(m_ctx);
 			m_trailer = true;
 		}
+
 		if (m_ctx->pb && !(m_ctx->oformat && (m_ctx->oformat->flags & AVFMT_NOFILE)))
 			avio_closep(&m_ctx->pb);
 		avformat_free_context(m_ctx);

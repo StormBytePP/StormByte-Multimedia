@@ -152,15 +152,18 @@ FFmpeg::OperationResult FFmpeg::AVDecoder::SetEof() noexcept {
 		m_bsf_pipeline.SetEof();
 		return OperationResult::EndOfFile;
 	}
+
 	if (IsSubtitle()) {
 		m_bsf_pipeline.SetEof();
 		return OperationResult::EndOfFile;
 	}
+
 	const int ret = avcodec_send_packet(m_ptr, nullptr);
 	if (ret == 0 || ret == AVERROR_EOF) {
 		m_bsf_pipeline.SetEof();
 		return (ret == 0) ? OperationResult::Success : OperationResult::EndOfFile;
 	}
+
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
 	return OperationResult::Error;

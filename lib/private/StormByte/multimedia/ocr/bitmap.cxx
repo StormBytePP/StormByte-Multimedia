@@ -79,6 +79,7 @@ namespace StormByte::Multimedia::OCR {
 				width = rect->w;
 			height += rect->h;
 		}
+
 		if (width <= 0 || height <= 0)
 			return std::nullopt;
 
@@ -106,8 +107,10 @@ namespace StormByte::Multimedia::OCR {
 						dst[x] = src[x];
 				}
 			}
+
 			row += rect->h;
 		}
+
 		return out;
 	}
 }

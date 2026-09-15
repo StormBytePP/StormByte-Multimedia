@@ -86,10 +86,12 @@ namespace {
 				if (found.has_value())
 					return found;
 			}
+
 			if (comma == std::string_view::npos)
 				break;
 			rest = rest.substr(comma + 1);
 		}
+
 		return Unexpected<ContainerNotFoundException>(std::string(formatName));
 	}
 
@@ -107,15 +109,18 @@ namespace {
 			reason = "file does not exist";
 			return false;
 		}
+
 		if (!std::filesystem::is_regular_file(path, ec) || ec) {
 			reason = "path is not a regular file";
 			return false;
 		}
+
 		std::ifstream in(path, std::ios::binary);
 		if (!in) {
 			reason = "file is not readable";
 			return false;
 		}
+
 		return true;
 	}
 
@@ -124,10 +129,12 @@ namespace {
 			reason = "buffer is not readable";
 			return false;
 		}
+
 		if (consumer.EoF() && consumer.AvailableBytes() == 0) {
 			reason = "buffer is empty";
 			return false;
 		}
+
 		return true;
 	}
 
@@ -160,10 +167,12 @@ namespace {
 			bytes.assign(p, p + raw->attached_pic.size);
 			return bytes;
 		}
+
 		if (raw && raw->codecpar && raw->codecpar->extradata_size > 0 && raw->codecpar->extradata) {
 			const auto* p = reinterpret_cast<const std::byte*>(raw->codecpar->extradata);
 			bytes.assign(p, p + raw->codecpar->extradata_size);
 		}
+
 		return bytes;
 	}
 
@@ -187,6 +196,7 @@ namespace {
 				break;
 			}
 		}
+
 		if (!missing || coverIndex.empty())
 			return;
 
@@ -212,6 +222,7 @@ namespace {
 					const auto* raw = reinterpret_cast<const std::byte*>(data);
 					bytes.assign(raw, raw + packet.Size());
 				}
+
 				attachments[n] = Attachment(
 					attachments[n].FileName(),
 					attachments[n].MimeType(),
@@ -219,6 +230,7 @@ namespace {
 				++filled;
 				break;
 			}
+
 			packet.Unref();
 			if (filled == coverIndex.size())
 				break;
@@ -286,6 +298,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 			coverIndex.push_back(stream.Index());
 			continue;
 		}
+
 		auto codec = ResolveCodec(stream);
 		if (!codec.has_value())
 			return FailOpen(*origin, codec.error()->what());
@@ -297,6 +310,7 @@ ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chron
 			FFmpeg::MapProperties(stream)
 		));
 	}
+
 	FillEmptyAttachmentPayloads(ctx, attachments, coverIndex);
 
 	if (knownDuration.has_value())
