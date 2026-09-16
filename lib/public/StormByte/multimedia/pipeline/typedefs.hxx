@@ -159,9 +159,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * because the shared hopper is Eof, not by reading this enum.
 	 *
 	 * Owned by the Pumper. A Worker has no State: it only Fail()s
-	 * into the Host. Step::Status exposes this value (today the
-	 * atomic still lives on Step; it moves to the Pumper when
-	 * the leaves switch over).
+	 * into the Host. Step::Status forwards to the Pumper.
 	 *
 	 * Created
 	 *   Constructor finished. The object is usable: Plan can be
@@ -169,7 +167,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   Setup/Open has not returned. Pump must not take units
 	 *   from the input hopper. Launch has usually already spawned
 	 *   the thread; the thread is blocked inside Setup (waiting
-	 *   for a Plan, an origin, a path, …). This is the only state
+	 *   for a Plan, an origin, a path, …).
+	 *   This is the only state
 	 *   in which Setup may run to completion.
 	 *
 	 * Ready

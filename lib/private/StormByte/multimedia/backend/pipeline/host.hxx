@@ -126,7 +126,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 
 			/**
 			 * @brief Next unit from the input hopper.
-			 * @param return Item, or empty if none is ready.
+			 * @return Item, or empty if none is ready.
 			 */
 			virtual Multimedia::Pipeline::Item::PointerType Pull() noexcept = 0;
 
