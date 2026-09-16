@@ -184,7 +184,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Muxer(Muxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. @ref Step::Join Halt s before backends die.
 			 */
 			~Muxer() noexcept override;
 
@@ -337,5 +337,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::atomic<bool> m_closed;										///< Set by Finish / Fail
 			std::atomic<std::size_t> m_reserved;
 			std::atomic<std::int64_t> m_positionNs;							///< Last written Pts, or -1
+			Join m_join{*this};												///< Halt before other members die
 	};
 }
