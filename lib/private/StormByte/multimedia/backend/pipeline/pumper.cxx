@@ -39,14 +39,21 @@
 #include <StormByte/multimedia/backend/pipeline/pumper.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 
+#include <chrono>
 #include <utility>
 
 using namespace StormByte::Multimedia::Backend::Pipeline;
 using StormByte::Multimedia::Pipeline::State;
+using StormByte::Logger::Level;
 
 namespace {
 	bool Terminal(State state) noexcept {
 		return state == State::Failed || state == State::Stopped;
+	}
+
+	std::int64_t ElapsedUs(std::chrono::steady_clock::time_point started) noexcept {
+		return std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - started).count();
 	}
 }
 
@@ -65,7 +72,7 @@ void Pumper::Bind(std::unique_ptr<Worker> worker) noexcept {
 }
 
 void Pumper::Launch() noexcept {
-	if (m_thread.joinable() || !m_worker)
+	if (m_thread.joinable() || !m_worker || Stopping())
 		return;
 	m_thread = std::jthread([this](std::stop_token token) {
 		(void)token;
@@ -76,6 +83,7 @@ void Pumper::Launch() noexcept {
 		if (!m_state.compare_exchange_strong(expected, State::Ready,
 				std::memory_order_acq_rel, std::memory_order_acquire))
 			return;
+		m_host.BecameReady();
 		Pump();
 		m_host.CloseOutput();
 		expected = State::Stopping;
@@ -85,6 +93,8 @@ void Pumper::Launch() noexcept {
 			m_state.compare_exchange_strong(expected, State::Stopped,
 				std::memory_order_acq_rel, std::memory_order_acquire);
 		}
+
+		m_host.Log(Level::LowLevel, "stopped");
 	});
 }
 
@@ -146,9 +156,15 @@ void Pumper::PumpSource() noexcept {
 	for (;;) {
 		if (Stopping() || m_host.Exhausted())
 			break;
+		const auto started = std::chrono::steady_clock::now();
 		m_worker->Process({});
-		if (Stopping() || m_host.Exhausted())
+		m_host.RecordWork(ElapsedUs(started));
+		if (Stopping())
 			break;
+		if (m_host.Exhausted()) {
+			m_host.DumpWork();
+			break;
+		}
 	}
 }
 
@@ -165,12 +181,19 @@ void Pumper::PumpPop() noexcept {
 				continue;
 			}
 
-			if (!Stopping())
+			if (!Stopping()) {
+				const auto started = std::chrono::steady_clock::now();
 				m_worker->Process({});
+				m_host.RecordWork(ElapsedUs(started));
+				m_host.DumpWork();
+			}
+
 			break;
 		}
 
+		const auto started = std::chrono::steady_clock::now();
 		m_worker->Process(std::move(item));
+		m_host.RecordWork(ElapsedUs(started));
 		if (Failed())
 			break;
 	}

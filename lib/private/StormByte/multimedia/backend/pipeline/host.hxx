@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -56,10 +57,11 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * @class Host
 	 * @brief Owner surface that a Worker and a Pumper may call.
 	 *
-	 * Implemented by @ref StormByte::Multimedia::Pipeline::Step when
-	 * the leaves switch over. Hoppers, logging and Plan stay on
-	 * the Step. The Pumper is not a Host and is not a friend of
-	 * Step: it only holds a Host&. No friends on this type.
+	 * Implemented by a private nested type of
+	 * @ref StormByte::Multimedia::Pipeline::Step. Hoppers, logging
+	 * and Plan stay on the Step. The Pumper is not a Host and is
+	 * not a friend of Step: it only holds a Host&. No friends on
+	 * this type.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -124,7 +126,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 
 			/**
 			 * @brief Next unit from the input hopper.
-			 * @return Item, or empty if none is ready.
+			 * @param return Item, or empty if none is ready.
 			 */
 			virtual Multimedia::Pipeline::Item::PointerType Pull() noexcept = 0;
 
@@ -140,6 +142,22 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * Does not Eof the analytics tap.
 			 */
 			virtual void CloseOutput() noexcept = 0;
+
+			/**
+			 * @brief Pumper has CAS Created → Ready. Wake waiters.
+			 */
+			virtual void BecameReady() noexcept = 0;
+
+			/**
+			 * @brief Adds one Process duration to the step summary.
+			 * @param microseconds Wall time of that Process call.
+			 */
+			virtual void RecordWork(std::int64_t microseconds) noexcept = 0;
+
+			/**
+			 * @brief Writes min/max Process time at Debug. No-op if none.
+			 */
+			virtual void DumpWork() noexcept = 0;
 
 		protected:
 			Host() noexcept = default;
