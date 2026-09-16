@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/Sws.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/pipeline/filters/video/watermark.hxx>
 
 #include <algorithm>
@@ -49,8 +49,8 @@
 #include <utility>
 
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
-using FFrame = StormByte::Multimedia::Backend::FFmpeg::AVFrame;
-using FSws = StormByte::Multimedia::Backend::FFmpeg::Sws;
+using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
+using FSws = StormByte::Multimedia::FFmpeg::Sws;
 
 namespace {
 	int SampleY8(const FFrame& src, int x, int y) noexcept {

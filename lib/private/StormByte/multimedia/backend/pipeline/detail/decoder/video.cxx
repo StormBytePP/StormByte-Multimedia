@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -69,7 +69,7 @@ using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Pipeline::SideDataKind;
 using StormByte::Multimedia::Type;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	constexpr int ChromaDenominator = 50000;
@@ -129,7 +129,7 @@ namespace {
 		}
 	}
 
-	std::vector<SideData> MapAttachments(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& av) noexcept {
+	std::vector<SideData> MapAttachments(const StormByte::Multimedia::FFmpeg::AVFrame& av) noexcept {
 		std::vector<SideData> out;
 		for (int i = 0; i < av.SideDataCount(); ++i) {
 			const AVFrameSideData* sd = av.SideDataAt(i);
@@ -153,7 +153,7 @@ namespace {
 	}
 
 	std::optional<StormByte::Multimedia::Property::HDR10> MapFrameHDR10(
-		const StormByte::Multimedia::Backend::FFmpeg::AVFrame& av, bool heuristics, const StormByte::Multimedia::Property::Video& video) noexcept {
+		const StormByte::Multimedia::FFmpeg::AVFrame& av, bool heuristics, const StormByte::Multimedia::Property::Video& video) noexcept {
 		const AVFrameSideData* mdmSd = av.SideData(AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
 		const AVFrameSideData* cllSd = av.SideData(AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 		const AVFrameSideData* plusSd = av.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
@@ -213,7 +213,7 @@ namespace {
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
-	Video::Video(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase,
+	Video::Video(StormByte::Multimedia::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase,
 		std::optional<StormByte::Multimedia::Property::Video> video) noexcept
 	: m_decoder(std::move(decoder)), m_video(std::move(video)), m_timeBase(timeBase), m_flushed(false) {}
 
@@ -228,7 +228,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			return false;
 		}
 
-		StormByte::Multimedia::Backend::FFmpeg::AVPacket raw;
+		StormByte::Multimedia::FFmpeg::AVPacket raw;
 		StormByte::Buffer::DataType bytes;
 		const auto n = packet->Payload().AvailableBytes();
 		const std::uint8_t* data = nullptr;
@@ -252,12 +252,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
 		const auto result = m_decoder.SendPacket(raw);
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 			owner.Fail("failed to send packet");
 			return false;
 		}
 
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 			return false;
 		return true;
 	}
@@ -266,10 +266,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
 		auto holder = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
 		const auto result = m_decoder.ReceiveFrame(holder->Handle());
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain
-			|| result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain
+			|| result == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 			return {};
-		if (result != StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+		if (result != StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 			owner.Fail("failed to receive frame");
 			return {};
 		}
@@ -309,12 +309,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			return;
 		for (;;) {
 			const auto sent = m_decoder.SetEof();
-			if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success
-				|| sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+			if (sent == StormByte::Multimedia::FFmpeg::OperationResult::Success
+				|| sent == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 				break;
-			if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+			if (sent == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 				break;
-			if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+			if (sent == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 				owner.Fail("failed to flush decoder");
 				return;
 			}

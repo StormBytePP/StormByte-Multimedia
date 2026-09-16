@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/convert.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -68,7 +68,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Pipeline::SideDataKind;
@@ -185,7 +185,7 @@ std::int64_t Encoder::NsToTicks(std::int64_t ns, FFmpeg::AVRational timeBase) no
 
 std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 	StormByte::Multimedia::Pipeline::Encoder& owner,
-	enum Type type, int index, const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
+	enum Type type, int index, const StormByte::Multimedia::FFmpeg::AVPacket& raw,
 	AVRational timeBase, bool keepPacketHdrPlus) noexcept {
 	StormByte::Buffer::DataType bytes;
 	const auto* data = raw.Data();
@@ -235,7 +235,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 		if (const auto* ctx = owner.m_backend->Context(); ctx) {
 			::AVCodecParameters* par = avcodec_parameters_alloc();
 			if (par && avcodec_parameters_from_context(par, ctx) >= 0)
-				holder->Parameters(StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters(par));
+				holder->Parameters(StormByte::Multimedia::FFmpeg::AVCodecParameters(par));
 			if (par)
 				avcodec_parameters_free(&par);
 		}
@@ -253,7 +253,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 }
 
 std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipeline::Encoder& owner,
-	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params,
+	StormByte::Multimedia::FFmpeg::AVCodecParameters params,
 	AVRational timeBase,
 	Features need) noexcept {
 	if (!owner.Destination().HasAccess(Operation::Write)) {
@@ -435,7 +435,7 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 		}
 	}
 
-	auto opened = StormByte::Multimedia::Backend::FFmpeg::AVEncoder::Open(
+	auto opened = StormByte::Multimedia::FFmpeg::AVEncoder::Open(
 		const_cast<::AVCodec*>(codec), params, owner.Index(), opts, timeBase);
 	if (!opened.has_value()) {
 		owner.Fail(opened.error() ? opened.error()->what() : "Failed to open encoder");
@@ -455,16 +455,16 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 	return out;
 }
 
-StormByte::Multimedia::Backend::FFmpeg::AVFrame* Encoder::FrameHandle(
+StormByte::Multimedia::FFmpeg::AVFrame* Encoder::FrameHandle(
 	StormByte::Multimedia::Pipeline::Encoder& owner,
 	StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
-	return static_cast<StormByte::Multimedia::Backend::FFmpeg::AVFrame*>(owner.FrameHandle(frame));
+	return static_cast<StormByte::Multimedia::FFmpeg::AVFrame*>(owner.FrameHandle(frame));
 }
 
-const StormByte::Multimedia::Backend::FFmpeg::AVFrame* Encoder::FrameHandle(
+const StormByte::Multimedia::FFmpeg::AVFrame* Encoder::FrameHandle(
 	StormByte::Multimedia::Pipeline::Encoder& owner,
 	const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
-	return static_cast<const StormByte::Multimedia::Backend::FFmpeg::AVFrame*>(owner.FrameHandle(frame));
+	return static_cast<const StormByte::Multimedia::FFmpeg::AVFrame*>(owner.FrameHandle(frame));
 }
 
 void Encoder::CommitOpen(StormByte::Multimedia::Pipeline::Encoder& owner,

@@ -39,7 +39,7 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -228,8 +228,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			struct Lane {
 				VmafContext* vmaf = nullptr;	///< libvmaf context
 				VmafModel* model = nullptr;	///< Loaded model
-				std::deque<StormByte::Multimedia::Backend::FFmpeg::AVFrame> ref;	///< Decoder looks
-				std::deque<StormByte::Multimedia::Backend::FFmpeg::AVFrame> dist;	///< Dest looks
+				std::deque<StormByte::Multimedia::FFmpeg::AVFrame> ref;	///< Decoder looks
+				std::deque<StormByte::Multimedia::FFmpeg::AVFrame> dist;	///< Dest looks
 				int width = 0;					///< Latched width
 				int height = 0;					///< Latched height
 				unsigned index = 0;				///< Next accepted libvmaf index
@@ -254,7 +254,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * On a failed read, the caller still owns both
 			 * pictures and must unref them.
 			 */
-			bool Fill(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& raw,
+			bool Fill(const StormByte::Multimedia::FFmpeg::AVFrame& raw,
 				int tw, int th, void* out) noexcept;
 
 			/**
@@ -275,8 +275,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * when it pops the FIFOs.
 			 */
 			void Score(Lane& lane,
-				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& ref,
-				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& dist,
+				const StormByte::Multimedia::FFmpeg::AVFrame& ref,
+				const StormByte::Multimedia::FFmpeg::AVFrame& dist,
 				unsigned index) noexcept;
 
 			/**

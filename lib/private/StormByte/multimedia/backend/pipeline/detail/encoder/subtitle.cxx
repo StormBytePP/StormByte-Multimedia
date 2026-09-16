@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/subtitle.hxx>
 #include <StormByte/multimedia/ocr/engine.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -61,7 +61,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	constexpr std::size_t DialogueFieldsBeforeText = 9;
@@ -265,7 +265,7 @@ namespace {
 			+ ",Default,NTP,0000,0000,0000,," + NewlinesToAss(std::move(text));
 	}
 
-	void StampSubtitlePacket(StormByte::Multimedia::Backend::FFmpeg::AVPacket& pkt,
+	void StampSubtitlePacket(StormByte::Multimedia::FFmpeg::AVPacket& pkt,
 		std::int64_t pts, std::uint32_t durationMs, FFmpeg::AVRational tb) noexcept {
 		const std::int64_t duration = FFmpeg::AVRational{1, 1000}.Rescale(static_cast<std::int64_t>(durationMs), tb);
 		const std::int64_t scaled = (pts == AV_NOPTS_VALUE)
@@ -303,7 +303,7 @@ bool Subtitle::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 		return false;
 	}
 
-	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params(nullptr);
+	StormByte::Multimedia::FFmpeg::AVCodecParameters params(nullptr);
 	auto opened = StormByte::Multimedia::Backend::Pipeline::Encoder::OpenCodec(
 		owner, std::move(params), FFmpeg::AVRational{1, AV_TIME_BASE}, owner.Require());
 	if (!opened)
@@ -354,10 +354,10 @@ void Subtitle::EmitHeld(StormByte::Multimedia::Pipeline::Encoder& owner,
 	else {
 		if (WantsAssRect(impl))
 			text = WrapAss(std::move(text), m_heldStartNs, m_heldStartNs + durationNs);
-		StormByte::Multimedia::Backend::FFmpeg::AVSubtitle sub;
+		StormByte::Multimedia::FFmpeg::AVSubtitle sub;
 		sub.FillText(std::move(text), m_heldPts, durationMs, WantsAssRect(impl));
 		if (!m_encoder || m_encoder->EncodeSubtitle(sub, m_scratch)
-			!= StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+			!= StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 			owner.Fail("failed to encode subtitle");
 			m_heldText.clear();
 			m_heldPts = AV_NOPTS_VALUE;

@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -74,7 +74,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			 * @param decoder Opened AVDecoder.
 			 * @param timeBase Stream time base.
 			 */
-			Subtitle(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder,
+			Subtitle(StormByte::Multimedia::FFmpeg::AVDecoder decoder,
 				AVRational timeBase) noexcept;
 
 			/**
@@ -138,8 +138,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			void Flush(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
 
 		private:
-			StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;						///< Opened decoder
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVSubtitle> m_pendingSub;	///< Pending AVSubtitle
+			StormByte::Multimedia::FFmpeg::AVDecoder m_decoder;						///< Opened decoder
+			std::optional<StormByte::Multimedia::FFmpeg::AVSubtitle> m_pendingSub;	///< Pending AVSubtitle
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Frame> m_heldSubtitle;			///< Held subtitle frame
 			std::optional<StormByte::Multimedia::Property::Duration> m_packetPts;			///< Last packet PTS
 			std::optional<StormByte::Multimedia::Property::Duration> m_packetDuration;		///< Last packet duration

@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -87,7 +87,7 @@ namespace {
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
-	Audio::Audio(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase,
+	Audio::Audio(StormByte::Multimedia::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase,
 		std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept
 	: m_decoder(std::move(decoder)), m_audio(std::move(audio)), m_timeBase(timeBase), m_flushed(false) {}
 
@@ -102,7 +102,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			return false;
 		}
 
-		StormByte::Multimedia::Backend::FFmpeg::AVPacket raw;
+		StormByte::Multimedia::FFmpeg::AVPacket raw;
 		StormByte::Buffer::DataType bytes;
 		const auto n = packet->Payload().AvailableBytes();
 		const std::uint8_t* data = nullptr;
@@ -126,12 +126,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
 		const auto result = m_decoder.SendPacket(raw);
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 			owner.Fail("failed to send packet");
 			return false;
 		}
 
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 			return false;
 		return true;
 	}
@@ -140,10 +140,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
 		auto holder = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
 		const auto result = m_decoder.ReceiveFrame(holder->Handle());
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain
-			|| result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain
+			|| result == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 			return {};
-		if (result != StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+		if (result != StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 			owner.Fail("failed to receive frame");
 			return {};
 		}
@@ -173,10 +173,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			return;
 		for (;;) {
 			const auto sent = m_decoder.SetEof();
-			if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success
-				|| sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+			if (sent == StormByte::Multimedia::FFmpeg::OperationResult::Success
+				|| sent == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 				break;
-			if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+			if (sent == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 				break;
 			owner.Fail("failed to signal decoder EOF");
 			return;

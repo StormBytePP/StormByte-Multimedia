@@ -43,8 +43,8 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
+#include <StormByte/multimedia/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/ffmpeg/fwd.hxx>
 
 #include <memory>
 

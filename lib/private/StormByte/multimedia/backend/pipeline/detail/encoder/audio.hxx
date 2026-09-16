@@ -38,11 +38,11 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AudioFifo.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/Swr.hxx>
+#include <StormByte/multimedia/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AudioFifo.hxx>
+#include <StormByte/multimedia/ffmpeg/Swr.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -172,7 +172,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 * @return false if owner.Fail() was called.
 			 */
 			bool PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
-				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
+				const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Converts @p src and writes samples into the fifo.
@@ -181,7 +181,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 * @return false if owner.Fail() was called.
 			 */
 			bool Ingest(StormByte::Multimedia::Pipeline::Encoder& owner,
-				StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
+				StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Sends encoder-sized frames from the fifo.
@@ -196,14 +196,14 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 */
 			void StampOutgoing() noexcept;
 
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
-			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
+			std::optional<StormByte::Multimedia::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
+			StormByte::Multimedia::FFmpeg::AVPacket m_scratch;					///< Receive scratch
+			StormByte::Multimedia::FFmpeg::AVFrame m_converted;				///< Encoder-sized frame
 			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
 			StormByte::Multimedia::Pipeline::Encoder* m_owner;							///< Owner for Take/Wrap
 			AVRational m_timeBase;														///< Encoder time base
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::Swr> m_swr;			///< Format / layout converter
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AudioFifo> m_fifo;	///< Samples waiting for frame_size
+			std::optional<StormByte::Multimedia::FFmpeg::Swr> m_swr;			///< Format / layout converter
+			std::optional<StormByte::Multimedia::FFmpeg::AudioFifo> m_fifo;	///< Samples waiting for frame_size
 			int m_inFormat;																///< Decoded sample format
 			int m_outFormat;															///< Encoder sample format
 			int m_frameSize;															///< Encoder frame_size

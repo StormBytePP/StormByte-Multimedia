@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 
 #include <chrono>
 
@@ -84,7 +84,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @param stream Stream view.
 	 * @return true if `AV_DISPOSITION_ATTACHED_PIC`.
 	 */
-	inline bool IsAttachedPicture(const Backend::FFmpeg::AVStream& stream) noexcept {
+	inline bool IsAttachedPicture(const FFmpeg::AVStream& stream) noexcept {
 		return (stream.Disposition() & AV_DISPOSITION_ATTACHED_PIC) != 0;
 	}
 
@@ -93,7 +93,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @param stream Stream view.
 	 * @return true if it is not a media track.
 	 */
-	inline bool IsContainerAttachment(const Backend::FFmpeg::AVStream& stream) noexcept {
+	inline bool IsContainerAttachment(const FFmpeg::AVStream& stream) noexcept {
 		if (stream.Type() == AVMEDIA_TYPE_ATTACHMENT)
 			return true;
 		return stream.CodecParameters().CodecId() == AV_CODEC_ID_NONE;
@@ -104,7 +104,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @param ctx Opened format context.
 	 * @return true when a non-cover video exists.
 	 */
-	inline bool HasPrimaryVideo(const Backend::FFmpeg::AVFormatContext& ctx) noexcept {
+	inline bool HasPrimaryVideo(const FFmpeg::AVFormatContext& ctx) noexcept {
 		for (const auto& stream : ctx.Streams()) {
 			if (stream.Type() != AVMEDIA_TYPE_VIDEO)
 				continue;
@@ -123,7 +123,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @param hasPrimaryVideo Result of HasPrimaryVideo.
 	 * @return true if it must not be a Stream.
 	 */
-	inline bool IsCoverStream(const Backend::FFmpeg::AVStream& stream, bool hasPrimaryVideo) noexcept {
+	inline bool IsCoverStream(const FFmpeg::AVStream& stream, bool hasPrimaryVideo) noexcept {
 		if (IsAttachedPicture(stream))
 			return true;
 		if (!hasPrimaryVideo)
@@ -144,7 +144,7 @@ namespace StormByte::Multimedia::Detail {
 	 * @param index avformat stream index.
 	 * @return true if Demux must drop it and Decoder must fail.
 	 */
-	inline bool IsAttachmentIndex(const Backend::FFmpeg::AVFormatContext& ctx, int index) noexcept {
+	inline bool IsAttachmentIndex(const FFmpeg::AVFormatContext& ctx, int index) noexcept {
 		const bool hasPrimaryVideo = HasPrimaryVideo(ctx);
 		for (const auto& stream : ctx.Streams()) {
 			if (stream.Index() != index)

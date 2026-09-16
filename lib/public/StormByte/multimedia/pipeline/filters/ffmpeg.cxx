@@ -286,8 +286,8 @@ std::uint8_t FFmpeg::HeldFor() const noexcept {
 
 void FFmpeg::Eof() noexcept {}
 
-const StormByte::Multimedia::Backend::FFmpeg::AVFrame& FFmpeg::AVFrame() const noexcept {
-	static StormByte::Multimedia::Backend::FFmpeg::AVFrame empty;
+const StormByte::Multimedia::FFmpeg::AVFrame& FFmpeg::AVFrame() const noexcept {
+	static StormByte::Multimedia::FFmpeg::AVFrame empty;
 	static const bool primed = []() noexcept {
 		empty.Reset(nullptr);
 		return true;
@@ -299,8 +299,8 @@ const StormByte::Multimedia::Backend::FFmpeg::AVFrame& FFmpeg::AVFrame() const n
 	return frame->m_backend->Handle();
 }
 
-const StormByte::Multimedia::Backend::FFmpeg::AVPacket& FFmpeg::AVPacket() const noexcept {
-	static StormByte::Multimedia::Backend::FFmpeg::AVPacket empty;
+const StormByte::Multimedia::FFmpeg::AVPacket& FFmpeg::AVPacket() const noexcept {
+	static StormByte::Multimedia::FFmpeg::AVPacket empty;
 	static const bool primed = []() noexcept {
 		empty.Reset(nullptr);
 		return true;
@@ -312,7 +312,7 @@ const StormByte::Multimedia::Backend::FFmpeg::AVPacket& FFmpeg::AVPacket() const
 	return packet->m_backend->Handle();
 }
 
-void FFmpeg::Save(StormByte::Multimedia::Backend::FFmpeg::AVFrame&& incoming) noexcept {
+void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept {
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
 	if (!frame)
 		return;
@@ -325,7 +325,7 @@ void FFmpeg::Save(StormByte::Multimedia::Backend::FFmpeg::AVFrame&& incoming) no
 		Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
 }
 
-void FFmpeg::Save(StormByte::Multimedia::Backend::FFmpeg::AVPacket&& incoming) noexcept {
+void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept {
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
 	if (!packet)
 		return;

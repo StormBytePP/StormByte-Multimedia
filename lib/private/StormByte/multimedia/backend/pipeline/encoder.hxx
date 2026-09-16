@@ -38,10 +38,10 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/features.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -98,7 +98,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 					 * @param implementation Selected row name.
 					 * @param capabilities Selected row features.
 					 */
-					Opened(StormByte::Multimedia::Backend::FFmpeg::AVEncoder encoder,
+					Opened(StormByte::Multimedia::FFmpeg::AVEncoder encoder,
 						AVRational timeBase,
 						std::string implementation,
 						StormByte::Multimedia::Features capabilities) noexcept
@@ -111,7 +111,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 					 * @brief Opened FFmpeg encoder.
 					 * @return Encoder.
 					 */
-					inline StormByte::Multimedia::Backend::FFmpeg::AVEncoder& Handle() noexcept {
+					inline StormByte::Multimedia::FFmpeg::AVEncoder& Handle() noexcept {
 						return m_encoder;
 					}
 
@@ -119,7 +119,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 					 * @brief Opened FFmpeg encoder.
 					 * @return Encoder.
 					 */
-					inline const StormByte::Multimedia::Backend::FFmpeg::AVEncoder& Handle() const noexcept {
+					inline const StormByte::Multimedia::FFmpeg::AVEncoder& Handle() const noexcept {
 						return m_encoder;
 					}
 
@@ -172,7 +172,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 					}
 
 				private:
-					StormByte::Multimedia::Backend::FFmpeg::AVEncoder m_encoder;	///< Opened encoder
+					StormByte::Multimedia::FFmpeg::AVEncoder m_encoder;	///< Opened encoder
 					AVRational m_timeBase{};										///< Encoder time base
 					std::string m_implementation;									///< Selected row name
 					StormByte::Multimedia::Features m_capabilities;				///< Selected row features
@@ -253,7 +253,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @return Opened backend, or empty after owner.Fail().
 			 */
 			static std::optional<Opened> OpenCodec(StormByte::Multimedia::Pipeline::Encoder& owner,
-				StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params,
+				StormByte::Multimedia::FFmpeg::AVCodecParameters params,
 				AVRational timeBase,
 				StormByte::Multimedia::Features need) noexcept;
 
@@ -270,7 +270,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			static std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> MakePacket(
 				StormByte::Multimedia::Pipeline::Encoder& owner,
 				enum StormByte::Multimedia::Type type, int index,
-				const StormByte::Multimedia::Backend::FFmpeg::AVPacket& raw,
+				const StormByte::Multimedia::FFmpeg::AVPacket& raw,
 				AVRational timeBase, bool keepPacketHdrPlus = true) noexcept;
 
 			/**
@@ -306,7 +306,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param frame Public unit.
 			 * @return Handle, or nullptr.
 			 */
-			static StormByte::Multimedia::Backend::FFmpeg::AVFrame* FrameHandle(
+			static StormByte::Multimedia::FFmpeg::AVFrame* FrameHandle(
 				StormByte::Multimedia::Pipeline::Encoder& owner,
 				StormByte::Multimedia::Pipeline::Frame& frame) noexcept;
 
@@ -316,7 +316,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param frame Public unit.
 			 * @return Handle, or nullptr.
 			 */
-			static const StormByte::Multimedia::Backend::FFmpeg::AVFrame* FrameHandle(
+			static const StormByte::Multimedia::FFmpeg::AVFrame* FrameHandle(
 				StormByte::Multimedia::Pipeline::Encoder& owner,
 				const StormByte::Multimedia::Pipeline::Frame& frame) noexcept;
 

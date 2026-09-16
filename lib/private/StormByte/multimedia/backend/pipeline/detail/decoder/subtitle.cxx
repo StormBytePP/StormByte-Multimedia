@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVSubtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/ocr/bitmap.hxx>
@@ -81,7 +81,7 @@ namespace {
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
-	Subtitle::Subtitle(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase) noexcept
+	Subtitle::Subtitle(StormByte::Multimedia::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase) noexcept
 	: m_decoder(std::move(decoder)), m_timeBase(timeBase), m_flushed(false) {}
 
 	bool Subtitle::IsOpen() const noexcept {
@@ -95,7 +95,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			return false;
 		}
 
-		StormByte::Multimedia::Backend::FFmpeg::AVPacket raw;
+		StormByte::Multimedia::FFmpeg::AVPacket raw;
 		StormByte::Buffer::DataType bytes;
 		const auto n = packet->Payload().AvailableBytes();
 		const std::uint8_t* data = nullptr;
@@ -120,16 +120,16 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 
 		m_packetPts = packet->Pts();
 		m_packetDuration = packet->Duration();
-		StormByte::Multimedia::Backend::FFmpeg::AVSubtitle sub;
+		StormByte::Multimedia::FFmpeg::AVSubtitle sub;
 		const auto result = m_decoder.DecodeSubtitle(raw, sub);
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 			owner.Fail("failed to decode subtitle");
 			return false;
 		}
 
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 			return false;
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success)
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Success)
 			m_pendingSub = std::move(sub);
 		return true;
 	}

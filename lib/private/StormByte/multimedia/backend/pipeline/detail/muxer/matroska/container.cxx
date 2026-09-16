@@ -69,7 +69,7 @@ extern "C" {
 }
 
 using StormByte::Multimedia::Type;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	const FFmpeg::AVRational NanoTimeBase{1, 1000000000};

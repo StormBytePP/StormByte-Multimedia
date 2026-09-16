@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <optional>
@@ -121,7 +121,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief FFmpeg packet owned by this holder.
 			 * @return Handle.
 			 */
-			inline const StormByte::Multimedia::Backend::FFmpeg::AVPacket& Handle() const noexcept {
+			inline const StormByte::Multimedia::FFmpeg::AVPacket& Handle() const noexcept {
 				return m_handle;
 			}
 
@@ -129,7 +129,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief FFmpeg packet owned by this holder.
 			 * @return Handle.
 			 */
-			inline StormByte::Multimedia::Backend::FFmpeg::AVPacket& Handle() noexcept {
+			inline StormByte::Multimedia::FFmpeg::AVPacket& Handle() noexcept {
 				return m_handle;
 			}
 
@@ -137,7 +137,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Replaces the owned FFmpeg packet.
 			 * @param handle Packet to take.
 			 */
-			inline void Handle(StormByte::Multimedia::Backend::FFmpeg::AVPacket handle) noexcept {
+			inline void Handle(StormByte::Multimedia::FFmpeg::AVPacket handle) noexcept {
 				m_handle = std::move(handle);
 			}
 
@@ -154,7 +154,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Codec parameters stamped by the producer, if any.
 			 * @return Pointer valid while this holder lives, or nullptr.
 			 */
-			inline const StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters* Parameters() const noexcept {
+			inline const StormByte::Multimedia::FFmpeg::AVCodecParameters* Parameters() const noexcept {
 				if (!m_params)
 					return nullptr;
 				return &*m_params;
@@ -164,7 +164,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Codec parameters stamped by the producer, if any.
 			 * @return Pointer valid while this holder lives, or nullptr.
 			 */
-			inline StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters* Parameters() noexcept {
+			inline StormByte::Multimedia::FFmpeg::AVCodecParameters* Parameters() noexcept {
 				if (!m_params)
 					return nullptr;
 				return &*m_params;
@@ -174,7 +174,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Deep-copies @p params onto this holder.
 			 * @param params Source parameters. Empty clears the stamp.
 			 */
-			void Parameters(std::optional<StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters> params) noexcept;
+			void Parameters(std::optional<StormByte::Multimedia::FFmpeg::AVCodecParameters> params) noexcept;
 
 			/**
 			 * @}
@@ -187,7 +187,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void BindProperties(StormByte::Multimedia::Pipeline::Packet& packet) noexcept;
 
 		private:
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_handle;	///< FFmpeg packet
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters> m_params;	///< Producer codecpar
+			StormByte::Multimedia::FFmpeg::AVPacket m_handle;	///< FFmpeg packet
+			std::optional<StormByte::Multimedia::FFmpeg::AVCodecParameters> m_params;	///< Producer codecpar
 	};
 }

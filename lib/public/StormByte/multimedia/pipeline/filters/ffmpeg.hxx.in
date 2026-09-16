@@ -56,7 +56,7 @@
 #include <string>
 #include <string_view>
 
-namespace StormByte::Multimedia::Backend::FFmpeg {
+namespace StormByte::Multimedia::FFmpeg {
 	class AVFrame;
 	class AVPacket;
 }
@@ -140,8 +140,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	* `av_*` call.
 	*
 	* The contract of a filter is the StormByte RAII types
-	* @ref StormByte::Multimedia::Backend::FFmpeg::AVFrame and
-	* @ref StormByte::Multimedia::Backend::FFmpeg::AVPacket.
+	* @ref StormByte::Multimedia::FFmpeg::AVFrame and
+	* @ref StormByte::Multimedia::FFmpeg::AVPacket.
 	* Those wrappers should expose everything a plugin needs.
 	* @ref AVFrame / @ref AVPacket borrow the current unit;
 	* @ref Save takes a wrapper by rvalue and Detach s it into
@@ -499,7 +499,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			* If one is missing, the C API of the linked FFmpeg
 			* build is an escape only — open an issue for the gap.
 			*/
-			const StormByte::Multimedia::Backend::FFmpeg::AVFrame& AVFrame() const noexcept;
+			const StormByte::Multimedia::FFmpeg::AVFrame& AVFrame() const noexcept;
 
 			/**
 			* @brief Borrowed RAII handle of the current packet.
@@ -512,7 +512,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			* If one is missing, the C API of the linked FFmpeg
 			* build is an escape only — open an issue for the gap.
 			*/
-			const StormByte::Multimedia::Backend::FFmpeg::AVPacket& AVPacket() const noexcept;
+			const StormByte::Multimedia::FFmpeg::AVPacket& AVPacket() const noexcept;
 
 			/**
 			* @brief Replaces the backend of the current frame.
@@ -529,14 +529,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			* not @ref Fail. @ref Log writes @c Level::Warning with
 			* the holder's reason.
 			*/
-			void Save(StormByte::Multimedia::Backend::FFmpeg::AVFrame&& incoming) noexcept;
+			void Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept;
 
 			/**
 			* @brief Replaces the backend of the current packet.
 			* @param incoming RAII packet. This call Detach s it and
 			*        takes ownership of the resource.
 			*/
-			void Save(StormByte::Multimedia::Backend::FFmpeg::AVPacket&& incoming) noexcept;
+			void Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept;
 
 		private:
 			class Surface;
@@ -852,13 +852,13 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			* @brief Deleted. Analytics must not rewrite the current frame.
 			* @param incoming Ignored.
 			*/
-			void Save(StormByte::Multimedia::Backend::FFmpeg::AVFrame&& incoming) noexcept = delete;
+			void Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept = delete;
 
 			/**
 			* @brief Deleted. Analytics never sees packets and must not rewrite them.
 			* @param incoming Ignored.
 			*/
-			void Save(StormByte::Multimedia::Backend::FFmpeg::AVPacket&& incoming) noexcept = delete;
+			void Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept = delete;
 
 			/**
 			* @brief Deleted. Holding would mix reference and distorted looks.

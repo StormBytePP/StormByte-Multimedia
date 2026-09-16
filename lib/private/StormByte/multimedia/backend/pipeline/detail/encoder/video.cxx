@@ -36,7 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/features.hxx>
@@ -60,7 +60,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	int ToAVPixelFormat(Property::PixelFormat format) noexcept {
@@ -163,11 +163,11 @@ namespace {
 		return FFmpeg::AVRational{1, 24};
 	}
 
-	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters FillVideoParams(
+	StormByte::Multimedia::FFmpeg::AVCodecParameters FillVideoParams(
 		const StormByte::Multimedia::Pipeline::Frame& frame,
 		const std::optional<std::int64_t>& bitRate,
-		const StormByte::Multimedia::Backend::FFmpeg::AVFrame* handle) noexcept {
-		StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params(nullptr);
+		const StormByte::Multimedia::FFmpeg::AVFrame* handle) noexcept {
+		StormByte::Multimedia::FFmpeg::AVCodecParameters params(nullptr);
 		if (bitRate)
 			params.BitRate(*bitRate);
 		if (frame.Video()) {
@@ -314,9 +314,9 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		handle->DurationTicks(1);
 
 	const auto result = m_encoder->SendFrame(*handle);
-	if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
+	if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 		return false;
-	if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+	if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 		owner.Fail("failed to send frame");
 		return false;
 	}
@@ -328,10 +328,10 @@ bool Video::DrainOne(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder)
 		return false;
 	const auto result = m_encoder->ReceivePacket(m_scratch);
-	if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain
-		|| result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+	if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain
+		|| result == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 		return false;
-	if (result != StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+	if (result != StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 		owner.Fail("failed to receive packet");
 		return false;
 	}
@@ -349,10 +349,10 @@ void Video::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 		return;
 	for (;;) {
 		const auto sent = m_encoder->SetEof();
-		if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success
-			|| sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+		if (sent == StormByte::Multimedia::FFmpeg::OperationResult::Success
+			|| sent == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 			break;
-		if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain) {
+		if (sent == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain) {
 			if (!DrainOne(owner))
 				break;
 			continue;
@@ -370,7 +370,7 @@ void Video::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Video::Take() noexcept {
 	if (m_pending.empty() && m_encoder && m_owner) {
 		const auto result = m_encoder->ReceivePacket(m_scratch);
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 			StampOutgoing();
 			const bool keepPacketHdrPlus = m_encoder->CodecId() != AV_CODEC_ID_HEVC;
 			m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(

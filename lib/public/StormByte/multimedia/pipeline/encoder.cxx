@@ -59,7 +59,7 @@ extern "C" {
 	#include <libavutil/samplefmt.h>
 }
 
-#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+#include <StormByte/multimedia/ffmpeg/convert.hxx>
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
@@ -212,9 +212,9 @@ bool Encoder::MuxBindStream(void* avStream) noexcept {
 		return false;
 	auto tb = m_backend->TimeBase();
 	if (tb.num <= 0 || tb.den <= 0)
-		tb = StormByte::Multimedia::Backend::FFmpeg::FromRaw(ctx->time_base);
+		tb = StormByte::Multimedia::FFmpeg::FromRaw(ctx->time_base);
 	if (tb.num <= 0 || tb.den <= 0)
-		tb = StormByte::Multimedia::Backend::FFmpeg::AVRational{1, 1000};
+		tb = StormByte::Multimedia::FFmpeg::AVRational{1, 1000};
 	stream->time_base = ::AVRational{tb.num, tb.den};
 	if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 		if (ctx->framerate.num > 0 && ctx->framerate.den > 0) {

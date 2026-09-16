@@ -61,7 +61,7 @@ using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::ToString;
 using StormByte::Multimedia::Type;
 using StormByte::Logger::Level;
-using FFrame = StormByte::Multimedia::Backend::FFmpeg::AVFrame;
+using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
 
 namespace {
 	enum VmafPixelFormat Pix(const FFrame& raw) noexcept {

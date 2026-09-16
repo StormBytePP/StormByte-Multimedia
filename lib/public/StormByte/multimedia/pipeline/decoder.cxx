@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
@@ -174,14 +174,14 @@ bool Decoder::OpenLook(const Packet& packet) noexcept {
 		return false;
 	}
 
-	auto opened = Backend::FFmpeg::AVDecoder::Open(
+	auto opened = FFmpeg::AVDecoder::Open(
 		const_cast<AVCodec*>(codec), params, m_index);
 	if (!opened) {
 		Fail(opened.error()->what());
 		return false;
 	}
 
-	const StormByte::Multimedia::Backend::FFmpeg::AVRational timeBase{1, 1000000000};
+	const StormByte::Multimedia::FFmpeg::AVRational timeBase{1, 1000000000};
 	if (packet.Type() == Type::Video) {
 		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Video>(
 			std::move(*opened), timeBase, std::nullopt));

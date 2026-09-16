@@ -51,7 +51,7 @@
 #include <optional>
 #include <string_view>
 
-namespace StormByte::Multimedia::Backend::FFmpeg {
+namespace StormByte::Multimedia::FFmpeg {
 	class AVFrame;
 	class Sws;
 }
@@ -276,15 +276,15 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @param src Live RAII frame.
 			 * @return Luma frame, or nullptr on Fail.
 			 */
-			const StormByte::Multimedia::Backend::FFmpeg::AVFrame* Luma(
-				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
+			const StormByte::Multimedia::FFmpeg::AVFrame* Luma(
+				const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Samples letterbox / pillarbox on the luma view of @p src.
 			 * @param src Live RAII frame.
 			 * @return true if this frame updated or confirmed the rectangle.
 			 */
-			bool ProbeBars(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
+			bool ProbeBars(const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Paints the logo and @ref FFmpeg::Save.
@@ -318,7 +318,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			int m_lumaW;													///< Cached luma width
 			int m_lumaH;													///< Cached luma height
 			int m_lumaFmt;													///< Cached source pixel format
-			std::unique_ptr<StormByte::Multimedia::Backend::FFmpeg::Sws> m_swsLuma;	///< Cached src → gray
-			std::unique_ptr<StormByte::Multimedia::Backend::FFmpeg::AVFrame> m_luma;	///< Cached GRAY8 view
+			std::unique_ptr<StormByte::Multimedia::FFmpeg::Sws> m_swsLuma;	///< Cached src → gray
+			std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFrame> m_luma;	///< Cached GRAY8 view
 	};
 }

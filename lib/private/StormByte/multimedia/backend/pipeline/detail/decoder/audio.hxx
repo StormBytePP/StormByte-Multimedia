@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -75,7 +75,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			 * @param timeBase Stream time base.
 			 * @param audio Stream audio properties.
 			 */
-			Audio(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder,
+			Audio(StormByte::Multimedia::FFmpeg::AVDecoder decoder,
 				AVRational timeBase,
 				std::optional<StormByte::Multimedia::Property::Audio> audio) noexcept;
 
@@ -140,8 +140,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			void Flush(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
 
 		private:
-			StormByte::Multimedia::Backend::FFmpeg::AVDecoder m_decoder;	///< Opened decoder
-			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_scratch;		///< Receive scratch
+			StormByte::Multimedia::FFmpeg::AVDecoder m_decoder;	///< Opened decoder
+			StormByte::Multimedia::FFmpeg::AVFrame m_scratch;		///< Receive scratch
 			std::optional<StormByte::Multimedia::Property::Audio> m_audio;	///< Stream audio properties
 			AVRational m_timeBase;											///< Stream time base
 			bool m_flushed;													///< EOF already signalled

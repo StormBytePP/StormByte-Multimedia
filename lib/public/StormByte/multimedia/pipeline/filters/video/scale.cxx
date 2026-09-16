@@ -36,11 +36,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
-using FFrame = StormByte::Multimedia::Backend::FFmpeg::AVFrame;
+using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
 
 /*
  * Process leaf. Inherit Process, never FFmpeg.

@@ -36,12 +36,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVDecoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/ffmpeg/property.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
@@ -75,7 +75,7 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	std::optional<Property::Duration> TicksToPts(std::int64_t ticks, Property::AVRational timeBase) noexcept {

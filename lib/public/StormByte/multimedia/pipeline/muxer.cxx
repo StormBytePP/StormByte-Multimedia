@@ -213,7 +213,7 @@ bool Muxer::RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept {
 	return m_origin->m_backend->CloneStream(
 		inIndex,
 		*reinterpret_cast<::AVCodecParameters**>(&params),
-		*static_cast<StormByte::Multimedia::Backend::FFmpeg::AVRational*>(timeBase));
+		*static_cast<StormByte::Multimedia::FFmpeg::AVRational*>(timeBase));
 }
 
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {

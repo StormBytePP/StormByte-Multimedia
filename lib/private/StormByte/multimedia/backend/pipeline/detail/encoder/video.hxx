@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -167,8 +167,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 */
 			void StampOutgoing() noexcept;
 
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;					///< Receive scratch
+			std::optional<StormByte::Multimedia::FFmpeg::AVEncoder> m_encoder;	///< Opened encoder
+			StormByte::Multimedia::FFmpeg::AVPacket m_scratch;					///< Receive scratch
 			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
 			StormByte::Multimedia::Pipeline::Encoder* m_owner;							///< Owner for Take/Wrap
 			AVRational m_timeBase;														///< Encoder time base

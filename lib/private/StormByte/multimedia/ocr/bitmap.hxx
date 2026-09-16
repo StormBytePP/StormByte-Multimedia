@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/ffmpeg/AVSubtitle.hxx>
 
 #include <cstdint>
 #include <optional>
@@ -65,5 +65,5 @@ namespace StormByte::Multimedia::OCR {
 	 * @param sub Decoded AVSubtitle (PGS / DVD).
 	 * @return Image, or empty when there is no bitmap rect.
 	 */
-	std::optional<GrayBitmap> GrayFromSubtitle(const Backend::FFmpeg::AVSubtitle& sub) noexcept;
+	std::optional<GrayBitmap> GrayFromSubtitle(const FFmpeg::AVSubtitle& sub) noexcept;
 }

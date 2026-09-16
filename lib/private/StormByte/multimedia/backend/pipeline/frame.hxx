@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <string>
@@ -121,7 +121,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief FFmpeg frame owned by this holder.
 			 * @return Handle.
 			 */
-			inline const StormByte::Multimedia::Backend::FFmpeg::AVFrame& Handle() const noexcept {
+			inline const StormByte::Multimedia::FFmpeg::AVFrame& Handle() const noexcept {
 				return m_handle;
 			}
 
@@ -129,7 +129,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief FFmpeg frame owned by this holder.
 			 * @return Handle.
 			 */
-			inline StormByte::Multimedia::Backend::FFmpeg::AVFrame& Handle() noexcept {
+			inline StormByte::Multimedia::FFmpeg::AVFrame& Handle() noexcept {
 				return m_handle;
 			}
 
@@ -137,7 +137,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Replaces the owned FFmpeg frame.
 			 * @param handle Frame to take.
 			 */
-			inline void Handle(StormByte::Multimedia::Backend::FFmpeg::AVFrame handle) noexcept {
+			inline void Handle(StormByte::Multimedia::FFmpeg::AVFrame handle) noexcept {
 				m_handle = std::move(handle);
 			}
 
@@ -194,7 +194,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			const std::string& Warning() const noexcept;
 
 		private:
-			StormByte::Multimedia::Backend::FFmpeg::AVFrame m_handle;	///< FFmpeg frame
+			StormByte::Multimedia::FFmpeg::AVFrame m_handle;	///< FFmpeg frame
 			bool m_payloadReady = false;								///< true after Payload materialised planes
 			std::string m_warning;										///< Last Content drop reason
 	};

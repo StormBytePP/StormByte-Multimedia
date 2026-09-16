@@ -36,8 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/convert.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
@@ -55,7 +55,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	bool SameLayout(const FFmpeg::AVChannelLayout& a, const FFmpeg::AVChannelLayout& b) noexcept {
@@ -74,11 +74,11 @@ namespace {
 		return FFmpeg::AVRational{1, 48000};
 	}
 
-	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters FillAudioParams(
+	StormByte::Multimedia::FFmpeg::AVCodecParameters FillAudioParams(
 		const StormByte::Multimedia::Pipeline::Frame& frame,
 		const std::optional<std::int64_t>& bitRate,
-		const StormByte::Multimedia::Backend::FFmpeg::AVFrame* handle) noexcept {
-		StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters params(nullptr);
+		const StormByte::Multimedia::FFmpeg::AVFrame* handle) noexcept {
+		StormByte::Multimedia::FFmpeg::AVCodecParameters params(nullptr);
 		if (bitRate)
 			params.BitRate(*bitRate);
 		if (frame.Audio()) {
@@ -155,7 +155,7 @@ FFmpeg::AVRational Audio::TimeBase() const noexcept {
 }
 
 bool Audio::PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
-	const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept {
+	const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept {
 	if (!src || !m_encoder) {
 		owner.Fail("audio convert missing source or encoder context");
 		return false;
@@ -186,7 +186,7 @@ bool Audio::PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
 	const bool sameLayout = SameLayout(inLayout, outLayout);
 	m_swr.reset();
 	if (!sameFmt || !sameLayout) {
-		auto swr = StormByte::Multimedia::Backend::FFmpeg::Swr::Open(
+		auto swr = StormByte::Multimedia::FFmpeg::Swr::Open(
 			outLayout, m_outFormat, src.SampleRate(),
 			inLayout, m_inFormat, src.SampleRate());
 		if (!swr) {
@@ -197,7 +197,7 @@ bool Audio::PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
 		m_swr = std::move(swr);
 	}
 
-	auto fifo = StormByte::Multimedia::Backend::FFmpeg::AudioFifo::Open(
+	auto fifo = StormByte::Multimedia::FFmpeg::AudioFifo::Open(
 		m_outFormat, m_channels, m_frameSize * 2);
 	if (!fifo) {
 		owner.Fail("failed to allocate audio fifo");
@@ -210,13 +210,13 @@ bool Audio::PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
 }
 
 bool Audio::Ingest(StormByte::Multimedia::Pipeline::Encoder& owner,
-	StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept {
+	StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept {
 	if (!src || !m_fifo || !m_encoder) {
 		owner.Fail("audio ingest missing source or fifo");
 		return false;
 	}
 
-	StormByte::Multimedia::Backend::FFmpeg::AVFrame* ready = &src;
+	StormByte::Multimedia::FFmpeg::AVFrame* ready = &src;
 	if (m_swr) {
 		m_converted.Unref();
 		m_converted.Format(m_outFormat);
@@ -290,7 +290,7 @@ bool Audio::Emit(StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noe
 		}
 
 		auto result = m_encoder->SendFrame(m_converted);
-		while (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain) {
+		while (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain) {
 			if (!DrainOne(owner)) {
 				if (owner.Failed())
 					return false;
@@ -301,7 +301,7 @@ bool Audio::Emit(StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noe
 			result = m_encoder->SendFrame(m_converted);
 		}
 
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Error) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
 			owner.Fail("failed to send frame");
 			return false;
 		}
@@ -385,10 +385,10 @@ bool Audio::DrainOne(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder)
 		return false;
 	const auto result = m_encoder->ReceivePacket(m_scratch);
-	if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain
-		|| result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+	if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain
+		|| result == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 		return false;
-	if (result != StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+	if (result != StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 		owner.Fail("failed to receive packet");
 		return false;
 	}
@@ -423,10 +423,10 @@ void Audio::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 		return;
 	for (;;) {
 		const auto sent = m_encoder->SetEof();
-		if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success
-			|| sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::EndOfFile)
+		if (sent == StormByte::Multimedia::FFmpeg::OperationResult::Success
+			|| sent == StormByte::Multimedia::FFmpeg::OperationResult::EndOfFile)
 			break;
-		if (sent == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain) {
+		if (sent == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain) {
 			if (!DrainOne(owner))
 				break;
 			continue;
@@ -444,7 +444,7 @@ void Audio::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Audio::Take() noexcept {
 	if (m_pending.empty() && m_encoder && m_owner) {
 		const auto result = m_encoder->ReceivePacket(m_scratch);
-		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
+		if (result == StormByte::Multimedia::FFmpeg::OperationResult::Success) {
 			StampOutgoing();
 			m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(
 				*m_owner, Type::Audio, m_index, m_scratch, m_timeBase, true));

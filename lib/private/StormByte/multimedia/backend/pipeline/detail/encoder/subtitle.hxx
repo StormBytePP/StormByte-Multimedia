@@ -38,8 +38,8 @@
 
 #pragma once
 
-#include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVEncoder.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/ocr/engine.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -165,8 +165,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			void EmitHeld(StormByte::Multimedia::Pipeline::Encoder& owner,
 				std::int64_t endNs) noexcept;
 
-			std::optional<StormByte::Multimedia::Backend::FFmpeg::AVEncoder> m_encoder;		///< Opened encoder
-			StormByte::Multimedia::Backend::FFmpeg::AVPacket m_scratch;						///< Encode scratch
+			std::optional<StormByte::Multimedia::FFmpeg::AVEncoder> m_encoder;		///< Opened encoder
+			StormByte::Multimedia::FFmpeg::AVPacket m_scratch;						///< Encode scratch
 			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
 			AVRational m_timeBase;															///< Encoder time base
 			StormByte::Multimedia::OCR::Engine m_ocr;										///< Bitmap OCR

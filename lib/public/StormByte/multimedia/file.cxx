@@ -36,11 +36,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVFormatContext.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/property.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/ffmpeg/property.hxx>
 #include <StormByte/multimedia/detail/cover.hxx>
 #include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/file.hxx>
@@ -61,7 +61,7 @@ extern "C" {
 }
 
 using namespace StormByte::Multimedia;
-namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
+namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	const std::filesystem::path& EmptyPath() noexcept {
