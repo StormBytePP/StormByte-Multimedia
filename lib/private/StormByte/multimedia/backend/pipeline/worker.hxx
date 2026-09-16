@@ -38,12 +38,12 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/pipeline/host.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
-#include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <optional>
 #include <string>
+#include <string_view>
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
@@ -56,15 +56,14 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * @class Worker
 	 * @brief Stage body without a thread.
 	 *
-	 * A Pumper calls @ref Setup once (idempotent) and
-	 * @ref Process each cycle. Concretes: DemuxWorker,
-	 * DecodeWorker, EncodeWorker, RemuxWorker, MuxWorker,
-	 * FilterWorker.
+	 * A Pumper calls @ref Setup once and @ref Process for each
+	 * unit. The Worker emits 0..N results through @ref Emit
+	 * before returning. It has no State: on error it calls
+	 * @ref Fail, which goes to the Host (the Step).
 	 *
-	 * Source pumpers pass an empty pointer; through and sink
-	 * pass a popped unit. An empty return means do not push.
-	 * Each concrete calls its own @ref Flush when it sees EoF.
-	 * Hoppers belong to the owner.
+	 * Concretes live under Detail::Worker (Demux, Decode,
+	 * Encode, Remux, Mux, Filter). Hoppers belong to the Step.
+	 * No friends.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -86,33 +85,30 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 
 			/**
-			 * @brief Lifecycle value of this worker.
-			 * @return Current @ref State.
-			 */
-			Multimedia::Pipeline::State Status() const noexcept;
-
-			/**
 			 * @brief One-shot backend bring-up.
 			 *
-			 * Must be noexcept. Idempotent: Created performs the
-			 * work; any other State is a no-op. On error call
-			 * @ref Fail and return. The Pumper sets Ready only if
-			 * Status is still Created after return.
+			 * Must be noexcept. Called once by the Pumper. On
+			 * error call @ref Fail and return. The Pumper sets
+			 * Ready only if it is still Created after return.
 			 */
 			virtual void Setup() noexcept = 0;
 
 			/**
-			 * @brief One cycle of the stage.
-			 * @param item Popped unit, or empty if the Pumper is a source.
-			 * @return Unit to push, or empty if the Pumper must not push.
+			 * @brief One unit of the stage.
+			 * @param item Popped unit, or empty for a source tick
+			 *        or an EoF flush.
+			 *
+			 * Emit 0..N times, then return. On EoF the concrete
+			 * calls @ref Flush itself; the Pumper does not.
 			 */
-			virtual Multimedia::Pipeline::Item::PointerType Process(Multimedia::Pipeline::Item::PointerType item) noexcept = 0;
+			virtual void Process(Multimedia::Pipeline::Item::PointerType item) noexcept = 0;
 
 		protected:
 			/**
-			 * @brief Worker in State::Created.
+			 * @brief Worker bound to @p host.
+			 * @param host Owner surface (the Step).
 			 */
-			Worker() noexcept;
+			explicit Worker(Host& host) noexcept;
 
 			/**
 			 * @brief Stage-specific drain when this worker sees EoF.
@@ -124,15 +120,41 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			virtual void Flush() noexcept = 0;
 
 			/**
-			 * @brief Marks Failed and stores @p reason.
+			 * @brief Forwards @p item to the Host. Empty is a no-op.
+			 * @param item Unit to emit. Ownership moves.
+			 */
+			void Emit(Multimedia::Pipeline::Item::PointerType item) noexcept;
+
+			/**
+			 * @brief Forwards Wait to the Host.
+			 */
+			void Wait() noexcept;
+
+			/**
+			 * @brief Forwards Stopping to the Host.
+			 * @return true if the stage must return.
+			 */
+			bool Stopping() const noexcept;
+
+			/**
+			 * @brief Forwards Fail to the Host.
 			 * @param reason Message.
-			 *
-			 * Does not close hoppers. Does not join a thread.
 			 */
 			void Fail(std::string reason) noexcept;
 
+			/**
+			 * @brief Forwards Log to the Host.
+			 * @param level StormByte::Logger::Level of this line.
+			 * @param message Already-formatted text.
+			 */
+			void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
+
+			/**
+			 * @brief Forwards Ended to the Host (source EoF).
+			 */
+			void Ended() noexcept;
+
 		private:
-			Multimedia::Pipeline::State m_state;	///< Lifecycle
-			std::optional<std::string> m_error;		///< Fail message
+			Host& m_host;	///< Step, via Host
 	};
 }

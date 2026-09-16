@@ -38,16 +38,33 @@
 
 #include <StormByte/multimedia/backend/pipeline/worker.hxx>
 
+#include <utility>
+
 using namespace StormByte::Multimedia::Backend::Pipeline;
 
-Worker::Worker() noexcept
-: m_state(Multimedia::Pipeline::State::Created) {}
+Worker::Worker(Host& host) noexcept
+:	m_host(host) {}
 
-Multimedia::Pipeline::State Worker::Status() const noexcept {
-	return m_state;
+void Worker::Emit(Multimedia::Pipeline::Item::PointerType item) noexcept {
+	m_host.Emit(std::move(item));
+}
+
+void Worker::Wait() noexcept {
+	m_host.Wait();
+}
+
+bool Worker::Stopping() const noexcept {
+	return m_host.Stopping();
 }
 
 void Worker::Fail(std::string reason) noexcept {
-	m_error = std::move(reason);
-	m_state = Multimedia::Pipeline::State::Failed;
+	m_host.Fail(std::move(reason));
+}
+
+void Worker::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
+	m_host.Log(level, message);
+}
+
+void Worker::Ended() noexcept {
+	m_host.Ended();
 }
