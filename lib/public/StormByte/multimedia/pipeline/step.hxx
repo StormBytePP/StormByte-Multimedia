@@ -45,7 +45,6 @@
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -55,7 +54,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <thread>
+
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Host;
+	class Pumper;
+	class Worker;
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -88,71 +92,13 @@ namespace StormByte::Multimedia::Pipeline {
 	STORMBYTE_MULTIMEDIA_PUBLIC class Step& operator>>(Step& from, Step& to) noexcept;
 
 	/**
-	 * @enum State
-	 * @brief Lifecycle of one Step. Values are mutually exclusive.
-	 *
-	 * This is the state of *this* stage, not of the job and not of
-	 * the bound neighbor. A neighbor learns that this stage is dead
-	 * because the shared hopper is Eof, not by reading this enum.
-	 *
-	 * Created
-	 *   Constructor finished. The object is usable: Plan can be
-	 *   bound, operator>> can wire hoppers, Stop/Fail are legal.
-	 *   Open has not returned. Pump must not take units from m_in.
-	 *   Launch has usually already spawned the worker; the worker
-	 *   is blocked inside Open (waiting for a Plan, an origin,
-	 *   a path, …). This is the only state in which Open may run
-	 *   to completion.
-	 *
-	 * Ready
-	 *   Step::Open returned. The backend (if any) can take work.
-	 *   Pump may pop m_in and call Work. There is no separate
-	 *   "running" value: pumping is what a Ready worker does, not
-	 *   a new phase. Fail or Stop may still fire from here.
-	 *   When the input hopper reaches Eof and Pump returns without
-	 *   Stop(), Launch moves Ready → Stopped. That is how a stage
-	 *   ends in a live tube (Analytics after the last look, Muxer
-	 *   after the last packet). Route::Idle and Transcoder wait
-	 *   that Stopped before Reports / OnDone.
-	 *
-	 * Stopping
-	 *   Stop() was called, or Halt() from a destructor. Hoppers
-	 *   are Eof and waiters are notified. The worker has not
-	 *   joined yet. Pump and Open must return. This is not a
-	 *   failure; Finish may still run.
-	 *
-	 * Stopped
-	 *   The worker has left. Hoppers stay Eof. Reached from
-	 *   Stopping after Halt/Stop, or from Ready after a natural
-	 *   hopper Eof. The tube is not reused: there is no restart
-	 *   back to Created.
-	 *
-	 * Failed
-	 *   Fail() latched a reason. Hoppers are Eof. Terminal, like
-	 *   Stopped, but Error() is set. May be entered from Created
-	 *   (Open never succeeded) or from Ready. Does not pass
-	 *   through Stopping.
-	 *
-	 * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
-	 * Ready→Stopping, Ready→Failed, Ready→Stopped, Stopping→Stopped.
-	 * Failed and Stopped do not leave.
-	 *
-	 * Source EOF is not a State. Demuxer keeps m_eof next to this.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	enum class State: std::uint8_t {
-		Created,
-		Ready,
-		Stopping,
-		Stopped,
-		Failed
-	};
-
-	/**
 	 * @class Step
-	 * @brief One threaded stage with an input @ref ItemSink, an output
+	 * @brief One stage with an input @ref ItemSink, an output
 	 *        @ref ItemSink and an analytics tap @ref ItemSink.
+	 *
+	 * Owns a Pumper (thread + @ref State) and exposes hoppers to
+	 * that pumper through a private Host surface. Leaves Mount a
+	 * concrete Pumper and Worker, then Launch.
 	 *
 	 * Log lines use Logger component `STMM` and group @ref Label.
 	 * Volume is a Logger throttle on that component/group, not a
@@ -195,7 +141,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Step(Step&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Signals stop and joins the worker if Launch ran.
+			 * @brief Destructor. Signals stop and joins the pumper if Launch ran.
 			 */
 			virtual ~Step() noexcept;
 
@@ -261,14 +207,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Current lifecycle value.
-			 * @return State of this step only.
+			 * @return @ref State of this step only.
 			 */
 			State Status() const noexcept;
 
 			/**
 			 * @brief Whether this step can take work.
 			 *
-			 * Default: Status is Ready (Open finished without Fail or Stop).
+			 * Default: Status is Ready (Setup finished without Fail or Stop).
 			 * Muxer also requires @ref Muxer::Armed so header write and
 			 * Pump do not start while @c operator>> is still reserving.
 			 *
@@ -364,26 +310,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Prepare-once hook. Moves Created → Ready and wakes waiters.
-			 *
-			 * Leaves that override Open must call Step::Open at the end
-			 * after their backend is usable. Must be noexcept. On error
-			 * call Fail and return without Step::Open.
-			 */
-			virtual void Open() noexcept;
-
-			/**
-			 * @brief One unit taken from m_in.
-			 * @param item Never empty.
-			 */
-			virtual void Work(Item::PointerType item) noexcept;
-
-			/**
-			 * @brief Input is Sink EoF and the last Pop was empty.
-			 */
-			virtual void Finish() noexcept;
-
-			/**
 			 * @brief Encode-look side channel. Default no-op.
 			 * @param sink Look decoder @c m_in.
 			 *
@@ -418,26 +344,20 @@ namespace StormByte::Multimedia::Pipeline {
 			Item::PointerType CloneItem(const Item& item) const noexcept;
 
 			/**
-			 * @brief Body of the worker after Open returns.
-			 *
-			 * Times each @ref Work. Leaves that override Pump (Demuxer)
-			 * must call @ref RecordWork themselves if they want the same
-			 * summary.
-			 */
-			virtual void Pump() noexcept;
-
-			/**
 			 * @brief Sleeps on Wake until hopper Ready, Failed or Stopping.
 			 */
 			void Wait() noexcept;
 
 			/**
-			 * @brief Starts the worker: Open, then Pump if still Ready.
+			 * @brief Starts the pumper: Setup, Ready, Pump.
+			 *
+			 * Idempotent. No-op without a mounted pumper, or if the
+			 * stage has already Failed or Stopped.
 			 */
 			void Launch() noexcept;
 
 			/**
-			 * @brief Stop and join the worker.
+			 * @brief Stop and join the pumper.
 			 *
 			 * Safe to call more than once. Leaves call this from their
 			 * destructor before releasing a backend the worker still uses.
@@ -451,21 +371,37 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Stopping() const noexcept;
 
 			/**
-			 * @brief Adds one Work duration to the step summary.
-			 * @param microseconds Wall time of that Work call.
+			 * @brief Adds one Process duration to the step summary.
+			 * @param microseconds Wall time of that Process call.
 			 */
 			void RecordWork(std::int64_t microseconds) noexcept;
 
 			/**
-			 * @brief Duration of the last timed Work, or 0.
+			 * @brief Duration of the last timed Process, or 0.
 			 * @return Microseconds.
 			 */
 			std::int64_t LastWork() const noexcept;
 
 			/**
-			 * @brief Writes min/max Work time at Debug. No-op if none.
+			 * @brief Writes min/max Process time at Debug. No-op if none.
 			 */
 			void DumpWork() noexcept;
+
+			/**
+			 * @brief Owner surface for the Pumper and Worker.
+			 * @return Host implemented by this Step.
+			 */
+			Backend::Pipeline::Host& Face() noexcept;
+
+			/**
+			 * @brief Takes ownership of @p pumper and binds @p worker.
+			 * @param pumper Source, Through or Sink. Must not be empty.
+			 * @param worker Stage body. Must not be empty.
+			 *
+			 * No-op if a pumper is already mounted. Does not Launch.
+			 */
+			void Mount(std::unique_ptr<Backend::Pipeline::Pumper> pumper,
+				std::unique_ptr<Backend::Pipeline::Worker> worker) noexcept;
 
 			/**
 			 * @}
@@ -502,27 +438,30 @@ namespace StormByte::Multimedia::Pipeline {
 			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger (ThreadedLog preferred)
 			enum Producer m_name;								///< Default Label / Logger group
 			ItemSink m_in;										///< Input buckets
-			ItemSink m_out;										///< Output buckets (process path)
-			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
-			ItemSink m_lookOut;									///< Packet-look producer for Demuxer remux stretch
+			ItemSink m_out;									///< Output buckets (process path)
+			ItemSink m_tap;									///< Analytics tap; Drain until Route binds
+			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 			Kinds m_receives;									///< Receives
 			Kinds m_produces;									///< Produces
 
 		private:
+			class Surface;
+
 			/**
 			 * @brief Eof on @ref m_in, @ref m_out and @ref m_tap.
 			 */
 			void CloseHoppers() noexcept;
 
+			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
+			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
 			std::shared_ptr<class Plan> m_plan;					///< Current plan
 			std::condition_variable m_wake;						///< Single consumer CV
 			std::mutex m_wait;									///< Mutex for m_wake
-			std::jthread m_worker;								///< Owned worker
-			std::atomic<State> m_state;							///< Lifecycle
 			std::optional<std::string> m_error;					///< Fail message
-			std::uint64_t m_workN;								///< Timed Work calls
-			std::int64_t m_workMin;								///< Fastest Work, us
-			std::int64_t m_workMax;								///< Slowest Work, us
-			std::int64_t m_lastWork;							///< Last Work, us
+			bool m_exhausted;									///< Source Ended()
+			std::uint64_t m_workN;								///< Timed Process calls
+			std::int64_t m_workMin;								///< Fastest Process, us
+			std::int64_t m_workMax;								///< Slowest Process, us
+			std::int64_t m_lastWork;							///< Last Process, us
 	};
 }
