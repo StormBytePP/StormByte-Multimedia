@@ -39,6 +39,8 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -55,11 +57,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-
-namespace StormByte::Multimedia::FFmpeg {
-	class AVFrame;
-	class AVPacket;
-}
 
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Host;
