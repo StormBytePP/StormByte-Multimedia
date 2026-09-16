@@ -153,13 +153,13 @@ namespace {
 		}
 	}
 
-	AVRational VideoTimeBase(const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
+	FFmpeg::AVRational VideoTimeBase(const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 		if (frame.Video() && frame.Video()->FrameRate() && frame.Video()->FrameRate()->Valid()) {
 			const auto& fps = *frame.Video()->FrameRate();
-			return AVRational{fps.den, fps.num};
+			return FFmpeg::AVRational{fps.den, fps.num};
 		}
 
-		return AVRational{1, 24};
+		return FFmpeg::AVRational{1, 24};
 	}
 
 	StormByte::Multimedia::Backend::FFmpeg::AVCodecParameters FillVideoParams(
@@ -211,7 +211,7 @@ const AVCodecContext* Video::Context() const noexcept {
 	return m_encoder ? m_encoder->Context() : nullptr;
 }
 
-AVRational Video::TimeBase() const noexcept {
+FFmpeg::AVRational Video::TimeBase() const noexcept {
 	return m_timeBase;
 }
 
@@ -266,7 +266,7 @@ bool Video::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 	CommitOpen(owner, *opened);
 	m_timeBase = opened->TimeBase();
 	if (m_timeBase.num <= 0 || m_timeBase.den <= 0)
-		m_timeBase = AVRational{1, 24};
+		m_timeBase = FFmpeg::AVRational{1, 24};
 	m_encoder = std::move(opened->Handle());
 	m_index = owner.Index();
 	m_owner = &owner;
