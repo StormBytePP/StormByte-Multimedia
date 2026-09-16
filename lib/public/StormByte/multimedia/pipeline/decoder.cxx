@@ -42,9 +42,10 @@
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/decode.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -63,18 +64,12 @@ using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Logger::Level;
 
-namespace {
-	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
-		if (!value)
-			return "-";
-		return std::format("{}", value->Nanoseconds().count());
-	}
-}
-
 Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, DecoderFlags flags) noexcept
 :	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags(flags), m_part(0), m_look(false) {
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Decode>(*this));
 	Launch();
 }
 
@@ -82,6 +77,8 @@ Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, EncodeLook) noexcept
 :	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags{}, m_part(0), m_look(true), m_lookStamp(Producer::Encoder) {
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Decode>(*this));
 	Launch();
 }
 
@@ -89,6 +86,8 @@ Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, RemuxLook) noexcept
 :	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags{}, m_part(0), m_look(true), m_lookStamp(Producer::Remuxer) {
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Decode>(*this));
 	Launch();
 }
 
@@ -96,6 +95,8 @@ Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	int track, SourceLook) noexcept
 :	Step(std::move(log), Producer::Decoder, Kinds{Kind::Packet}, Kinds{Kind::Frame}),
 	m_index(track), m_flags{}, m_part(0), m_look(true) {
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Decode>(*this));
 	Launch();
 }
 
@@ -138,6 +139,12 @@ void Decoder::StampLook(Frame& frame) noexcept {
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {
 	m_backend = std::move(backend);
 	m_capabilities = Features{};
+}
+
+std::unique_ptr<Backend::Pipeline::Decoder> Decoder::OpenOrigin() noexcept {
+	if (!m_origin)
+		return {};
+	return m_origin->OpenDecoder(*this);
 }
 
 void Decoder::Stamp(std::optional<std::string> language, std::optional<std::string> title) noexcept {
@@ -194,133 +201,6 @@ bool Decoder::OpenLook(const Packet& packet) noexcept {
 
 	Log(Level::Debug, std::format("look open t={}", m_index));
 	return static_cast<bool>(m_backend);
-}
-
-void Decoder::Open() noexcept {
-	NameThread("STMM:Decode:" + std::to_string(m_index));
-	if (m_look) {
-		Log(Level::Notice, std::format("look t={}", m_index));
-		Step::Open();
-		return;
-	}
-
-	while (!Stopping() && m_origin == nullptr)
-		Wait();
-	if (Stopping())
-		return;
-	if (!m_origin) {
-		Fail("decoder has no demuxer");
-		return;
-	}
-
-	while (!Stopping() && !m_origin->Failed() && !m_origin->Ready())
-		Wait();
-	if (Stopping())
-		return;
-	if (m_origin->Failed() || !m_origin->Ready()) {
-		Fail(m_origin->Error().value_or("demuxer failed"));
-		return;
-	}
-
-	auto backend = m_origin->OpenDecoder(*this);
-	if (!backend)
-		return;
-	Bind(std::move(backend));
-	m_serial.reset();
-	m_part = 0;
-	m_inDts.reset();
-	Log(Level::Notice, std::format("open t={} impl={}",
-		m_index, m_implementation.value_or("auto")));
-	Step::Open();
-}
-
-void Decoder::Work(Item::PointerType item) noexcept {
-	NameThread("STMM:Decode:" + std::to_string(m_index));
-	if (Failed())
-		return;
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("decoder expected a packet");
-		return;
-	}
-
-	if (m_look && !m_backend) {
-		if (!OpenLook(*packet))
-			return;
-	}
-
-	if (!m_backend) {
-		Fail("decoder is not open");
-		return;
-	}
-
-	if (packet->Track() != m_index)
-		return;
-	if (!packet->Serial()) {
-		Fail("packet has no serial");
-		return;
-	}
-
-	if (m_serial != packet->Serial()) {
-		m_serial = packet->Serial();
-		m_part = 0;
-		m_inDts = packet->Dts();
-	}
-
-	Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
-		packet->Track(), *packet->Serial(), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts())));
-
-	auto emit = [this](Frame::PointerType frame) {
-		StampLineage(*frame);
-		StampLook(*frame);
-		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-			frame->Track(), frame->Serial().value_or(0), frame->Part(),
-			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		Emit(std::move(frame));
-	};
-
-	while (!m_backend->Send(*this, packet)) {
-		if (Failed())
-			return;
-		Frame::PointerType frame = m_backend->Receive(*this);
-		if (Failed())
-			return;
-		if (!frame) {
-			Wait();
-			continue;
-		}
-
-		emit(std::move(frame));
-	}
-
-	for (;;) {
-		if (Failed())
-			return;
-		Frame::PointerType frame = m_backend->Receive(*this);
-		if (!frame)
-			break;
-		emit(std::move(frame));
-	}
-}
-
-void Decoder::Finish() noexcept {
-	if (Failed() || !m_backend)
-		return;
-	m_backend->Flush(*this);
-	for (;;) {
-		if (Failed())
-			return;
-		Frame::PointerType frame = m_backend->Receive(*this);
-		if (!frame)
-			return;
-		StampLineage(*frame);
-		StampLook(*frame);
-		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-			frame->Track(), frame->Serial().value_or(0), frame->Part(),
-			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		Emit(std::move(frame));
-	}
 }
 
 std::string Decoder::Label() const noexcept {

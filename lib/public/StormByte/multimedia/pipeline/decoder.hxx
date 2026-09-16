@@ -61,6 +61,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	class Decoder;
 }
 
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	class Decode;
+}
+
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
@@ -109,8 +113,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Decodes packets of one origin track into frames.
 	 *
 	 * Notice: opened implementation, once. LowLevel unit lines
-	 * always; the shared logger throttles. Step::Pump times each
-	 * Work; Finish dumps min/max at Debug.
+	 * always; the shared logger throttles. The Through pumper times each
+	 * Process; source EoF dumps min/max at Debug.
 	 *
 	 * Lineage: @ref StampLineage copies the last accepted packet
 	 * Serial onto each produced frame and advances Part. Dts of
@@ -136,6 +140,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
 		friend class Backend::Pipeline::Decoder;
+		friend class Backend::Pipeline::Detail::Worker::Decode;
 		friend class Demuxer;
 		friend class Route;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
@@ -153,7 +158,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param flags Heuristics / future bits. Empty = passthrough.
 			 *
 			 * Origin mode. Frames carry @ref Producer::Decoder.
-			 * Open waits for demuxer >> decoder.
+			 * Setup waits for demuxer >> decoder.
 			 */
 			explicit Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 				int track, DecoderFlags flags = DecoderFlags{}) noexcept;
@@ -373,27 +378,16 @@ namespace StormByte::Multimedia::Pipeline {
 			std::string Label() const noexcept override;
 
 			/**
-			 * @brief Origin: waits for the demuxer and opens the codec.
-			 *        Look: becomes Ready; the codec opens on first Packet.
-			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Decodes one packet and @ref Step::Emit s frames.
-			 * @param item Incoming packet.
-			 */
-			void Work(Item::PointerType item) noexcept override;
-
-			/**
-			 * @brief Flushes the codec after input EoF.
-			 */
-			void Finish() noexcept override;
-
-			/**
 			 * @brief Pins the opened backend.
 			 * @param backend Opened decode backend.
 			 */
 			void Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept;
+
+			/**
+			 * @brief Opens the decode backend from the bound demuxer.
+			 * @return Backend, or empty after Fail.
+			 */
+			std::unique_ptr<Backend::Pipeline::Decoder> OpenOrigin() noexcept;
 
 			/**
 			 * @brief Copies origin File tags onto this decoder.
