@@ -137,7 +137,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Encoder(Encoder&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. @ref Step::Join Halt s before backends die.
 			 */
 			~Encoder() noexcept override;
 
@@ -507,5 +507,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::uint64_t> m_serial;							///< Lineage of the last accepted frame
 			std::uint64_t m_part;											///< Part of the last accepted frame
 			ItemSink m_lookOut;												///< Encode-look producer; not m_out
+			Join m_join{*this};												///< Halt before other members die
 	};
 }
