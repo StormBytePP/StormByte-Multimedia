@@ -96,23 +96,22 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * Warning. Scale is not @ref Report::Failed.
 	 *
 	 * @par Memory
-	 * @ref InputCeiling is the hopper and the park cap (512).
-	 * Process blocks at that park cap and does not drop looks:
-	 * it Waits and pulls opposite looks from In so a full
-	 * reference park cannot starve distorted frames.
-	 * After @c vmaf_read_pictures, @c vmaf_score_at_index waits
-	 * for the pair that is n_threads behind so libvmaf's
-	 * thread-pool queue stays about n_threads deep, not the
-	 * job length. Default n_threads is
+	 * Process must not stall the encode tube: it clones the
+	 * look, enqueues @c vmaf_read_pictures, and returns.
+	 * Waiting for extractors is only in @ref Eof.
+	 * @ref InputCeiling (512) sizes the analytics hopper, not
+	 * the park. Parked AVFrames cover encoder delay (ref
+	 * waiting for dist). libvmaf feature extractors scale
+	 * with n_threads × resolution, not duration.
+	 * Default n_threads is
 	 * @c std::thread::hardware_concurrency() (all cores).
 	 * 4K 10-bit (`vmaf_4k_v0.6.1`, subsample 1) at 32
 	 * threads holds ~18.5 GiB for the extractors (massif
 	 * plateau; peak ~20.5 GiB at init). RSS is the same
-	 * order. Parked AVFrames add encoder delay on top
-	 * (capped at 512 looks per FIFO). A second video track
-	 * opens another context of that extractor size. Pass a
-	 * smaller thread count in the constructor to cap it.
-	 * Notice logs park depth every 64 scored pairs.
+	 * order. A second video track opens another context of
+	 * that size. Pass a smaller thread count in the
+	 * constructor to cap it. Notice logs park depth every
+	 * 64 scored pairs.
 	 *
 	 * A failed @c vmaf_read_pictures still belongs to us:
 	 * Score unrefs both pictures.
@@ -163,11 +162,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			enum StormByte::Multimedia::Type Media() const noexcept override;
 
 			/**
-			 * @brief Ceiling of the analytics input hopper and look park.
-			 * @return Max items in the hopper and in each park FIFO. Never 0.
+			 * @brief Ceiling of the analytics input hopper.
+			 * @return Max items in the hopper. Never 0.
 			 *
 			 * Must exceed encoder delay or the first distorted
-			 * look cannot arrive. Process blocks at this cap.
+			 * look cannot arrive. Does not cap @c m_ref / @c m_dist.
 			 */
 			std::size_t InputCeiling() const noexcept override {
 				return Ceiling;
@@ -267,26 +266,6 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			unsigned Threads() const noexcept;
 
 			/**
-			 * @brief Waits for the pair n_threads behind so the pool cannot grow with the job.
-			 */
-			void Pace(Lane& lane) noexcept;
-
-			/**
-			 * @brief Blocks until @p ref FIFO is under @ref ParkCap. Does not drop.
-			 */
-			void Admit(Lane& lane, bool ref) noexcept;
-
-			/**
-			 * @brief Pops one extra look from In and parks it (no nested Admit).
-			 */
-			void Pull() noexcept;
-
-			/**
-			 * @brief Clones @p frame into the track park and Drains. No cap wait.
-			 */
-			void Take(const Pipeline::Frame& frame) noexcept;
-
-			/**
 			 * @brief Notice park depth every @ref ParkLogEvery scored pairs.
 			 */
 			void LogPark(const Lane& lane, int track) noexcept;
@@ -301,8 +280,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 			void DropAll() noexcept;
 
-			static constexpr std::size_t Ceiling = 512;	///< Hopper and park FIFO
-			static constexpr std::size_t ParkCap = Ceiling;
+			static constexpr std::size_t Ceiling = 512;	///< Analytics hopper
 			static constexpr unsigned ParkLogEvery = 64;	///< Notice park depth
 			std::string m_modelName;					///< libvmaf built-in version
 			std::optional<unsigned short> m_threads;	///< Empty: all cores
