@@ -40,6 +40,8 @@
 
 #include <StormByte/buffer/generic.hxx>
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/property/point.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -50,11 +52,6 @@
 #include <memory>
 #include <optional>
 #include <string_view>
-
-namespace StormByte::Multimedia::FFmpeg {
-	class AVFrame;
-	class Sws;
-}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
@@ -74,15 +71,15 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * letterbox / pillarbox rectangle, not of the full frame.
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Anchor {
-		TopLeft,		///< Top left of the active picture
-		TopCenter,		///< Top center of the active picture
-		TopRight,		///< Top right of the active picture
-		CenterLeft,		///< Middle left of the active picture
-		Center,			///< Center of the active picture
-		CenterRight,	///< Middle right of the active picture
-		BottomLeft,		///< Bottom left of the active picture
-		BottomCenter,	///< Bottom center of the active picture
-		BottomRight		///< Bottom right of the active picture
+	    TopLeft,
+	    TopCenter,
+	    TopRight,
+	    CenterLeft,
+	    Center,
+	    CenterRight,
+	    BottomLeft,
+	    BottomCenter,
+	    BottomRight
 	};
 
 	/**
@@ -115,10 +112,12 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * An absolute @ref StormByte::Multimedia::Property::Point
 	 * does not Hold: coordinates are already in frame pixels.
 	 *
-	 * Bars are measured on a GRAY8 plane from @c ScaleTo, not
-	 * on plane 0 of HDR sources. Overlay is RGBA then back
+	 * Bars are measured on a GRAY8 plane from
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo,
+	 * not on plane 0 of HDR sources. Overlay is RGBA then back
 	 * to the source format. Talks to libav only through
-	 * @ref FFmpeg::AVFrame and @ref FFmpeg::Save.
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame and
+	 * @ref Filter::FFmpeg::Save.
 	 *
 	 * The first constructor argument is the shared logger of the
 	 * tube. The leaf may call protected @ref FFmpeg::Log. That is
@@ -128,6 +127,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Hold
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::LastChance
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Log
+	 * @see StormByte::Multimedia::FFmpeg::AVFrame
+	 * @see StormByte::Multimedia::FFmpeg::Sws
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:
@@ -227,7 +228,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Probes bars while Held; paints after Release replay.
-			 * @param frame Video unit (read the backend with AVFrame()).
+			 * @param frame Video unit. Borrow
+			 *        @ref Filter::FFmpeg::AVFrame for the live picture.
 			 *
 			 * Must not @ref Paint while @ref FFmpeg::Held is true.
 			 */

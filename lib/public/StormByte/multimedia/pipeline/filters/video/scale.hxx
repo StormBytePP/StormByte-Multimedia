@@ -57,13 +57,15 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Scale
-	 * @brief Scales a decoded video frame with libswscale.
+	 * @brief Scales a decoded video frame.
 	 *
 	 * Minimal Process filter: @ref Media is Video, @ref Clean and
-	 * @ref Setup are empty, @ref Process reads @ref FFmpeg::AVFrame,
-	 * @c ScaleTo a new RAII frame, then @ref FFmpeg::Save. After a
-	 * successful Save the old backend is gone. Do not free the
-	 * wrapper you passed; Save takes ownership.
+	 * @ref Setup are empty. @ref Process borrows
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame, writes a
+	 * destination wrapper with
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo and
+	 * commits it with
+	 * @ref Filter::FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&&).
 	 *
 	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
 	 * on the first video frame. Same size as the source is a no-op
@@ -73,6 +75,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * See @ref Filter::FFmpeg logging notes.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
+	 * @see StormByte::Multimedia::FFmpeg::AVFrame
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Scale: public Filter::Process {
 		public:
@@ -165,8 +168,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Scales the current video unit and @ref FFmpeg::Save.
-			 * @param frame Video frame with a backend buffer.
+			 * @brief Scales the current video unit and
+			 *        @ref Filter::FFmpeg::Save.
+			 * @param frame Video unit. Borrow
+			 *        @ref Filter::FFmpeg::AVFrame for the live picture.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
