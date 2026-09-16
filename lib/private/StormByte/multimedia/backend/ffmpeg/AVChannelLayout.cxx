@@ -43,7 +43,7 @@ extern "C" {
 	#include <libavutil/mem.h>
 }
 
-using StormByte::Multimedia::Backend::FFmpeg::AVChannelLayout;
+namespace StormByte::Multimedia::Backend::FFmpeg {
 
 AVChannelLayout::AVChannelLayout() noexcept = default;
 
@@ -146,4 +146,6 @@ const ::AVChannelLayout* AVChannelLayout::Get() const noexcept {
 
 ::AVChannelLayout* AVChannelLayout::Get() noexcept {
 	return m_raw;
+}
+
 }
