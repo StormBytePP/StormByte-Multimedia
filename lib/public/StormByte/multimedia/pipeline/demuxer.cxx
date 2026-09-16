@@ -89,11 +89,7 @@ Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 	Launch();
 }
 
-Demuxer::~Demuxer() noexcept {
-	Halt();
-	if (m_backend)
-		m_backend->Close();
-}
+Demuxer::~Demuxer() noexcept = default;
 
 Demuxer::operator bool() const noexcept {
 	return !Failed() && !m_eof && Ready() && m_backend && m_backend->IsOpen();
