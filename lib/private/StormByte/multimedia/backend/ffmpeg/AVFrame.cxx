@@ -151,17 +151,17 @@ void FFmpeg::AVFrame::WriteHdr10(const StormByte::Multimedia::Property::HDR10& h
 		auto* mdm = av_mastering_display_metadata_create_side_data(m_ptr);
 		if (mdm) {
 			mdm->has_primaries = 1;
-			mdm->display_primaries[0][0] = AVRational{hdr10.Red().X(), ChromaDenominator};
-			mdm->display_primaries[0][1] = AVRational{hdr10.Red().Y(), ChromaDenominator};
-			mdm->display_primaries[1][0] = AVRational{hdr10.Green().X(), ChromaDenominator};
-			mdm->display_primaries[1][1] = AVRational{hdr10.Green().Y(), ChromaDenominator};
-			mdm->display_primaries[2][0] = AVRational{hdr10.Blue().X(), ChromaDenominator};
-			mdm->display_primaries[2][1] = AVRational{hdr10.Blue().Y(), ChromaDenominator};
-			mdm->white_point[0] = AVRational{hdr10.White().X(), ChromaDenominator};
-			mdm->white_point[1] = AVRational{hdr10.White().Y(), ChromaDenominator};
+			mdm->display_primaries[0][0] = ::AVRational{hdr10.Red().X(), ChromaDenominator};
+			mdm->display_primaries[0][1] = ::AVRational{hdr10.Red().Y(), ChromaDenominator};
+			mdm->display_primaries[1][0] = ::AVRational{hdr10.Green().X(), ChromaDenominator};
+			mdm->display_primaries[1][1] = ::AVRational{hdr10.Green().Y(), ChromaDenominator};
+			mdm->display_primaries[2][0] = ::AVRational{hdr10.Blue().X(), ChromaDenominator};
+			mdm->display_primaries[2][1] = ::AVRational{hdr10.Blue().Y(), ChromaDenominator};
+			mdm->white_point[0] = ::AVRational{hdr10.White().X(), ChromaDenominator};
+			mdm->white_point[1] = ::AVRational{hdr10.White().Y(), ChromaDenominator};
 			mdm->has_luminance = 1;
-			mdm->min_luminance = AVRational{hdr10.Luminance().X(), LumaDenominator};
-			mdm->max_luminance = AVRational{hdr10.Luminance().Y(), LumaDenominator};
+			mdm->min_luminance = ::AVRational{hdr10.Luminance().X(), LumaDenominator};
+			mdm->max_luminance = ::AVRational{hdr10.Luminance().Y(), LumaDenominator};
 		}
 	}
 
