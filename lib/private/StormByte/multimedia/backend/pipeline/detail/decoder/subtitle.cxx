@@ -64,24 +64,24 @@ using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Type;
 
 namespace {
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, StormByte::Multimedia::Property::AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, StormByte::Multimedia::Property::AVRational{1, 1000000000});
 		if (ns < 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	std::int64_t NsToTicks(const std::optional<StormByte::Multimedia::Property::Duration>& value, AVRational timeBase) noexcept {
+	std::int64_t NsToTicks(const std::optional<StormByte::Multimedia::Property::Duration>& value, StormByte::Multimedia::Property::AVRational timeBase) noexcept {
 		if (!value.has_value() || timeBase.num <= 0 || timeBase.den <= 0)
 			return AV_NOPTS_VALUE;
-		return av_rescale_q(value->Nanoseconds().count(), AVRational{1, 1000000000}, timeBase);
+		return StormByte::Multimedia::Property::AVRational{1, 1000000000}.Rescale(value->Nanoseconds().count(), timeBase);
 	}
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
-	Subtitle::Subtitle(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, AVRational timeBase) noexcept
+	Subtitle::Subtitle(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase) noexcept
 	: m_decoder(std::move(decoder)), m_timeBase(timeBase), m_flushed(false) {}
 
 	bool Subtitle::IsOpen() const noexcept {
@@ -114,7 +114,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		}
 
 		const std::int64_t duration = packet->Duration()
-			? av_rescale_q(packet->Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
+			? StormByte::Multimedia::Property::AVRational{1, 1000000000}.Rescale(packet->Duration()->Nanoseconds().count(), m_timeBase)
 			: 0;
 		raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
@@ -167,7 +167,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 				std::memcpy(p + 12, gray->pixels.data(), bytesN);
 		}
 
-		auto pts = TicksToPts(sub.Pts(), AVRational{1, AV_TIME_BASE});
+		auto pts = TicksToPts(sub.Pts(), StormByte::Multimedia::Property::AVRational{1, AV_TIME_BASE});
 		if (!pts)
 			pts = m_packetPts;
 
