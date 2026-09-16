@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/pipeline/detail/worker/filter.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
+#include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 
 #include <StormByte/multimedia/name_thread.hxx>
