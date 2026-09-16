@@ -36,7 +36,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/remux.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -49,18 +50,12 @@
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Logger::Level;
 
-namespace {
-	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
-		if (!value)
-			return "-";
-		return std::format("{}", value->Nanoseconds().count());
-	}
-}
-
 Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 :	Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
 	m_index(in) {
 	m_lookOut.Drain();
+	Mount(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Remux>(*this));
 	Launch();
 }
 
@@ -78,43 +73,6 @@ void Remuxer::Emit(Packet::PointerType packet) noexcept {
 	if (auto copy = CloneItem(*packet))
 		m_lookOut.Push(m_index, std::move(copy));
 	Step::Emit(std::move(packet));
-}
-
-void Remuxer::Open() noexcept {
-	if (m_index < 0) {
-		Fail("remuxer origin is negative");
-		return;
-	}
-
-	Log(Level::Notice, std::format("open t={}", m_index));
-	Step::Open();
-}
-
-void Remuxer::Work(Item::PointerType item) noexcept {
-	NameThread("STMM:Remuxer:" + std::to_string(m_index));
-	if (Failed())
-		return;
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("remuxer expected a packet");
-		return;
-	}
-
-	if (packet->Track() != m_index)
-		return;
-	if (!packet->Serial()) {
-		Fail("packet has no serial");
-		return;
-	}
-
-	Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
-		packet->Track(), *packet->Serial(), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts())));
-	Emit(std::move(packet));
-}
-
-void Remuxer::Finish() noexcept {
-	m_lookOut.Eof();
 }
 
 Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept {

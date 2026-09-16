@@ -46,6 +46,10 @@
 #include <cstddef>
 #include <memory>
 
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	class Remux;
+}
+
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
@@ -84,6 +88,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Remuxer final: public Step {
+		friend class Backend::Pipeline::Detail::Worker::Remux;
 		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
 		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 		friend class Route;
@@ -170,27 +175,6 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @}
 			 */
-
-			/**
-			 * @brief Marks Ready. No codec.
-			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Forwards one packet of In via @ref Emit.
-			 * @param item Incoming packet.
-			 *
-			 * The packet keeps the @ref Packet::Serial born at the demuxer.
-			 * Missing lineage is a pipe error, not a drop.
-			 */
-			void Work(Item::PointerType item) noexcept override;
-
-			/**
-			 * @brief Eofs @ref m_lookOut after the last forward.
-			 *
-			 * Do not Eof @ref m_tap. The dest look reads @ref m_lookOut.
-			 */
-			void Finish() noexcept override;
 
 			/**
 			 * @brief Dest-look side channel. Shares @ref m_lookOut with @p sink.
