@@ -61,9 +61,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 *
 	 * Minimal Process filter: @ref Media is Video, @ref Clean and
 	 * @ref Setup are empty, @ref Process reads @ref FFmpeg::AVFrame,
-	 * allocates a new @c AVFrame, calls @ref FFmpeg::Save. After a
-	 * successful Save the old backend is gone; do not @c av_frame_free
-	 * the pointer you passed.
+	 * @c ScaleTo a new RAII frame, then @ref FFmpeg::Save. After a
+	 * successful Save the old backend is gone. Do not free the
+	 * wrapper you passed; Save takes ownership.
 	 *
 	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
 	 * on the first video frame. Same size as the source is a no-op

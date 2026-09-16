@@ -36,15 +36,20 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
+using FFrame = StormByte::Multimedia::Backend::FFmpeg::AVFrame;
 
 /*
  * Process leaf. Inherit Process, never FFmpeg.
  *
  * Construction names the node ("scale") so logs and Report dumps
  * can tell filters apart. Do not Launch or Halt from the leaf.
+ *
+ * Process borrows the current RAII frame, ScaleTo a new one,
+ * Save(std::move). No av_*.
  */
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
@@ -65,7 +70,7 @@ void Scale::Clean() noexcept {}
 void Scale::Setup() noexcept {}
 
 void Scale::Process(const Pipeline::Frame&) noexcept {
-	const auto& src = AVFrame();
+	const FFrame& src = AVFrame();
 	if (!src || src.Width() <= 0 || src.Height() <= 0) {
 		Fail("missing video buffer");
 		return;
@@ -92,7 +97,7 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 	if (static_cast<int>(dstW) == src.Width() && static_cast<int>(dstH) == src.Height())
 		return;
 
-	StormByte::Multimedia::Backend::FFmpeg::AVFrame out;
+	FFrame out;
 	if (!src.ScaleTo(out, static_cast<int>(dstW), static_cast<int>(dstH))) {
 		Fail("swscale failed");
 		return;

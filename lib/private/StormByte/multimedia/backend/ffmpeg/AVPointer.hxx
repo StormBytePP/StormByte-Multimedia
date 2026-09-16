@@ -128,6 +128,21 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			}
 
 			/**
+			 * @brief Yields the raw pointer and leaves this wrapper empty.
+			 * @return Previous pointer, or nullptr. Does not Free.
+			 *
+			 * Ownership moves to the caller. The wrapper destructor
+			 * must not free a detached pointer. Not public; derived
+			 * types `using` this as private for friends such as
+			 * @c Filter::FFmpeg::Save.
+			 */
+			constexpr std::decay_t<AVType>* Detach() noexcept {
+				auto* ptr = m_ptr;
+				m_ptr = nullptr;
+				return ptr;
+			}
+
+			/**
 			 * @brief Adopts @p ptr.
 			 * @param ptr Raw pointer.
 			 */

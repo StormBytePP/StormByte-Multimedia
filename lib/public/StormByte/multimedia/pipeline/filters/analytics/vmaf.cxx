@@ -46,10 +46,9 @@
 #include <format>
 #include <map>
 #include <thread>
+#include <utility>
 
 extern "C" {
-	#include <libavutil/frame.h>
-	#include <libavutil/pixdesc.h>
 	#include <libavutil/pixfmt.h>
 	#include <libswscale/swscale.h>
 	#include <libvmaf/libvmaf.h>
@@ -62,12 +61,13 @@ using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::ToString;
 using StormByte::Multimedia::Type;
 using StormByte::Logger::Level;
+using FFrame = StormByte::Multimedia::Backend::FFmpeg::AVFrame;
 
 namespace {
-	enum VmafPixelFormat Pix(const ::AVFrame* raw) noexcept {
+	enum VmafPixelFormat Pix(const FFrame& raw) noexcept {
 		if (!raw)
 			return VMAF_PIX_FMT_UNKNOWN;
-		switch (raw->format) {
+		switch (raw.Format()) {
 			case AV_PIX_FMT_YUV420P:
 			case AV_PIX_FMT_YUV420P10LE:
 			case AV_PIX_FMT_YUV420P12LE:
@@ -86,22 +86,15 @@ namespace {
 		}
 	}
 
-	unsigned Bpc(const ::AVFrame* raw) noexcept {
+	unsigned Bpc(const FFrame& raw) noexcept {
 		if (!raw)
 			return 8;
-		const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(raw->format));
-		if (!desc || desc->comp[0].depth <= 8)
+		const int depth = raw.BitsPerComponent();
+		if (depth <= 8)
 			return 8;
-		if (desc->comp[0].depth <= 10)
+		if (depth <= 10)
 			return 10;
 		return 12;
-	}
-
-	const char* PixName(const ::AVFrame* raw) noexcept {
-		if (!raw)
-			return "?";
-		const char* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(raw->format));
-		return name ? name : "?";
 	}
 
 	bool DistLook(Producer producer) noexcept {
@@ -116,22 +109,22 @@ namespace {
 }
 
 /*
- * Analytics leaf. Inherit Analytics, never FFmpeg.
- *
- * Construction names the node ("vmaf") so logs and Report dumps
- * can tell filters apart. Do not Launch or Halt from the leaf.
- *
- * Two looks arrive on the same Process: Producer::Decoder is the
- * reference, Producer::Encoder or Producer::Remuxer is the distorted
- * reconstruct. Clone the raw AVFrame; the StormByte Frame is gone
- * after Process returns.
- *
- * Pairing is presentation FIFO per Frame::Track, not Serial and
- * not container PTS. One libvmaf context per track.
- *
- * Debug is the bugreport level: first looks, latch, ignore, paced
- * scored count, eof. Per-frame park/score stays at LowLevel.
- */
+* Analytics leaf. Inherit Analytics, never FFmpeg.
+*
+* Construction names the node ("vmaf") so logs and Report dumps
+* can tell filters apart. Do not Launch or Halt from the leaf.
+*
+* Two looks arrive on the same Process: Producer::Decoder is the
+* reference, Producer::Encoder or Producer::Remuxer is the distorted
+* reconstruct. Clone the RAII AVFrame; the StormByte Frame is gone
+* after Process returns.
+*
+* Pairing is presentation FIFO per Frame::Track, not Serial and
+* not container PTS. One libvmaf context per track.
+*
+* Debug is the bugreport level: first looks, latch, ignore, paced
+* scored count, eof. Per-frame park/score stays at LowLevel.
+*/
 VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model,
 	std::optional<unsigned short> threads) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),
@@ -146,10 +139,6 @@ enum Type VMAF::Media() const noexcept {
 }
 
 void VMAF::DropParked(Lane& lane) noexcept {
-	for (auto* raw : lane.ref)
-		av_frame_free(&raw);
-	for (auto* raw : lane.dist)
-		av_frame_free(&raw);
 	lane.ref.clear();
 	lane.dist.clear();
 }
@@ -219,7 +208,7 @@ void VMAF::Setup() noexcept {
 	Log(Level::Debug, std::format("{} setup model={}", Name(), m_modelName));
 }
 
-bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
+bool VMAF::Fill(const FFrame& raw, int tw, int th, void* out) noexcept {
 	auto* pic = static_cast<VmafPicture*>(out);
 	if (!raw || !pic || tw <= 0 || th <= 0)
 		return false;
@@ -230,81 +219,55 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 	if (vmaf_picture_alloc(pic, fmt, bpc, static_cast<unsigned>(tw), static_cast<unsigned>(th)) != 0)
 		return false;
 
-	const bool scale = raw->width != tw || raw->height != th;
-	const ::AVFrame* src = raw;
-	::AVFrame* scaled = nullptr;
-	if (scale) {
-		scaled = av_frame_alloc();
-		if (!scaled) {
+	const FFrame* src = &raw;
+	FFrame scaled;
+	if (raw.Width() != tw || raw.Height() != th) {
+		if (!raw.ScaleTo(scaled, tw, th, SWS_BICUBIC) || !scaled) {
 			vmaf_picture_unref(pic);
 			return false;
 		}
-
-		scaled->format = raw->format;
-		scaled->width = tw;
-		scaled->height = th;
-		if (av_frame_get_buffer(scaled, 32) < 0) {
-			av_frame_free(&scaled);
-			vmaf_picture_unref(pic);
-			return false;
-		}
-
-		SwsContext* sws = sws_getContext(
-			raw->width, raw->height, static_cast<AVPixelFormat>(raw->format),
-			tw, th, static_cast<AVPixelFormat>(raw->format),
-			SWS_BICUBIC, nullptr, nullptr, nullptr);
-		if (!sws) {
-			av_frame_free(&scaled);
-			vmaf_picture_unref(pic);
-			return false;
-		}
-
-		sws_scale(sws, raw->data, raw->linesize, 0, raw->height, scaled->data, scaled->linesize);
-		sws_freeContext(sws);
-		src = scaled;
+		src = &scaled;
 	}
 
 	const int planes = (fmt == VMAF_PIX_FMT_YUV400P) ? 1 : 3;
 	const int bytesPel = (bpc > 8) ? 2 : 1;
 	for (int p = 0; p < planes; ++p) {
-		if (!src->data[p] || !pic->data[p])
+		if (!src->Data(p) || !pic->data[p])
 			continue;
 		const int height = static_cast<int>(pic->h[p]);
 		const int widthBytes = static_cast<int>(pic->w[p]) * bytesPel;
-		CopyPlane(src->data[p], src->linesize[p],
+		CopyPlane(src->Data(p), src->Linesize(p),
 			static_cast<uint8_t*>(pic->data[p]), pic->stride[p],
 			widthBytes, height);
 	}
-
-	av_frame_free(&scaled);
 	return true;
 }
 
-void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept {
+void VMAF::Score(Lane& lane, const FFrame& ref, const FFrame& dist, unsigned index) noexcept {
 	if (!lane.vmaf || !ref || !dist)
 		return;
-	if (ref->width <= 0 || ref->height <= 0 || dist->width <= 0 || dist->height <= 0) {
+	if (ref.Width() <= 0 || ref.Height() <= 0 || dist.Width() <= 0 || dist.Height() <= 0) {
 		Log(Level::Warning, Name() + " look has no picture size, skip pair");
 		return;
 	}
 
 	if (lane.width == 0) {
-		lane.width = ref->width;
-		lane.height = ref->height;
+		lane.width = ref.Width();
+		lane.height = ref.Height();
 		Log(Level::Debug, std::format(
 			"{} first pair index={} latch={}x{} ref_fmt={} ref_bpc={} ref_pts={} dist={}x{} dist_fmt={} dist_bpc={} dist_pts={}",
 			Name(), index, lane.width, lane.height,
-			PixName(ref), Bpc(ref), ref->pts,
-			dist->width, dist->height,
-			PixName(dist), Bpc(dist), dist->pts));
-		if (dist->width != lane.width || dist->height != lane.height)
+			ref.FormatName(), Bpc(ref), ref.Pts(),
+			dist.Width(), dist.Height(),
+			dist.FormatName(), Bpc(dist), dist.Pts()));
+		if (dist.Width() != lane.width || dist.Height() != lane.height)
 			Log(Level::Notice, std::format("{} geometry ref={}x{} dist={}x{}, scaling dist",
-				Name(), lane.width, lane.height, dist->width, dist->height));
+				Name(), lane.width, lane.height, dist.Width(), dist.Height()));
 	}
 
-	else if (ref->width != lane.width || ref->height != lane.height) {
+	else if (ref.Width() != lane.width || ref.Height() != lane.height) {
 		Log(Level::Warning, std::format("{} skip pair, ref size {}x{} latch {}x{}",
-			Name(), ref->width, ref->height, lane.width, lane.height));
+			Name(), ref.Width(), ref.Height(), lane.width, lane.height));
 		return;
 	}
 
@@ -314,7 +277,7 @@ void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsign
 		|| !Fill(dist, lane.width, lane.height, &pdist)) {
 		Log(Level::Warning, std::format(
 			"{} skip pair, fill failed ref={}x{} dist={}x{} latch={}x{}",
-			Name(), ref->width, ref->height, dist->width, dist->height,
+			Name(), ref.Width(), ref.Height(), dist.Width(), dist.Height(),
 			lane.width, lane.height));
 		vmaf_picture_unref(&pref);
 		vmaf_picture_unref(&pdist);
@@ -330,7 +293,7 @@ void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsign
 
 	++lane.scored;
 	Log(Level::LowLevel, std::format("{} scored index={} n={} ref_pts={} dist_pts={}",
-		Name(), index, lane.scored, ref->pts, dist->pts));
+		Name(), index, lane.scored, ref.Pts(), dist.Pts()));
 }
 
 /*
@@ -340,16 +303,14 @@ void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsign
 */
 void VMAF::Drain(Lane& lane) noexcept {
 	while (!lane.ref.empty() && !lane.dist.empty()) {
-		::AVFrame* ref = lane.ref.front();
-		::AVFrame* dist = lane.dist.front();
+		FFrame ref = std::move(lane.ref.front());
+		FFrame dist = std::move(lane.dist.front());
 		lane.ref.pop_front();
 		lane.dist.pop_front();
 		const unsigned before = lane.scored;
 		Score(lane, ref, dist, lane.index);
 		if (lane.scored > before)
 			++lane.index;
-		av_frame_free(&ref);
-		av_frame_free(&dist);
 	}
 }
 
@@ -379,7 +340,7 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		return;
 	}
 
-	const ::AVFrame* raw = AVFrame();
+	const FFrame& raw = AVFrame();
 	if (!raw) {
 		Log(Level::Warning, std::format("{} frame has no backend producer={}",
 			Name(), ToString(producer)));
@@ -392,17 +353,18 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 	if (!lane.vmaf && !OpenLane(lane))
 		return;
 
-	::AVFrame* clone = av_frame_clone(raw);
+	FFrame clone = raw.Clone();
 	if (!clone) {
-		Log(Level::Warning, Name() + " av_frame_clone failed");
+		Log(Level::Warning, Name() + " AVFrame::Clone failed");
 		return;
 	}
 
 	if (producer == Producer::Decoder) {
 		if (lane.scored == 0 && lane.ref.empty())
 			Log(Level::Debug, std::format("{} first ref t={} {}x{} fmt={} bpc={} pts={}",
-				Name(), frame.Track(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		lane.ref.push_back(clone);
+				Name(), frame.Track(), raw.Width(), raw.Height(),
+				raw.FormatName(), Bpc(raw), raw.Pts()));
+		lane.ref.push_back(std::move(clone));
 		if (lane.ref.size() > lane.peakRef)
 			lane.peakRef = lane.ref.size();
 	}
@@ -410,8 +372,8 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		if (lane.scored == 0 && lane.dist.empty())
 			Log(Level::Debug, std::format("{} first dist t={} producer={} {}x{} fmt={} bpc={} pts={}",
 				Name(), frame.Track(), ToString(producer),
-				raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		lane.dist.push_back(clone);
+				raw.Width(), raw.Height(), raw.FormatName(), Bpc(raw), raw.Pts()));
+		lane.dist.push_back(std::move(clone));
 		if (lane.dist.size() > lane.peakDist)
 			lane.peakDist = lane.dist.size();
 	}

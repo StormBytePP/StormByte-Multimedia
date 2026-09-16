@@ -51,6 +51,11 @@
 #include <optional>
 #include <string_view>
 
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVFrame;
+	class Sws;
+}
+
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
@@ -66,7 +71,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @brief Logo placement relative to the active picture.
 	 *
 	 * Top / Bottom / Left / Right are edges of the measured
-	 * letterbox / pillarbox rectangle, not of the full @c AVFrame.
+	 * letterbox / pillarbox rectangle, not of the full frame.
 	 */
 	enum class STORMBYTE_MULTIMEDIA_PUBLIC Anchor {
 		TopLeft,		///< Top left of the active picture
@@ -110,10 +115,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * An absolute @ref StormByte::Multimedia::Property::Point
 	 * does not Hold: coordinates are already in frame pixels.
 	 *
-	 * Bars are measured on a GRAY8 plane from libswscale, not
-	 * on @c data[0] of HDR sources. Overlay is RGBA then back
-	 * to the source format. Talks to libav via @ref FFmpeg::AVFrame
-	 * and @ref FFmpeg::Save.
+	 * Bars are measured on a GRAY8 plane from @c ScaleTo, not
+	 * on plane 0 of HDR sources. Overlay is RGBA then back
+	 * to the source format. Talks to libav only through
+	 * @ref FFmpeg::AVFrame and @ref FFmpeg::Save.
 	 *
 	 * The first constructor argument is the shared logger of the
 	 * tube. The leaf may call protected @ref FFmpeg::Log. That is
@@ -156,14 +161,12 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 				unsigned opacity = 100) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other Source filter.
+			 * @brief Copy constructor (deleted). Filters are unique in the tube.
 			 */
 			Watermark(const Watermark& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other Filter to take.
+			 * @brief Move constructor (deleted). Filters are unique in the tube.
 			 */
 			Watermark(Watermark&& other) noexcept = delete;
 
@@ -173,15 +176,13 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			~Watermark() noexcept override;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param other Source filter.
+			 * @brief Copy assignment (deleted). Filters are unique in the tube.
 			 * @return *this.
 			 */
 			Watermark& operator=(const Watermark& other) = delete;
 
 			/**
-			 * @brief Move assignment.
-			 * @param other Filter to take.
+			 * @brief Move assignment (deleted). Filters are unique in the tube.
 			 * @return *this.
 			 */
 			Watermark& operator=(Watermark&& other) noexcept = delete;
@@ -272,17 +273,18 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			/**
 			 * @brief Builds an 8-bit luma view of @p src for bar sampling.
-			 * @param src Live libav frame.
+			 * @param src Live RAII frame.
 			 * @return Luma frame, or nullptr on Fail.
 			 */
-			::AVFrame* Luma(::AVFrame* src) noexcept;
+			const StormByte::Multimedia::Backend::FFmpeg::AVFrame* Luma(
+				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Samples letterbox / pillarbox on the luma view of @p src.
-			 * @param src Live libav frame.
+			 * @param src Live RAII frame.
 			 * @return true if this frame updated or confirmed the rectangle.
 			 */
-			bool ProbeBars(::AVFrame* src) noexcept;
+			bool ProbeBars(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Paints the logo and @ref FFmpeg::Save.
@@ -292,7 +294,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Paint() noexcept;
 
 			/**
-			 * @brief Frees cached scale contexts and luma buffer.
+			 * @brief Frees cached scale context and luma buffer.
 			 */
 			void DropScale() noexcept;
 
@@ -316,7 +318,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			int m_lumaW;													///< Cached luma width
 			int m_lumaH;													///< Cached luma height
 			int m_lumaFmt;													///< Cached source pixel format
-			void* m_swsLuma;												///< Cached src → gray SwsContext
-			::AVFrame* m_luma;												///< Cached GRAY8 view
+			std::unique_ptr<StormByte::Multimedia::Backend::FFmpeg::Sws> m_swsLuma;	///< Cached src → gray
+			std::unique_ptr<StormByte::Multimedia::Backend::FFmpeg::AVFrame> m_luma;	///< Cached GRAY8 view
 	};
 }

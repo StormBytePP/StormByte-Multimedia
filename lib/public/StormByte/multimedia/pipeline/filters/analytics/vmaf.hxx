@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -52,7 +53,6 @@
 
 struct VmafContext;
 struct VmafModel;
-struct AVFrame;
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
@@ -97,10 +97,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 *
 	 * @par Memory
 	 * Process must not stall the encode tube: it clones the
-	 * look, enqueues @c vmaf_read_pictures, and returns.
+	 * RAII look, enqueues @c vmaf_read_pictures, and returns.
 	 * Waiting for extractors is only in @ref Eof.
 	 * @ref InputCeiling (512) sizes the analytics hopper, not
-	 * the park. Parked AVFrames cover encoder delay (ref
+	 * the park. Parked RAII frames cover encoder delay (ref
 	 * waiting for dist). libvmaf feature extractors scale
 	 * with n_threads × resolution, not duration.
 	 * Default n_threads is
@@ -144,7 +144,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model,
 				std::optional<unsigned short> threads = {}) noexcept;
 
+			/**
+			 * @brief Copy is not allowed. Each leaf owns libvmaf contexts.
+			 */
 			VMAF(const VMAF& other) = delete;
+
+			/**
+			 * @brief Move is not allowed. The tube owns the mounted leaf.
+			 */
 			VMAF(VMAF&& other) noexcept = delete;
 
 			/**
@@ -152,7 +159,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 			~VMAF() noexcept override;
 
+			/**
+			 * @brief Copy assignment is not allowed.
+			 */
 			VMAF& operator=(const VMAF& other) = delete;
+
+			/**
+			 * @brief Move assignment is not allowed.
+			 */
 			VMAF& operator=(VMAF&& other) noexcept = delete;
 
 			/**
@@ -166,7 +180,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @return Max items in the hopper. Never 0.
 			 *
 			 * Must exceed encoder delay or the first distorted
-			 * look cannot arrive. Does not cap @c m_ref / @c m_dist.
+			 * look cannot arrive. Does not cap the park FIFOs.
 			 */
 			std::size_t InputCeiling() const noexcept override {
 				return Ceiling;
@@ -208,25 +222,28 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Eof() noexcept override;
 
 		private:
+			/**
+			 * @brief Per-track libvmaf context and presentation park.
+			 */
 			struct Lane {
-				VmafContext* vmaf = nullptr;
-				VmafModel* model = nullptr;
-				std::deque<::AVFrame*> ref;
-				std::deque<::AVFrame*> dist;
-				int width = 0;
-				int height = 0;
-				unsigned index = 0;
-				unsigned scored = 0;
-				std::size_t peakRef = 0;
-				std::size_t peakDist = 0;
-				std::optional<double> mean;
-				std::optional<double> min;
-				bool failed = false;
+				VmafContext* vmaf = nullptr;	///< libvmaf context
+				VmafModel* model = nullptr;	///< Loaded model
+				std::deque<StormByte::Multimedia::Backend::FFmpeg::AVFrame> ref;	///< Decoder looks
+				std::deque<StormByte::Multimedia::Backend::FFmpeg::AVFrame> dist;	///< Dest looks
+				int width = 0;					///< Latched width
+				int height = 0;					///< Latched height
+				unsigned index = 0;				///< Next accepted libvmaf index
+				unsigned scored = 0;			///< Accepted pairs
+				std::size_t peakRef = 0;		///< Peak parked refs
+				std::size_t peakDist = 0;		///< Peak parked dists
+				std::optional<double> mean;		///< Pooled mean
+				std::optional<double> min;		///< Pooled min
+				bool failed = false;			///< Context or score failure
 			};
 
 			/**
 			 * @brief Copies @p raw into a VmafPicture, scaling to @p tw x @p th.
-			 * @param raw Source libav frame.
+			 * @param raw Source RAII frame.
 			 * @param tw Target width (latch).
 			 * @param th Target height (latch).
 			 * @param out VmafPicture to fill.
@@ -237,10 +254,13 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * On a failed read, the caller still owns both
 			 * pictures and must unref them.
 			 */
-			bool Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept;
+			bool Fill(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& raw,
+				int tw, int th, void* out) noexcept;
 
 			/**
 			 * @brief Opens a libvmaf context and model on @p lane.
+			 * @param lane Track context to initialise.
+			 * @return false if init or model load failed.
 			 */
 			bool OpenLane(Lane& lane) noexcept;
 
@@ -251,27 +271,36 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @param dist Dest look (Encoder or Remuxer).
 			 * @param index Next libvmaf picture index (0..n).
 			 *
-			 * Does not free @p ref / @p dist. @ref Drain does.
+			 * Does not destroy @p ref / @p dist. @ref Drain does
+			 * when it pops the FIFOs.
 			 */
-			void Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept;
+			void Score(Lane& lane,
+				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& ref,
+				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& dist,
+				unsigned index) noexcept;
 
 			/**
 			 * @brief Scores while both presentation FIFOs of @p lane have a frame.
+			 * @param lane Track context.
 			 */
 			void Drain(Lane& lane) noexcept;
 
 			/**
 			 * @brief libvmaf worker count actually used (at least 1).
+			 * @return Thread count passed to vmaf_init.
 			 */
 			unsigned Threads() const noexcept;
 
 			/**
 			 * @brief Notice park depth every @ref ParkLogEvery scored pairs.
+			 * @param lane Track context.
+			 * @param track Origin track index.
 			 */
 			void LogPark(const Lane& lane, int track) noexcept;
 
 			/**
-			 * @brief Frees parked clones of @p lane.
+			 * @brief Drops parked RAII clones of @p lane.
+			 * @param lane Track context.
 			 */
 			void DropParked(Lane& lane) noexcept;
 
@@ -280,10 +309,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 			void DropAll() noexcept;
 
-			static constexpr std::size_t Ceiling = 512;	///< Analytics hopper
+			static constexpr std::size_t Ceiling = 512;		///< Analytics hopper
 			static constexpr unsigned ParkLogEvery = 64;	///< Notice park depth
-			std::string m_modelName;					///< libvmaf built-in version
-			std::optional<unsigned short> m_threads;	///< Empty: all cores
-			std::map<int, Lane> m_lanes;				///< One context per Frame::Track
+			std::string m_modelName;						///< libvmaf built-in version
+			std::optional<unsigned short> m_threads;		///< Empty: all cores
+			std::map<int, Lane> m_lanes;					///< One context per Frame::Track
 	};
 }

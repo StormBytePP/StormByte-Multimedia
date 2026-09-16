@@ -40,10 +40,15 @@
 #include <StormByte/multimedia/backend/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 
+#include <cctype>
+#include <climits>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <string_view>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavutil/avutil.h>
 	#include <libavutil/channel_layout.h>
 	#include <libavutil/frame.h>
@@ -62,6 +67,25 @@ using StormByte::Multimedia::Pipeline::SideDataKind;
 namespace {
 	constexpr int ChromaDenominator = 50000;
 	constexpr int LumaDenominator = 10000;
+
+	AVCodecID ImageCodecFromHint(std::string_view hint) noexcept {
+		std::string ext;
+		const auto slash = hint.find_last_of("/\\");
+		const auto base = slash == std::string_view::npos ? hint : hint.substr(slash + 1);
+		const auto dot = base.find_last_of('.');
+		ext = std::string(dot == std::string_view::npos ? base : base.substr(dot));
+		for (char& c : ext)
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		if (ext == ".png" || ext == "png")
+			return AV_CODEC_ID_PNG;
+		if (ext == ".jpg" || ext == ".jpeg" || ext == "jpg" || ext == "jpeg")
+			return AV_CODEC_ID_MJPEG;
+		if (ext == ".webp" || ext == "webp")
+			return AV_CODEC_ID_WEBP;
+		if (ext == ".bmp" || ext == "bmp")
+			return AV_CODEC_ID_BMP;
+		return AV_CODEC_ID_MJPEG;
+	}
 }
 
 FFmpeg::AVFrame::AVFrame() noexcept:
@@ -311,6 +335,66 @@ int FFmpeg::AVFrame::Format() const noexcept {
 void FFmpeg::AVFrame::Format(int format) noexcept {
 	if (m_ptr)
 		m_ptr->format = format;
+}
+
+bool FFmpeg::AVFrame::Hardware() const noexcept {
+	if (!m_ptr)
+		return false;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	return !desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL) != 0;
+}
+
+int FFmpeg::AVFrame::FormatNone() noexcept {
+	return static_cast<int>(AV_PIX_FMT_NONE);
+}
+
+int FFmpeg::AVFrame::FormatGray8() noexcept {
+	return static_cast<int>(AV_PIX_FMT_GRAY8);
+}
+
+int FFmpeg::AVFrame::FormatRgba() noexcept {
+	return static_cast<int>(AV_PIX_FMT_RGBA);
+}
+
+FFmpeg::AVFrame FFmpeg::AVFrame::DecodeImage(const std::uint8_t* data, std::size_t size,
+	std::string_view hint) noexcept {
+	AVFrame out;
+	out.Reset(nullptr);
+	if (!data || size == 0 || size > static_cast<std::size_t>(INT_MAX))
+		return out;
+
+	const AVCodec* codec = avcodec_find_decoder(ImageCodecFromHint(hint));
+	if (!codec)
+		return out;
+
+	AVCodecContext* ctx = avcodec_alloc_context3(codec);
+	if (!ctx || avcodec_open2(ctx, codec, nullptr) < 0) {
+		avcodec_free_context(&ctx);
+		return out;
+	}
+
+	AVPacket* pkt = av_packet_alloc();
+	if (!pkt) {
+		avcodec_free_context(&ctx);
+		return out;
+	}
+
+	pkt->data = const_cast<std::uint8_t*>(data);
+	pkt->size = static_cast<int>(size);
+
+	AVFrame decoded;
+	const bool ok = avcodec_send_packet(ctx, pkt) >= 0
+		&& avcodec_receive_frame(ctx, decoded.Get()) >= 0
+		&& decoded.Width() > 0 && decoded.Height() > 0;
+
+	pkt->data = nullptr;
+	pkt->size = 0;
+	av_packet_free(&pkt);
+	avcodec_free_context(&ctx);
+
+	if (!ok)
+		return out;
+	return decoded;
 }
 
 void FFmpeg::AVFrame::Pts(std::int64_t pts) noexcept {

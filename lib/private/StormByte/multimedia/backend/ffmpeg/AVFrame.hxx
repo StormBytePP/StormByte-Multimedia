@@ -46,7 +46,9 @@
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/hdr10.hxx>
 
+#include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 /**
@@ -85,8 +87,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @class AVFrame
 	 * @brief RAII owner of a libav AVFrame.
 	 *
-	 * Filter authors: clone, scale, planes, props, side data.
-	 * Do not call av_*. @c Get() is not public.
+	 * Filter authors: clone, scale, planes, props, side data,
+	 * still-image decode. Do not call av_*. @c Get() and
+	 * @c Detach() are not public.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -233,6 +236,44 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @param format Format as int.
 			 */
 			void Format(int format) noexcept;
+
+			/**
+			 * @brief Whether the pixel format is hardware-backed.
+			 * @return true if planes are not CPU-readable.
+			 */
+			bool Hardware() const noexcept;
+
+			/**
+			 * @brief `AV_PIX_FMT_NONE` as int.
+			 * @return Format token.
+			 */
+			static int FormatNone() noexcept;
+
+			/**
+			 * @brief `AV_PIX_FMT_GRAY8` as int.
+			 * @return Format token.
+			 */
+			static int FormatGray8() noexcept;
+
+			/**
+			 * @brief `AV_PIX_FMT_RGBA` as int.
+			 * @return Format token.
+			 */
+			static int FormatRgba() noexcept;
+
+			/**
+			 * @brief Decodes one still image from a compressed buffer.
+			 * @param data File bytes (PNG / JPEG / WebP / BMP).
+			 * @param size Byte count.
+			 * @param hint Path or extension (`.png`, `logo.jpg`). Empty tries JPEG.
+			 * @return Frame with planes, or an empty wrapper (`!frame`) on failure.
+			 *
+			 * Opens a decoder, sends one packet, receives one frame.
+			 * Does not convert pixel format; call @ref ScaleTo for RGBA / GRAY8.
+			 * @p data must remain valid for the duration of the call.
+			 */
+			static AVFrame DecodeImage(const std::uint8_t* data, std::size_t size,
+				std::string_view hint = {}) noexcept;
 
 			/**
 			 * @brief Presentation timestamp in stream ticks.
@@ -640,6 +681,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void Free() noexcept override;
 
 			using AVPointer<::AVFrame>::Get;
+			using AVPointer<::AVFrame>::Detach;
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVFrame>;
