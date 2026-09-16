@@ -210,6 +210,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			void Reset(::AVPacket* raw) noexcept;
 
+			using AVPointer<::AVPacket>::Get;
+
 		private:
 			/**
 			 * @brief Deep copy via av_packet_clone.
@@ -228,8 +230,6 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Frees the packet (av_packet_free).
 			 */
 			void Free() noexcept override;
-
-			using AVPointer<::AVPacket>::Get;
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVPacket>;
