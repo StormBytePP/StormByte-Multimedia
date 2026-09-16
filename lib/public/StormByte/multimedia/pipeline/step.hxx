@@ -141,7 +141,11 @@ namespace StormByte::Multimedia::Pipeline {
 			Step(Step&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Signals stop and joins the pumper if Launch ran.
+			 * @brief Destructor. Joins the pumper if Launch ran.
+			 *
+			 * Most-derived Step members are already gone. Those
+			 * leaves Halt first via @ref Join so a backend the
+			 * worker still uses survives until the thread has left.
 			 */
 			virtual ~Step() noexcept;
 
@@ -359,10 +363,37 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Stop and join the pumper.
 			 *
-			 * Safe to call more than once. Leaves call this from their
-			 * destructor before releasing a backend the worker still uses.
+			 * Safe to call more than once. Step leaves do not call
+			 * this from their destructor: @ref Join is their last
+			 * member and Halt s before other members die. Filter
+			 * plugins never call Halt; @ref Route joins them while
+			 * the leaf is still complete.
 			 */
 			void Halt() noexcept;
+
+			/**
+			 * @class Join
+			 * @brief Last data member of every most-derived Step.
+			 *
+			 * Destructor Halt s this Step. Declared last so backends
+			 * and hoppers of the leaf are still alive while the
+			 * worker leaves. Not a plugin API: Filter::FFmpeg is
+			 * not a Step.
+			 */
+			class Join final {
+				public:
+					explicit Join(Step& step) noexcept: m_step(step) {}
+					Join(const Join&) = delete;
+					Join(Join&&) noexcept = delete;
+					~Join() noexcept {
+						m_step.Halt();
+					}
+					Join& operator=(const Join&) = delete;
+					Join& operator=(Join&&) noexcept = delete;
+
+				private:
+					Step& m_step;
+			};
 
 			/**
 			 * @brief Worker must return (Stop, Halt or Fail).
