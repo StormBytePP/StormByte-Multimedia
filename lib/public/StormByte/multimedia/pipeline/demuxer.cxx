@@ -38,9 +38,10 @@
 
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/source.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/demux.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
@@ -83,6 +84,8 @@ Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 	// Unbound keys must drop. Route only Binds the look track.
 	// Without Drain, the next audio/subtitle packet blocks Push forever.
 	m_lookOut.Drain();
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Source>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Demux>(*this));
 	Launch();
 }
 
@@ -105,6 +108,13 @@ std::optional<Property::Duration> Demuxer::Position() const noexcept {
 	if (ns < 0)
 		return std::nullopt;
 	return Property::Duration{std::chrono::nanoseconds{ns}};
+}
+
+void Demuxer::WaitForPlan() noexcept {
+	std::unique_lock lock(m_planMutex);
+	m_planPresent.wait(lock, [this]() {
+		return Stopping() || static_cast<bool>(m_plan);
+	});
 }
 
 void Demuxer::ReachedEof() noexcept {
@@ -159,67 +169,6 @@ Packet::PointerType Demuxer::Wrap(
 	if (backend)
 		packet->Bind(std::move(backend));
 	return packet;
-}
-
-void Demuxer::Open() noexcept {
-	NameThread("STMM:Demuxer");
-	{
-		std::unique_lock lock(m_planMutex);
-		m_planPresent.wait(lock, [this]() {
-			return Stopping() || static_cast<bool>(m_plan);
-		});
-	}
-
-	if (Stopping() || !m_plan)
-		return;
-
-	if (const CheckResult check = m_plan->Check(); !check) {
-		Fail((*check.error()).what());
-		return;
-	}
-
-	m_backend = std::make_unique<Backend::Pipeline::Demuxer>();
-	if (!m_backend->Open(*this))
-		return;
-
-	m_eof = false;
-	m_positionNs.store(-1, std::memory_order_release);
-	m_nextSerial.clear();
-	Log(Level::Notice, std::format("open {}", OriginFile().Path().string()));
-	Step::Open();
-}
-
-void Demuxer::Pump() noexcept {
-	if (!m_backend || !m_backend->IsOpen())
-		return;
-
-	for (;;) {
-		if (Stopping())
-			return;
-		const auto started = std::chrono::steady_clock::now();
-		Packet::PointerType packet = m_backend->Read(*this);
-		if (Failed())
-			return;
-		if (!packet) {
-			ReachedEof();
-			m_lookOut.Eof();
-			DumpWork();
-			return;
-		}
-
-		if (const auto& pts = packet->Pts(); pts)
-			m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-		m_lookOut.Push(packet->Track(), Packet::PointerType(new Packet(*packet)));
-		Emit(std::move(packet));
-		RecordWork(std::chrono::duration_cast<std::chrono::microseconds>(
-			std::chrono::steady_clock::now() - started).count());
-	}
-}
-
-void Demuxer::Finish() noexcept {
-	ReachedEof();
-	m_lookOut.Eof();
-	DumpWork();
 }
 
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Decoder& decoder) noexcept {

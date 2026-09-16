@@ -66,6 +66,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	class Demuxer;	///< Demux backend behind @ref StormByte::Multimedia::Pipeline::Demuxer.
 }
 
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	class Demux;
+}
+
 /**
  * @namespace StormByte::Multimedia
  * @brief Public multimedia types: codecs, containers, streams and files.
@@ -103,10 +107,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Only tracks listed in the bound Plan enter the tube. An origin
 	 * stream omitted from Plan::add is never pushed.
 	 *
-	 * Notice: origin path at Open, eof once. Debug: bind to a decoder
-	 * and Work min/max at Finish. LowLevel unit lines always;
-	 * the shared logger throttles. Each Read+Emit is timed with
-	 * @ref Step::RecordWork because this leaf overrides Pump.
+	 * Notice: origin path at Setup, eof once. Debug: bind to a decoder
+	 * and Process min/max at source EoF. LowLevel unit lines always;
+	 * the shared logger throttles. Each Read+Emit is timed by the
+	 * Source pumper.
 	 *
 	 * Wrap assigns the next @ref Packet::Serial for that origin
 	 * track and Part zero. That id is pipe lineage, not an FFmpeg
@@ -116,6 +120,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
 		friend class Backend::Pipeline::Demuxer;
+		friend class Backend::Pipeline::Detail::Worker::Demux;
 		friend class Decoder;
 		friend class Muxer;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
@@ -130,7 +135,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Demuxer. Launches; Open waits for a Plan.
+			 * @brief Demuxer. Launches; Setup waits for a Plan.
 			 * @param log Shared logger. Empty pointer means no log.
 			 */
 			explicit Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept;
@@ -201,22 +206,9 @@ namespace StormByte::Multimedia::Pipeline {
 			using Step::Log;
 
 			/**
-			 * @brief Waits for a Plan, checks it and opens the origin.
+			 * @brief Blocks until a Plan is bound or the stage must leave.
 			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Reads packets until Fail, stop or EOF.
-			 *
-			 * Origin streams not listed in the Plan are discarded
-			 * and never enter a hopper.
-			 */
-			void Pump() noexcept override;
-
-			/**
-			 * @brief Marks end of source after the last packet.
-			 */
-			void Finish() noexcept override;
+			void WaitForPlan() noexcept;
 
 			/**
 			 * @brief Marks end of source. Called by the backend on EOF.
