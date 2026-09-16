@@ -79,6 +79,7 @@ Pipe& Pipe::CloneTo(int track, Pipe& dest) noexcept {
 	dest.Listen();
 	m_clone.Bind(track, dest.In());
 	m_fork = true;
+	dest.m_inTracks.insert(track);
 	return dest;
 }
 
@@ -102,8 +103,14 @@ Pipe::Lane Pipe::To(int track) noexcept {
 }
 
 Pipe& Pipe::Lane::operator>>(Pipe& dest) noexcept {
+	if (dest.m_inTracks.contains(m_track)) {
+		dest.m_in.Bind(m_track, m_from->m_out);
+		return dest;
+	}
+
 	dest.Listen();
 	m_from->m_out.Bind(m_track, dest.m_in);
+	dest.m_inTracks.insert(m_track);
 	return dest;
 }
 

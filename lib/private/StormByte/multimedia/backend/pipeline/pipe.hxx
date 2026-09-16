@@ -44,6 +44,7 @@
 
 #include <condition_variable>
 #include <cstddef>
+#include <unordered_set>
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
@@ -169,9 +170,13 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			class STORMBYTE_MULTIMEDIA_PRIVATE Lane {
 				public:
 					/**
-					 * @brief Notify dest In, Bind this track.
+					 * @brief Wire this track onto @p dest.
 					 * @param dest Consumer pipe.
 					 * @return @p dest.
+					 *
+					 * Empty dest In: first producer (Out onto In).
+					 * Dest In already wired (CloneTo): extra producer
+					 * (In onto Out). Bind is not a Route API.
 					 */
 					Pipe& operator>>(Pipe& dest) noexcept;
 
@@ -236,5 +241,6 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			ItemSink m_out;						///< Output buckets
 			ItemSink m_clone;					///< Analytics fork; unused until CloneTo
 			bool m_fork;						///< CloneTo has bound m_clone
+			std::unordered_set<int> m_inTracks;	///< Keys already wired on In
 	};
 }

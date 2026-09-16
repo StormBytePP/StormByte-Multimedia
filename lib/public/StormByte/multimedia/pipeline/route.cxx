@@ -226,8 +226,7 @@ void Route::TapEncode(Step& destination, Lane& lane) noexcept {
 	else
 		look.reset(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
 	look->pipe().Listen();
-	lane.FirstAnalytics->pipe().Listen();
 	destination.Look(look->pipe().In());
-	lane.FirstAnalytics->pipe().In().Bind(m_track, look->pipe().Out());
+	look->pipe().To(m_track) >> lane.FirstAnalytics->pipe();
 	m_looks.push_back(std::move(look));
 }
