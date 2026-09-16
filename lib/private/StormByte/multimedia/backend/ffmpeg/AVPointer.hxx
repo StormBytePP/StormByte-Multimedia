@@ -51,14 +51,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @brief Move-only RAII base for FFmpeg C pointers.
 	 * @tparam AVType Underlying FFmpeg struct type.
 	 *
-	 * Derived classes must implement Free(). Get() is public inside the
-	 * library; the type itself is not part of the installed API.
+	 * Derived classes must implement Free(). Get() is protected; each
+	 * derived type re-exports it as private so only its friends (other
+	 * wrappers) may touch the raw pointer.
 	 */
 	template<typename AVType>
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer {
 		public:
 			/**
 			 * @brief Default constructor (deleted).
+			 *
+			 * An empty wrapper is not useful; derived types adopt a pointer
+			 * through the explicit constructor or a factory such as Open().
 			 */
 			constexpr AVPointer() noexcept = delete;
 
@@ -101,9 +105,15 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 				return *this;
 			}
 
+		protected:
+			std::decay_t<AVType>* m_ptr = nullptr;	///< Owned FFmpeg pointer
+
 			/**
 			 * @brief Const view of the raw FFmpeg pointer.
 			 * @return Pointer or nullptr.
+			 *
+			 * Not public. Derived wrappers expose typed work;
+			 * friends of the derived class may `using` this as private.
 			 */
 			constexpr const std::decay_t<AVType>* Get() const noexcept {
 				return m_ptr;
@@ -116,9 +126,6 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			constexpr std::decay_t<AVType>* Get() noexcept {
 				return m_ptr;
 			}
-
-		protected:
-			std::decay_t<AVType>* m_ptr = nullptr;	///< Owned FFmpeg pointer
 
 			/**
 			 * @brief Adopts @p ptr.

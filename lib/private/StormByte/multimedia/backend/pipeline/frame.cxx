@@ -63,21 +63,20 @@ Frame& Frame::operator=(const Frame& other) noexcept {
 }
 
 void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
-	const ::AVFrame* raw = m_handle.Get();
-	if (!raw)
+	if (!m_handle)
 		return;
 
 	switch (frame.Type()) {
 		case Type::Video: {
 			if (!frame.m_video)
 				return;
-			if (raw->width <= 0 || raw->height <= 0)
+			if (m_handle.Width() <= 0 || m_handle.Height() <= 0)
 				return;
 			frame.m_video = Property::Video(
 				frame.m_video->Color(),
 				Property::Resolution{
-					static_cast<std::uint32_t>(raw->width),
-					static_cast<std::uint32_t>(raw->height)
+					static_cast<std::uint32_t>(m_handle.Width()),
+					static_cast<std::uint32_t>(m_handle.Height())
 				},
 				frame.m_video->HDR10(),
 				frame.m_video->FrameRate());
@@ -87,12 +86,12 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 		case Type::Audio: {
 			if (!frame.m_audio)
 				return;
-			if (raw->sample_rate <= 0 || raw->ch_layout.nb_channels <= 0)
+			if (m_handle.SampleRate() <= 0 || m_handle.Channels() <= 0)
 				return;
 			frame.m_audio = Property::Audio(
 				frame.m_audio->Layout(),
-				static_cast<std::uint32_t>(raw->sample_rate),
-				static_cast<std::uint8_t>(raw->ch_layout.nb_channels),
+				static_cast<std::uint32_t>(m_handle.SampleRate()),
+				static_cast<std::uint8_t>(m_handle.Channels()),
 				frame.m_audio->BitRate(),
 				frame.m_audio->Profile());
 			break;

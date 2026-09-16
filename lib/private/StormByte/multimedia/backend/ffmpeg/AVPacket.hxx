@@ -181,6 +181,33 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int Size() const noexcept;
 
 			/**
+			 * @brief Whether a packet struct is owned.
+			 * @return true if the wrapper holds a packet.
+			 */
+			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Number of side-data entries.
+			 * @return Count, or 0.
+			 */
+			int SideDataCount() const noexcept;
+
+			/**
+			 * @brief Side-data type at @p index.
+			 * @param index Entry index.
+			 * @return `AVPacketSideDataType` as int, or -1.
+			 */
+			int SideDataType(int index) const noexcept;
+
+			/**
+			 * @brief Side-data payload at @p index.
+			 * @param index Entry index.
+			 * @param size Set to payload size on success.
+			 * @return Pointer, or nullptr.
+			 */
+			const std::uint8_t* SideData(int index, int& size) const noexcept;
+
+			/**
 			 * @brief Adopts @p raw. Previous packet is freed.
 			 * @param raw libav packet, or nullptr.
 			 */
@@ -204,5 +231,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Frees the packet (av_packet_free).
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVPacket>::Get;
 	};
+
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVPacket>;
 }

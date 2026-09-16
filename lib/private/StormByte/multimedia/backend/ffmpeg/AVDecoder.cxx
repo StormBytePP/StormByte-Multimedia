@@ -87,7 +87,7 @@ FFmpeg::ExpectedAVDecoder FFmpeg::AVDecoder::Open(AVCodec* codec, const AVCodecP
 	auto opened = OpenRaw(codec, params, stream_index);
 	if (!opened)
 		return opened;
-	auto bsf = fmt.Mp4ToAnnexB(params.Get()->codec_id, stream_index, params);
+	auto bsf = fmt.Mp4ToAnnexB(params.CodecId(), stream_index, params);
 	if (bsf)
 		opened->m_bsf_pipeline.Add(std::move(*bsf));
 	return opened;

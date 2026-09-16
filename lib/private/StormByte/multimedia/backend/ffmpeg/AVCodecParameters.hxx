@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/property/hdr10.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
@@ -57,6 +58,10 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @brief Deep-copying RAII wrapper for ::AVCodecParameters.
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE AVCodecParameters: public AVPointer<::AVCodecParameters> {
+		friend class AVBSF;
+		friend class AVDecoder;
+		friend class AVEncoder;
+		friend class AVFormatContext;
 		public:
 			/**
 			 * @brief Allocates and optionally copies from @p par.
@@ -246,6 +251,32 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void DefaultChannelLayout(int channels) noexcept;
 
 			/**
+			 * @brief Whether a parameters struct is owned.
+			 * @return true if codecpar is allocated.
+			 */
+			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Replaces the channel layout.
+			 * @param layout Source layout.
+			 * @return false on failure.
+			 */
+			bool CopyChannelLayout(const AVChannelLayout& layout) noexcept;
+
+			/**
+			 * @brief Copies this into @p dest (`avcodec_parameters_copy`).
+			 * @param dest Already allocated codecpar.
+			 * @return false on failure.
+			 */
+			bool Export(::AVCodecParameters* dest) const noexcept;
+
+			/**
+			 * @brief Writes mastering display and content light onto coded side data.
+			 * @param hdr10 High-level HDR10 bag.
+			 */
+			void WriteHdr10(const StormByte::Multimedia::Property::HDR10& hdr10) noexcept;
+
+			/**
 			 * @brief Media type.
 			 * @return `AVMediaType` as int.
 			 */
@@ -262,5 +293,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Frees parameters (avcodec_parameters_free).
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVCodecParameters>::Get;
 	};
+
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVCodecParameters>;
 }

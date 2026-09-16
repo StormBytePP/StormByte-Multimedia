@@ -41,10 +41,20 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+}
+
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	class AVSubtitle;
+}
+
+namespace StormByte::Multimedia::OCR {
+	struct GrayBitmap;
+	std::optional<GrayBitmap> GrayFromSubtitle(const Backend::FFmpeg::AVSubtitle& sub) noexcept;
 }
 
 /**
@@ -93,18 +103,6 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			AVSubtitle& operator=(AVSubtitle&& other) noexcept;
 
 			/**
-			 * @brief Mutable FFmpeg struct.
-			 * @return Pointer to the owned struct.
-			 */
-			::AVSubtitle* Get() noexcept;
-
-			/**
-			 * @brief Const FFmpeg struct.
-			 * @return Pointer to the owned struct.
-			 */
-			const ::AVSubtitle* Get() const noexcept;
-
-			/**
 			 * @brief Presentation timestamp in `AV_TIME_BASE`.
 			 * @return PTS, or `AV_NOPTS_VALUE`.
 			 */
@@ -137,6 +135,23 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void Free() noexcept;
 
 		private:
+			/**
+			 * @brief Mutable FFmpeg struct.
+			 * @return Pointer to the owned struct.
+			 */
+			::AVSubtitle* Get() noexcept;
+
+			/**
+			 * @brief Const FFmpeg struct.
+			 * @return Pointer to the owned struct.
+			 */
+			const ::AVSubtitle* Get() const noexcept;
+
 			::AVSubtitle m_sub;
+
+			friend class AVDecoder;
+			friend class AVEncoder;
+			friend std::optional<StormByte::Multimedia::OCR::GrayBitmap>
+				StormByte::Multimedia::OCR::GrayFromSubtitle(const AVSubtitle& sub) noexcept;
 	};
 }

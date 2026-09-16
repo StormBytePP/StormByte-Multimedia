@@ -38,6 +38,13 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 
+#include <cstring>
+
+extern "C" {
+	#include <libavcodec/packet.h>
+	#include <libavutil/mastering_display_metadata.h>
+}
+
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVCodecParameters::AVCodecParameters(::AVCodecParameters* par) noexcept
@@ -187,6 +194,60 @@ int FFmpeg::AVCodecParameters::CodecType() const noexcept {
 void FFmpeg::AVCodecParameters::CodecType(int type) noexcept {
 	if (m_ptr)
 		m_ptr->codec_type = static_cast<::AVMediaType>(type);
+}
+
+FFmpeg::AVCodecParameters::operator bool() const noexcept {
+	return m_ptr != nullptr;
+}
+
+bool FFmpeg::AVCodecParameters::CopyChannelLayout(const AVChannelLayout& layout) noexcept {
+	return m_ptr && av_channel_layout_copy(&m_ptr->ch_layout, &layout) >= 0;
+}
+
+bool FFmpeg::AVCodecParameters::Export(::AVCodecParameters* dest) const noexcept {
+	if (!m_ptr || !dest)
+		return false;
+	return avcodec_parameters_copy(dest, m_ptr) >= 0;
+}
+
+void FFmpeg::AVCodecParameters::WriteHdr10(const StormByte::Multimedia::Property::HDR10& hdr10) noexcept {
+	if (!m_ptr)
+		return;
+	const bool hasMastering =
+		hdr10.Red().X() != 0 || hdr10.Red().Y() != 0 ||
+		hdr10.Green().X() != 0 || hdr10.Green().Y() != 0 ||
+		hdr10.Blue().X() != 0 || hdr10.Blue().Y() != 0 ||
+		hdr10.White().X() != 0 || hdr10.White().Y() != 0 ||
+		hdr10.Luminance().X() != 0 || hdr10.Luminance().Y() != 0;
+	const auto& light = hdr10.LightLevel();
+	const bool hasLight = light.has_value() && (light->X() != 0 || light->Y() != 0);
+	if (hasMastering) {
+		AVMasteringDisplayMetadata mdm{};
+		mdm.display_primaries[0][0] = av_make_q(static_cast<int>(hdr10.Red().X()), 50000);
+		mdm.display_primaries[0][1] = av_make_q(static_cast<int>(hdr10.Red().Y()), 50000);
+		mdm.display_primaries[1][0] = av_make_q(static_cast<int>(hdr10.Green().X()), 50000);
+		mdm.display_primaries[1][1] = av_make_q(static_cast<int>(hdr10.Green().Y()), 50000);
+		mdm.display_primaries[2][0] = av_make_q(static_cast<int>(hdr10.Blue().X()), 50000);
+		mdm.display_primaries[2][1] = av_make_q(static_cast<int>(hdr10.Blue().Y()), 50000);
+		mdm.white_point[0] = av_make_q(static_cast<int>(hdr10.White().X()), 50000);
+		mdm.white_point[1] = av_make_q(static_cast<int>(hdr10.White().Y()), 50000);
+		mdm.min_luminance = av_make_q(static_cast<int>(hdr10.Luminance().X()), 10000);
+		mdm.max_luminance = av_make_q(static_cast<int>(hdr10.Luminance().Y()), 10000);
+		mdm.has_primaries = 1;
+		mdm.has_luminance = 1;
+		if (AVPacketSideData* sd = av_packet_side_data_new(&m_ptr->coded_side_data, &m_ptr->nb_coded_side_data,
+				AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(mdm), 0))
+			std::memcpy(sd->data, &mdm, sizeof(mdm));
+	}
+
+	if (hasLight) {
+		AVContentLightMetadata cll{};
+		cll.MaxCLL = static_cast<unsigned>(light->X());
+		cll.MaxFALL = static_cast<unsigned>(light->Y());
+		if (AVPacketSideData* sd = av_packet_side_data_new(&m_ptr->coded_side_data, &m_ptr->nb_coded_side_data,
+				AV_PKT_DATA_CONTENT_LIGHT_LEVEL, sizeof(cll), 0))
+			std::memcpy(sd->data, &cll, sizeof(cll));
+	}
 }
 
 void FFmpeg::AVCodecParameters::Free() noexcept {

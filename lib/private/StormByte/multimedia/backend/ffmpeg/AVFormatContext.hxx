@@ -46,6 +46,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <unordered_set>
 
 extern "C" {
 	#include <libavformat/avformat.h>
@@ -153,6 +154,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			std::optional<AVBSF> Mp4ToAnnexB(int codec_id, int stream_id, const AVCodecParameters& params) const noexcept;
 
+			/**
+			 * @brief Whether an input context is open.
+			 * @return true after a successful Open().
+			 */
+			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Marks streams not in @p wanted as `AVDISCARD_ALL`.
+			 * @param wanted Origin indexes to keep (`AVDISCARD_DEFAULT`).
+			 */
+			void DiscardUnwanted(const std::unordered_set<int>& wanted) noexcept;
+
 		private:
 			struct ConsumerIO;
 
@@ -174,5 +187,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Closes input and custom AVIO.
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVFormatContext>::Get;
 	};
+
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVFormatContext>;
 }

@@ -50,6 +50,7 @@
 extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavformat/avformat.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavutil/rational.h>
 }
 
@@ -177,6 +178,72 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			FFmpeg::OperationResult SetEof() noexcept;
 
+			/**
+			 * @brief Whether a codec context is open.
+			 * @return true after a successful Open().
+			 */
+			explicit operator bool() const noexcept;
+
+			/**
+			 * @brief Opened codec id.
+			 * @return `AVCodecID` as int, or `AV_CODEC_ID_NONE`.
+			 */
+			int CodecId() const noexcept;
+
+			/**
+			 * @brief Media type of the opened codec.
+			 * @return `AVMediaType` as int.
+			 */
+			int CodecType() const noexcept;
+
+			/**
+			 * @brief Audio sample format.
+			 * @return `AVSampleFormat` as int, or `AV_SAMPLE_FMT_NONE`.
+			 */
+			int SampleFmt() const noexcept;
+
+			/**
+			 * @brief Encoder frame size in samples. 0 means variable.
+			 * @return Frame size, or 0.
+			 */
+			int FrameSize() const noexcept;
+
+			/**
+			 * @brief Audio channel count.
+			 * @return Channels, or 0.
+			 */
+			int Channels() const noexcept;
+
+			/**
+			 * @brief Audio sample rate in Hz.
+			 * @return Rate, or 0.
+			 */
+			int SampleRate() const noexcept;
+
+			/**
+			 * @brief Channel layout owned by the context.
+			 * @return Layout, or nullptr.
+			 */
+			const AVChannelLayout* ChannelLayout() const noexcept;
+
+			/**
+			 * @brief Whether the codec uses B-frames.
+			 * @return true if `has_b_frames` is set.
+			 */
+			bool HasBFrames() const noexcept;
+
+			/**
+			 * @brief Video framerate guessed by the encoder.
+			 * @return Framerate, or `{0, 1}`.
+			 */
+			AVRational FrameRate() const noexcept;
+
+			/**
+			 * @brief Opened codec context for mux stream bind.
+			 * @return Context, or nullptr.
+			 */
+			const ::AVCodecContext* Context() const noexcept;
+
 		private:
 			int m_stream_index = -1;										///< Output track
 			FFmpeg::AVBSFPipeline m_bsf_pipeline;							///< Optional annex-B filter
@@ -192,5 +259,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Frees the codec context.
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVCodecContext>::Get;
 	};
 }

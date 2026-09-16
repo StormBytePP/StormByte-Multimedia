@@ -50,6 +50,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 extern "C" {
@@ -388,6 +389,21 @@ std::optional<FFmpeg::AVBSF> FFmpeg::AVFormatContext::Mp4ToAnnexB(int codec_id, 
 	if (expected_bsf)
 		return std::move(expected_bsf.value());
 	return std::nullopt;
+}
+
+FFmpeg::AVFormatContext::operator bool() const noexcept {
+	return m_ptr != nullptr;
+}
+
+void FFmpeg::AVFormatContext::DiscardUnwanted(const std::unordered_set<int>& wanted) noexcept {
+	if (!m_ptr)
+		return;
+	for (unsigned i = 0; i < m_ptr->nb_streams; ++i) {
+		AVStream* avs = m_ptr->streams[i];
+		if (!avs)
+			continue;
+		avs->discard = wanted.contains(avs->index) ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+	}
 }
 
 void FFmpeg::AVFormatContext::Free() noexcept {

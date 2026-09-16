@@ -286,7 +286,7 @@ bool Subtitle::IsOpen() const noexcept {
 }
 
 const AVCodecContext* Subtitle::Context() const noexcept {
-	return m_encoder ? m_encoder->Get() : nullptr;
+	return m_encoder ? m_encoder->Context() : nullptr;
 }
 
 AVRational Subtitle::TimeBase() const noexcept {

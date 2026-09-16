@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
@@ -127,12 +128,10 @@ namespace {
 		}
 	}
 
-	std::vector<SideData> MapAttachments(const ::AVFrame* av) noexcept {
+	std::vector<SideData> MapAttachments(const StormByte::Multimedia::Backend::FFmpeg::AVFrame& av) noexcept {
 		std::vector<SideData> out;
-		if (!av)
-			return out;
-		for (int i = 0; i < av->nb_side_data; ++i) {
-			const AVFrameSideData* sd = av->side_data[i];
+		for (int i = 0; i < av.SideDataCount(); ++i) {
+			const AVFrameSideData* sd = av.SideDataAt(i);
 			if (!sd || !sd->data || sd->size <= 0)
 				continue;
 			StormByte::Buffer::DataType bytes(
@@ -153,10 +152,10 @@ namespace {
 	}
 
 	std::optional<StormByte::Multimedia::Property::HDR10> MapFrameHDR10(
-		const ::AVFrame* av, bool heuristics, const StormByte::Multimedia::Property::Video& video) noexcept {
-		const AVFrameSideData* mdmSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA) : nullptr;
-		const AVFrameSideData* cllSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL) : nullptr;
-		const AVFrameSideData* plusSd = av ? av_frame_get_side_data(av, AV_FRAME_DATA_DYNAMIC_HDR_PLUS) : nullptr;
+		const StormByte::Multimedia::Backend::FFmpeg::AVFrame& av, bool heuristics, const StormByte::Multimedia::Property::Video& video) noexcept {
+		const AVFrameSideData* mdmSd = av.SideData(AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+		const AVFrameSideData* cllSd = av.SideData(AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+		const AVFrameSideData* plusSd = av.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
 		const auto* mdm = (mdmSd && mdmSd->size >= sizeof(AVMasteringDisplayMetadata))
 			? reinterpret_cast<const AVMasteringDisplayMetadata*>(mdmSd->data) : nullptr;
 		const auto* cll = (cllSd && cllSd->size >= sizeof(AVContentLightMetadata))
@@ -275,9 +274,9 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		}
 
 		auto video = m_video;
-		auto attachments = MapAttachments(holder->Handle().Get());
+		auto attachments = MapAttachments(holder->Handle());
 		if (video) {
-			auto hdr = MapFrameHDR10(holder->Handle().Get(),
+			auto hdr = MapFrameHDR10(holder->Handle(),
 				owner.Flags().Has(DecoderFlag::HeuristicsHDR10), *video);
 			video = StormByte::Multimedia::Property::Video(
 				video->Color(), video->Resolution(), std::move(hdr), video->FrameRate());

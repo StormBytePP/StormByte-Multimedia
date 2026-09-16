@@ -47,11 +47,9 @@
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
-	#include <libavutil/audio_fifo.h>
 	#include <libavutil/channel_layout.h>
 	#include <libavutil/rational.h>
 	#include <libavutil/samplefmt.h>
-	#include <libswresample/swresample.h>
 }
 
 using namespace StormByte::Multimedia;
@@ -90,42 +88,35 @@ namespace {
 			params.DefaultChannelLayout(channels);
 		}
 
-		if (handle && handle->Get() && handle->Get()->ch_layout.nb_channels > 0 && params.Get())
-			av_channel_layout_copy(&params.Get()->ch_layout, &handle->Get()->ch_layout);
+		if (handle && *handle && handle->Channels() > 0) {
+			if (const auto* layout = handle->ChannelLayout())
+				params.CopyChannelLayout(*layout);
+		}
 		return params;
 	}
 }
 
 Audio::Audio() noexcept
-: m_owner(nullptr), m_timeBase{0, 1}, m_swr(nullptr), m_fifo(nullptr),
+: m_owner(nullptr), m_timeBase{0, 1},
 	m_inFormat(-1), m_outFormat(-1), m_frameSize(0), m_channels(0),
 	m_index(0), m_nextPts(0), m_flushed(false), m_pktPts(0) {}
 
-Audio::~Audio() noexcept {
-	swr_free(&m_swr);
-	if (m_fifo)
-		av_audio_fifo_free(m_fifo);
-}
+Audio::~Audio() noexcept = default;
 
 Audio::Audio(Audio&& other) noexcept
-: m_encoder(std::move(other.m_encoder)), m_scratch(std::move(other.m_scratch)),
+:	m_encoder(std::move(other.m_encoder)), m_scratch(std::move(other.m_scratch)),
 	m_converted(std::move(other.m_converted)), m_pending(std::move(other.m_pending)),
-	m_owner(other.m_owner), m_timeBase(other.m_timeBase), m_swr(other.m_swr), m_fifo(other.m_fifo),
+	m_owner(other.m_owner), m_timeBase(other.m_timeBase), m_swr(std::move(other.m_swr)), m_fifo(std::move(other.m_fifo)),
 	m_inFormat(other.m_inFormat), m_outFormat(other.m_outFormat),
 	m_frameSize(other.m_frameSize), m_channels(other.m_channels),
 	m_index(other.m_index), m_nextPts(other.m_nextPts), m_flushed(other.m_flushed),
 	m_pktPts(other.m_pktPts) {
-	other.m_swr = nullptr;
-	other.m_fifo = nullptr;
 	other.m_owner = nullptr;
 }
 
 Audio& Audio::operator=(Audio&& other) noexcept {
 	if (this == &other)
 		return *this;
-	swr_free(&m_swr);
-	if (m_fifo)
-		av_audio_fifo_free(m_fifo);
 	m_encoder = std::move(other.m_encoder);
 	m_scratch = std::move(other.m_scratch);
 	m_converted = std::move(other.m_converted);
@@ -133,10 +124,8 @@ Audio& Audio::operator=(Audio&& other) noexcept {
 	m_owner = other.m_owner;
 	other.m_owner = nullptr;
 	m_timeBase = other.m_timeBase;
-	m_swr = other.m_swr;
-	other.m_swr = nullptr;
-	m_fifo = other.m_fifo;
-	other.m_fifo = nullptr;
+	m_swr = std::move(other.m_swr);
+	m_fifo = std::move(other.m_fifo);
 	m_inFormat = other.m_inFormat;
 	m_outFormat = other.m_outFormat;
 	m_frameSize = other.m_frameSize;
@@ -153,7 +142,7 @@ bool Audio::IsOpen() const noexcept {
 }
 
 const AVCodecContext* Audio::Context() const noexcept {
-	return m_encoder ? m_encoder->Get() : nullptr;
+	return m_encoder ? m_encoder->Context() : nullptr;
 }
 
 AVRational Audio::TimeBase() const noexcept {
@@ -161,107 +150,98 @@ AVRational Audio::TimeBase() const noexcept {
 }
 
 bool Audio::PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
-	const ::AVFrame* src, const AVCodecContext* ctx) noexcept {
-	if (!src || !ctx) {
+	const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept {
+	if (!src || !m_encoder) {
 		owner.Fail("audio convert missing source or encoder context");
 		return false;
 	}
 
-	if (src->sample_rate != ctx->sample_rate) {
+	if (src.SampleRate() != m_encoder->SampleRate()) {
 		owner.Fail("encoder sample rate does not match the decoded frame");
 		return false;
 	}
 
-	m_inFormat = src->format;
-	m_outFormat = ctx->sample_fmt;
-	m_frameSize = ctx->frame_size > 0 ? ctx->frame_size : src->nb_samples;
-	m_channels = ctx->ch_layout.nb_channels;
+	m_inFormat = src.Format();
+	m_outFormat = m_encoder->SampleFmt();
+	m_frameSize = m_encoder->FrameSize() > 0 ? m_encoder->FrameSize() : src.NbSamples();
+	m_channels = m_encoder->Channels();
 	if (m_frameSize <= 0 || m_channels <= 0) {
 		owner.Fail("encoder audio frame size or channel count is invalid");
 		return false;
 	}
 
+	const auto* inLayout = src.ChannelLayout();
+	const auto* outLayout = m_encoder->ChannelLayout();
+	if (!inLayout || !outLayout) {
+		owner.Fail("audio convert missing channel layout");
+		return false;
+	}
+
 	const bool sameFmt = m_inFormat == m_outFormat;
-	const bool sameLayout = SameLayout(src->ch_layout, ctx->ch_layout);
+	const bool sameLayout = SameLayout(*inLayout, *outLayout);
+	m_swr.reset();
 	if (!sameFmt || !sameLayout) {
-		swr_free(&m_swr);
-		int rc = swr_alloc_set_opts2(&m_swr,
-			const_cast<AVChannelLayout*>(&ctx->ch_layout), static_cast<AVSampleFormat>(m_outFormat), ctx->sample_rate,
-			const_cast<AVChannelLayout*>(&src->ch_layout), static_cast<AVSampleFormat>(m_inFormat), src->sample_rate,
-			0, nullptr);
-		if (rc < 0 || !m_swr) {
+		auto swr = StormByte::Multimedia::Backend::FFmpeg::Swr::Open(
+			*outLayout, m_outFormat, src.SampleRate(),
+			*inLayout, m_inFormat, src.SampleRate());
+		if (!swr) {
 			owner.Fail("failed to allocate sample format converter");
 			return false;
 		}
 
-		rc = swr_init(m_swr);
-		if (rc < 0) {
-			swr_free(&m_swr);
-			owner.Fail("failed to init sample format converter");
-			return false;
-		}
+		m_swr = std::move(swr);
 	}
 
-	if (m_fifo)
-		av_audio_fifo_free(m_fifo);
-	m_fifo = av_audio_fifo_alloc(static_cast<AVSampleFormat>(m_outFormat), m_channels, m_frameSize * 2);
-	if (!m_fifo) {
+	auto fifo = StormByte::Multimedia::Backend::FFmpeg::AudioFifo::Open(
+		m_outFormat, m_channels, m_frameSize * 2);
+	if (!fifo) {
 		owner.Fail("failed to allocate audio fifo");
 		return false;
 	}
 
+	m_fifo = std::move(fifo);
 	m_nextPts = 0;
 	return true;
 }
 
-bool Audio::Ingest(StormByte::Multimedia::Pipeline::Encoder& owner, ::AVFrame* src) noexcept {
+bool Audio::Ingest(StormByte::Multimedia::Pipeline::Encoder& owner,
+	StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept {
 	if (!src || !m_fifo || !m_encoder) {
 		owner.Fail("audio ingest missing source or fifo");
 		return false;
 	}
 
-	const auto* ctx = m_encoder->Get();
-	if (!ctx) {
-		owner.Fail("audio ingest missing encoder context");
-		return false;
-	}
-
-	::AVFrame* ready = src;
+	StormByte::Multimedia::Backend::FFmpeg::AVFrame* ready = &src;
 	if (m_swr) {
-		auto* dst = m_converted.Get();
-		if (!dst) {
-			owner.Fail("audio convert output frame is empty");
-			return false;
-		}
-
-		av_frame_unref(dst);
-		dst->format = m_outFormat;
-		dst->sample_rate = ctx->sample_rate;
-		dst->nb_samples = src->nb_samples;
-		if (av_channel_layout_copy(&dst->ch_layout, &ctx->ch_layout) < 0) {
+		m_converted.Unref();
+		m_converted.Format(m_outFormat);
+		m_converted.SampleRate(m_encoder->SampleRate());
+		m_converted.NbSamples(src.NbSamples());
+		if (const auto* layout = m_encoder->ChannelLayout();
+			!layout || !m_converted.CopyChannelLayout(*layout)) {
 			owner.Fail("failed to copy audio channel layout");
 			return false;
 		}
 
-		if (av_frame_get_buffer(dst, 0) < 0) {
+		if (!m_converted.GetBuffer(0)) {
 			owner.Fail("failed to allocate converted audio buffer");
 			return false;
 		}
 
-		if (swr_convert_frame(m_swr, dst, src) < 0) {
+		if (!m_swr->Convert(src, m_converted)) {
 			owner.Fail("failed to convert audio sample format");
 			return false;
 		}
 
-		ready = dst;
+		ready = &m_converted;
 	}
 
-	if (av_audio_fifo_realloc(m_fifo, av_audio_fifo_size(m_fifo) + ready->nb_samples) < 0) {
+	if (!m_fifo->Realloc(m_fifo->Size() + ready->NbSamples())) {
 		owner.Fail("failed to grow audio fifo");
 		return false;
 	}
 
-	if (av_audio_fifo_write(m_fifo, reinterpret_cast<void**>(ready->extended_data), ready->nb_samples) < ready->nb_samples) {
+	if (!m_fifo->Write(*ready)) {
 		owner.Fail("failed to write audio fifo");
 		return false;
 	}
@@ -272,14 +252,9 @@ bool Audio::Ingest(StormByte::Multimedia::Pipeline::Encoder& owner, ::AVFrame* s
 bool Audio::Emit(StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noexcept {
 	if (!m_encoder || !m_fifo)
 		return true;
-	const auto* ctx = m_encoder->Get();
-	if (!ctx) {
-		owner.Fail("audio emit missing encoder context");
-		return false;
-	}
 
 	for (;;) {
-		const int available = av_audio_fifo_size(m_fifo);
+		const int available = m_fifo->Size();
 		int take = m_frameSize;
 		if (available < m_frameSize) {
 			if (!last || available <= 0)
@@ -287,29 +262,24 @@ bool Audio::Emit(StormByte::Multimedia::Pipeline::Encoder& owner, bool last) noe
 			take = available;
 		}
 
-		auto* dst = m_converted.Get();
-		if (!dst) {
-			owner.Fail("audio emit output frame is empty");
-			return false;
-		}
-
-		av_frame_unref(dst);
-		dst->format = m_outFormat;
-		dst->sample_rate = ctx->sample_rate;
-		dst->nb_samples = take;
-		dst->pts = m_nextPts;
-		dst->duration = take;
-		if (av_channel_layout_copy(&dst->ch_layout, &ctx->ch_layout) < 0) {
+		m_converted.Unref();
+		m_converted.Format(m_outFormat);
+		m_converted.SampleRate(m_encoder->SampleRate());
+		m_converted.NbSamples(take);
+		m_converted.Pts(m_nextPts);
+		m_converted.DurationTicks(take);
+		if (const auto* layout = m_encoder->ChannelLayout();
+			!layout || !m_converted.CopyChannelLayout(*layout)) {
 			owner.Fail("failed to copy audio channel layout");
 			return false;
 		}
 
-		if (av_frame_get_buffer(dst, 0) < 0) {
+		if (!m_converted.GetBuffer(0)) {
 			owner.Fail("failed to allocate encoder audio buffer");
 			return false;
 		}
 
-		if (av_audio_fifo_read(m_fifo, reinterpret_cast<void**>(dst->extended_data), take) < take) {
+		if (!m_fifo->Read(m_converted, take)) {
 			owner.Fail("failed to read audio fifo");
 			return false;
 		}
@@ -345,7 +315,7 @@ bool Audio::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 	}
 
 	const auto* handle = FrameHandle(owner, frame);
-	if (!handle || !handle->Get()) {
+	if (!handle || !*handle) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
@@ -362,7 +332,7 @@ bool Audio::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 	m_encoder = std::move(opened->Handle());
 	m_index = owner.Index();
 	m_owner = &owner;
-	return PrepareConvert(owner, handle->Get(), m_encoder->Get());
+	return PrepareConvert(owner, *handle);
 }
 
 bool Audio::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
@@ -377,30 +347,29 @@ bool Audio::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 	if (!m_encoder)
 		return false;
 	auto* handle = FrameHandle(owner, *frame);
-	if (!handle || !handle->Get()) {
+	if (!handle || !*handle) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
 
 	handle->WriteSideData(frame->Attachments());
 
-	auto* raw = handle->Get();
 	if (frame->Pts())
-		raw->pts = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
-			frame->Pts()->Nanoseconds().count(), m_timeBase);
+		handle->Pts(StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
+			frame->Pts()->Nanoseconds().count(), m_timeBase));
 	else
-		raw->pts = AV_NOPTS_VALUE;
+		handle->Pts(AV_NOPTS_VALUE);
 	if (frame->Duration()) {
-		raw->duration = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
+		auto duration = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
 			frame->Duration()->Nanoseconds().count(), m_timeBase);
-		if (raw->duration <= 0)
-			raw->duration = 1;
+		if (duration <= 0)
+			duration = 1;
+		handle->DurationTicks(duration);
 	}
-
 	else
-		raw->duration = 1;
+		handle->DurationTicks(1);
 
-	if (!Ingest(owner, raw))
+	if (!Ingest(owner, *handle))
 		return false;
 	if (!Emit(owner, false))
 		return false;
@@ -430,21 +399,18 @@ void Audio::Flush(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	if (owner.Failed() || !m_encoder || m_flushed)
 		return;
 	if (m_swr) {
-		auto* dst = m_converted.Get();
-		const auto* ctx = m_encoder->Get();
-		if (dst && ctx) {
-			av_frame_unref(dst);
-			dst->format = m_outFormat;
-			dst->sample_rate = ctx->sample_rate;
-			dst->nb_samples = m_frameSize;
-			if (av_channel_layout_copy(&dst->ch_layout, &ctx->ch_layout) == 0
-				&& av_frame_get_buffer(dst, 0) == 0
-				&& swr_convert_frame(m_swr, dst, nullptr) >= 0
-				&& dst->nb_samples > 0
-				&& m_fifo) {
-				(void)av_audio_fifo_realloc(m_fifo, av_audio_fifo_size(m_fifo) + dst->nb_samples);
-				(void)av_audio_fifo_write(m_fifo, reinterpret_cast<void**>(dst->extended_data), dst->nb_samples);
-			}
+		m_converted.Unref();
+		m_converted.Format(m_outFormat);
+		m_converted.SampleRate(m_encoder->SampleRate());
+		m_converted.NbSamples(m_frameSize);
+		if (const auto* layout = m_encoder->ChannelLayout();
+			layout && m_converted.CopyChannelLayout(*layout)
+			&& m_converted.GetBuffer(0)
+			&& m_swr->Drain(m_converted)
+			&& m_converted.NbSamples() > 0
+			&& m_fifo) {
+			(void)m_fifo->Realloc(m_fifo->Size() + m_converted.NbSamples());
+			(void)m_fifo->Write(m_converted);
 		}
 	}
 

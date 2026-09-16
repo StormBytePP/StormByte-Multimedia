@@ -41,6 +41,8 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVEncoder.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AudioFifo.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/Swr.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -53,9 +55,7 @@
 #include <optional>
 
 extern "C" {
-	#include <libavutil/audio_fifo.h>
 	#include <libavutil/rational.h>
-	#include <libswresample/swresample.h>
 }
 
 /**
@@ -172,11 +172,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 * @brief Builds swr and the sample fifo.
 			 * @param owner Public encoder.
 			 * @param src First decoded frame.
-			 * @param ctx Opened encoder context.
 			 * @return false if owner.Fail() was called.
 			 */
 			bool PrepareConvert(StormByte::Multimedia::Pipeline::Encoder& owner,
-				const ::AVFrame* src, const AVCodecContext* ctx) noexcept;
+				const StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Converts @p src and writes samples into the fifo.
@@ -184,7 +183,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			 * @param src Decoded frame.
 			 * @return false if owner.Fail() was called.
 			 */
-			bool Ingest(StormByte::Multimedia::Pipeline::Encoder& owner, ::AVFrame* src) noexcept;
+			bool Ingest(StormByte::Multimedia::Pipeline::Encoder& owner,
+				StormByte::Multimedia::Backend::FFmpeg::AVFrame& src) noexcept;
 
 			/**
 			 * @brief Sends encoder-sized frames from the fifo.
@@ -205,8 +205,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
 			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_pending;	///< Packets waiting for Mux
 			StormByte::Multimedia::Pipeline::Encoder* m_owner;							///< Owner for Take/Wrap
 			AVRational m_timeBase;														///< Encoder time base
-			SwrContext* m_swr;															///< Format / layout converter
-			AVAudioFifo* m_fifo;														///< Samples waiting for frame_size
+			std::optional<StormByte::Multimedia::Backend::FFmpeg::Swr> m_swr;			///< Format / layout converter
+			std::optional<StormByte::Multimedia::Backend::FFmpeg::AudioFifo> m_fifo;	///< Samples waiting for frame_size
 			int m_inFormat;																///< Decoded sample format
 			int m_outFormat;															///< Encoder sample format
 			int m_frameSize;															///< Encoder frame_size

@@ -170,17 +170,8 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::Open(
 	for (const auto& stream : m_ctx->format->Streams())
 		m_ctx->timeBase[stream.Index()] = stream.TimeBase();
 
-	if (auto* raw = m_ctx->format->Get()) {
-		for (unsigned i = 0; i < raw->nb_streams; ++i) {
-			AVStream* avs = raw->streams[i];
-			if (!avs)
-				continue;
-			if (m_ctx->wanted.contains(avs->index))
-				avs->discard = AVDISCARD_DEFAULT;
-			else
-				avs->discard = AVDISCARD_ALL;
-		}
-	}
+	if (*m_ctx->format)
+		m_ctx->format->DiscardUnwanted(m_ctx->wanted);
 
 	return true;
 }
@@ -310,12 +301,12 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::CloneStream(
 		if (stream.Index() != index)
 			continue;
 		auto wrapped = stream.CodecParameters();
-		if (!wrapped.Get())
+		if (!wrapped)
 			return false;
 		params = avcodec_parameters_alloc();
 		if (!params)
 			return false;
-		if (avcodec_parameters_copy(params, wrapped.Get()) < 0) {
+		if (!wrapped.Export(params)) {
 			avcodec_parameters_free(&params);
 			return false;
 		}

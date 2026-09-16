@@ -128,6 +128,28 @@ int FFmpeg::AVPacket::Size() const noexcept {
 	return m_ptr ? m_ptr->size : 0;
 }
 
+FFmpeg::AVPacket::operator bool() const noexcept {
+	return m_ptr != nullptr;
+}
+
+int FFmpeg::AVPacket::SideDataCount() const noexcept {
+	return m_ptr ? m_ptr->side_data_elems : 0;
+}
+
+int FFmpeg::AVPacket::SideDataType(int index) const noexcept {
+	if (!m_ptr || index < 0 || index >= m_ptr->side_data_elems)
+		return -1;
+	return static_cast<int>(m_ptr->side_data[index].type);
+}
+
+const std::uint8_t* FFmpeg::AVPacket::SideData(int index, int& size) const noexcept {
+	size = 0;
+	if (!m_ptr || index < 0 || index >= m_ptr->side_data_elems)
+		return nullptr;
+	size = static_cast<int>(m_ptr->side_data[index].size);
+	return m_ptr->side_data[index].data;
+}
+
 void FFmpeg::AVPacket::Reset(::AVPacket* raw) noexcept {
 	Free();
 	m_ptr = raw;

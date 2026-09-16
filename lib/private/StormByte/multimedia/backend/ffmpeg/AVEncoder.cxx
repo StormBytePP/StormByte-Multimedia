@@ -178,23 +178,20 @@ namespace {
 			out.insert(out.end(), src, src + srcSize);
 		}
 
-		::AVPacket* raw = pkt.Get();
-		const int stream = raw ? raw->stream_index : 0;
-		const bool key = raw && (raw->flags & AV_PKT_FLAG_KEY);
-		const std::int64_t pts = raw ? raw->pts : AV_NOPTS_VALUE;
-		const std::int64_t dts = raw ? raw->dts : AV_NOPTS_VALUE;
-		const std::int64_t duration = raw ? raw->duration : 0;
+		const int stream = pkt.StreamIndex() >= 0 ? pkt.StreamIndex() : 0;
+		const bool key = (pkt.Flags() & AV_PKT_FLAG_KEY) != 0;
+		const std::int64_t pts = pkt.Pts();
+		const std::int64_t dts = pkt.Dts();
+		const std::int64_t duration = pkt.Duration();
 		if (!pkt.Load(out.data(), static_cast<int>(out.size()), stream, key))
 			return false;
 		pkt.Timestamps(pts, dts, duration);
 		return true;
 	}
 
-	std::vector<std::uint8_t> T35FromFrame(const ::AVFrame* frame) noexcept {
+	std::vector<std::uint8_t> T35FromFrame(const FFmpeg::AVFrame& frame) noexcept {
 		std::vector<std::uint8_t> out;
-		if (!frame)
-			return out;
-		const AVFrameSideData* sd = av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+		const AVFrameSideData* sd = frame.SideData(AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
 		if (!sd || !sd->data || sd->size <= 0)
 			return out;
 		const auto* plus = reinterpret_cast<const AVDynamicHDRPlus*>(sd->data);
@@ -303,7 +300,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	auto opened = Open(codec, params, stream_index, {}, AVRational{0, 1});
 	if (!opened.has_value())
 		return opened;
-	auto bsf = fmt.Mp4ToAnnexB(params.Get()->codec_id, stream_index, params);
+	auto bsf = fmt.Mp4ToAnnexB(params.CodecId(), stream_index, params);
 	if (bsf)
 		opened->m_bsf_pipeline.Add(std::move(*bsf));
 	return opened;
@@ -311,9 +308,9 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 
 FFmpeg::OperationResult FFmpeg::AVEncoder::SendFrame(AVFrame& frame) noexcept {
 	if (m_ptr && m_ptr->codec_id == AV_CODEC_ID_HEVC) {
-		auto t35 = T35FromFrame(frame.Get());
+		auto t35 = T35FromFrame(frame);
 		if (!t35.empty()) {
-			const std::int64_t pts = frame.Get() ? frame.Get()->pts : AV_NOPTS_VALUE;
+			const std::int64_t pts = frame.Pts();
 			if (pts != AV_NOPTS_VALUE)
 				m_hdrPlusT35[pts] = std::move(t35);
 		}
@@ -387,8 +384,8 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::ReceivePacket(AVPacket& pkt) noexcept
 			return filtered;
 	}
 
-	if (m_ptr && m_ptr->codec_id == AV_CODEC_ID_HEVC && tmp.Get()) {
-		const std::int64_t pts = tmp.Get()->pts;
+	if (m_ptr && m_ptr->codec_id == AV_CODEC_ID_HEVC && tmp) {
+		const std::int64_t pts = tmp.Pts();
 		auto found = m_hdrPlusT35.find(pts);
 		if (found != m_hdrPlusT35.end()) {
 			if (!PrependHevcSei(tmp, found->second))
@@ -436,6 +433,50 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::SetEof() noexcept {
 	if (ret == AVERROR(EAGAIN))
 		return OperationResult::TryAgain;
 	return OperationResult::Error;
+}
+
+FFmpeg::AVEncoder::operator bool() const noexcept {
+	return m_ptr != nullptr;
+}
+
+int FFmpeg::AVEncoder::CodecId() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->codec_id) : AV_CODEC_ID_NONE;
+}
+
+int FFmpeg::AVEncoder::CodecType() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->codec_type) : AVMEDIA_TYPE_UNKNOWN;
+}
+
+int FFmpeg::AVEncoder::SampleFmt() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->sample_fmt) : AV_SAMPLE_FMT_NONE;
+}
+
+int FFmpeg::AVEncoder::FrameSize() const noexcept {
+	return m_ptr ? m_ptr->frame_size : 0;
+}
+
+int FFmpeg::AVEncoder::Channels() const noexcept {
+	return m_ptr ? m_ptr->ch_layout.nb_channels : 0;
+}
+
+int FFmpeg::AVEncoder::SampleRate() const noexcept {
+	return m_ptr ? m_ptr->sample_rate : 0;
+}
+
+const AVChannelLayout* FFmpeg::AVEncoder::ChannelLayout() const noexcept {
+	return m_ptr ? &m_ptr->ch_layout : nullptr;
+}
+
+bool FFmpeg::AVEncoder::HasBFrames() const noexcept {
+	return m_ptr && m_ptr->has_b_frames;
+}
+
+AVRational FFmpeg::AVEncoder::FrameRate() const noexcept {
+	return m_ptr ? m_ptr->framerate : AVRational{0, 1};
+}
+
+const ::AVCodecContext* FFmpeg::AVEncoder::Context() const noexcept {
+	return m_ptr;
 }
 
 void FFmpeg::AVEncoder::Free() noexcept {

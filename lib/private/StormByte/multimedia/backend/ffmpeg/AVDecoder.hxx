@@ -191,5 +191,9 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Frees the codec context.
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVCodecContext>::Get;
 	};
+
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVCodecContext>;
 }

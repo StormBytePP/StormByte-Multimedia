@@ -37,17 +37,22 @@
  */
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/Sws.hxx>
 
 #include <cstdint>
 #include <cstring>
 
 extern "C" {
 	#include <libavutil/avutil.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavutil/frame.h>
 	#include <libavutil/hdr_dynamic_metadata.h>
 	#include <libavutil/imgutils.h>
 	#include <libavutil/mastering_display_metadata.h>
+	#include <libavutil/pixdesc.h>
+	#include <libavutil/pixfmt.h>
 	#include <libavutil/samplefmt.h>
+	#include <libswscale/swscale.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
@@ -216,6 +221,433 @@ void FFmpeg::AVFrame::WriteSideData(
 void FFmpeg::AVFrame::Reset(::AVFrame* raw) noexcept {
 	Free();
 	m_ptr = raw;
+}
+
+FFmpeg::AVFrame::operator bool() const noexcept {
+	return m_ptr != nullptr;
+}
+
+FFmpeg::AVFrame FFmpeg::AVFrame::Clone() const noexcept {
+	return AVFrame(*this);
+}
+
+bool FFmpeg::AVFrame::Ref(const AVFrame& other) noexcept {
+	if (!m_ptr || !other.m_ptr)
+		return false;
+	Unref();
+	return av_frame_ref(m_ptr, other.m_ptr) >= 0;
+}
+
+bool FFmpeg::AVFrame::Copy(const AVFrame& other) noexcept {
+	if (!m_ptr || !other.m_ptr)
+		return false;
+	return av_frame_copy(m_ptr, other.m_ptr) >= 0;
+}
+
+bool FFmpeg::AVFrame::CopyProps(const AVFrame& other) noexcept {
+	if (!m_ptr || !other.m_ptr)
+		return false;
+	return av_frame_copy_props(m_ptr, other.m_ptr) >= 0;
+}
+
+bool FFmpeg::AVFrame::GetBuffer(int align) noexcept {
+	return m_ptr && av_frame_get_buffer(m_ptr, align) >= 0;
+}
+
+bool FFmpeg::AVFrame::MakeWritable() noexcept {
+	return m_ptr && av_frame_make_writable(m_ptr) >= 0;
+}
+
+bool FFmpeg::AVFrame::Writable() const noexcept {
+	return m_ptr && av_frame_is_writable(m_ptr);
+}
+
+bool FFmpeg::AVFrame::AllocVideo(int width, int height, int format, int align) noexcept {
+	if (!m_ptr || width <= 0 || height <= 0)
+		return false;
+	Unref();
+	m_ptr->width = width;
+	m_ptr->height = height;
+	m_ptr->format = format;
+	return GetBuffer(align);
+}
+
+bool FFmpeg::AVFrame::AllocAudio(int nb_samples, int format, const AVChannelLayout& layout, int sample_rate) noexcept {
+	if (!m_ptr || nb_samples <= 0)
+		return false;
+	Unref();
+	m_ptr->nb_samples = nb_samples;
+	m_ptr->format = format;
+	m_ptr->sample_rate = sample_rate;
+	if (av_channel_layout_copy(&m_ptr->ch_layout, &layout) < 0)
+		return false;
+	return GetBuffer(0);
+}
+
+int FFmpeg::AVFrame::Width() const noexcept {
+	return m_ptr ? m_ptr->width : 0;
+}
+
+void FFmpeg::AVFrame::Width(int width) noexcept {
+	if (m_ptr)
+		m_ptr->width = width;
+}
+
+int FFmpeg::AVFrame::Height() const noexcept {
+	return m_ptr ? m_ptr->height : 0;
+}
+
+void FFmpeg::AVFrame::Height(int height) noexcept {
+	if (m_ptr)
+		m_ptr->height = height;
+}
+
+int FFmpeg::AVFrame::Format() const noexcept {
+	return m_ptr ? m_ptr->format : AV_PIX_FMT_NONE;
+}
+
+void FFmpeg::AVFrame::Format(int format) noexcept {
+	if (m_ptr)
+		m_ptr->format = format;
+}
+
+void FFmpeg::AVFrame::Pts(std::int64_t pts) noexcept {
+	if (m_ptr)
+		m_ptr->pts = pts;
+}
+
+std::int64_t FFmpeg::AVFrame::BestEffortTimestamp() const noexcept {
+	return m_ptr ? m_ptr->best_effort_timestamp : AV_NOPTS_VALUE;
+}
+
+void FFmpeg::AVFrame::BestEffortTimestamp(std::int64_t ts) noexcept {
+	if (m_ptr)
+		m_ptr->best_effort_timestamp = ts;
+}
+
+void FFmpeg::AVFrame::DurationTicks(std::int64_t duration) noexcept {
+	if (m_ptr)
+		m_ptr->duration = duration;
+}
+
+int FFmpeg::AVFrame::ColorRange() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->color_range) : 0;
+}
+
+void FFmpeg::AVFrame::ColorRange(int range) noexcept {
+	if (m_ptr)
+		m_ptr->color_range = static_cast<AVColorRange>(range);
+}
+
+int FFmpeg::AVFrame::ColorSpace() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->colorspace) : 0;
+}
+
+void FFmpeg::AVFrame::ColorSpace(int space) noexcept {
+	if (m_ptr)
+		m_ptr->colorspace = static_cast<AVColorSpace>(space);
+}
+
+int FFmpeg::AVFrame::ColorPrimaries() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->color_primaries) : 0;
+}
+
+void FFmpeg::AVFrame::ColorPrimaries(int primaries) noexcept {
+	if (m_ptr)
+		m_ptr->color_primaries = static_cast<AVColorPrimaries>(primaries);
+}
+
+int FFmpeg::AVFrame::ColorTransfer() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->color_trc) : 0;
+}
+
+void FFmpeg::AVFrame::ColorTransfer(int transfer) noexcept {
+	if (m_ptr)
+		m_ptr->color_trc = static_cast<AVColorTransferCharacteristic>(transfer);
+}
+
+int FFmpeg::AVFrame::ChromaLocation() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->chroma_location) : 0;
+}
+
+void FFmpeg::AVFrame::ChromaLocation(int location) noexcept {
+	if (m_ptr)
+		m_ptr->chroma_location = static_cast<AVChromaLocation>(location);
+}
+
+AVRational FFmpeg::AVFrame::SampleAspectRatio() const noexcept {
+	return m_ptr ? m_ptr->sample_aspect_ratio : AVRational{0, 1};
+}
+
+void FFmpeg::AVFrame::SampleAspectRatio(AVRational sar) noexcept {
+	if (m_ptr)
+		m_ptr->sample_aspect_ratio = sar;
+}
+
+int FFmpeg::AVFrame::PictType() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->pict_type) : 0;
+}
+
+void FFmpeg::AVFrame::PictType(int type) noexcept {
+	if (m_ptr)
+		m_ptr->pict_type = static_cast<AVPictureType>(type);
+}
+
+bool FFmpeg::AVFrame::KeyFrame() const noexcept {
+	if (!m_ptr)
+		return false;
+#if defined(AV_FRAME_FLAG_KEY)
+	return (m_ptr->flags & AV_FRAME_FLAG_KEY) != 0;
+#else
+	return m_ptr->key_frame != 0;
+#endif
+}
+
+void FFmpeg::AVFrame::KeyFrame(bool key) noexcept {
+	if (!m_ptr)
+		return;
+#if defined(AV_FRAME_FLAG_KEY)
+	if (key)
+		m_ptr->flags |= AV_FRAME_FLAG_KEY;
+	else
+		m_ptr->flags &= ~AV_FRAME_FLAG_KEY;
+#else
+	m_ptr->key_frame = key ? 1 : 0;
+#endif
+}
+
+int FFmpeg::AVFrame::RepeatPict() const noexcept {
+	return m_ptr ? m_ptr->repeat_pict : 0;
+}
+
+void FFmpeg::AVFrame::RepeatPict(int repeat) noexcept {
+	if (m_ptr)
+		m_ptr->repeat_pict = repeat;
+}
+
+bool FFmpeg::AVFrame::Interlaced() const noexcept {
+	if (!m_ptr)
+		return false;
+#if defined(AV_FRAME_FLAG_INTERLACED)
+	return (m_ptr->flags & AV_FRAME_FLAG_INTERLACED) != 0;
+#else
+	return m_ptr->interlaced_frame != 0;
+#endif
+}
+
+void FFmpeg::AVFrame::Interlaced(bool interlaced, bool top_first) noexcept {
+	if (!m_ptr)
+		return;
+#if defined(AV_FRAME_FLAG_INTERLACED)
+	if (interlaced)
+		m_ptr->flags |= AV_FRAME_FLAG_INTERLACED;
+	else
+		m_ptr->flags &= ~AV_FRAME_FLAG_INTERLACED;
+#if defined(AV_FRAME_FLAG_TOP_FIELD_FIRST)
+	if (top_first)
+		m_ptr->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST;
+	else
+		m_ptr->flags &= ~AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#endif
+#else
+	m_ptr->interlaced_frame = interlaced ? 1 : 0;
+	m_ptr->top_field_first = top_first ? 1 : 0;
+#endif
+}
+
+bool FFmpeg::AVFrame::TopFieldFirst() const noexcept {
+	if (!m_ptr)
+		return false;
+#if defined(AV_FRAME_FLAG_TOP_FIELD_FIRST)
+	return (m_ptr->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST) != 0;
+#else
+	return m_ptr->top_field_first != 0;
+#endif
+}
+
+int FFmpeg::AVFrame::CropLeft() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->crop_left) : 0;
+}
+
+int FFmpeg::AVFrame::CropRight() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->crop_right) : 0;
+}
+
+int FFmpeg::AVFrame::CropTop() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->crop_top) : 0;
+}
+
+int FFmpeg::AVFrame::CropBottom() const noexcept {
+	return m_ptr ? static_cast<int>(m_ptr->crop_bottom) : 0;
+}
+
+void FFmpeg::AVFrame::Crop(int left, int right, int top, int bottom) noexcept {
+	if (!m_ptr)
+		return;
+	m_ptr->crop_left = static_cast<std::size_t>(left < 0 ? 0 : left);
+	m_ptr->crop_right = static_cast<std::size_t>(right < 0 ? 0 : right);
+	m_ptr->crop_top = static_cast<std::size_t>(top < 0 ? 0 : top);
+	m_ptr->crop_bottom = static_cast<std::size_t>(bottom < 0 ? 0 : bottom);
+}
+
+bool FFmpeg::AVFrame::ApplyCropping(int flags) noexcept {
+	return m_ptr && av_frame_apply_cropping(m_ptr, flags) >= 0;
+}
+
+int FFmpeg::AVFrame::PlaneCount() const noexcept {
+	if (!m_ptr)
+		return 0;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	if (desc)
+		return desc->nb_components;
+	if (m_ptr->nb_samples > 0)
+		return m_ptr->ch_layout.nb_channels;
+	return 0;
+}
+
+int FFmpeg::AVFrame::PlaneWidth(int plane) const noexcept {
+	if (!m_ptr || m_ptr->width <= 0)
+		return 0;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	if (!desc || plane <= 0)
+		return m_ptr->width;
+	return AV_CEIL_RSHIFT(m_ptr->width, desc->log2_chroma_w);
+}
+
+int FFmpeg::AVFrame::PlaneHeight(int plane) const noexcept {
+	if (!m_ptr || m_ptr->height <= 0)
+		return 0;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	if (!desc || plane <= 0)
+		return m_ptr->height;
+	return AV_CEIL_RSHIFT(m_ptr->height, desc->log2_chroma_h);
+}
+
+int FFmpeg::AVFrame::BitsPerComponent() const noexcept {
+	if (!m_ptr)
+		return 0;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	if (!desc)
+		return 8;
+	return desc->comp[0].depth;
+}
+
+const char* FFmpeg::AVFrame::FormatName() const noexcept {
+	if (!m_ptr)
+		return "?";
+	if (m_ptr->width > 0) {
+		const char* name = av_get_pix_fmt_name(static_cast<AVPixelFormat>(m_ptr->format));
+		return name ? name : "?";
+	}
+	const char* name = av_get_sample_fmt_name(static_cast<AVSampleFormat>(m_ptr->format));
+	return name ? name : "?";
+}
+
+const uint8_t* FFmpeg::AVFrame::Data(int plane) const noexcept {
+	if (!m_ptr || plane < 0 || plane >= AV_NUM_DATA_POINTERS)
+		return nullptr;
+	return m_ptr->data[plane];
+}
+
+uint8_t* FFmpeg::AVFrame::Data(int plane) noexcept {
+	if (!m_ptr || plane < 0 || plane >= AV_NUM_DATA_POINTERS)
+		return nullptr;
+	return m_ptr->data[plane];
+}
+
+int FFmpeg::AVFrame::Linesize(int plane) const noexcept {
+	if (!m_ptr || plane < 0 || plane >= AV_NUM_DATA_POINTERS)
+		return 0;
+	return m_ptr->linesize[plane];
+}
+
+int FFmpeg::AVFrame::NbSamples() const noexcept {
+	return m_ptr ? m_ptr->nb_samples : 0;
+}
+
+void FFmpeg::AVFrame::NbSamples(int samples) noexcept {
+	if (m_ptr)
+		m_ptr->nb_samples = samples;
+}
+
+int FFmpeg::AVFrame::SampleRate() const noexcept {
+	return m_ptr ? m_ptr->sample_rate : 0;
+}
+
+void FFmpeg::AVFrame::SampleRate(int rate) noexcept {
+	if (m_ptr)
+		m_ptr->sample_rate = rate;
+}
+
+int FFmpeg::AVFrame::Channels() const noexcept {
+	return m_ptr ? m_ptr->ch_layout.nb_channels : 0;
+}
+
+const AVChannelLayout* FFmpeg::AVFrame::ChannelLayout() const noexcept {
+	return m_ptr ? &m_ptr->ch_layout : nullptr;
+}
+
+bool FFmpeg::AVFrame::CopyChannelLayout(const AVChannelLayout& layout) noexcept {
+	return m_ptr && av_channel_layout_copy(&m_ptr->ch_layout, &layout) >= 0;
+}
+
+uint8_t** FFmpeg::AVFrame::ExtendedData() noexcept {
+	return m_ptr ? m_ptr->extended_data : nullptr;
+}
+
+const uint8_t* const* FFmpeg::AVFrame::ExtendedData() const noexcept {
+	return m_ptr ? m_ptr->extended_data : nullptr;
+}
+
+AVFrameSideData* FFmpeg::AVFrame::SideData(int type) noexcept {
+	if (!m_ptr)
+		return nullptr;
+	return av_frame_get_side_data(m_ptr, static_cast<AVFrameSideDataType>(type));
+}
+
+void FFmpeg::AVFrame::RemoveSideData(int type) noexcept {
+	if (m_ptr)
+		av_frame_remove_side_data(m_ptr, static_cast<AVFrameSideDataType>(type));
+}
+
+int FFmpeg::AVFrame::SideDataCount() const noexcept {
+	return m_ptr ? m_ptr->nb_side_data : 0;
+}
+
+const AVFrameSideData* FFmpeg::AVFrame::SideDataAt(int index) const noexcept {
+	if (!m_ptr || index < 0 || index >= m_ptr->nb_side_data)
+		return nullptr;
+	return m_ptr->side_data[index];
+}
+
+uint8_t* FFmpeg::AVFrame::NewSideData(int type, int size) noexcept {
+	if (!m_ptr || size < 0)
+		return nullptr;
+	AVFrameSideData* sd = av_frame_new_side_data(m_ptr, static_cast<AVFrameSideDataType>(type), size);
+	return sd ? sd->data : nullptr;
+}
+
+bool FFmpeg::AVFrame::ScaleTo(AVFrame& dst, int dst_w, int dst_h, int flags) const noexcept {
+	if (!m_ptr || dst_w <= 0 || dst_h <= 0 || Width() <= 0 || Height() <= 0)
+		return false;
+	if (flags == 0)
+		flags = SWS_BILINEAR;
+	if (!dst.m_ptr)
+		return false;
+	const int fmt = (dst.Format() == AV_PIX_FMT_NONE) ? Format() : dst.Format();
+	if (dst.Width() != dst_w || dst.Height() != dst_h || dst.Format() != fmt
+		|| !dst.Data(0)) {
+		if (!dst.AllocVideo(dst_w, dst_h, fmt))
+			return false;
+		(void)dst.CopyProps(*this);
+		dst.Width(dst_w);
+		dst.Height(dst_h);
+		dst.Format(fmt);
+	}
+	Sws sws = Sws::Open(Width(), Height(), Format(), dst.Width(), dst.Height(), dst.Format(), flags);
+	if (!sws)
+		return false;
+	return sws.Scale(*this, dst);
 }
 
 void FFmpeg::AVFrame::Free() noexcept {

@@ -60,6 +60,7 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavutil/avutil.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavutil/mathematics.h>
 	#include <libavutil/rational.h>
 }
@@ -195,36 +196,36 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
 	}
 
 	std::vector<SideData> attachments;
-	if (const auto* pkt = raw.Get()) {
-		for (int i = 0; i < pkt->side_data_elems; ++i) {
-			const AVPacketSideData& sd = pkt->side_data[i];
-			if (!sd.data || sd.size <= 0)
-				continue;
-			if (sd.type == AV_PKT_DATA_DYNAMIC_HDR10_PLUS && !keepPacketHdrPlus)
-				continue;
-			if (sd.type != AV_PKT_DATA_DYNAMIC_HDR10_PLUS
-				&& sd.type != AV_PKT_DATA_MASTERING_DISPLAY_METADATA
-				&& sd.type != AV_PKT_DATA_CONTENT_LIGHT_LEVEL)
-				continue;
-			StormByte::Buffer::DataType blob(
-				reinterpret_cast<const std::byte*>(sd.data),
-				reinterpret_cast<const std::byte*>(sd.data) + sd.size);
-			switch (sd.type) {
-				case AV_PKT_DATA_DYNAMIC_HDR10_PLUS:
-					attachments.emplace_back(SideDataKind::HdrPlus,
-						StormByte::Buffer::FIFO{std::move(blob)});
-					break;
-				case AV_PKT_DATA_MASTERING_DISPLAY_METADATA:
-					attachments.emplace_back(SideDataKind::MasteringDisplay,
-						StormByte::Buffer::FIFO{std::move(blob)});
-					break;
-				case AV_PKT_DATA_CONTENT_LIGHT_LEVEL:
-					attachments.emplace_back(SideDataKind::ContentLight,
-						StormByte::Buffer::FIFO{std::move(blob)});
-					break;
-				default:
-					break;
-			}
+	for (int i = 0; i < raw.SideDataCount(); ++i) {
+		int size = 0;
+		const auto* data = raw.SideData(i, size);
+		if (!data || size <= 0)
+			continue;
+		const int type = raw.SideDataType(i);
+		if (type == AV_PKT_DATA_DYNAMIC_HDR10_PLUS && !keepPacketHdrPlus)
+			continue;
+		if (type != AV_PKT_DATA_DYNAMIC_HDR10_PLUS
+			&& type != AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+			&& type != AV_PKT_DATA_CONTENT_LIGHT_LEVEL)
+			continue;
+		StormByte::Buffer::DataType blob(
+			reinterpret_cast<const std::byte*>(data),
+			reinterpret_cast<const std::byte*>(data) + size);
+		switch (type) {
+			case AV_PKT_DATA_DYNAMIC_HDR10_PLUS:
+				attachments.emplace_back(SideDataKind::HdrPlus,
+					StormByte::Buffer::FIFO{std::move(blob)});
+				break;
+			case AV_PKT_DATA_MASTERING_DISPLAY_METADATA:
+				attachments.emplace_back(SideDataKind::MasteringDisplay,
+					StormByte::Buffer::FIFO{std::move(blob)});
+				break;
+			case AV_PKT_DATA_CONTENT_LIGHT_LEVEL:
+				attachments.emplace_back(SideDataKind::ContentLight,
+					StormByte::Buffer::FIFO{std::move(blob)});
+				break;
+			default:
+				break;
 		}
 	}
 
@@ -400,30 +401,33 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 				}
 			}
 
-			if (params.Get()) {
+			if (params) {
 				const void* layouts = nullptr;
 				int count = 0;
 				if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_CHANNEL_LAYOUT,
 						0, &layouts, &count) >= 0 && layouts && count > 0) {
 					const auto* list = static_cast<const AVChannelLayout*>(layouts);
+					const auto* have = params.ChannelLayout();
 					bool supported = false;
-					for (int i = 0; i < count; ++i) {
-						if (av_channel_layout_compare(&params.Get()->ch_layout, &list[i]) == 0) {
-							supported = true;
-							break;
+					if (have) {
+						for (int i = 0; i < count; ++i) {
+							if (av_channel_layout_compare(have, &list[i]) == 0) {
+								supported = true;
+								break;
+							}
 						}
 					}
 
 					if (!supported) {
 						const AVChannelLayout* best = &list[0];
-						const int have = params.Get()->ch_layout.nb_channels;
+						const int n = have ? have->nb_channels : 0;
 						for (int i = 0; i < count; ++i) {
-							if (list[i].nb_channels <= have
+							if (list[i].nb_channels <= n
 								&& list[i].nb_channels >= best->nb_channels)
 								best = &list[i];
 						}
 
-						av_channel_layout_copy(&params.Get()->ch_layout, best);
+						params.CopyChannelLayout(*best);
 					}
 				}
 			}

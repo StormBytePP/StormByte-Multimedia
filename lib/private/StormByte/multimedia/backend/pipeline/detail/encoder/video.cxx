@@ -153,45 +153,6 @@ namespace {
 		}
 	}
 
-	void AddHdr10SideData(::AVCodecParameters* par, const Property::HDR10& hdr10) noexcept {
-		if (!par)
-			return;
-		const bool hasMastering = hdr10.Red().X() != 0 || hdr10.Red().Y() != 0
-			|| hdr10.Green().X() != 0 || hdr10.Green().Y() != 0
-			|| hdr10.Blue().X() != 0 || hdr10.Blue().Y() != 0
-			|| hdr10.White().X() != 0 || hdr10.White().Y() != 0
-			|| hdr10.Luminance().X() != 0 || hdr10.Luminance().Y() != 0;
-		const bool hasLight = hdr10.LightLevel().has_value()
-			&& (hdr10.LightLevel()->X() != 0 || hdr10.LightLevel()->Y() != 0);
-		if (hasMastering) {
-			AVMasteringDisplayMetadata mdm{};
-			mdm.display_primaries[0][0] = av_make_q(static_cast<int>(hdr10.Red().X()), 50000);
-			mdm.display_primaries[0][1] = av_make_q(static_cast<int>(hdr10.Red().Y()), 50000);
-			mdm.display_primaries[1][0] = av_make_q(static_cast<int>(hdr10.Green().X()), 50000);
-			mdm.display_primaries[1][1] = av_make_q(static_cast<int>(hdr10.Green().Y()), 50000);
-			mdm.display_primaries[2][0] = av_make_q(static_cast<int>(hdr10.Blue().X()), 50000);
-			mdm.display_primaries[2][1] = av_make_q(static_cast<int>(hdr10.Blue().Y()), 50000);
-			mdm.white_point[0] = av_make_q(static_cast<int>(hdr10.White().X()), 50000);
-			mdm.white_point[1] = av_make_q(static_cast<int>(hdr10.White().Y()), 50000);
-			mdm.min_luminance = av_make_q(static_cast<int>(hdr10.Luminance().X()), 10000);
-			mdm.max_luminance = av_make_q(static_cast<int>(hdr10.Luminance().Y()), 10000);
-			mdm.has_primaries = 1;
-			mdm.has_luminance = 1;
-			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
-					AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(mdm), 0))
-				std::memcpy(sd->data, &mdm, sizeof(mdm));
-		}
-
-		if (hasLight) {
-			AVContentLightMetadata cll{};
-			cll.MaxCLL = static_cast<unsigned>(hdr10.LightLevel()->X());
-			cll.MaxFALL = static_cast<unsigned>(hdr10.LightLevel()->Y());
-			if (AVPacketSideData* sd = av_packet_side_data_new(&par->coded_side_data, &par->nb_coded_side_data,
-					AV_PKT_DATA_CONTENT_LIGHT_LEVEL, sizeof(cll), 0))
-				std::memcpy(sd->data, &cll, sizeof(cll));
-		}
-	}
-
 	AVRational VideoTimeBase(const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 		if (frame.Video() && frame.Video()->FrameRate() && frame.Video()->FrameRate()->Valid()) {
 			const auto& fps = *frame.Video()->FrameRate();
@@ -218,17 +179,16 @@ namespace {
 			params.ColorPrimaries(ToAVPrimaries(video.Color().Primaries()));
 			params.ColorTransfer(ToAVTransfer(video.Color().Transfer()));
 			if (video.HDR10())
-				AddHdr10SideData(params.Get(), *video.HDR10());
+				params.WriteHdr10(*video.HDR10());
 		}
 
-		const auto* raw = handle ? handle->Get() : nullptr;
-		if (raw) {
-			if (raw->format != AV_PIX_FMT_NONE)
-				params.Format(raw->format);
-			if (raw->width > 0)
-				params.Width(raw->width);
-			if (raw->height > 0)
-				params.Height(raw->height);
+		if (handle && *handle) {
+			if (handle->Format() != AV_PIX_FMT_NONE)
+				params.Format(handle->Format());
+			if (handle->Width() > 0)
+				params.Width(handle->Width());
+			if (handle->Height() > 0)
+				params.Height(handle->Height());
 		}
 
 		return params;
@@ -243,7 +203,7 @@ bool Video::IsOpen() const noexcept {
 }
 
 const AVCodecContext* Video::Context() const noexcept {
-	return m_encoder ? m_encoder->Get() : nullptr;
+	return m_encoder ? m_encoder->Context() : nullptr;
 }
 
 AVRational Video::TimeBase() const noexcept {
@@ -284,7 +244,7 @@ bool Video::Open(StormByte::Multimedia::Pipeline::Encoder& owner,
 	}
 
 	const auto* handle = FrameHandle(owner, frame);
-	if (!handle || !handle->Get()) {
+	if (!handle || !*handle) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
@@ -320,7 +280,7 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 	if (!m_encoder)
 		return false;
 	auto* handle = FrameHandle(owner, *frame);
-	if (!handle || !handle->Get()) {
+	if (!handle || !*handle) {
 		owner.Fail("frame has no backend buffer");
 		return false;
 	}
@@ -329,21 +289,20 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		handle->WriteHdr10(*frame->Video()->HDR10());
 	handle->WriteSideData(frame->Attachments());
 
-	auto* raw = handle->Get();
 	if (frame->Pts())
-		raw->pts = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
-			frame->Pts()->Nanoseconds().count(), m_timeBase);
+		handle->Pts(StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
+			frame->Pts()->Nanoseconds().count(), m_timeBase));
 	else
-		raw->pts = AV_NOPTS_VALUE;
+		handle->Pts(AV_NOPTS_VALUE);
 	if (frame->Duration()) {
-		raw->duration = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
+		auto duration = StormByte::Multimedia::Backend::Pipeline::Encoder::NsToTicks(
 			frame->Duration()->Nanoseconds().count(), m_timeBase);
-		if (raw->duration <= 0)
-			raw->duration = 1;
+		if (duration <= 0)
+			duration = 1;
+		handle->DurationTicks(duration);
 	}
-
 	else
-		raw->duration = 1;
+		handle->DurationTicks(1);
 
 	const auto result = m_encoder->SendFrame(*handle);
 	if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::TryAgain)
@@ -369,8 +328,7 @@ bool Video::DrainOne(StormByte::Multimedia::Pipeline::Encoder& owner) noexcept {
 	}
 
 	StampOutgoing();
-	const auto* ctx = m_encoder->Get();
-	const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
+	const bool keepPacketHdrPlus = m_encoder->CodecId() != AV_CODEC_ID_HEVC;
 	m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(
 		owner, Type::Video, owner.Index(), m_scratch, m_timeBase, keepPacketHdrPlus));
 	m_scratch.Unref();
@@ -405,8 +363,7 @@ std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Video::Take() noexcept 
 		const auto result = m_encoder->ReceivePacket(m_scratch);
 		if (result == StormByte::Multimedia::Backend::FFmpeg::OperationResult::Success) {
 			StampOutgoing();
-			const auto* ctx = m_encoder->Get();
-			const bool keepPacketHdrPlus = !ctx || ctx->codec_id != AV_CODEC_ID_HEVC;
+			const bool keepPacketHdrPlus = m_encoder->CodecId() != AV_CODEC_ID_HEVC;
 			m_pending.push_back(StormByte::Multimedia::Backend::Pipeline::Encoder::MakePacket(
 				*m_owner, Type::Video, m_index, m_scratch, m_timeBase, keepPacketHdrPlus));
 			m_scratch.Unref();
