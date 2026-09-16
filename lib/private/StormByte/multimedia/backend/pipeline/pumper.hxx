@@ -49,10 +49,6 @@
 #include <string>
 #include <thread>
 
-namespace StormByte::Multimedia::Pipeline {
-	class Step;
-}
-
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
  * @brief Multimedia-owned pipeline stages and unit holders.
@@ -66,18 +62,18 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 *
 	 * Owns the only @ref StormByte::Multimedia::Pipeline::State
 	 * of the stage. Does not implement @ref Host and does not
-	 * touch Step hoppers: the loop talks to a Host& (the Step).
-	 * Concretes live under Detail::Pumper (Source, Through, Sink).
+	 * touch hoppers: the loop talks to a Host& (Step or
+	 * Filter::FFmpeg, via Surface). Concretes live under
+	 * Detail::Pumper (Source, Through, Sink).
 	 *
-	 * The only friend is @ref StormByte::Multimedia::Pipeline::Step,
-	 * so Bind / Launch / Halt / Stop stay off the backend API.
-	 * Leaves never friend a Pumper or a Worker.
+	 * Bind / Launch / Halt / Stop are public on this private
+	 * type so both Step and Filter::FFmpeg can compose a
+	 * Pumper. No friends. Leaves never friend a Pumper or a
+	 * Worker.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Pumper {
-		friend class StormByte::Multimedia::Pipeline::Step;
-
 		public:
 			/**
 			 * @name Lifecycle
@@ -94,10 +90,57 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @}
 			 */
 
+			/**
+			 * @brief Takes ownership of @p worker.
+			 * @param worker Body. Must not be empty. No-op if a
+			 *        worker is already bound or the thread runs.
+			 */
+			void Bind(std::unique_ptr<Worker> worker) noexcept;
+
+			/**
+			 * @brief Starts the thread: Setup, Ready, Pump.
+			 *
+			 * Idempotent. No-op without a bound worker.
+			 */
+			void Launch() noexcept;
+
+			/**
+			 * @brief Stop and join the thread.
+			 *
+			 * Safe to call more than once.
+			 */
+			void Halt() noexcept;
+
+			/**
+			 * @brief Asks the thread to leave.
+			 *
+			 * Idempotent. Does not join. Does not close hoppers;
+			 * the owner does that.
+			 */
+			void Stop() noexcept;
+
+			/**
+			 * @brief Current lifecycle value.
+			 * @return State of this pumper only.
+			 */
+			Multimedia::Pipeline::State Status() const noexcept;
+
+			/**
+			 * @brief Failure text.
+			 * @return Message, or empty.
+			 */
+			const std::optional<std::string>& Error() const noexcept;
+
+			/**
+			 * @brief Latches Failed. Does not close hoppers.
+			 * @param reason Message.
+			 */
+			void Fail(std::string reason) noexcept;
+
 		protected:
 			/**
 			 * @brief Pumper in State::Created, bound to @p host.
-			 * @param host Owner surface (the Step).
+			 * @param host Owner surface (Step or Filter::FFmpeg).
 			 */
 			explicit Pumper(Host& host) noexcept;
 
@@ -153,54 +196,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			bool Failed() const noexcept;
 
 		private:
-			/**
-			 * @brief Takes ownership of @p worker.
-			 * @param worker Body. Must not be empty. No-op if a
-			 *        worker is already bound or the thread runs.
-			 */
-			void Bind(std::unique_ptr<Worker> worker) noexcept;
-
-			/**
-			 * @brief Starts the thread: Setup, Ready, Pump.
-			 *
-			 * Idempotent. No-op without a bound worker.
-			 */
-			void Launch() noexcept;
-
-			/**
-			 * @brief Stop and join the thread.
-			 *
-			 * Safe to call more than once.
-			 */
-			void Halt() noexcept;
-
-			/**
-			 * @brief Asks the thread to leave.
-			 *
-			 * Idempotent. Does not join. Does not close hoppers;
-			 * the Step does that.
-			 */
-			void Stop() noexcept;
-
-			/**
-			 * @brief Current lifecycle value.
-			 * @return State of this pumper only.
-			 */
-			Multimedia::Pipeline::State Status() const noexcept;
-
-			/**
-			 * @brief Failure text.
-			 * @return Message, or empty.
-			 */
-			const std::optional<std::string>& Error() const noexcept;
-
-			/**
-			 * @brief Latches Failed. Does not close hoppers.
-			 * @param reason Message.
-			 */
-			void Fail(std::string reason) noexcept;
-
-			Host& m_host;											///< Step, via Host
+			Host& m_host;											///< Owner, via Host
 			std::unique_ptr<Worker> m_worker;						///< Body
 			std::atomic<Multimedia::Pipeline::State> m_state;		///< Lifecycle
 			std::optional<std::string> m_error;						///< Fail message
