@@ -151,6 +151,12 @@ const std::uint8_t* FFmpeg::AVPacket::SideData(int index, int& size) const noexc
 	return m_ptr->side_data[index].data;
 }
 
+::AVPacket* FFmpeg::AVPacket::Detach() noexcept {
+	::AVPacket* raw = m_ptr;
+	m_ptr = nullptr;
+	return raw;
+}
+
 void FFmpeg::AVPacket::Reset(::AVPacket* raw) noexcept {
 	Free();
 	m_ptr = raw;

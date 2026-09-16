@@ -286,40 +286,52 @@ std::uint8_t FFmpeg::HeldFor() const noexcept {
 
 void FFmpeg::Eof() noexcept {}
 
-::AVFrame* FFmpeg::AVFrame() noexcept {
-	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
+const StormByte::Multimedia::Backend::FFmpeg::AVFrame& FFmpeg::AVFrame() const noexcept {
+	static StormByte::Multimedia::Backend::FFmpeg::AVFrame empty;
+	static const bool primed = []() noexcept {
+		empty.Reset(nullptr);
+		return true;
+	}();
+	(void)primed;
+	auto frame = std::dynamic_pointer_cast<const Pipeline::Frame>(m_current);
 	if (!frame || !frame->m_backend)
-		return nullptr;
-	return frame->m_backend->Handle().Get();
+		return empty;
+	return frame->m_backend->Handle();
 }
 
-::AVPacket* FFmpeg::AVPacket() noexcept {
-	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
+const StormByte::Multimedia::Backend::FFmpeg::AVPacket& FFmpeg::AVPacket() const noexcept {
+	static StormByte::Multimedia::Backend::FFmpeg::AVPacket empty;
+	static const bool primed = []() noexcept {
+		empty.Reset(nullptr);
+		return true;
+	}();
+	(void)primed;
+	auto packet = std::dynamic_pointer_cast<const Pipeline::Packet>(m_current);
 	if (!packet || !packet->m_backend)
-		return nullptr;
-	return packet->m_backend->Handle().Get();
+		return empty;
+	return packet->m_backend->Handle();
 }
 
-void FFmpeg::Save(::AVFrame* raw) noexcept {
+void FFmpeg::Save(StormByte::Multimedia::Backend::FFmpeg::AVFrame&& incoming) noexcept {
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
 	if (!frame)
 		return;
 	if (!frame->m_backend)
 		frame->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
-	frame->m_backend->Put(*frame, raw);
+	frame->m_backend->Put(*frame, incoming.Detach());
 	if (!frame->m_backend->Warning().empty())
 		Log(Level::Warning, std::format("{}: {}", Name(), frame->m_backend->Warning()));
 	Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
 		Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
 }
 
-void FFmpeg::Save(::AVPacket* raw) noexcept {
+void FFmpeg::Save(StormByte::Multimedia::Backend::FFmpeg::AVPacket&& incoming) noexcept {
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
 	if (!packet)
 		return;
 	if (!packet->m_backend)
 		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
-	packet->m_backend->Handle().Reset(raw);
+	packet->m_backend->Handle().Reset(incoming.Detach());
 	packet->m_backend->BindProperties(*packet);
 	Log(Level::LowLevel, std::format("{} save packet t={} {}:{}",
 		Name(), packet->Track(), packet->Serial().value_or(0), packet->Part()));

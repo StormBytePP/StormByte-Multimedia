@@ -38,12 +38,6 @@
 
 #include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
-extern "C" {
-	#include <libavutil/frame.h>
-	#include <libavutil/pixfmt.h>
-	#include <libswscale/swscale.h>
-}
-
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 /*
@@ -71,9 +65,8 @@ void Scale::Clean() noexcept {}
 void Scale::Setup() noexcept {}
 
 void Scale::Process(const Pipeline::Frame&) noexcept {
-	/* Gate already matched Kind::Frame + Video. AVFrame() is the live backend. */
-	::AVFrame* src = AVFrame();
-	if (!src || src->width <= 0 || src->height <= 0) {
+	const auto& src = AVFrame();
+	if (!src || src.Width() <= 0 || src.Height() <= 0) {
 		Fail("missing video buffer");
 		return;
 	}
@@ -87,62 +80,23 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 	std::uint32_t dstH = m_height;
 	if (dstW == 0)
 		dstW = static_cast<std::uint32_t>(
-			(static_cast<std::uint64_t>(src->width) * dstH + src->height / 2) / src->height);
+			(static_cast<std::uint64_t>(src.Width()) * dstH + src.Height() / 2) / src.Height());
 	if (dstH == 0)
 		dstH = static_cast<std::uint32_t>(
-			(static_cast<std::uint64_t>(src->height) * dstW + src->width / 2) / src->width);
+			(static_cast<std::uint64_t>(src.Height()) * dstW + src.Width() / 2) / src.Width());
 	if (dstW == 0 || dstH == 0) {
 		Fail("computed destination is empty");
 		return;
 	}
 
-	/* Same geometry: leave the unit alone. No Save. */
-	if (static_cast<int>(dstW) == src->width && static_cast<int>(dstH) == src->height)
+	if (static_cast<int>(dstW) == src.Width() && static_cast<int>(dstH) == src.Height())
 		return;
 
-	::AVFrame* out = av_frame_alloc();
-	if (!out) {
-		Fail("out of memory");
-		return;
-	}
-
-	if (av_frame_copy_props(out, src) < 0) {
-		av_frame_free(&out);
-		Fail("failed to copy frame properties");
-		return;
-	}
-
-	out->width = static_cast<int>(dstW);
-	out->height = static_cast<int>(dstH);
-	out->format = src->format;
-	if (av_frame_get_buffer(out, 0) < 0) {
-		av_frame_free(&out);
-		Fail("failed to allocate destination");
-		return;
-	}
-
-	::SwsContext* sws = sws_getContext(
-		src->width, src->height, static_cast<AVPixelFormat>(src->format),
-		out->width, out->height, static_cast<AVPixelFormat>(out->format),
-		SWS_BILINEAR, nullptr, nullptr, nullptr);
-	if (!sws) {
-		av_frame_free(&out);
-		Fail("swscale rejected this format");
-		return;
-	}
-
-	const int scaled = sws_scale(sws, src->data, src->linesize, 0, src->height,
-		out->data, out->linesize);
-	sws_freeContext(sws);
-	if (scaled <= 0) {
-		av_frame_free(&out);
+	StormByte::Multimedia::Backend::FFmpeg::AVFrame out;
+	if (!src.ScaleTo(out, static_cast<int>(dstW), static_cast<int>(dstH))) {
 		Fail("swscale failed");
 		return;
 	}
 
-	/*
-	* Save takes ownership of `out`. Do not av_frame_free(out) after
-	* a successful Save. Fail paths above still free.
-	*/
-	Save(out);
+	Save(std::move(out));
 }

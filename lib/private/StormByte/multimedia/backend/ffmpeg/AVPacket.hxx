@@ -214,6 +214,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 
 		private:
 			/**
+			 * @brief Yields the raw pointer and leaves this wrapper empty.
+			 * @return Previous libav packet, or nullptr. Does not free.
+			 */
+			::AVPacket* Detach() noexcept;
+
+			/**
 			 * @brief Deep copy via av_packet_clone.
 			 * @param other Source packet.
 			 */
