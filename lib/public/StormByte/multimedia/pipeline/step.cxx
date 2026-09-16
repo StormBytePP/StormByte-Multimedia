@@ -37,21 +37,80 @@
  */
 
 #include <StormByte/logger/manipulators.hxx>
+#include <StormByte/multimedia/backend/pipeline/host.hxx>
+#include <StormByte/multimedia/backend/pipeline/pumper.hxx>
+#include <StormByte/multimedia/backend/pipeline/worker.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 
-#include <chrono>
 #include <format>
 #include <limits>
 #include <string>
+#include <utility>
 
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Logger::Level;
 
-namespace {
-	bool Terminal(State state) noexcept {
-		return state == State::Failed || state == State::Stopped;
-	}
-}
+class Step::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host {
+	public:
+		explicit Surface(Step& step) noexcept
+		:	m_step(step) {}
+
+		void Emit(Item::PointerType item) noexcept override {
+			m_step.Emit(std::move(item));
+		}
+
+		void Wait() noexcept override {
+			m_step.Wait();
+		}
+
+		bool Stopping() const noexcept override {
+			return m_step.Stopping();
+		}
+
+		void Fail(std::string reason) noexcept override {
+			m_step.Fail(std::move(reason));
+		}
+
+		void Log(StormByte::Logger::Level level, std::string_view message) noexcept override {
+			m_step.Log(level, message);
+		}
+
+		void Ended() noexcept override {
+			m_step.m_exhausted = true;
+		}
+
+		bool Exhausted() const noexcept override {
+			return m_step.m_exhausted;
+		}
+
+		Item::PointerType Pull() noexcept override {
+			return m_step.m_in.Pop();
+		}
+
+		bool InputEof() const noexcept override {
+			return m_step.m_in.EoF();
+		}
+
+		void CloseOutput() noexcept override {
+			m_step.m_out.Eof();
+		}
+
+		void BecameReady() noexcept override {
+			m_step.Log(Level::Debug, "ready");
+			m_step.m_wake.notify_all();
+		}
+
+		void RecordWork(std::int64_t microseconds) noexcept override {
+			m_step.RecordWork(microseconds);
+		}
+
+		void DumpWork() noexcept override {
+			m_step.DumpWork();
+		}
+
+	private:
+		Step& m_step;
+};
 
 Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	enum Producer name,
@@ -60,7 +119,8 @@ Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	m_name(name),
 	m_receives(receives),
 	m_produces(produces),
-	m_state(State::Created),
+	m_surface(std::make_unique<Surface>(*this)),
+	m_exhausted(false),
 	m_workN(0),
 	m_workMin(std::numeric_limits<std::int64_t>::max()),
 	m_workMax(0),
@@ -74,7 +134,9 @@ Step::~Step() noexcept {
 }
 
 State Step::Status() const noexcept {
-	return m_state.load(std::memory_order_acquire);
+	if (m_pumper)
+		return m_pumper->Status();
+	return m_error ? State::Failed : State::Created;
 }
 
 void Step::CloseHoppers() noexcept {
@@ -86,13 +148,8 @@ void Step::CloseHoppers() noexcept {
 void Step::Fail(std::string reason) noexcept {
 	m_error = std::move(reason);
 	Log(Level::Error, *m_error);
-	State current = m_state.load(std::memory_order_acquire);
-	while (!Terminal(current)) {
-		if (m_state.compare_exchange_weak(current, State::Failed,
-				std::memory_order_acq_rel, std::memory_order_acquire))
-			break;
-	}
-
+	if (m_pumper)
+		m_pumper->Fail(*m_error);
 	CloseHoppers();
 	m_wake.notify_all();
 }
@@ -106,16 +163,10 @@ bool Step::Ready() const noexcept {
 }
 
 void Step::Stop() noexcept {
-	State current = m_state.load(std::memory_order_acquire);
-	bool signaled = false;
-	while (current == State::Created || current == State::Ready) {
-		if (m_state.compare_exchange_weak(current, State::Stopping,
-				std::memory_order_acq_rel, std::memory_order_acquire)) {
-			signaled = true;
-			break;
-		}
-	}
-
+	const State state = Status();
+	const bool signaled = state == State::Created || state == State::Ready;
+	if (m_pumper)
+		m_pumper->Stop();
 	if (signaled)
 		Log(Level::LowLevel, "stop");
 	CloseHoppers();
@@ -147,18 +198,6 @@ void Step::Wait() noexcept {
 	});
 	Log(Level::LowLevel, "wake");
 }
-
-void Step::Open() noexcept {
-	State expected = State::Created;
-	m_state.compare_exchange_strong(expected, State::Ready,
-		std::memory_order_acq_rel, std::memory_order_acquire);
-	Log(Level::Debug, "ready");
-	m_wake.notify_all();
-}
-
-void Step::Work(Item::PointerType) noexcept {}
-
-void Step::Finish() noexcept {}
 
 void Step::Look(ItemSink&) noexcept {}
 
@@ -209,86 +248,30 @@ void Step::DumpWork() noexcept {
 		m_workN, m_workMin, m_workMax));
 }
 
-/**
- * Drain the process/encode hopper only.
- *
- * Do not Eof @c m_tap here. Route shares that hopper with the
- * encode look and Analytics. The source Decoder finishes before
- * the look; Eof on the tap would close VMAF while reconstructed
- * frames are still arriving (leftover refs, scored=0).
- *
- * The look Decoder Eofs its @c m_out (same hopper) when it
- * finishes. Fail/Stop still call @ref CloseHoppers, which does
- * Eof the tap.
- */
-void Step::Pump() noexcept {
-	for (;;) {
-		if (Stopping())
-			break;
-		Item::PointerType item = m_in.Pop();
-		if (!item) {
-			if (!m_in.EoF() && !Stopping()) {
-				Wait();
-				continue;
-			}
+Backend::Pipeline::Host& Step::Face() noexcept {
+	return *m_surface;
+}
 
-			if (!Stopping()) {
-				Log(Level::LowLevel, "finish");
-				Finish();
-				DumpWork();
-			}
-
-			break;
-		}
-
-		const auto started = std::chrono::steady_clock::now();
-		Work(std::move(item));
-		const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-			std::chrono::steady_clock::now() - started).count();
-		RecordWork(us);
-	}
-
-	m_out.Eof();
+void Step::Mount(std::unique_ptr<Backend::Pipeline::Pumper> pumper,
+	std::unique_ptr<Backend::Pipeline::Worker> worker) noexcept {
+	if (m_pumper || !pumper || !worker)
+		return;
+	m_pumper = std::move(pumper);
+	m_pumper->Bind(std::move(worker));
 }
 
 void Step::Launch() noexcept {
-	if (m_worker.joinable())
+	if (!m_pumper || Stopping())
 		return;
 	Log(Level::LowLevel, "launch");
 	m_in.Notify(m_wake);
-	m_worker = std::jthread([this](std::stop_token token) {
-		(void)token;
-		Open();
-		if (Stopping())
-			return;
-		Pump();
-		m_out.Eof();
-		State expected = State::Stopping;
-		if (!m_state.compare_exchange_strong(expected, State::Stopped,
-				std::memory_order_acq_rel, std::memory_order_acquire)) {
-			expected = State::Ready;
-			m_state.compare_exchange_strong(expected, State::Stopped,
-				std::memory_order_acq_rel, std::memory_order_acquire);
-		}
-
-		Log(Level::LowLevel, "stopped");
-	});
+	m_pumper->Launch();
 }
 
 void Step::Halt() noexcept {
 	Stop();
-	if (m_worker.joinable()) {
-		m_worker.request_stop();
-		m_worker.join();
-	}
-
-	State expected = State::Stopping;
-	if (!m_state.compare_exchange_strong(expected, State::Stopped,
-			std::memory_order_acq_rel, std::memory_order_acquire)) {
-		expected = State::Ready;
-		m_state.compare_exchange_strong(expected, State::Stopped,
-			std::memory_order_acq_rel, std::memory_order_acquire);
-	}
+	if (m_pumper)
+		m_pumper->Halt();
 }
 
 Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
