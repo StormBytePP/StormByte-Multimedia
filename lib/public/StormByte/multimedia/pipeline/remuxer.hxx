@@ -119,7 +119,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Remuxer(Remuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. @ref Step::Join Halt s before backends die.
 			 */
 			~Remuxer() noexcept override;
 
@@ -195,5 +195,6 @@ namespace StormByte::Multimedia::Pipeline {
 			static constexpr std::size_t Ceiling = 32;	///< Input hopper ceiling
 			int m_index;								///< Origin stream index
 			ItemSink m_lookOut;							///< Dest-look producer; Drain until Look
+			Join m_join{*this};							///< Halt before other members die
 	};
 }
