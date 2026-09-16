@@ -47,62 +47,63 @@
 #include <format>
 #include <memory>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Demux;
-using StormByte::Multimedia::Pipeline::CheckResult;
-using StormByte::Multimedia::Pipeline::Demuxer;
-using StormByte::Multimedia::Pipeline::Item;
-using StormByte::Multimedia::Pipeline::Packet;
-using StormByte::Logger::Level;
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::CheckResult;
+	using StormByte::Multimedia::Pipeline::Demuxer;
+	using StormByte::Multimedia::Pipeline::Item;
+	using StormByte::Multimedia::Pipeline::Packet;
+	using StormByte::Logger::Level;
 
-Demux::Demux(Demuxer& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+	Demux::Demux(Demuxer& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
 
-void Demux::Setup() noexcept {
-	NameThread("STMM:Demuxer");
-	m_owner.WaitForPlan();
-	if (Stopping() || !m_owner.Plan())
-		return;
+	void Demux::Setup() noexcept {
+		NameThread("STMM:Demuxer");
+		m_owner.WaitForPlan();
+		if (Stopping() || !m_owner.Plan())
+			return;
 
-	if (const CheckResult check = m_owner.Plan()->Check(); !check) {
-		Fail((*check.error()).what());
-		return;
+		if (const CheckResult check = m_owner.Plan()->Check(); !check) {
+			Fail((*check.error()).what());
+			return;
+		}
+
+		m_owner.m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Demuxer>();
+		if (!m_owner.m_backend->Open(m_owner))
+			return;
+
+		m_owner.m_eof = false;
+		m_owner.m_positionNs.store(-1, std::memory_order_release);
+		m_owner.m_nextSerial.clear();
+		Log(Level::Notice, std::format("open {}", m_owner.OriginFile().Path().string()));
 	}
 
-	m_owner.m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Demuxer>();
-	if (!m_owner.m_backend->Open(m_owner))
-		return;
+	void Demux::Process(Item::PointerType) noexcept {
+		if (!m_owner.m_backend || !m_owner.m_backend->IsOpen()) {
+			Ended();
+			return;
+		}
 
-	m_owner.m_eof = false;
-	m_owner.m_positionNs.store(-1, std::memory_order_release);
-	m_owner.m_nextSerial.clear();
-	Log(Level::Notice, std::format("open {}", m_owner.OriginFile().Path().string()));
+		if (Stopping())
+			return;
+
+		Packet::PointerType packet = m_owner.m_backend->Read(m_owner);
+		if (m_owner.Failed())
+			return;
+		if (!packet) {
+			m_owner.ReachedEof();
+			m_owner.m_lookOut.Eof();
+			Ended();
+			return;
+		}
+
+		if (const auto& pts = packet->Pts(); pts)
+			m_owner.m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
+		if (auto copy = m_owner.CloneItem(*packet))
+			m_owner.m_lookOut.Push(packet->Track(), std::move(copy));
+		Emit(std::move(packet));
+	}
+
+	void Demux::Flush() noexcept {}
 }
-
-void Demux::Process(Item::PointerType) noexcept {
-	if (!m_owner.m_backend || !m_owner.m_backend->IsOpen()) {
-		Ended();
-		return;
-	}
-
-	if (Stopping())
-		return;
-
-	Packet::PointerType packet = m_owner.m_backend->Read(m_owner);
-	if (m_owner.Failed())
-		return;
-	if (!packet) {
-		m_owner.ReachedEof();
-		m_owner.m_lookOut.Eof();
-		Ended();
-		return;
-	}
-
-	if (const auto& pts = packet->Pts(); pts)
-		m_owner.m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-	if (auto copy = m_owner.CloneItem(*packet))
-		m_owner.m_lookOut.Push(packet->Track(), std::move(copy));
-	Emit(std::move(packet));
-}
-
-void Demux::Flush() noexcept {}

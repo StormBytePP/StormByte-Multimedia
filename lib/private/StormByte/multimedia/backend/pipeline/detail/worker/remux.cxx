@@ -45,12 +45,6 @@
 #include <format>
 #include <string>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Remux;
-using StormByte::Multimedia::Pipeline::Item;
-using StormByte::Multimedia::Pipeline::Packet;
-using StormByte::Multimedia::Pipeline::Remuxer;
-using StormByte::Logger::Level;
-
 namespace {
 	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
 		if (!value)
@@ -59,47 +53,54 @@ namespace {
 	}
 }
 
-Remux::Remux(Remuxer& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::Item;
+	using StormByte::Multimedia::Pipeline::Packet;
+	using StormByte::Multimedia::Pipeline::Remuxer;
+	using StormByte::Logger::Level;
 
-void Remux::Setup() noexcept {
-	if (m_owner.m_index < 0) {
-		Fail("remuxer origin is negative");
-		return;
+	Remux::Remux(Remuxer& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
+
+	void Remux::Setup() noexcept {
+		if (m_owner.m_index < 0) {
+			Fail("remuxer origin is negative");
+			return;
+		}
+
+		Log(Level::Notice, std::format("open t={}", m_owner.m_index));
 	}
 
-	Log(Level::Notice, std::format("open t={}", m_owner.m_index));
-}
+	void Remux::Process(Item::PointerType item) noexcept {
+		if (!item) {
+			Flush();
+			return;
+		}
 
-void Remux::Process(Item::PointerType item) noexcept {
-	if (!item) {
-		Flush();
-		return;
+		NameThread("STMM:Remuxer:" + std::to_string(m_owner.m_index));
+		if (m_owner.Failed())
+			return;
+		auto packet = std::dynamic_pointer_cast<Packet>(item);
+		if (!packet) {
+			Fail("remuxer expected a packet");
+			return;
+		}
+
+		if (packet->Track() != m_owner.m_index)
+			return;
+		if (!packet->Serial()) {
+			Fail("packet has no serial");
+			return;
+		}
+
+		Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
+			packet->Track(), *packet->Serial(), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts())));
+		m_owner.Emit(std::move(packet));
 	}
 
-	NameThread("STMM:Remuxer:" + std::to_string(m_owner.m_index));
-	if (m_owner.Failed())
-		return;
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("remuxer expected a packet");
-		return;
+	void Remux::Flush() noexcept {
+		m_owner.m_lookOut.Eof();
 	}
-
-	if (packet->Track() != m_owner.m_index)
-		return;
-	if (!packet->Serial()) {
-		Fail("packet has no serial");
-		return;
-	}
-
-	Log(Level::LowLevel, std::format("fwd t={} {}:{} pts={} dts={}",
-		packet->Track(), *packet->Serial(), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts())));
-	m_owner.Emit(std::move(packet));
-}
-
-void Remux::Flush() noexcept {
-	m_owner.m_lookOut.Eof();
 }

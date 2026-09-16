@@ -48,13 +48,6 @@
 #include <string>
 #include <thread>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Encode;
-using StormByte::Multimedia::Pipeline::Encoder;
-using StormByte::Multimedia::Pipeline::Frame;
-using StormByte::Multimedia::Pipeline::Item;
-using StormByte::Multimedia::Pipeline::Packet;
-using StormByte::Logger::Level;
-
 namespace {
 	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
 		if (!value)
@@ -63,78 +56,72 @@ namespace {
 	}
 }
 
-Encode::Encode(Encoder& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::Encoder;
+	using StormByte::Multimedia::Pipeline::Frame;
+	using StormByte::Multimedia::Pipeline::Item;
+	using StormByte::Multimedia::Pipeline::Packet;
+	using StormByte::Logger::Level;
 
-void Encode::Setup() noexcept {
-	if (!m_owner.m_backend)
-		Fail("encoder has no backend");
-}
+	Encode::Encode(Encoder& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
 
-void Encode::Process(Item::PointerType item) noexcept {
-	if (!item) {
-		Flush();
-		return;
+	void Encode::Setup() noexcept {
+		if (!m_owner.m_backend)
+			Fail("encoder has no backend");
 	}
 
-	NameThread("STMM:Encode:" + std::to_string(m_owner.m_index));
-	if (m_owner.Failed() || !m_owner.m_backend)
-		return;
-	auto frame = std::dynamic_pointer_cast<Frame>(item);
-	if (!frame) {
-		Fail("encoder expected a frame");
-		return;
-	}
-
-	if (!frame->Serial()) {
-		Fail("frame has no serial");
-		return;
-	}
-
-	const bool opening = !m_owner.m_backend->IsOpen();
-	if (opening && !m_owner.m_backend->Open(m_owner, *frame))
-		return;
-	if (opening)
-		Log(Level::Notice, std::format("open t={} codec={} impl={}",
-			m_owner.m_index, std::string(m_owner.m_codec->Name()),
-			m_owner.m_implementation.value_or("auto")));
-
-	Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
-		m_owner.m_index, *frame->Serial(), frame->Part(),
-		Ns(frame->Pts()), Ns(frame->Dts())));
-
-	while (!m_owner.m_backend->Push(m_owner, frame)) {
-		if (m_owner.Failed())
+	void Encode::Process(Item::PointerType item) noexcept {
+		if (!item) {
+			Flush();
 			return;
-		Packet::PointerType packet = m_owner.m_backend->Take();
-		if (!packet) {
-			std::this_thread::yield();
-			continue;
 		}
 
-		m_owner.Emit(std::move(packet));
-	}
-
-	m_owner.m_serial = frame->Serial();
-	m_owner.m_part = frame->Part();
-
-	for (;;) {
-		if (m_owner.Failed())
+		NameThread("STMM:Encode:" + std::to_string(m_owner.m_index));
+		if (m_owner.Failed() || !m_owner.m_backend)
 			return;
-		Packet::PointerType packet = m_owner.m_backend->Take();
-		if (!packet)
-			break;
-		m_owner.Emit(std::move(packet));
-	}
-}
+		auto frame = std::dynamic_pointer_cast<Frame>(item);
+		if (!frame) {
+			Fail("encoder expected a frame");
+			return;
+		}
 
-void Encode::Flush() noexcept {
-	if (!m_owner.Failed() && m_owner.m_backend) {
-		m_owner.m_backend->Flush(m_owner);
+		if (!frame->Serial()) {
+			Fail("frame has no serial");
+			return;
+		}
+
+		const bool opening = !m_owner.m_backend->IsOpen();
+		if (opening && !m_owner.m_backend->Open(m_owner, *frame))
+			return;
+		if (opening)
+			Log(Level::Notice, std::format("open t={} codec={} impl={}",
+				m_owner.m_index, std::string(m_owner.m_codec->Name()),
+				m_owner.m_implementation.value_or("auto")));
+
+		Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
+			m_owner.m_index, *frame->Serial(), frame->Part(),
+			Ns(frame->Pts()), Ns(frame->Dts())));
+
+		while (!m_owner.m_backend->Push(m_owner, frame)) {
+			if (m_owner.Failed())
+				return;
+			Packet::PointerType packet = m_owner.m_backend->Take();
+			if (!packet) {
+				std::this_thread::yield();
+				continue;
+			}
+
+			m_owner.Emit(std::move(packet));
+		}
+
+		m_owner.m_serial = frame->Serial();
+		m_owner.m_part = frame->Part();
+
 		for (;;) {
 			if (m_owner.Failed())
-				break;
+				return;
 			Packet::PointerType packet = m_owner.m_backend->Take();
 			if (!packet)
 				break;
@@ -142,5 +129,19 @@ void Encode::Flush() noexcept {
 		}
 	}
 
-	m_owner.m_lookOut.Eof();
+	void Encode::Flush() noexcept {
+		if (!m_owner.Failed() && m_owner.m_backend) {
+			m_owner.m_backend->Flush(m_owner);
+			for (;;) {
+				if (m_owner.Failed())
+					break;
+				Packet::PointerType packet = m_owner.m_backend->Take();
+				if (!packet)
+					break;
+				m_owner.Emit(std::move(packet));
+			}
+		}
+
+		m_owner.m_lookOut.Eof();
+	}
 }

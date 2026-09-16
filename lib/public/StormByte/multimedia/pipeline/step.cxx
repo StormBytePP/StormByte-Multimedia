@@ -48,6 +48,7 @@
 #include <utility>
 
 using namespace StormByte::Multimedia::Pipeline;
+namespace Backend = StormByte::Multimedia::Backend;
 using StormByte::Logger::Level;
 
 class Step::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host {

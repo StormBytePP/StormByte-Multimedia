@@ -41,27 +41,28 @@
 
 #include <utility>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Filter;
-using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
-using StormByte::Multimedia::Pipeline::Item;
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
+	using StormByte::Multimedia::Pipeline::Item;
 
-Filter::Filter(FFmpeg& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+	Filter::Filter(FFmpeg& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
 
-void Filter::Setup() noexcept {
-	m_owner.Open();
-}
-
-void Filter::Process(Item::PointerType item) noexcept {
-	if (!item) {
-		Flush();
-		return;
+	void Filter::Setup() noexcept {
+		m_owner.Open();
 	}
 
-	m_owner.Work(std::move(item));
-}
+	void Filter::Process(Item::PointerType item) noexcept {
+		if (!item) {
+			Flush();
+			return;
+		}
 
-void Filter::Flush() noexcept {
-	m_owner.Finish();
+		m_owner.Work(std::move(item));
+	}
+
+	void Filter::Flush() noexcept {
+		m_owner.Finish();
+	}
 }

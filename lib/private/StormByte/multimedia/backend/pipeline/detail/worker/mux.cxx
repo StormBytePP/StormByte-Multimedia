@@ -47,14 +47,6 @@
 #include <format>
 #include <string>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Mux;
-using StormByte::Multimedia::Pipeline::Item;
-using StormByte::Multimedia::Pipeline::Muxer;
-using StormByte::Multimedia::Pipeline::Packet;
-using StormByte::Multimedia::Pipeline::State;
-using StormByte::Multimedia::Type;
-using StormByte::Logger::Level;
-
 namespace {
 	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
 		if (!value)
@@ -63,70 +55,79 @@ namespace {
 	}
 }
 
-Mux::Mux(Muxer& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::Item;
+	using StormByte::Multimedia::Pipeline::Muxer;
+	using StormByte::Multimedia::Pipeline::Packet;
+	using StormByte::Multimedia::Pipeline::State;
+	using StormByte::Multimedia::Type;
+	using StormByte::Logger::Level;
 
-void Mux::Setup() noexcept {
-	if (!m_owner.m_backend)
-		Fail("muxer has no backend");
-}
+	Mux::Mux(Muxer& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
 
-void Mux::Process(Item::PointerType item) noexcept {
-	if (!item) {
-		Flush();
-		return;
+	void Mux::Setup() noexcept {
+		if (!m_owner.m_backend)
+			Fail("muxer has no backend");
 	}
 
-	NameThread("STMM:Muxer");
-
-	if (m_owner.Failed() || !m_owner.m_backend)
-		return;
-
-	if (!m_owner.Armed())
-		m_owner.WaitArmed();
-
-	if (m_owner.Failed() || m_owner.Status() == State::Stopping || !m_owner.Armed())
-		return;
-
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("muxer expected a packet");
-		return;
-	}
-
-	while (!m_owner.m_backend->Push(m_owner, packet)) {
-		if (m_owner.Failed())
+	void Mux::Process(Item::PointerType item) noexcept {
+		if (!item) {
+			Flush();
 			return;
-		Wait();
-	}
+		}
 
-	const int track = packet->Track();
-	const auto type = packet->Type();
-	if (type == Type::Video || type == Type::Audio) {
-		if (const auto& pts = packet->Pts(); pts) {
-			auto ns = pts->Nanoseconds().count();
-			if (const auto& dur = packet->Duration(); dur)
-				ns += dur->Nanoseconds().count();
-			if (type == Type::Video)
-				m_owner.m_positionNs.store(ns, std::memory_order_release);
-			else {
-				const std::int64_t current = m_owner.m_positionNs.load(std::memory_order_acquire);
-				if (current < 0)
+		NameThread("STMM:Muxer");
+
+		if (m_owner.Failed() || !m_owner.m_backend)
+			return;
+
+		if (!m_owner.Armed())
+			m_owner.WaitArmed();
+
+		if (m_owner.Failed() || m_owner.Status() == State::Stopping || !m_owner.Armed())
+			return;
+
+		auto packet = std::dynamic_pointer_cast<Packet>(item);
+		if (!packet) {
+			Fail("muxer expected a packet");
+			return;
+		}
+
+		while (!m_owner.m_backend->Push(m_owner, packet)) {
+			if (m_owner.Failed())
+				return;
+			Wait();
+		}
+
+		const int track = packet->Track();
+		const auto type = packet->Type();
+		if (type == Type::Video || type == Type::Audio) {
+			if (const auto& pts = packet->Pts(); pts) {
+				auto ns = pts->Nanoseconds().count();
+				if (const auto& dur = packet->Duration(); dur)
+					ns += dur->Nanoseconds().count();
+				if (type == Type::Video)
 					m_owner.m_positionNs.store(ns, std::memory_order_release);
+				else {
+					const std::int64_t current = m_owner.m_positionNs.load(std::memory_order_acquire);
+					if (current < 0)
+						m_owner.m_positionNs.store(ns, std::memory_order_release);
+				}
 			}
 		}
+
+		Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
+			track, packet->Serial().value_or(0), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts()),
+			m_owner.m_positionNs.load(std::memory_order_acquire)));
 	}
 
-	Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
-		track, packet->Serial().value_or(0), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts()),
-		m_owner.m_positionNs.load(std::memory_order_acquire)));
-}
-
-void Mux::Flush() noexcept {
-	if (m_owner.m_backend && !m_owner.Failed())
-		m_owner.m_backend->Flush(m_owner);
-	m_owner.m_closed.store(true, std::memory_order_release);
-	Log(Level::Notice, "closed");
+	void Mux::Flush() noexcept {
+		if (m_owner.m_backend && !m_owner.Failed())
+			m_owner.m_backend->Flush(m_owner);
+		m_owner.m_closed.store(true, std::memory_order_release);
+		Log(Level::Notice, "closed");
+	}
 }

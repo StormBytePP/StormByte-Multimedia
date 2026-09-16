@@ -47,13 +47,6 @@
 #include <format>
 #include <string>
 
-using StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Decode;
-using StormByte::Multimedia::Pipeline::Decoder;
-using StormByte::Multimedia::Pipeline::Frame;
-using StormByte::Multimedia::Pipeline::Item;
-using StormByte::Multimedia::Pipeline::Packet;
-using StormByte::Logger::Level;
-
 namespace {
 	std::string Ns(const std::optional<StormByte::Multimedia::Property::Duration>& value) noexcept {
 		if (!value)
@@ -62,136 +55,144 @@ namespace {
 	}
 }
 
-Decode::Decode(Decoder& owner) noexcept
-:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
-	m_owner(owner) {}
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	using StormByte::Multimedia::Pipeline::Decoder;
+	using StormByte::Multimedia::Pipeline::Frame;
+	using StormByte::Multimedia::Pipeline::Item;
+	using StormByte::Multimedia::Pipeline::Packet;
+	using StormByte::Logger::Level;
 
-void Decode::Setup() noexcept {
-	NameThread("STMM:Decode:" + std::to_string(m_owner.m_index));
-	if (m_owner.m_look) {
-		Log(Level::Notice, std::format("look t={}", m_owner.m_index));
-		return;
-	}
+	Decode::Decode(Decoder& owner) noexcept
+	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
+		m_owner(owner) {}
 
-	while (!Stopping() && m_owner.m_origin == nullptr)
-		Wait();
-	if (Stopping())
-		return;
-	if (!m_owner.m_origin) {
-		Fail("decoder has no demuxer");
-		return;
-	}
-
-	while (!Stopping() && !m_owner.m_origin->Failed() && !m_owner.m_origin->Ready())
-		Wait();
-	if (Stopping())
-		return;
-	if (m_owner.m_origin->Failed() || !m_owner.m_origin->Ready()) {
-		Fail(m_owner.m_origin->Error().value_or("demuxer failed"));
-		return;
-	}
-
-	auto backend = m_owner.OpenOrigin();
-	if (!backend)
-		return;
-	m_owner.Bind(std::move(backend));
-	m_owner.m_serial.reset();
-	m_owner.m_part = 0;
-	m_owner.m_inDts.reset();
-	Log(Level::Notice, std::format("open t={} impl={}",
-		m_owner.m_index, m_owner.m_implementation.value_or("auto")));
-}
-
-void Decode::Process(Item::PointerType item) noexcept {
-	if (!item) {
-		Flush();
-		return;
-	}
-
-	NameThread("STMM:Decode:" + std::to_string(m_owner.m_index));
-	if (m_owner.Failed())
-		return;
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("decoder expected a packet");
-		return;
-	}
-
-	if (m_owner.m_look && !m_owner.m_backend) {
-		if (!m_owner.OpenLook(*packet))
+	void Decode::Setup() noexcept {
+		NameThread("STMM:Decode:" + std::to_string(m_owner.m_index));
+		if (m_owner.m_look) {
+			Log(Level::Notice, std::format("look t={}", m_owner.m_index));
 			return;
-	}
-
-	if (!m_owner.m_backend) {
-		Fail("decoder is not open");
-		return;
-	}
-
-	if (packet->Track() != m_owner.m_index)
-		return;
-	if (!packet->Serial()) {
-		Fail("packet has no serial");
-		return;
-	}
-
-	if (m_owner.m_serial != packet->Serial()) {
-		m_owner.m_serial = packet->Serial();
-		m_owner.m_part = 0;
-		m_owner.m_inDts = packet->Dts();
-	}
-
-	Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
-		packet->Track(), *packet->Serial(), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts())));
-
-	auto emit = [this](Frame::PointerType frame) {
-		m_owner.StampLineage(*frame);
-		m_owner.StampLook(*frame);
-		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-			frame->Track(), frame->Serial().value_or(0), frame->Part(),
-			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		Emit(std::move(frame));
-	};
-
-	while (!m_owner.m_backend->Send(m_owner, packet)) {
-		if (m_owner.Failed())
-			return;
-		Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
-		if (m_owner.Failed())
-			return;
-		if (!frame) {
-			Wait();
-			continue;
 		}
 
-		emit(std::move(frame));
+		while (!Stopping() && m_owner.m_origin == nullptr)
+			Wait();
+		if (Stopping())
+			return;
+		if (!m_owner.m_origin) {
+			Fail("decoder has no demuxer");
+			return;
+		}
+
+		while (!Stopping() && !m_owner.m_origin->Failed() && !m_owner.m_origin->Ready())
+			Wait();
+		if (Stopping())
+			return;
+		if (m_owner.m_origin->Failed() || !m_owner.m_origin->Ready()) {
+			Fail(m_owner.m_origin->Error().value_or("demuxer failed"));
+			return;
+		}
+
+		auto backend = m_owner.OpenOrigin();
+		if (!backend)
+			return;
+		m_owner.Bind(std::move(backend));
+		m_owner.m_serial.reset();
+		m_owner.m_part = 0;
+		m_owner.m_inDts.reset();
+		Log(Level::Notice, std::format("open t={} impl={}",
+			m_owner.m_index, m_owner.m_implementation.value_or("auto")));
 	}
 
-	for (;;) {
-		if (m_owner.Failed())
+	void Decode::Process(Item::PointerType item) noexcept {
+		if (!item) {
+			Flush();
 			return;
-		Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
-		if (!frame)
-			break;
-		emit(std::move(frame));
-	}
-}
+		}
 
-void Decode::Flush() noexcept {
-	if (m_owner.Failed() || !m_owner.m_backend)
-		return;
-	m_owner.m_backend->Flush(m_owner);
-	for (;;) {
+		NameThread("STMM:Decode:" + std::to_string(m_owner.m_index));
 		if (m_owner.Failed())
 			return;
-		Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
-		if (!frame)
+		auto packet = std::dynamic_pointer_cast<Packet>(item);
+		if (!packet) {
+			Fail("decoder expected a packet");
 			return;
-		m_owner.StampLineage(*frame);
-		m_owner.StampLook(*frame);
-		Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
-			frame->Track(), frame->Serial().value_or(0), frame->Part(),
-			Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
-		Emit(std::move(frame));
+		}
+
+		if (m_owner.m_look && !m_owner.m_backend) {
+			if (!m_owner.OpenLook(*packet))
+				return;
+		}
+
+		if (!m_owner.m_backend) {
+			Fail("decoder is not open");
+			return;
+		}
+
+		if (packet->Track() != m_owner.m_index)
+			return;
+		if (!packet->Serial()) {
+			Fail("packet has no serial");
+			return;
+		}
+
+		if (m_owner.m_serial != packet->Serial()) {
+			m_owner.m_serial = packet->Serial();
+			m_owner.m_part = 0;
+			m_owner.m_inDts = packet->Dts();
+		}
+
+		Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
+			packet->Track(), *packet->Serial(), packet->Part(),
+			Ns(packet->Pts()), Ns(packet->Dts())));
+
+		auto emit = [this](Frame::PointerType frame) {
+			m_owner.StampLineage(*frame);
+			m_owner.StampLook(*frame);
+			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+				frame->Track(), frame->Serial().value_or(0), frame->Part(),
+				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+			Emit(std::move(frame));
+		};
+
+		while (!m_owner.m_backend->Send(m_owner, packet)) {
+			if (m_owner.Failed())
+				return;
+			Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
+			if (m_owner.Failed())
+				return;
+			if (!frame) {
+				Wait();
+				continue;
+			}
+
+			emit(std::move(frame));
+		}
+
+		for (;;) {
+			if (m_owner.Failed())
+				return;
+			Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
+			if (!frame)
+				break;
+			emit(std::move(frame));
+		}
+	}
+
+	void Decode::Flush() noexcept {
+		if (m_owner.Failed() || !m_owner.m_backend)
+			return;
+		m_owner.m_backend->Flush(m_owner);
+		for (;;) {
+			if (m_owner.Failed())
+				return;
+			Frame::PointerType frame = m_owner.m_backend->Receive(m_owner);
+			if (!frame)
+				return;
+			m_owner.StampLineage(*frame);
+			m_owner.StampLook(*frame);
+			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
+				frame->Track(), frame->Serial().value_or(0), frame->Part(),
+				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
+			Emit(std::move(frame));
+		}
 	}
 }
