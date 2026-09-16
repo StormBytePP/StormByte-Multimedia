@@ -149,4 +149,24 @@ namespace StormByte::Multimedia::Pipeline {
 		public:
 			using StormByte::Bitmask<Kinds, Kind>::Bitmask;
 	};
+
+    /**
+     * @enum State
+     * @brief Lifecycle of a Step, Worker or Pumper.
+     *
+     * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
+     * Ready→Stopping, Ready→Failed, Ready→Stopped, Stopping→Stopped.
+     * Failed and Stopped do not leave.
+     *
+     * Source EOF is not a State.
+     *
+     * @ingroup multimedia_pipeline
+     */
+    enum class State: std::uint8_t {
+        Created,
+        Ready,
+        Stopping,
+        Stopped,
+        Failed
+    };
 }
