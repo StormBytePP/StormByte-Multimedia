@@ -116,23 +116,22 @@ namespace {
 }
 
 /*
-* Analytics leaf. Filters::Add / Between::Add only accept
-* Process / Packet / Analytics.
-*
-* Construction names the node ("vmaf") so logs and Report dumps
-* can tell filters apart. Do not Launch() here: Filters does.
-*
-* Two looks arrive on the same Process: Producer::Decoder is the
-* reference, Producer::Encoder or Producer::Remuxer is the distorted
-* reconstruct. Clone the raw AVFrame; Work will Drain the StormByte
-* Frame after this returns.
-*
-* Pairing is presentation FIFO per Frame::Track, not Serial and
-* not container PTS. One libvmaf context per track.
-*
-* Debug is the bugreport level: first looks, latch, ignore, paced
-* scored count, eof. Per-frame park/score stays at LowLevel.
-*/
+ * Analytics leaf. Inherit Analytics, never FFmpeg.
+ *
+ * Construction names the node ("vmaf") so logs and Report dumps
+ * can tell filters apart. Do not Launch or Halt from the leaf.
+ *
+ * Two looks arrive on the same Process: Producer::Decoder is the
+ * reference, Producer::Encoder or Producer::Remuxer is the distorted
+ * reconstruct. Clone the raw AVFrame; the StormByte Frame is gone
+ * after Process returns.
+ *
+ * Pairing is presentation FIFO per Frame::Track, not Serial and
+ * not container PTS. One libvmaf context per track.
+ *
+ * Debug is the bugreport level: first looks, latch, ignore, paced
+ * scored count, eof. Per-frame park/score stays at LowLevel.
+ */
 VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model,
 	std::optional<unsigned short> threads) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),

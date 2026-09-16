@@ -70,17 +70,15 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @brief Full-reference VMAF. Reference Analytics leaf.
 	 *
 	 * @par What an Analytics leaf is
-	 * Analytics is not on the encode path. Filters CloneTo s the
-	 * Decoder tap (reference look, cloned before Process) and
-	 * a Route-owned dest look (distorted look) onto this
-	 * node. @ref Process sees only @ref Pipeline::Frame.
-	 * Reference @ref Item::Producer is @ref Producer::Decoder.
+	 * Analytics is not on the encode path. @ref Process sees
+	 * only @ref Pipeline::Frame. Reference
+	 * @ref Item::Producer is @ref Producer::Decoder.
 	 * Distorted Producer is @ref Producer::Encoder or
 	 * @ref Producer::Remuxer. There is no Packet and no
 	 * @ref FFmpeg::Save.
 	 *
 	 * Implement @ref Setup, @ref Process, @ref Eof, @ref Clean,
-	 * @ref Report, @ref Media. Filters launches the worker.
+	 * @ref Report, @ref Media.
 	 *
 	 * @par Pairing
 	 * Presentation FIFOs per @ref Pipeline::Frame::Track, not Serial
@@ -118,15 +116,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * the constructor to cap it.
 	 *
 	 * @par When to read @ref Report
-	 * Muxer closed is not Eof on this node. Wait Filters::Idle
-	 * first. A low score is not Fail. @ref Report::Failed
+	 * Muxer closed is not Eof on this node. Wait until the
+	 * job is Done. A low score is not Fail. @ref Report::Failed
 	 * only when a context or model could not be opened, or
 	 * no pair was scored. One track keeps flat keys
 	 * (`vmaf_mean`). Several tracks prefix with the origin
 	 * index (`0.vmaf_mean`, `1.vmaf_mean`).
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Analytics
-	 * @see StormByte::Multimedia::Pipeline::Filters
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC VMAF: public Filter::Analytics {
 		public:

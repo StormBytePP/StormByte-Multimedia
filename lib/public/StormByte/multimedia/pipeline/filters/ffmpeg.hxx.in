@@ -86,27 +86,22 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * FFmpeg is not a @ref StormByte::Multimedia::Pipeline::Step.
 	 * A Step is a named node of the public graph (Demuxer, Decoder,
-	 * Encoder, Muxer, Remuxer). A filter is a plugin that Filters
-	 * mounts between two Steps. The plugin composes its own
-	 * Worker and Pumper; hoppers exist so Filters can wire the
-	 * tube. That does not make the plugin a Step.
+	 * Encoder, Muxer, Remuxer). A filter is a plugin that sits
+	 * between two of those nodes. Inheriting FFmpeg does not
+	 * make the plugin a Step.
 	 *
 	 * @par How to write a plugin
 	 * Inherit @ref Process, @ref Packet or @ref Analytics. Never
-	 * inherit FFmpeg. Never inherit Step. @ref Filters::Between::Add
-	 * and @ref Filters::Add compile with a bare FFmpeg pointer
-	 * and then @ref Fail at wiring time: one failed node aborts
-	 * the whole job.
+	 * inherit FFmpeg. Never inherit Step.
 	 *
 	 * Construct the leaf with a shared logger and a short name
-	 * (`scale`) via the base constructor. @ref Name is
-	 * `Media()/name`. Do not Launch, Stop, Halt or Mount from
-	 * the leaf: @ref Filters does that. A destructor only
-	 * releases plugin resources (a sws context, a libvmaf
-	 * model). Do not call Halt.
+	 * (`scale`) via the Process / Packet / Analytics constructor.
+	 * @ref Name is `Media()/name`. Do not Launch, Stop, Halt or
+	 * Mount from the leaf. A destructor only releases plugin
+	 * resources (a sws context, a libvmaf model). Do not call Halt.
 	 *
 	 * Implement @ref Media, @ref Clean, @ref Setup and the
-	 * @ref Process overload that matches the kind mask. Clean
+	 * @ref Process overload that matches the kind. Clean
 	 * must be callable more than once; Setup runs after Clean.
 	 * Mutate through @ref AVFrame / @ref AVPacket and @ref Save.
 	 * @ref Fail is a hard error. @ref Log is not Fail. An
@@ -115,11 +110,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * numbers via @ref Report.
 	 *
 	 * Optional: @ref Hold / @ref Release / @ref LastChance /
-	 * @ref Eof. The plugin does not see Sink, Hopper, Bind,
-	 * Route, Worker or Pumper.
+	 * @ref Eof.
 	 *
-	 * Attach with @c Filters::Between::Add, @c Filters::Add or
-	 * @c job.Video(in).Filter<T>(…).
+	 * Attach the leaf from the tube
+	 * (`job.Video(in).Filter<T>(…)`). Do not wire anything
+	 * from inside the plugin.
 	 *
 	 * @par Kinds
 	 * @ref Receives and @ref Produces are fixed at construction.
@@ -188,14 +183,13 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * @ref Release ends the Hold and runs @ref Process again on
 	 * every parked unit (now with the state the probe computed),
-	 * then Emit s them in that same call. The pumper sends EoF
-	 * on the sinks after Finish returns, so a Release from
-	 * LastChance during Finish still flushes.
+	 * then they leave in that same call. A Release from
+	 * LastChance at end-of-input still flushes.
 	 *
 	 * @par Mutation
-	 * Effect of a mutation is @ref Save inside Work.
-	 * @ref Analytics deletes @ref Save. @ref Save mutates the
-	 * process unit after CloneTo has already cloned.
+	 * Effect of a mutation is @ref Save. @ref Analytics deletes
+	 * @ref Save. @ref Save replaces the current unit's backend
+	 * and takes ownership of the libav pointer.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -214,7 +208,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			FFmpeg(FFmpeg&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Filters already Halt s; this joins if Launch ran.
+			 * @brief Destructor. Joins if the worker ran. The leaf
+			 *        only releases plugin resources.
 			 */
 			virtual ~FFmpeg() noexcept;
 
@@ -243,7 +238,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::string Name() const noexcept;
 
 			/**
-			 * @brief Leaf token used in @ref Filters reports (`vmaf`).
+			 * @brief Leaf token used in reports (`vmaf`).
 			 * @return Constructor name, not `Media()/name`.
 			 */
 			inline const std::string& Leaf() const noexcept {
@@ -291,9 +286,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 *
 			 * On @ref Analytics this is both looks. Read
 			 * @ref StormByte::Multimedia::Pipeline::Item::Producer:
-			 * Decoder is the frame after decode. Encoder is the
-			 * same lineage after encode, already decoded and ready
-			 * to observe. Match units with Serial / Part / Dts.
+			 * Decoder is the reference look. Encoder or Remuxer is
+			 * the distorted look, already decoded. Pair them in
+			 * presentation order per track.
 			 */
 			virtual void Process(const Pipeline::Frame& frame) noexcept;
 
@@ -354,8 +349,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @param produces Kinds this filter emits.
 			 *
 			 * Called from @ref Process, @ref Packet and @ref Analytics.
-			 * Do not construct FFmpeg from a plugin. Binds the
-			 * Through pumper and Filter worker; does not Launch.
+			 * Do not construct FFmpeg from a plugin.
 			 */
 			FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 				std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
@@ -381,7 +375,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Starts a Hold of at most @p n units.
 			 *
 			 * @p n of 0 means 255. Parks the current unit. Later
-			 * units while Held are parked by Work. @ref Release may
+			 * units while Held are parked. @ref Release may
 			 * run before the ceiling. @ref HeldFor equal to @p n is
 			 * still valid; the next unit is @ref LastChance, not a
 			 * park. A second Hold while @ref Held is @ref Fail.
@@ -394,7 +388,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Ends the Hold and replays parked units through
 			 *        @ref Process, then Emit s them.
 			 *
-			 * Runs in the same call (not on the next Work). No-op if
+			 * Runs in the same call (not deferred). No-op if
 			 * not @ref Held. Set probe state before calling this.
 			 */
 			void Release() noexcept;
@@ -420,7 +414,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @brief Last look before the Hold must end.
 			 *
 			 * Called when one more unit would overflow the queue, and
-			 * when the route hits EoF while still Held. Default no-op.
+			 * when input ends while still Held. Default no-op.
 			 * Override to @ref Release with a sane default, or leave
 			 * Held and let the job @ref Fail. Not called if the leaf
 			 * never @ref Hold s.
@@ -669,25 +663,17 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @class Analytics
 	 * @brief Measures units. Does not rewrite them.
 	 *
-	 * Not a node on the encode critical path. Filters
-	 * @ref Backend::Pipeline::Pipe::CloneTo s the origin Pipe
-	 * onto this filter (decode look) and feeds a second look
-	 * that is already a decoded Frame taken from the Encoder
-	 * bitstream. The plugin does not open a decoder and does
-	 * not see packets.
+	 * Inherit this to observe decoded frames (VMAF, loudness).
+	 * The plugin does not open a decoder and does not see packets.
 	 *
 	 * Implement @ref Process(const Pipeline::Frame&) only.
 	 * @ref StormByte::Multimedia::Pipeline::Item::Producer is
-	 * Decoder on the pre-encode look and Encoder on the
-	 * post-encode look. Match units with Serial / Part / Dts.
-	 *
-	 * Decode and encode looks share one input hopper. A Hold would
-	 * park both looks in one FIFO and break pairing. Buffer
-	 * unmatched frames in the plugin (map by Serial / Part).
+	 * Decoder on the reference look and Encoder or Remuxer on
+	 * the distorted look. Pair them in presentation order per
+	 * @ref Pipeline::Frame::Track. Do not Hold: both looks
+	 * arrive on the same Process and a Hold would mix them.
 	 *
 	 * The short constructor Receives Frame and Produces Frame.
-	 * Each Analytics is a CloneTo dest, not a process node.
-	 * The last node is Drained.
 	 *
 	 * @ref Save, @ref Hold, @ref Release, @ref Held, @ref HeldFor
 	 * and @ref LastChance are deleted. @ref Eof, @ref Clean,
