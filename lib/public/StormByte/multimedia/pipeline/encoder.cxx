@@ -39,17 +39,17 @@
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/video.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/encode.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <format>
-#include <thread>
 #include <utility>
 
 extern "C" {
@@ -92,6 +92,8 @@ Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
 			return;
 	}
 
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Through>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Encode>(*this));
 	Launch();
 }
 
@@ -249,82 +251,6 @@ void* Encoder::FrameHandle(Frame& frame) noexcept {
 
 const void* Encoder::FrameHandle(const Frame& frame) noexcept {
 	return frame.m_backend ? &frame.m_backend->Handle() : nullptr;
-}
-
-void Encoder::Open() noexcept {
-	if (!m_backend) {
-		Fail("encoder has no backend");
-		return;
-	}
-
-	Step::Open();
-}
-
-void Encoder::Work(Item::PointerType item) noexcept {
-	NameThread("STMM:Encode:" + std::to_string(m_index));
-	if (Failed() || !m_backend)
-		return;
-	auto frame = std::dynamic_pointer_cast<Frame>(item);
-	if (!frame) {
-		Fail("encoder expected a frame");
-		return;
-	}
-
-	if (!frame->Serial()) {
-		Fail("frame has no serial");
-		return;
-	}
-
-	const bool opening = !m_backend->IsOpen();
-	if (opening && !m_backend->Open(*this, *frame))
-		return;
-	if (opening)
-		Log(Level::Notice, std::format("open t={} codec={} impl={}",
-			m_index, std::string(m_codec->Name()), m_implementation.value_or("auto")));
-
-	Log(Level::LowLevel, std::format("in t={} {}:{} pts={} dts={}",
-		m_index, *frame->Serial(), frame->Part(),
-		Ns(frame->Pts()), Ns(frame->Dts())));
-
-	while (!m_backend->Push(*this, frame)) {
-		if (Failed())
-			return;
-		Packet::PointerType packet = m_backend->Take();
-		if (!packet) {
-			std::this_thread::yield();
-			continue;
-		}
-
-		Emit(std::move(packet));
-	}
-
-	m_serial = frame->Serial();
-	m_part = frame->Part();
-
-	for (;;) {
-		if (Failed())
-			return;
-		Packet::PointerType packet = m_backend->Take();
-		if (!packet)
-			break;
-		Emit(std::move(packet));
-	}
-}
-
-void Encoder::Finish() noexcept {
-	if (!Failed() && m_backend) {
-		m_backend->Flush(*this);
-		for (;;) {
-			if (Failed())
-				break;
-			Packet::PointerType packet = m_backend->Take();
-			if (!packet)
-				break;
-			Emit(std::move(packet));
-		}
-	}
-
-	m_lookOut.Eof();
 }
 
 std::string Encoder::Label() const noexcept {

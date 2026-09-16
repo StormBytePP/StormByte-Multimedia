@@ -67,6 +67,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	class Packet;	///< Packet holder behind the public Packet.
 }
 
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	class Encode;
+}
+
 /**
  * @namespace StormByte::Multimedia::Pipeline
  * @brief Demux / decode / filter / encode / mux types.
@@ -87,7 +91,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * throttles. One incoming frame counts once; packets produced
 	 * in that Work share the sample. Pts/Dts on Wrap are the
 	 * flattened encoder clock (the line that catches a bad DTS
-	 * flatten). Step::Pump times each Work.
+	 * flatten). The Through pumper times each Process.
 	 *
 	 * @ref Label is `Encoder(libx265)` when an implementation is
 	 * pinned or selected, otherwise `Encoder(<registry name>)`.
@@ -102,6 +106,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder final: public Step {
 		friend class Backend::Pipeline::Encoder;
+		friend class Backend::Pipeline::Detail::Worker::Encode;
 		friend class Muxer;
 
 		public:
@@ -417,22 +422,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Prepare-once. Codec Open stays lazy in Work.
-			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Encodes one frame and @ref Emit s packets.
-			 * @param item Incoming frame.
-			 */
-			void Work(Item::PointerType item) noexcept override;
-
-			/**
-			 * @brief Flushes the codec after input EoF.
-			 */
-			void Finish() noexcept override;
-
-			/**
 			 * @brief Encode-look side channel. Deep-copies each encoded packet into @p sink.
 			 * @param sink Look decoder @c m_in.
 			 *
@@ -503,20 +492,20 @@ namespace StormByte::Multimedia::Pipeline {
 
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			int m_index;														///< Mux destination order key
-			const Codec* m_codec;												///< Destination codec
-			std::string m_encoderTag;											///< ENCODER metadata
-			std::optional<std::string> m_implementation;						///< Pinned encoder name
-			Features m_require;													///< Extra required bits
-			Features m_capabilities;											///< Opened capabilities
-			std::optional<int> m_crf;											///< CRF/CQ
-			std::optional<std::int64_t> m_bitRate;								///< Target bitrate
-			std::optional<std::int64_t> m_maxBitRate;							///< VBV ceiling
-			std::optional<std::string> m_preset;								///< Preset
-			std::optional<std::string> m_tune;									///< Tune
-			std::map<std::string, std::string> m_fineTune;						///< Vendor leftovers
-			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;				///< Encode backend
-			std::optional<std::uint64_t> m_serial;								///< Lineage of the last accepted frame
-			std::uint64_t m_part;												///< Part of the last accepted frame
-			ItemSink m_lookOut;													///< Encode-look producer; not m_out
+			const Codec* m_codec;											///< Destination codec
+			std::string m_encoderTag;										///< ENCODER metadata
+			std::optional<std::string> m_implementation;					///< Pinned encoder name
+			Features m_require;												///< Extra required bits
+			Features m_capabilities;										///< Opened capabilities
+			std::optional<int> m_crf;										///< CRF/CQ
+			std::optional<std::int64_t> m_bitRate;							///< Target bitrate
+			std::optional<std::int64_t> m_maxBitRate;						///< VBV ceiling
+			std::optional<std::string> m_preset;							///< Preset
+			std::optional<std::string> m_tune;								///< Tune
+			std::map<std::string, std::string> m_fineTune;					///< Vendor leftovers
+			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;			///< Encode backend
+			std::optional<std::uint64_t> m_serial;							///< Lineage of the last accepted frame
+			std::uint64_t m_part;											///< Part of the last accepted frame
+			ItemSink m_lookOut;												///< Encode-look producer; not m_out
 	};
 }
