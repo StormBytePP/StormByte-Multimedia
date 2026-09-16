@@ -80,148 +80,147 @@ namespace StormByte::Multimedia::Pipeline {
 */
 namespace StormByte::Multimedia::Pipeline::Filter {
 	/**
-	* @class FFmpeg
-	* @brief Abstract base for every StormByte Multimedia filter.
-	*
-	* FFmpeg is not a @ref StormByte::Multimedia::Pipeline::Step.
-	* A Step is a named node of the public graph (Demuxer, Decoder,
-	* Encoder, Muxer, Remuxer). A filter is a plugin that sits
-	* between two of those nodes. Inheriting FFmpeg does not
-	* make the plugin a Step.
-	*
-	* @par How to write a plugin
-	* Inherit @ref Process, @ref Packet or @ref Analytics. Never
-	* inherit FFmpeg. Never inherit Step.
-	*
-	* Construct the leaf with a shared logger and a short name
-	* (`scale`) via the Process / Packet / Analytics constructor.
-	* @ref Name is `Media()/name`. Do not Launch, Stop, Halt or
-	* Mount from the leaf. A destructor only releases plugin
-	* resources (a sws context, a libvmaf model). Do not call Halt.
-	*
-	* Implement @ref Media, @ref Clean, @ref Setup and the
-	* @ref Process overload that matches the kind. Clean
-	* must be callable more than once; Setup runs after Clean.
-	* Mutate through @ref AVFrame / @ref AVPacket and @ref Save.
-	* @ref Fail is a hard error. @ref Log is not Fail. An
-	* @ref Analytics plugin implements
-	* @ref Process(const Pipeline::Frame&) only and reports
-	* numbers via @ref Report.
-	*
-	* Optional: @ref Hold / @ref Release / @ref LastChance /
-	* @ref Eof.
-	*
-	* Attach the leaf from the tube
-	* (`job.Video(in).Filter<T>(…)`). Do not wire anything
-	* from inside the plugin.
-	*
-	* @par Kinds
-	* @ref Receives and @ref Produces are fixed at construction.
-	* The short constructor of @ref Process and @ref Packet
-	* fills the usual single-kind mask. The short constructor
-	* of @ref Analytics receives Frame and produces Frame.
-	* Both looks arrive as Frame.
-	*
-	* @par Headers and FFmpeg
-	* StormByte-Multimedia does not install or export libav / libsw
-	* headers on its public API. A plugin includes the headers of the
-	* FFmpeg build this library was compiled against only if it must
-	* take the C escape below:
-	* FFmpeg @STORMBYTE_FFMPEG_VERSION@, libavcodec major
-	* @STORMBYTE_LIBAVCODEC_MAJOR@. Matching docs:
-	* https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION@/index.html
-	*
-	* Do not link libavcodec, libavformat, libavutil, libswscale or
-	* libswresample in the plugin. StormByte-Multimedia already links
-	* them. A second copy of those ABIs fails at load or at the first
-	* `av_*` call.
-	*
-	* The contract of a filter is the StormByte RAII types
-	* @ref StormByte::Multimedia::FFmpeg::AVFrame and
-	* @ref StormByte::Multimedia::FFmpeg::AVPacket.
-	* Those wrappers should expose everything a plugin needs.
-	* @ref AVFrame / @ref AVPacket borrow the current unit;
-	* @ref Save takes a wrapper by rvalue and Detach s it into
-	* the current unit. Do not free a pointer that still belongs
-	* to a wrapper or to @ref Save.
-	*
-	* Those RAII types are not ready for plugin authors yet.
-	* If a needed operation is missing on the wrapper, the C API
-	* of the same FFmpeg build is an escape only — not the API
-	* this header advertises. Use it without linking the libraries
-	* (see above) and open an issue for the missing RAII surface
-	* so the escape can go away.
-	*
-	* StormByte value types that a filter already sees through
-	* @ref Pipeline::Frame keep the C names where they pair:
-	* @ref StormByte::Multimedia::Property::AVRational is `{num, den}`
-	* (`AVRational{24000, 1001}`, `fps.num`, `fps.den`). Convert to
-	* `::AVRational` with `{r.num, r.den}`. On @ref Property::Video that
-	* is @c FrameRate and @c SampleAspectRatio. Speaker layout is
-	* @ref StormByte::Multimedia::Property::ChannelLayout, a curated
-	* enum — not `AVChannelLayout`.
-	*
-	* @par Logging
-	* The owner of the tube passes a
-	* @c std::shared_ptr<StormByte::Logger::Log> as the first
-	* constructor argument. Prefer
-	* @c StormByte::Logger::ThreadedLog: every filter runs on its
-	* own worker. A plain @c Log is only safe if a single thread
-	* writes. An empty pointer is a silent no-op, not a Fail.
-	*
-	* @ref Log is protected so a leaf can write from @ref Process,
-	* @ref Hold or @ref LastChance. Component is @c STMM and group
-	* is @ref Name (`Video/scale`). Levels are
-	* @c StormByte::Logger::Level (`LowLevel`, `Debug`, `Warning`,
-	* `Notice`, `Info`, `Error`, `Fatal`). The print floor and
-	* throttle are set on the shared logger, not by this class.
-	* Format the text before the call (`std::format`). Logging is
-	* not @ref Fail and is not a measurement; @ref Analytics still
-	* reports numbers via @ref Report.
-	*
-	* Full logger API:
-	* <a href="https://dev.stormbyte.org/StormByte-Logger/">StormByte-Logger</a>.
-	*
-	* @par Plugin surface
-	* Public: @ref Media, @ref Name, @ref Clean, @ref Setup,
-	* @ref Receives, @ref Produces, @ref Failed, @ref Error and
-	* the @ref Process overload that matches those masks.
-	* Protected: @ref Log, @ref AVFrame, @ref AVPacket, @ref Save,
-	* @ref Hold, @ref Release, @ref LastChance, @ref Fail,
-	* @ref Held, @ref HeldFor, @ref Eof.
-	*
-	* @par Hold
-	* @ref Hold parks incoming units so @ref Process can look at a
-	* window (letterbox, loudness, a decoder delay) before anything
-	* reaches the next node. @p n of 0 means 255. A second Hold
-	* while @ref Held is @ref Fail. Exactly @p n units may sit on
-	* the queue. The next unit that would exceed that ceiling runs
-	* @ref LastChance instead of parking. If that call returns
-	* without @ref Release, @ref Fail runs and the job stops.
-	* Hold plus EoF is the same path: @ref LastChance on the last
-	* parked unit, then @ref Fail if still Held.
-	*
-	* @ref Release ends the Hold and runs @ref Process again on
-	* every parked unit (now with the state the probe computed),
-	* then they leave in that same call. A Release from
-	* LastChance at end-of-input still flushes.
-	*
-	* @par Mutation
-	* Effect of a mutation is @ref Save. @ref Analytics deletes
-	* @ref Save: an analytics leaf must not rewrite units.
-	* @ref Save replaces the current unit's backend and takes
-	* ownership of the incoming RAII wrapper
-	* (`incoming.Detach()`). Serial, Part and timing stay on the
-	* StormByte Frame / Packet. The plugin does not pass a
-	* geometry hint.
-	*
-	* Content may drop coupled extras that would lie after
-	* the new card (HDR10+ windows, audio downmix). That is
-	* not @ref Fail. @ref Log writes @c Level::Warning with
-	* the holder's reason.
-	*
-	* @ingroup multimedia_pipeline
-	*/
+	 * @class FFmpeg
+	 * @brief Abstract base for every StormByte Multimedia filter.
+	 *
+	 * FFmpeg is not a @ref StormByte::Multimedia::Pipeline::Step.
+	 * A Step is a named node of the public graph (Demuxer, Decoder,
+	 * Encoder, Muxer, Remuxer). A filter is a plugin that sits
+	 * between two of those nodes. Inheriting FFmpeg does not
+	 * make the plugin a Step.
+	 *
+	 * @par How to write a plugin
+	 * Inherit @ref Process, @ref Packet or @ref Analytics. Never
+	 * inherit FFmpeg. Never inherit Step.
+	 *
+	 * Construct the leaf with a shared logger and a short name
+	 * (`scale`) via the Process / Packet / Analytics constructor.
+	 * @ref Name is `Media()/name`. Do not Launch, Stop, Halt or
+	 * Mount from the leaf. A destructor only releases plugin
+	 * resources (a sws context, a libvmaf model). Do not call Halt.
+	 *
+	 * Implement @ref Media, @ref Clean, @ref Setup and the
+	 * @ref Process overload that matches the kind. Clean
+	 * must be callable more than once; Setup runs after Clean.
+	 * Mutate through
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame /
+	 * @ref StormByte::Multimedia::FFmpeg::AVPacket and @ref Save.
+	 * @ref Fail is a hard error. @ref Log is not Fail. An
+	 * @ref Analytics plugin implements
+	 * @ref Process(const Pipeline::Frame&) only and reports
+	 * numbers via @ref Report.
+	 *
+	 * Optional: @ref Hold / @ref Release / @ref LastChance /
+	 * @ref Eof.
+	 *
+	 * Attach the leaf from the tube
+	 * (`job.Video(in).Filter<T>(…)`). Do not wire anything
+	 * from inside the plugin.
+	 *
+	 * @par Kinds
+	 * @ref Receives and @ref Produces are fixed at construction.
+	 * The short constructor of @ref Process and @ref Packet
+	 * fills the usual single-kind mask. The short constructor
+	 * of @ref Analytics receives Frame and produces Frame.
+	 * Both looks arrive as Frame.
+	 *
+	 * @par Headers and FFmpeg
+	 * The plugin contract is the public RAII types
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame and
+	 * @ref StormByte::Multimedia::FFmpeg::AVPacket
+	 * (`StormByte/multimedia/ffmpeg/AVFrame.hxx`,
+	 * `StormByte/multimedia/ffmpeg/AVPacket.hxx`).
+	 * Those wrappers should expose everything a plugin needs.
+	 * The getters on this class borrow the current unit;
+	 * @ref Save takes a wrapper by rvalue and replaces the
+	 * current unit. Do not free a resource that still belongs
+	 * to a wrapper or that @ref Save has already taken.
+	 *
+	 * StormByte-Multimedia does not install or export libav /
+	 * libsw headers. Include those headers of the FFmpeg build
+	 * this library was compiled against only if a needed
+	 * operation is missing on the wrapper:
+	 * FFmpeg @STORMBYTE_FFMPEG_VERSION@, libavcodec major
+	 * @STORMBYTE_LIBAVCODEC_MAJOR@. Matching docs:
+	 * https://ffmpeg.org/doxygen/@STORMBYTE_FFMPEG_VERSION@/index.html
+	 *
+	 * That C API is an escape only — not the API this header
+	 * advertises. Do not link libavcodec, libavformat, libavutil,
+	 * libswscale or libswresample in the plugin.
+	 * StormByte-Multimedia already links them. A second copy of
+	 * those ABIs fails at load or at the first `av_*` call.
+	 * Open an issue for the missing RAII surface so the escape
+	 * can go away.
+	 *
+	 * StormByte value types that a filter already sees through
+	 * @ref Pipeline::Frame keep the C names where they pair:
+	 * @ref StormByte::Multimedia::Property::AVRational is `{num, den}`
+	 * (`AVRational{24000, 1001}`, `fps.num`, `fps.den`). Convert to
+	 * `::AVRational` with `{r.num, r.den}`. On @ref Property::Video that
+	 * is @c FrameRate and @c SampleAspectRatio. Speaker layout is
+	 * @ref StormByte::Multimedia::Property::ChannelLayout, a curated
+	 * enum — not `AVChannelLayout`.
+	 *
+	 * @par Logging
+	 * The owner of the tube passes a
+	 * @c std::shared_ptr<StormByte::Logger::Log> as the first
+	 * constructor argument. Prefer
+	 * @c StormByte::Logger::ThreadedLog: every filter runs on its
+	 * own worker. A plain @c Log is only safe if a single thread
+	 * writes. An empty pointer is a silent no-op, not a Fail.
+	 *
+	 * @ref Log is protected so a leaf can write from @ref Process,
+	 * @ref Hold or @ref LastChance. Component is @c STMM and group
+	 * is @ref Name (`Video/scale`). Levels are
+	 * @c StormByte::Logger::Level (`LowLevel`, `Debug`, `Warning`,
+	 * `Notice`, `Info`, `Error`, `Fatal`). The print floor and
+	 * throttle are set on the shared logger, not by this class.
+	 * Format the text before the call (`std::format`). Logging is
+	 * not @ref Fail and is not a measurement; @ref Analytics still
+	 * reports numbers via @ref Report.
+	 *
+	 * Full logger API:
+	 * <a href="https://dev.stormbyte.org/StormByte-Logger/">StormByte-Logger</a>.
+	 *
+	 * @par Plugin surface
+	 * Public: @ref Media, @ref Name, @ref Clean, @ref Setup,
+	 * @ref Receives, @ref Produces, @ref Failed, @ref Error and
+	 * the @ref Process overload that matches those masks.
+	 * Protected: @ref Log, the AVFrame / AVPacket getters,
+	 * @ref Save, @ref Hold, @ref Release, @ref LastChance,
+	 * @ref Fail, @ref Held, @ref HeldFor, @ref Eof.
+	 *
+	 * @par Hold
+	 * @ref Hold parks incoming units so @ref Process can look at a
+	 * window (letterbox, loudness, a decoder delay) before anything
+	 * reaches the next node. @p n of 0 means 255. A second Hold
+	 * while @ref Held is @ref Fail. Exactly @p n units may sit on
+	 * the queue. The next unit that would exceed that ceiling runs
+	 * @ref LastChance instead of parking. If that call returns
+	 * without @ref Release, @ref Fail runs and the job stops.
+	 * Hold plus EoF is the same path: @ref LastChance on the last
+	 * parked unit, then @ref Fail if still Held.
+	 *
+	 * @ref Release ends the Hold and runs @ref Process again on
+	 * every parked unit (now with the state the probe computed),
+	 * then they leave in that same call. A Release from
+	 * LastChance at end-of-input still flushes.
+	 *
+	 * @par Mutation
+	 * Effect of a mutation is @ref Save. @ref Analytics deletes
+	 * @ref Save: an analytics leaf must not rewrite units.
+	 * @ref Save takes the incoming RAII wrapper by rvalue and
+	 * replaces the current unit's media. Serial, Part and timing
+	 * stay on the StormByte Frame / Packet. The plugin does not
+	 * pass a geometry hint.
+	 *
+	 * Coupled extras that would lie after the new card (HDR10+
+	 * windows, audio downmix) may be dropped. That is not
+	 * @ref Fail. @ref Log writes @c Level::Warning with the
+	 * holder's reason.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC FFmpeg {
 		friend class StormByte::Multimedia::Pipeline::Filters;
 		friend class StormByte::Multimedia::Pipeline::Route;
@@ -229,396 +228,390 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 		public:
 			/**
-			* @name Lifecycle
-			* @{
-			*/
+			 * @name Lifecycle
+			 * @{
+			 */
 
 			/**
-			* @brief Copy is not allowed. A filter owns hoppers and a worker.
-			*/
+			 * @brief Copy is not allowed. A filter owns hoppers and a worker.
+			 */
 			FFmpeg(const FFmpeg& other) = delete;
 
 			/**
-			* @brief Move is not allowed. The leaf stays where the tube mounted it.
-			*/
+			 * @brief Move is not allowed. The leaf stays where the tube mounted it.
+			 */
 			FFmpeg(FFmpeg&& other) noexcept = delete;
 
 			/**
-			* @brief Destructor. Joins if the worker ran. The leaf
-			*        only releases plugin resources.
-			*/
+			 * @brief Destructor. Joins if the worker ran. The leaf
+			 *        only releases plugin resources.
+			 */
 			virtual ~FFmpeg() noexcept;
 
 			/**
-			* @brief Copy assignment is not allowed.
-			*/
+			 * @brief Copy assignment is not allowed.
+			 */
 			FFmpeg& operator=(const FFmpeg& other) = delete;
 
 			/**
-			* @brief Move assignment is not allowed.
-			*/
+			 * @brief Move assignment is not allowed.
+			 */
 			FFmpeg& operator=(FFmpeg&& other) noexcept = delete;
 
 			/**
-			* @}
-			*/
+			 * @}
+			 */
 
 			/**
-			* @name Identity
-			* @{
-			*/
+			 * @name Identity
+			 * @{
+			 */
 
 			/**
-			* @brief Media this filter handles.
-			* @return Video, Audio or Subtitle.
-			*/
+			 * @brief Media this filter handles.
+			 * @return Video, Audio or Subtitle.
+			 */
 			virtual enum StormByte::Multimedia::Type Media() const noexcept = 0;
 
 			/**
-			* @brief `Media()/name` computed on each call.
-			* @return Identity string.
-			*/
+			 * @brief `Media()/name` computed on each call.
+			 * @return Identity string.
+			 */
 			std::string Name() const noexcept;
 
 			/**
-			* @brief Leaf token used in reports (`vmaf`).
-			* @return Constructor name, not `Media()/name`.
-			*/
+			 * @brief Leaf token used in reports (`vmaf`).
+			 * @return Constructor name, not `Media()/name`.
+			 */
 			inline const std::string& Leaf() const noexcept {
 				return m_name;
 			}
 
 			/**
-			* @brief Kinds this filter consumes.
-			* @return Mask set at construction.
-			*/
+			 * @brief Kinds this filter consumes.
+			 * @return Mask set at construction.
+			 */
 			inline const Pipeline::Kinds& Receives() const noexcept {
 				return m_receives;
 			}
 
 			/**
-			* @brief Kinds this filter emits.
-			* @return Mask set at construction.
-			*/
+			 * @brief Kinds this filter emits.
+			 * @return Mask set at construction.
+			 */
 			inline const Pipeline::Kinds& Produces() const noexcept {
 				return m_produces;
 			}
 
 			/**
-			* @}
-			*/
+			 * @}
+			 */
 
 			/**
-			* @name Run
-			* @{
-			*/
+			 * @name Run
+			 * @{
+			 */
 
 			/**
-			* @brief Drops per-run state. First-run no-op is allowed.
-			*
-			* Called from @ref Open before @ref Setup and again if
-			* the tube reuses the leaf. Must be idempotent.
-			*/
+			 * @brief Drops per-run state. First-run no-op is allowed.
+			 *
+			 * Called from @ref Open before @ref Setup and again if
+			 * the tube reuses the leaf. Must be idempotent.
+			 */
 			virtual void Clean() noexcept = 0;
 
 			/**
-			* @brief Acquires per-run state. Must be callable again after @ref Clean.
-			*
-			* Open contexts, load models, cache geometry. Do not
-			* Launch or Halt from here.
-			*/
+			 * @brief Acquires per-run state. Must be callable again after @ref Clean.
+			 *
+			 * Open contexts, load models, cache geometry. Do not
+			 * Launch or Halt from here.
+			 */
 			virtual void Setup() noexcept = 0;
 
 			/**
-			* @brief Frame body. Default no-op.
-			* @param frame Unit in the tube. Never null.
-			*
-			* On @ref Analytics this is both looks. Read
-			* @ref StormByte::Multimedia::Pipeline::Item::Producer:
-			* Decoder is the reference look. Encoder or Remuxer is
-			* the distorted look, already decoded. Pair them in
-			* presentation order per track.
-			*/
+			 * @brief Frame body. Default no-op.
+			 * @param frame Unit in the tube. Never null.
+			 *
+			 * On @ref Analytics this is both looks. Read
+			 * @ref StormByte::Multimedia::Pipeline::Item::Producer:
+			 * Decoder is the reference look. Encoder or Remuxer is
+			 * the distorted look, already decoded. Pair them in
+			 * presentation order per track.
+			 */
 			virtual void Process(const Pipeline::Frame& frame) noexcept;
 
 			/**
-			* @brief Packet body. Default no-op.
-			* @param packet Unit in the tube. Never null.
-			*
-			* @ref Packet leaves implement this. @ref Analytics
-			* does not receive packets.
-			*/
+			 * @brief Packet body. Default no-op.
+			 * @param packet Unit in the tube. Never null.
+			 *
+			 * @ref Packet leaves implement this. @ref Analytics
+			 * does not receive packets.
+			 */
 			virtual void Process(const Pipeline::Packet& packet) noexcept;
 
 			/**
-			* @brief Measurement, if any.
-			* @return None and an empty map by default.
-			*
-			* @ref Analytics overrides this. A process or packet
-			* leaf may leave the default.
-			*/
+			 * @brief Measurement, if any.
+			 * @return None and an empty map by default.
+			 *
+			 * @ref Analytics overrides this. A process or packet
+			 * leaf may leave the default.
+			 */
 			virtual class Report Report() const noexcept;
 
 			/**
-			* @brief Current lifecycle value.
-			* @return @ref Pipeline::State of this filter only.
-			*/
+			 * @brief Current lifecycle value.
+			 * @return @ref Pipeline::State of this filter only.
+			 */
 			Pipeline::State Status() const noexcept;
 
 			/**
-			* @brief Whether this filter has failed.
-			* @return true iff Status is Failed.
-			*/
+			 * @brief Whether this filter has failed.
+			 * @return true iff Status is Failed.
+			 */
 			bool Failed() const noexcept;
 
 			/**
-			* @brief Failure text.
-			* @return Message, or empty.
-			*/
+			 * @brief Failure text.
+			 * @return Message, or empty.
+			 */
 			const std::optional<std::string>& Error() const noexcept;
 
 			/**
-			* @brief Ceiling of this filter's input hopper.
-			* @return Max queued items. 0 means unbounded.
-			*/
+			 * @brief Ceiling of this filter's input hopper.
+			 * @return Max queued items. 0 means unbounded.
+			 */
 			virtual std::size_t InputCeiling() const noexcept;
 
 			/**
-			* @}
-			*/
+			 * @}
+			 */
 
 		protected:
 			/**
-			* @name Construction
-			* @{
-			*/
+			 * @name Construction
+			 * @{
+			 */
 
 			/**
-			* @brief Named plugin. There is no empty constructor.
-			* @param log Shared logger. Prefer ThreadedLog. Empty means no log.
-			* @param name Short leaf name (`scale`).
-			* @param receives Kinds this filter consumes.
-			* @param produces Kinds this filter emits.
-			*
-			* Called from @ref Process, @ref Packet and @ref Analytics.
-			* Do not construct FFmpeg from a plugin.
-			*/
+			 * @brief Named plugin. There is no empty constructor.
+			 * @param log Shared logger. Prefer ThreadedLog. Empty means no log.
+			 * @param name Short leaf name (`scale`).
+			 * @param receives Kinds this filter consumes.
+			 * @param produces Kinds this filter emits.
+			 *
+			 * Called from @ref Process, @ref Packet and @ref Analytics.
+			 * Do not construct FFmpeg from a plugin.
+			 */
 			FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 				std::string name, Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
-			* @}
-			*/
+			 * @}
+			 */
 
 			/**
-			* @brief Writes one log line with component @c STMM and group @ref Name.
-			* @param level StormByte::Logger::Level of this line.
-			* @param message Already-formatted text.
-			*/
+			 * @brief Writes one log line with component @c STMM and group @ref Name.
+			 * @param level StormByte::Logger::Level of this line.
+			 * @param message Already-formatted text.
+			 */
 			void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
 
 			/**
-			* @brief Marks a hard error and wakes the filter. The job stops.
-			* @param reason Bare message.
-			*/
+			 * @brief Marks a hard error and wakes the filter. The job stops.
+			 * @param reason Bare message.
+			 */
 			void Fail(std::string reason) noexcept;
 
 			/**
-			* @brief Starts a Hold of at most @p n units.
-			*
-			* @p n of 0 means 255. Parks the current unit. Later
-			* units while Held are parked. @ref Release may
-			* run before the ceiling. @ref HeldFor equal to @p n is
-			* still valid; the next unit is @ref LastChance, not a
-			* park. A second Hold while @ref Held is @ref Fail.
-			*
-			* @param n Maximum units for this Hold.
-			*/
+			 * @brief Starts a Hold of at most @p n units.
+			 *
+			 * @p n of 0 means 255. Parks the current unit. Later
+			 * units while Held are parked. @ref Release may
+			 * run before the ceiling. @ref HeldFor equal to @p n is
+			 * still valid; the next unit is @ref LastChance, not a
+			 * park. A second Hold while @ref Held is @ref Fail.
+			 *
+			 * @param n Maximum units for this Hold.
+			 */
 			void Hold(std::uint8_t n) noexcept;
 
 			/**
-			* @brief Ends the Hold and replays parked units through
-			*        @ref Process, then Emit s them.
-			*
-			* Runs in the same call (not deferred). No-op if
-			* not @ref Held. Set probe state before calling this.
-			*/
+			 * @brief Ends the Hold and replays parked units through
+			 *        @ref Process, then Emit s them.
+			 *
+			 * Runs in the same call (not deferred). No-op if
+			 * not @ref Held. Set probe state before calling this.
+			 */
 			void Release() noexcept;
 
 			/**
-			* @brief Whether this filter is inside a Hold.
-			* @return true after @ref Hold and before @ref Release.
-			*/
+			 * @brief Whether this filter is inside a Hold.
+			 * @return true after @ref Hold and before @ref Release.
+			 */
 			bool Held() const noexcept;
 
 			/**
-			* @brief Units currently parked in the Hold queue.
-			* @return Count, or 0 if not Held.
-			*/
+			 * @brief Units currently parked in the Hold queue.
+			 * @return Count, or 0 if not Held.
+			 */
 			std::uint8_t HeldFor() const noexcept;
 
 			/**
-			* @brief Plugin-visible end-of-input hook. Default no-op.
-			*
-			* Called from @ref Finish after a Hold has been
-			* released or failed. Flush leftover plugin state
-			* here. Do not Emit from this hook.
-			*/
+			 * @brief Plugin-visible end-of-input hook. Default no-op.
+			 *
+			 * Called from @ref Finish after a Hold has been
+			 * released or failed. Flush leftover plugin state
+			 * here. Do not Emit from this hook.
+			 */
 			virtual void Eof() noexcept;
 
 			/**
-			* @brief Last look before the Hold must end.
-			*
-			* Called when one more unit would overflow the queue, and
-			* when input ends while still Held. Default no-op.
-			* Override to @ref Release with a sane default, or leave
-			* Held and let the job @ref Fail. Not called if the leaf
-			* never @ref Hold s.
-			*
-			* @param frame Current frame, or last parked frame on EoF.
-			*/
+			 * @brief Last look before the Hold must end.
+			 *
+			 * Called when one more unit would overflow the queue, and
+			 * when input ends while still Held. Default no-op.
+			 * Override to @ref Release with a sane default, or leave
+			 * Held and let the job @ref Fail. Not called if the leaf
+			 * never @ref Hold s.
+			 *
+			 * @param frame Current frame, or last parked frame on EoF.
+			 */
 			virtual void LastChance(const Pipeline::Frame& frame) noexcept;
 
 			/**
-			* @brief Last look before the Hold must end.
-			* @param packet Current packet, or last parked packet on EoF.
-			*/
+			 * @brief Last look before the Hold must end.
+			 * @param packet Current packet, or last parked packet on EoF.
+			 */
 			virtual void LastChance(const Pipeline::Packet& packet) noexcept;
 
 			/**
-			* @brief Borrowed RAII handle of the current frame.
-			* @return Backend wrapper of the unit in @ref Process,
-			*         or an empty handle if there is no current frame.
-			*
-			* The reference is valid only for this Work call. Do not
-			* store it. Do not free the underlying resource: the
-			* wrapper owns it. Prefer methods on the RAII type.
-			* If one is missing, the C API of the linked FFmpeg
-			* build is an escape only — open an issue for the gap.
-			*/
+			 * @brief Borrowed RAII handle of the current frame.
+			 * @return @ref StormByte::Multimedia::FFmpeg::AVFrame of the
+			 *         unit in @ref Process, or an empty handle if there
+			 *         is no current frame.
+			 *
+			 * Valid only for this Work call. Do not store it. Do not
+			 * free the resource: the wrapper owns it. Prefer methods
+			 * on the RAII type. If one is missing, the C API of the
+			 * linked FFmpeg build is an escape only — open an issue.
+			 */
 			const StormByte::Multimedia::FFmpeg::AVFrame& AVFrame() const noexcept;
 
 			/**
-			* @brief Borrowed RAII handle of the current packet.
-			* @return Backend wrapper of the unit in @ref Process,
-			*         or an empty handle if there is no current packet.
-			*
-			* The reference is valid only for this Work call. Do not
-			* store it. Do not free the underlying resource: the
-			* wrapper owns it. Prefer methods on the RAII type.
-			* If one is missing, the C API of the linked FFmpeg
-			* build is an escape only — open an issue for the gap.
-			*/
+			 * @brief Borrowed RAII handle of the current packet.
+			 * @return @ref StormByte::Multimedia::FFmpeg::AVPacket of the
+			 *         unit in @ref Process, or an empty handle if there
+			 *         is no current packet.
+			 *
+			 * Valid only for this Work call. Do not store it. Do not
+			 * free the resource: the wrapper owns it. Prefer methods
+			 * on the RAII type. If one is missing, the C API of the
+			 * linked FFmpeg build is an escape only — open an issue.
+			 */
 			const StormByte::Multimedia::FFmpeg::AVPacket& AVPacket() const noexcept;
 
 			/**
-			* @brief Replaces the backend of the current frame.
-			* @param incoming RAII frame. This call Detach s it and
-			*        takes ownership of the resource.
-			*
-			* Serial, Part and timing stay on the StormByte Frame.
-			* The backend holder runs Content::For(Type) on the raw
-			* pair, then Reset and BindProperties. The plugin does
-			* not pass a geometry hint.
-			*
-			* Content may drop coupled extras that would lie after
-			* the new card (HDR10+ windows, audio downmix). That is
-			* not @ref Fail. @ref Log writes @c Level::Warning with
-			* the holder's reason.
-			*/
+			 * @brief Replaces the media of the current frame.
+			 * @param incoming RAII frame taken by rvalue.
+			 *
+			 * Serial, Part and timing stay on the StormByte Frame.
+			 * The plugin does not pass a geometry hint. Coupled extras
+			 * that would lie after the new card may be dropped; that
+			 * is not @ref Fail. @ref Log writes @c Level::Warning with
+			 * the holder's reason.
+			 */
 			void Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept;
 
 			/**
-			* @brief Replaces the backend of the current packet.
-			* @param incoming RAII packet. This call Detach s it and
-			*        takes ownership of the resource.
-			*/
+			 * @brief Replaces the media of the current packet.
+			 * @param incoming RAII packet taken by rvalue.
+			 */
 			void Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept;
 
 		private:
 			class Surface;
 
 			/**
-			* @brief Clean + plugin Setup once before the first unit.
-			*/
+			 * @brief Clean + plugin Setup once before the first unit.
+			 */
 			void Open() noexcept;
 
 			/**
-			* @brief Process one unit. Save or passthrough. Park if Held.
-			* @param item Never empty.
-			*/
+			 * @brief Process one unit. Save or passthrough. Park if Held.
+			 * @param item Never empty.
+			 */
 			void Work(Pipeline::Item::PointerType item) noexcept;
 
 			/**
-			* @brief If Held, @ref LastChance on the last parked unit.
-			*        Still Held afterwards is Fail. Then @ref Eof.
-			*/
+			 * @brief If Held, @ref LastChance on the last parked unit.
+			 *        Still Held afterwards is Fail. Then @ref Eof.
+			 */
 			void Finish() noexcept;
 
 			/**
-			* @brief Parks @ref m_current if it is not already the tail.
-			*/
+			 * @brief Parks @ref m_current if it is not already the tail.
+			 */
 			void Park() noexcept;
 
 			/**
-			* @brief Dispatches @ref LastChance to the kind of @ref m_current.
-			*/
+			 * @brief Dispatches @ref LastChance to the kind of @ref m_current.
+			 */
 			void CallLastChance() noexcept;
 
 			/**
-			* @brief Write @p item to the Pipe (@c item >> pipe).
-			*/
+			 * @brief Write @p item to the Pipe (@c item >> pipe).
+			 */
 			void Emit(Pipeline::Item::PointerType item) noexcept;
 
 			/**
-			* @brief Sleeps on Wake until hopper Ready, Failed or Stopping.
-			*/
+			 * @brief Sleeps on Wake until hopper Ready, Failed or Stopping.
+			 */
 			void Wait() noexcept;
 
 			/**
-			* @brief Starts the pumper: Setup, Ready, Pump.
-			*/
+			 * @brief Starts the pumper: Setup, Ready, Pump.
+			 */
 			void Launch() noexcept;
 
 			/**
-			* @brief Stop and join the pumper.
-			*/
+			 * @brief Stop and join the pumper.
+			 */
 			void Halt() noexcept;
 
 			/**
-			* @brief Asks the worker to leave and closes hoppers.
-			*/
+			 * @brief Asks the worker to leave and closes hoppers.
+			 */
 			void Stop() noexcept;
 
 			/**
-			* @brief Worker must return.
-			*/
+			 * @brief Worker must return.
+			 */
 			bool Stopping() const noexcept;
 
 			/**
-			* @brief Owner surface for the Pumper and Worker.
-			*/
+			 * @brief Owner surface for the Pumper and Worker.
+			 */
 			Backend::Pipeline::Host& Face() noexcept;
 
 			/**
-			* @brief Consumer condition variable.
-			*/
+			 * @brief Consumer condition variable.
+			 */
 			std::condition_variable& Wake() noexcept;
 
 			/**
-			* @brief Eof on the Pipe.
-			*/
+			 * @brief Eof on the Pipe.
+			 */
 			void CloseHoppers() noexcept;
 
 			/**
-			* @brief Records one timed @ref Process call.
-			* @param microseconds Duration of that call.
-			*/
+			 * @brief Records one timed @ref Process call.
+			 * @param microseconds Duration of that call.
+			 */
 			void RecordWork(std::int64_t microseconds) noexcept;
 
 			/**
-			* @brief Writes the work timing summary to the logger.
-			*/
+			 * @brief Writes the work timing summary to the logger.
+			 */
 			void DumpWork() noexcept;
 
 			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger
@@ -632,264 +625,264 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 		protected:
 			/**
-			* @brief In / out hoppers of this filter.
-			* @return The composed Pipe.
-			*/
+			 * @brief In / out hoppers of this filter.
+			 * @return The composed Pipe.
+			 */
 			Backend::Pipeline::Pipe& pipe() noexcept;
 
 			/**
-			* @brief In / out hoppers of this filter.
-			* @return The composed Pipe.
-			*/
+			 * @brief In / out hoppers of this filter.
+			 * @return The composed Pipe.
+			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
 
-			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
+			std::unique_ptr<Surface> m_surface;						///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
-			std::mutex m_wait;									///< Mutex for m_wake
-			std::optional<std::string> m_error;					///< Fail message
-			bool m_exhausted;									///< Source Ended(); unused on Through
-			std::uint64_t m_workN;								///< Timed Process calls
-			std::int64_t m_workMin;								///< Fastest Process, us
-			std::int64_t m_workMax;								///< Slowest Process, us
+			std::mutex m_wait;										///< Mutex for m_wake
+			std::optional<std::string> m_error;						///< Fail message
+			bool m_exhausted;										///< Source Ended(); unused on Through
+			std::uint64_t m_workN;									///< Timed Process calls
+			std::int64_t m_workMin;									///< Fastest Process, us
+			std::int64_t m_workMax;									///< Slowest Process, us
 			std::int64_t m_lastWork;								///< Last Process, us
-			Pipeline::Item::PointerType m_current;				///< Unit of this Work call
-			std::deque<Pipeline::Item::PointerType> m_queue;	///< Thread-local Hold
-			std::uint8_t m_hold;								///< Ceiling; 0 = not Held
-			std::uint8_t m_heldFor;								///< Parked count
+			Pipeline::Item::PointerType m_current;					///< Unit of this Work call
+			std::deque<Pipeline::Item::PointerType> m_queue;		///< Thread-local Hold
+			std::uint8_t m_hold;									///< Ceiling; 0 = not Held
+			std::uint8_t m_heldFor;									///< Parked count
 	};
 
 	/**
-	* @class Process
-	* @brief Mutates decoded frames. May also take packets.
-	*
-	* Inherit this for a video / audio / subtitle filter that
-	* rewrites planes (watermark, scale, tonemap). The short
-	* constructor sets Receives and Produces to
-	* @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
-	* also handles packets uses the longer constructor.
-	* Implement @ref FFmpeg::Process(const Pipeline::Frame&) and,
-	* if the mask includes Packet,
-	* @ref FFmpeg::Process(const Pipeline::Packet&). Use @ref AVFrame
-	* / @ref AVPacket and @ref Save. Do not declare a method named
-	* Process on this class: that is a constructor.
-	*/
+	 * @class Process
+	 * @brief Mutates decoded frames. May also take packets.
+	 *
+	 * Inherit this for a video / audio / subtitle filter that
+	 * rewrites planes (watermark, scale, tonemap). The short
+	 * constructor sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Frame. A leaf that
+	 * also handles packets uses the longer constructor.
+	 * Implement @ref FFmpeg::Process(const Pipeline::Frame&) and,
+	 * if the mask includes Packet,
+	 * @ref FFmpeg::Process(const Pipeline::Packet&). Use @ref AVFrame
+	 * / @ref AVPacket and @ref Save. Do not declare a method named
+	 * Process on this class: that is a constructor.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Process: public FFmpeg {
 		public:
 			/**
-			* @brief Copy is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Copy is not allowed. The tube owns the mounted leaf.
+			 */
 			Process(const Process& other) = delete;
 
 			/**
-			* @brief Move is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Move is not allowed. The tube owns the mounted leaf.
+			 */
 			Process(Process&& other) noexcept = delete;
 
 			/**
-			* @brief Releases only plugin resources. Does not Halt.
-			*/
+			 * @brief Releases only plugin resources. Does not Halt.
+			 */
 			~Process() noexcept override = default;
 
 			/**
-			* @brief Copy assignment is not allowed.
-			*/
+			 * @brief Copy assignment is not allowed.
+			 */
 			Process& operator=(const Process& other) = delete;
 
 			/**
-			* @brief Move assignment is not allowed.
-			*/
+			 * @brief Move assignment is not allowed.
+			 */
 			Process& operator=(Process&& other) noexcept = delete;
 
 		protected:
 			/**
-			* @brief Named process node. Frame to Frame.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			*/
+			 * @brief Named process node. Frame to Frame.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 */
 			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
-			* @brief Named process node with an explicit mask.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			* @param receives Kinds this leaf consumes.
-			* @param produces Kinds this leaf emits.
-			*/
+			 * @brief Named process node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 */
 			Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
-	* @class Packet
-	* @brief Mutates compressed packets.
-	*
-	* Inherit this for a bitstream filter. The short constructor
-	* sets Receives and Produces to
-	* @ref StormByte::Multimedia::Pipeline::Kind::Packet.
-	*/
+	 * @class Packet
+	 * @brief Mutates compressed packets.
+	 *
+	 * Inherit this for a bitstream filter. The short constructor
+	 * sets Receives and Produces to
+	 * @ref StormByte::Multimedia::Pipeline::Kind::Packet.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Packet: public FFmpeg {
 		public:
 			/**
-			* @brief Copy is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Copy is not allowed. The tube owns the mounted leaf.
+			 */
 			Packet(const Packet& other) = delete;
 
 			/**
-			* @brief Move is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Move is not allowed. The tube owns the mounted leaf.
+			 */
 			Packet(Packet&& other) noexcept = delete;
 
 			/**
-			* @brief Releases only plugin resources. Does not Halt.
-			*/
+			 * @brief Releases only plugin resources. Does not Halt.
+			 */
 			~Packet() noexcept override = default;
 
 			/**
-			* @brief Copy assignment is not allowed.
-			*/
+			 * @brief Copy assignment is not allowed.
+			 */
 			Packet& operator=(const Packet& other) = delete;
 
 			/**
-			* @brief Move assignment is not allowed.
-			*/
+			 * @brief Move assignment is not allowed.
+			 */
 			Packet& operator=(Packet&& other) noexcept = delete;
 
 		protected:
 			/**
-			* @brief Named packet node. Packet to Packet.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			*/
+			 * @brief Named packet node. Packet to Packet.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 */
 			Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
-			* @brief Named packet node with an explicit mask.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			* @param receives Kinds this leaf consumes.
-			* @param produces Kinds this leaf emits.
-			*/
+			 * @brief Named packet node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 */
 			Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 	};
 
 	/**
-	* @class Analytics
-	* @brief Measures units. Does not rewrite them.
-	*
-	* Inherit this to observe decoded frames (VMAF, loudness).
-	* The plugin does not open a decoder and does not see packets.
-	*
-	* Implement @ref Process(const Pipeline::Frame&) only.
-	* @ref StormByte::Multimedia::Pipeline::Item::Producer is
-	* Decoder on the reference look and Encoder or Remuxer on
-	* the distorted look. Pair them in presentation order per
-	* @ref Pipeline::Frame::Track. Do not Hold: both looks
-	* arrive on the same Process and a Hold would mix them.
-	*
-	* The short constructor Receives Frame and Produces Frame.
-	*
-	* @ref Save, @ref Hold, @ref Release, @ref Held, @ref HeldFor
-	* and @ref LastChance are deleted because an analytics leaf
-	* must not rewrite units and must not park a mixed pair of
-	* looks. @ref Eof, @ref Clean, @ref Setup and @ref Report
-	* remain. A low score is not Fail.
-	*
-	* There is no method named Analytics on this class: that
-	* would be a constructor.
-	*/
+	 * @class Analytics
+	 * @brief Measures units. Does not rewrite them.
+	 *
+	 * Inherit this to observe decoded frames (VMAF, loudness).
+	 * The plugin does not open a decoder and does not see packets.
+	 *
+	 * Implement @ref Process(const Pipeline::Frame&) only.
+	 * @ref StormByte::Multimedia::Pipeline::Item::Producer is
+	 * Decoder on the reference look and Encoder or Remuxer on
+	 * the distorted look. Pair them in presentation order per
+	 * @ref Pipeline::Frame::Track. Do not Hold: both looks
+	 * arrive on the same Process and a Hold would mix them.
+	 *
+	 * The short constructor Receives Frame and Produces Frame.
+	 *
+	 * @ref Save, @ref Hold, @ref Release, @ref Held, @ref HeldFor
+	 * and @ref LastChance are deleted because an analytics leaf
+	 * must not rewrite units and must not park a mixed pair of
+	 * looks. @ref Eof, @ref Clean, @ref Setup and @ref Report
+	 * remain. A low score is not Fail.
+	 *
+	 * There is no method named Analytics on this class: that
+	 * would be a constructor.
+	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Analytics: public FFmpeg {
 		public:
 			/**
-			* @brief Copy is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Copy is not allowed. The tube owns the mounted leaf.
+			 */
 			Analytics(const Analytics& other) = delete;
 
 			/**
-			* @brief Move is not allowed. The tube owns the mounted leaf.
-			*/
+			 * @brief Move is not allowed. The tube owns the mounted leaf.
+			 */
 			Analytics(Analytics&& other) noexcept = delete;
 
 			/**
-			* @brief Releases only plugin resources. Does not Halt.
-			*/
+			 * @brief Releases only plugin resources. Does not Halt.
+			 */
 			~Analytics() noexcept override = default;
 
 			/**
-			* @brief Copy assignment is not allowed.
-			*/
+			 * @brief Copy assignment is not allowed.
+			 */
 			Analytics& operator=(const Analytics& other) = delete;
 
 			/**
-			* @brief Move assignment is not allowed.
-			*/
+			 * @brief Move assignment is not allowed.
+			 */
 			Analytics& operator=(Analytics&& other) noexcept = delete;
 
 		protected:
 			/**
-			* @brief Named analytics node.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			*
-			* Receives Frame. Produces Frame.
-			*/
+			 * @brief Named analytics node.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 *
+			 * Receives Frame. Produces Frame.
+			 */
 			Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept;
 
 			/**
-			* @brief Named analytics node with an explicit mask.
-			* @param log Shared logger. Empty pointer means no log.
-			* @param name Short leaf name.
-			* @param receives Kinds this leaf consumes.
-			* @param produces Kinds this leaf emits.
-			*/
+			 * @brief Named analytics node with an explicit mask.
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param name Short leaf name.
+			 * @param receives Kinds this leaf consumes.
+			 * @param produces Kinds this leaf emits.
+			 */
 			Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 				Pipeline::Kinds receives, Pipeline::Kinds produces) noexcept;
 
 			/**
-			* @brief Deleted. Analytics must not rewrite the current frame.
-			* @param incoming Ignored.
-			*/
+			 * @brief Deleted. Analytics must not rewrite the current frame.
+			 * @param incoming Ignored.
+			 */
 			void Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept = delete;
 
 			/**
-			* @brief Deleted. Analytics never sees packets and must not rewrite them.
-			* @param incoming Ignored.
-			*/
+			 * @brief Deleted. Analytics never sees packets and must not rewrite them.
+			 * @param incoming Ignored.
+			 */
 			void Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept = delete;
 
 			/**
-			* @brief Deleted. Holding would mix reference and distorted looks.
-			* @param n Ignored.
-			*/
+			 * @brief Deleted. Holding would mix reference and distorted looks.
+			 * @param n Ignored.
+			 */
 			void Hold(std::uint8_t n) noexcept = delete;
 
 			/**
-			* @brief Deleted. There is no Hold on Analytics.
-			*/
+			 * @brief Deleted. There is no Hold on Analytics.
+			 */
 			void Release() noexcept = delete;
 
 			/**
-			* @brief Deleted. There is no Hold on Analytics.
-			*/
+			 * @brief Deleted. There is no Hold on Analytics.
+			 */
 			bool Held() const noexcept = delete;
 
 			/**
-			* @brief Deleted. There is no Hold on Analytics.
-			*/
+			 * @brief Deleted. There is no Hold on Analytics.
+			 */
 			std::uint8_t HeldFor() const noexcept = delete;
 
 			/**
-			* @brief Unused on Analytics. Hold is not allowed here.
-			* @param frame Ignored.
-			*/
+			 * @brief Unused on Analytics. Hold is not allowed here.
+			 * @param frame Ignored.
+			 */
 			void LastChance(const Pipeline::Frame& frame) noexcept override {
 				(void)frame;
 			}
 
 			/**
-			* @brief Unused on Analytics. Packets never arrive here.
-			* @param packet Ignored.
-			*/
+			 * @brief Unused on Analytics. Packets never arrive here.
+			 * @param packet Ignored.
+			 */
 			void LastChance(const Pipeline::Packet& packet) noexcept override {
 				(void)packet;
 			}
