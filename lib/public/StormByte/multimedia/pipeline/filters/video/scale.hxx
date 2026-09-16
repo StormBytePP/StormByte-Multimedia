@@ -113,7 +113,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			/**
 			 * @brief Destructor.
 			 */
-			~Scale() noexcept override = default;
+			~Scale() noexcept override;
 
 			/**
 			 * @brief Copy assignment.

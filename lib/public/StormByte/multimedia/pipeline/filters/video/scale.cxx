@@ -57,6 +57,10 @@ Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 : Filter::Process(std::move(log), "scale"),
 	m_width(resolution.Width()), m_height(resolution.Height()) {}
 
+Scale::~Scale() noexcept {
+	Halt();
+}
+
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	std::uint32_t width, std::uint32_t height) noexcept
 : Filter::Process(std::move(log), "scale"),
