@@ -48,6 +48,7 @@
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
 	#include <libavutil/channel_layout.h>
 	#include <libavutil/mastering_display_metadata.h>
 	#include <libavutil/pixfmt.h>
@@ -71,11 +72,11 @@ namespace {
 	constexpr int ChromaDenominator = 50000;
 	constexpr int LuminanceDenominator = 10000;
 
-	Point FromChromaPair(const AVRational& x, const AVRational& y) noexcept {
+	Point FromChromaPair(const ::AVRational& x, const ::AVRational& y) noexcept {
 		return Point::Normalized(x.num, x.den, y.num, y.den, ChromaDenominator);
 	}
 
-	Point FromLuminancePair(const AVRational& minNits, const AVRational& maxNits) noexcept {
+	Point FromLuminancePair(const ::AVRational& minNits, const ::AVRational& maxNits) noexcept {
 		return Point::Normalized(minNits.num, minNits.den, maxNits.num, maxNits.den, LuminanceDenominator);
 	}
 
@@ -330,7 +331,7 @@ namespace {
 		}
 	}
 
-	ChannelLayout MapChannelLayout(const AVChannelLayout* layout) noexcept {
+	ChannelLayout MapChannelLayout(const ::AVChannelLayout* layout) noexcept {
 		if (!layout || layout->order != AV_CHANNEL_ORDER_NATIVE)
 			return ChannelLayout::Unknown;
 		switch (layout->u.mask) {
