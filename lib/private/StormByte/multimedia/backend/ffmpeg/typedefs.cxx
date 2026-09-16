@@ -36,46 +36,14 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#pragma once
+#include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
-#include <StormByte/expected.hxx>
-#include <StormByte/multimedia/backend/ffmpeg/exception.hxx>
+extern "C" {
+	#include <libavutil/error.h>
+}
 
-#include <set>
-#include <string>
-
-/**
- * @namespace StormByte::Multimedia::Backend::FFmpeg
- * @brief Private RAII wrappers over libav*.
- */
-namespace StormByte::Multimedia::Backend::FFmpeg {
-	/**
-	 * @enum OperationResult
-	 * @brief Result of send/receive style FFmpeg calls.
-	 */
-	enum STORMBYTE_MULTIMEDIA_PRIVATE OperationResult {
-		Success,	///< Completed successfully
-		EndOfFile,	///< EOF reached
-		Error,		///< Hard error
-		TryAgain	///< EAGAIN — need more input/output
-	};
-
-	class AVBSF;
-	class AVDecoder;
-	class AVEncoder;
-	class AVFormatContext;
-	class AVStream;
-
-	using ExpectedAVFormatContext = StormByte::Expected<AVFormatContext, FFmpeg::DecoderError>;	///< Open demuxer
-	using ExpectedAVDecoder = StormByte::Expected<AVDecoder, FFmpeg::DecoderError>;			///< Open decoder
-	using ExpectedAVEncoder = StormByte::Expected<AVEncoder, FFmpeg::EncoderError>;			///< Open encoder
-	using ExpectedAVBSF = StormByte::Expected<AVBSF, FFmpeg::BSFError>;				///< Create BSF
-	using Streams = std::set<AVStream>;								///< Stream set
-
-	/**
-	 * @brief Converts an FFmpeg error code to a string.
-	 * @param errnum Code from av_strerror.
-	 * @return Human-readable message.
-	 */
-	STORMBYTE_MULTIMEDIA_PRIVATE std::string ErrorToString(int errnum);
+std::string StormByte::Multimedia::Backend::FFmpeg::ErrorToString(int errnum) {
+	char buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+	av_strerror(errnum, buf, sizeof(buf));
+	return buf;
 }

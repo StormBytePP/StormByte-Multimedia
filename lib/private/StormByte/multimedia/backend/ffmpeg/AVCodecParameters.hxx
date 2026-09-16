@@ -38,15 +38,14 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/AVChannelLayout.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/property/hdr10.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
-
-extern "C" {
-	#include <libavcodec/avcodec.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -149,6 +148,18 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			void Height(int height) noexcept;
 
 			/**
+			 * @brief Pixel aspect ratio (`sample_aspect_ratio`).
+			 * @return `{num, den}`, or `{0, 1}` if unknown.
+			 */
+			AVRational SampleAspectRatio() const noexcept;
+
+			/**
+			 * @brief Sets pixel aspect ratio.
+			 * @param sar `{num, den}` like libav.
+			 */
+			void SampleAspectRatio(AVRational sar) noexcept;
+
+			/**
 			 * @brief Pixel or sample format.
 			 * @return Format as int, or `AV_PIX_FMT_NONE`.
 			 */
@@ -242,7 +253,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Channel layout owned by this wrapper.
 			 * @return Layout, or nullptr.
 			 */
-			const AVChannelLayout* ChannelLayout() const noexcept;
+			AVChannelLayout ChannelLayout() const noexcept;
 
 			/**
 			 * @brief Replaces the layout with FFmpeg's default for @p channels.

@@ -38,9 +38,9 @@
 
 #pragma once
 
+#include <StormByte/multimedia/property/av_rational.hxx>
 #include <StormByte/multimedia/property/color.hxx>
 #include <StormByte/multimedia/property/hdr10.hxx>
-#include <StormByte/multimedia/property/rate.hxx>
 #include <StormByte/multimedia/property/resolution.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -62,11 +62,13 @@ namespace StormByte::Multimedia::Property {
 			 * @param color Colorimetry and pixel format.
 			 * @param resolution Frame size.
 			 * @param hdr10 Optional mastering-display metadata.
-			 * @param frameRate Frames per second from the container/stream. Empty if unknown.
+			 * @param frameRate Frames per second (`{num, den}` like libav). Empty if unknown.
+			 * @param sampleAspectRatio Pixel aspect (`sample_aspect_ratio`). Empty if unknown.
 			 */
 			Video(Color color, Resolution resolution,
 				std::optional<HDR10> hdr10 = std::nullopt,
-				std::optional<Rate> frameRate = std::nullopt) noexcept;
+				std::optional<AVRational> frameRate = std::nullopt,
+				std::optional<AVRational> sampleAspectRatio = std::nullopt) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -115,14 +117,21 @@ namespace StormByte::Multimedia::Property {
 
 			/**
 			 * @brief Stream frame rate, if the container exposed one.
-			 * @return Rate in frames per second, or empty.
+			 * @return AVRational fps (`{24000, 1001}` for 23.976), or empty.
 			 */
-			const std::optional<class Rate>& FrameRate() const noexcept;
+			const std::optional<AVRational>& FrameRate() const noexcept;
+
+			/**
+			 * @brief Pixel aspect ratio (`sample_aspect_ratio`).
+			 * @return AVRational SAR (`{8, 9}` anamorphic NTSC, `{1, 1}` square), or empty.
+			 */
+			const std::optional<AVRational>& SampleAspectRatio() const noexcept;
 
 		private:
 			class Color m_color;						///< Color
 			class Resolution m_resolution;			///< Frame size
 			std::optional<class HDR10> m_hdr10;		///< Optional HDR10
-			std::optional<class Rate> m_frameRate;	///< Optional fps
+			std::optional<AVRational> m_frameRate;	///< Optional fps
+			std::optional<AVRational> m_sar;		///< Optional sample aspect ratio
 	};
 }

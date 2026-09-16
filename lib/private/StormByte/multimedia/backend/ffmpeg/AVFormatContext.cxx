@@ -55,8 +55,10 @@
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
 	#include <libavformat/avio.h>
 	#include <libavutil/mastering_display_metadata.h>
+	#include <libavutil/mathematics.h>
 	#include <libavutil/mem.h>
 }
 
@@ -325,7 +327,7 @@ const char* FFmpeg::AVFormatContext::Tag(const char* key) const noexcept {
 std::optional<std::chrono::nanoseconds> FFmpeg::AVFormatContext::Duration() const noexcept {
 	if (!m_ptr || m_ptr->duration == AV_NOPTS_VALUE)
 		return std::nullopt;
-	const std::int64_t ns = av_rescale_q(m_ptr->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, 1000000000});
+	const std::int64_t ns = av_rescale_q(m_ptr->duration, ::AVRational{1, AV_TIME_BASE}, ::AVRational{1, 1000000000});
 	if (ns < 0)
 		return std::nullopt;
 	return std::chrono::nanoseconds{ns};

@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/Sws.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 
 #include <cstdint>
 #include <cstring>
@@ -272,14 +273,15 @@ bool FFmpeg::AVFrame::AllocVideo(int width, int height, int format, int align) n
 	return GetBuffer(align);
 }
 
-bool FFmpeg::AVFrame::AllocAudio(int nb_samples, int format, const AVChannelLayout& layout, int sample_rate) noexcept {
+bool FFmpeg::AVFrame::AllocAudio(int nb_samples, int format, const FFmpeg::AVChannelLayout& layout, int sample_rate) noexcept {
 	if (!m_ptr || nb_samples <= 0)
 		return false;
 	Unref();
 	m_ptr->nb_samples = nb_samples;
 	m_ptr->format = format;
 	m_ptr->sample_rate = sample_rate;
-	if (av_channel_layout_copy(&m_ptr->ch_layout, &layout) < 0)
+	const auto* raw = FFmpeg::ToRaw(layout);
+	if (!raw || av_channel_layout_copy(&m_ptr->ch_layout, raw) < 0)
 		return false;
 	return GetBuffer(0);
 }
@@ -375,13 +377,13 @@ void FFmpeg::AVFrame::ChromaLocation(int location) noexcept {
 		m_ptr->chroma_location = static_cast<AVChromaLocation>(location);
 }
 
-AVRational FFmpeg::AVFrame::SampleAspectRatio() const noexcept {
-	return m_ptr ? m_ptr->sample_aspect_ratio : AVRational{0, 1};
+FFmpeg::AVRational FFmpeg::AVFrame::SampleAspectRatio() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->sample_aspect_ratio) : FFmpeg::AVRational{0, 1};
 }
 
-void FFmpeg::AVFrame::SampleAspectRatio(AVRational sar) noexcept {
+void FFmpeg::AVFrame::SampleAspectRatio(FFmpeg::AVRational sar) noexcept {
 	if (m_ptr)
-		m_ptr->sample_aspect_ratio = sar;
+		m_ptr->sample_aspect_ratio = FFmpeg::ToRaw(sar);
 }
 
 int FFmpeg::AVFrame::PictType() const noexcept {
@@ -583,12 +585,13 @@ int FFmpeg::AVFrame::Channels() const noexcept {
 	return m_ptr ? m_ptr->ch_layout.nb_channels : 0;
 }
 
-const AVChannelLayout* FFmpeg::AVFrame::ChannelLayout() const noexcept {
-	return m_ptr ? &m_ptr->ch_layout : nullptr;
+FFmpeg::AVChannelLayout FFmpeg::AVFrame::ChannelLayout() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->ch_layout) : FFmpeg::AVChannelLayout{};
 }
 
-bool FFmpeg::AVFrame::CopyChannelLayout(const AVChannelLayout& layout) noexcept {
-	return m_ptr && av_channel_layout_copy(&m_ptr->ch_layout, &layout) >= 0;
+bool FFmpeg::AVFrame::CopyChannelLayout(const FFmpeg::AVChannelLayout& layout) noexcept {
+	const auto* raw = FFmpeg::ToRaw(layout);
+	return m_ptr && raw && av_channel_layout_copy(&m_ptr->ch_layout, raw) >= 0;
 }
 
 uint8_t** FFmpeg::AVFrame::ExtendedData() noexcept {

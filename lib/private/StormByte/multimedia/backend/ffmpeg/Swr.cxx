@@ -38,6 +38,11 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/Swr.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+
+extern "C" {
+	#include <libswresample/swresample.h>
+}
 
 using namespace StormByte::Multimedia::Backend;
 
@@ -52,11 +57,16 @@ FFmpeg::Swr::operator bool() const noexcept {
 	return m_ptr != nullptr;
 }
 
-FFmpeg::Swr FFmpeg::Swr::Open(const AVChannelLayout& out_layout, int out_fmt, int out_rate,
-	const AVChannelLayout& in_layout, int in_fmt, int in_rate) noexcept {
+FFmpeg::Swr FFmpeg::Swr::Open(const FFmpeg::AVChannelLayout& out_layout, int out_fmt, int out_rate,
+	const FFmpeg::AVChannelLayout& in_layout, int in_fmt, int in_rate) noexcept {
 	SwrContext* ctx = nullptr;
-	if (swr_alloc_set_opts2(&ctx, &out_layout, static_cast<AVSampleFormat>(out_fmt), out_rate,
-		&in_layout, static_cast<AVSampleFormat>(in_fmt), in_rate, 0, nullptr) < 0) {
+	const auto* outRaw = FFmpeg::ToRaw(out_layout);
+	const auto* inRaw = FFmpeg::ToRaw(in_layout);
+	if (!outRaw || !inRaw) {
+		return Swr(nullptr);
+	}
+	if (swr_alloc_set_opts2(&ctx, outRaw, static_cast<AVSampleFormat>(out_fmt), out_rate,
+		inRaw, static_cast<AVSampleFormat>(in_fmt), in_rate, 0, nullptr) < 0) {
 		swr_free(&ctx);
 		return Swr(nullptr);
 	}
@@ -88,4 +98,4 @@ void FFmpeg::Swr::Free() noexcept {
 		swr_free(&m_ptr);
 }
 
-template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<SwrContext>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::SwrContext>;

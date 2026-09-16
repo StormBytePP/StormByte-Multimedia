@@ -38,8 +38,9 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVStream.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/property.hxx>
-#include <StormByte/multimedia/property/rate.hxx>
+#include <StormByte/multimedia/property/av_rational.hxx>
 
 #include <cstdint>
 #include <optional>
@@ -61,7 +62,6 @@ using StormByte::Multimedia::Property::PixelFormat;
 using StormByte::Multimedia::Property::Point;
 using StormByte::Multimedia::Property::Primaries;
 using StormByte::Multimedia::Property::Range;
-using StormByte::Multimedia::Property::Rate;
 using StormByte::Multimedia::Property::Resolution;
 using StormByte::Multimedia::Property::Space;
 using StormByte::Multimedia::Property::Transfer;
@@ -89,6 +89,12 @@ namespace {
 			return nullptr;
 		size = sd->size;
 		return sd->data;
+	}
+
+	std::optional<StormByte::Multimedia::Property::AVRational> IfValid(FFmpeg::AVRational r) noexcept {
+		if (!r.Valid())
+			return std::nullopt;
+		return r;
 	}
 
 	bool LooksLikeHDR10(Transfer transfer, Primaries primaries) noexcept {
@@ -374,14 +380,6 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 			const auto space = MapSpace(params.ColorSpace());
 			const auto primaries = MapPrimaries(params.ColorPrimaries());
 			const auto transfer = MapTransfer(params.ColorTransfer());
-			std::optional<Rate> frameRate;
-			if (const auto* raw = stream.Raw()) {
-				AVRational fps = raw->avg_frame_rate;
-				if (fps.num <= 0 || fps.den <= 0)
-					fps = raw->r_frame_rate;
-				if (fps.num > 0 && fps.den > 0)
-					frameRate = Rate{fps.num, fps.den};
-			}
 
 			return Video{
 				Color{pix, range, space, primaries, transfer},
@@ -390,7 +388,8 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 					static_cast<std::uint32_t>(params.Height())
 				},
 				MapHDR10(stream.Raw(), transfer, primaries),
-				std::move(frameRate)
+				IfValid(stream.FrameRateRational()),
+				IfValid(stream.SampleAspectRatio())
 			};
 		}
 
@@ -405,7 +404,7 @@ StormByte::Multimedia::Stream::Properties FFmpeg::MapProperties(const AVStream& 
 				profile = name;
 			const auto bitRate = params.BitRate();
 			return Audio{
-				MapChannelLayout(params.ChannelLayout()),
+				MapChannelLayout(FFmpeg::ToRaw(params.ChannelLayout())),
 				static_cast<std::uint32_t>(sampleRate > 0 ? sampleRate : 0),
 				static_cast<std::uint8_t>(channels > 0 ? channels : 0),
 				bitRate > 0 ? static_cast<std::uint64_t>(bitRate) : 0,

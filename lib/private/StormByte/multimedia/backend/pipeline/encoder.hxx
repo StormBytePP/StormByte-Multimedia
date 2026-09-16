@@ -57,7 +57,6 @@
 
 extern "C" {
 	struct AVCodecContext;
-	#include <libavutil/rational.h>
 }
 
 /**
@@ -67,6 +66,7 @@ extern "C" {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline {
+	using FFmpeg::AVRational;
 	/**
 	 * @class Encoder
 	 * @brief Encode backend behind one public Encoder.

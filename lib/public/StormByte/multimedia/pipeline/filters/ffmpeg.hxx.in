@@ -141,6 +141,15 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * not `av_frame_free` / `av_packet_free` a pointer @ref AVFrame
 	 * or @ref AVPacket returned. @ref Save takes ownership of @p raw.
 	 *
+	 * StormByte value types that a filter already sees through
+	 * @ref Pipeline::Frame keep the C names where they pair:
+	 * @ref StormByte::Multimedia::Property::AVRational is `{num, den}`
+	 * (`AVRational{24000, 1001}`, `fps.num`, `fps.den`). Convert to
+	 * `::AVRational` with `{r.num, r.den}`. On @ref Property::Video that
+	 * is @c FrameRate and @c SampleAspectRatio. Speaker layout is
+	 * @ref StormByte::Multimedia::Property::ChannelLayout, a curated
+	 * enum — not `AVChannelLayout`.
+	 *
 	 * @par Logging
 	 * The owner of the tube passes a
 	 * @c std::shared_ptr<StormByte::Logger::Log> as the first

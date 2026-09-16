@@ -38,10 +38,14 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/Dictionary.hxx>
 
+extern "C" {
+	#include <libavutil/dict.h>
+}
+
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::Dictionary::Dictionary() noexcept
-: AVPointer(static_cast<AVDictionary*>(nullptr)) {}
+: AVPointer(static_cast<::AVDictionary*>(nullptr)) {}
 
 FFmpeg::Dictionary::~Dictionary() noexcept {
 	Free();
@@ -72,4 +76,4 @@ void FFmpeg::Dictionary::Free() noexcept {
 	av_dict_free(&m_ptr);
 }
 
-template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<AVDictionary>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVDictionary>;

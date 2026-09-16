@@ -279,7 +279,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			auto hdr = MapFrameHDR10(holder->Handle(),
 				owner.Flags().Has(DecoderFlag::HeuristicsHDR10), *video);
 			video = StormByte::Multimedia::Property::Video(
-				video->Color(), video->Resolution(), std::move(hdr), video->FrameRate());
+				video->Color(), video->Resolution(), std::move(hdr), video->FrameRate(),
+				video->SampleAspectRatio());
 		}
 
 		auto frame = std::shared_ptr<StormByte::Multimedia::Pipeline::Frame>(

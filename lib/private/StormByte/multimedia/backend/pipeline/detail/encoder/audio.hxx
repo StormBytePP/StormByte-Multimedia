@@ -54,10 +54,6 @@
 #include <memory>
 #include <optional>
 
-extern "C" {
-	#include <libavutil/rational.h>
-}
-
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder
  * @brief Per-media encode backends.
@@ -65,6 +61,7 @@ extern "C" {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
+	using FFmpeg::AVRational;
 	/**
 	 * @class Audio
 	 * @brief Audio encode backend for one public Encoder.

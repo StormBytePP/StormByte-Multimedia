@@ -39,11 +39,8 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
-
-extern "C" {
-	#include <libswscale/swscale.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -56,7 +53,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @class Sws
 	 * @brief RAII `SwsContext` for video scale / convert.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Sws: public AVPointer<SwsContext> {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Sws: public AVPointer<::SwsContext> {
 		public:
 			/**
 			 * @brief Move constructor. Transfers the scaler.
@@ -123,7 +120,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Adopts an opened `SwsContext`.
 			 * @param ctx libswscale context, or nullptr.
 			 */
-			explicit Sws(SwsContext* ctx) noexcept;
+			explicit Sws(::SwsContext* ctx) noexcept;
 
 			/**
 			 * @brief Deleted. Use @ref Open; an empty scaler is not useful.
@@ -135,7 +132,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			void Free() noexcept override;
 
-			using AVPointer<SwsContext>::Get;
+			using AVPointer<::SwsContext>::Get;
 
 			int m_srcW = 0;		///< Cached source width
 			int m_srcH = 0;		///< Cached source height
@@ -146,5 +143,5 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			int m_flags = 0;	///< Cached libswscale flags
 	};
 
-	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<SwsContext>;
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::SwsContext>;
 }

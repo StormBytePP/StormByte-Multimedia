@@ -53,11 +53,6 @@
 #include <optional>
 #include <string>
 
-extern "C" {
-	#include <libavutil/avutil.h>
-	#include <libavutil/rational.h>
-}
-
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder
  * @brief Per-media encode backends.
@@ -65,6 +60,7 @@ extern "C" {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder {
+	using FFmpeg::AVRational;
 	/**
 	 * @class Subtitle
 	 * @brief Subtitle encode backend for one public Encoder.

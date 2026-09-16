@@ -41,13 +41,17 @@
 using namespace StormByte::Multimedia::Property;
 
 Video::Video(class Color color, class Resolution resolution,
-	std::optional<class HDR10> hdr10, std::optional<class Rate> frameRate) noexcept:
+	std::optional<class HDR10> hdr10, std::optional<AVRational> frameRate,
+	std::optional<AVRational> sampleAspectRatio) noexcept:
 m_color(std::move(color)),
 m_resolution(std::move(resolution)),
 m_hdr10(std::move(hdr10)),
-m_frameRate(std::move(frameRate)) {
+m_frameRate(std::move(frameRate)),
+m_sar(std::move(sampleAspectRatio)) {
 	if (m_frameRate && !m_frameRate->Valid())
 		m_frameRate.reset();
+	if (m_sar && !m_sar->Valid())
+		m_sar.reset();
 }
 
 const class Color& Video::Color() const noexcept {
@@ -62,6 +66,10 @@ const std::optional<class HDR10>& Video::HDR10() const noexcept {
 	return m_hdr10;
 }
 
-const std::optional<class Rate>& Video::FrameRate() const noexcept {
+const std::optional<AVRational>& Video::FrameRate() const noexcept {
 	return m_frameRate;
+}
+
+const std::optional<AVRational>& Video::SampleAspectRatio() const noexcept {
+	return m_sar;
 }

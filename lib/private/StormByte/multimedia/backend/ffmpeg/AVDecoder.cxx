@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -134,12 +135,12 @@ int FFmpeg::AVDecoder::StreamIndex() const noexcept {
 	return m_stream_index;
 }
 
-AVRational FFmpeg::AVDecoder::TimeBase() const noexcept {
+FFmpeg::AVRational FFmpeg::AVDecoder::TimeBase() const noexcept {
 	if (!m_ptr)
-		return AVRational{0, 1};
+		return FFmpeg::AVRational{0, 1};
 	if (m_ptr->pkt_timebase.num > 0 && m_ptr->pkt_timebase.den > 0)
-		return m_ptr->pkt_timebase;
-	return m_ptr->time_base;
+		return FFmpeg::FromRaw(m_ptr->pkt_timebase);
+	return FFmpeg::FromRaw(m_ptr->time_base);
 }
 
 void FFmpeg::AVDecoder::Flush() noexcept {

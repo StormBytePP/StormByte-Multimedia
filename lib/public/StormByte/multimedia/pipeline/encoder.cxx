@@ -230,6 +230,11 @@ bool Encoder::MuxBindStream(void* avStream) noexcept {
 			delay = 2;
 		if (delay > 0)
 			stream->codecpar->video_delay = delay;
+		if (ctx->sample_aspect_ratio.num > 0 && ctx->sample_aspect_ratio.den > 0) {
+			stream->sample_aspect_ratio = ctx->sample_aspect_ratio;
+			if (stream->codecpar)
+				stream->codecpar->sample_aspect_ratio = ctx->sample_aspect_ratio;
+		}
 	}
 
 	return true;

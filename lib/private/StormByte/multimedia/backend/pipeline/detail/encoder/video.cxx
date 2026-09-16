@@ -156,7 +156,7 @@ namespace {
 	AVRational VideoTimeBase(const StormByte::Multimedia::Pipeline::Frame& frame) noexcept {
 		if (frame.Video() && frame.Video()->FrameRate() && frame.Video()->FrameRate()->Valid()) {
 			const auto& fps = *frame.Video()->FrameRate();
-			return AVRational{fps.Den(), fps.Num()};
+			return AVRational{fps.den, fps.num};
 		}
 
 		return AVRational{1, 24};
@@ -180,6 +180,8 @@ namespace {
 			params.ColorTransfer(ToAVTransfer(video.Color().Transfer()));
 			if (video.HDR10())
 				params.WriteHdr10(*video.HDR10());
+			if (video.SampleAspectRatio() && video.SampleAspectRatio()->Valid())
+				params.SampleAspectRatio(*video.SampleAspectRatio());
 		}
 
 		if (handle && *handle) {
@@ -189,6 +191,9 @@ namespace {
 				params.Width(handle->Width());
 			if (handle->Height() > 0)
 				params.Height(handle->Height());
+			const auto sar = handle->SampleAspectRatio();
+			if (sar.Valid())
+				params.SampleAspectRatio(sar);
 		}
 
 		return params;
@@ -287,6 +292,9 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 
 	if (frame->Video() && frame->Video()->HDR10())
 		handle->WriteHdr10(*frame->Video()->HDR10());
+	if (frame->Video() && frame->Video()->SampleAspectRatio()
+		&& frame->Video()->SampleAspectRatio()->Valid())
+		handle->SampleAspectRatio(*frame->Video()->SampleAspectRatio());
 	handle->WriteSideData(frame->Attachments());
 
 	if (frame->Pts())

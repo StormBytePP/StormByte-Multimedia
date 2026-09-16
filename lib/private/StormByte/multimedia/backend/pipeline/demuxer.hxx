@@ -43,12 +43,10 @@
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <memory>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 
-extern "C" {
-	#include <libavcodec/codec_par.h>
-	#include <libavutil/rational.h>
-}
+#include <memory>
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
@@ -57,6 +55,7 @@ extern "C" {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline {
+	using FFmpeg::AVRational;
 	/**
 	 * @class Demuxer
 	 * @brief Single demux backend behind the public Demuxer.

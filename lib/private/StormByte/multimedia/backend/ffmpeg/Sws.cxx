@@ -43,11 +43,12 @@
 
 extern "C" {
 	#include <libavutil/pixfmt.h>
+	#include <libswscale/swscale.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
 
-FFmpeg::Sws::Sws(SwsContext* ctx) noexcept
+FFmpeg::Sws::Sws(::SwsContext* ctx) noexcept
 : AVPointer(ctx) {}
 
 FFmpeg::Sws::~Sws() noexcept {
@@ -115,4 +116,4 @@ void FFmpeg::Sws::Free() noexcept {
 	}
 }
 
-template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<SwsContext>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::SwsContext>;

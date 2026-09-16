@@ -38,76 +38,31 @@
 
 #pragma once
 
-#include <StormByte/multimedia/visibility.h>
+#include <StormByte/multimedia/property/av_rational.hxx>
+
+#include <cstdint>
+#include <limits>
 
 /**
- * @namespace StormByte::Multimedia::Property
- * @brief Media property value types.
+ * @namespace StormByte::Multimedia::Backend::FFmpeg
+ * @brief Private RAII wrappers over libav*.
  */
-namespace StormByte::Multimedia::Property {
+namespace StormByte::Multimedia::Backend::FFmpeg {
+	using StormByte::Multimedia::Property::AVRational;	///< Same `{num, den}` the public API uses
+
+	inline constexpr int TimeBase = 1000000;					///< `AV_TIME_BASE` (µs)
+	inline constexpr AVRational TimeBaseQ{1, TimeBase};			///< `AV_TIME_BASE_Q`
+	inline constexpr AVRational Nanosecond{1, 1000000000};		///< 1 ns tick
+	inline constexpr std::int64_t NoPts = std::numeric_limits<std::int64_t>::min();	///< `AV_NOPTS_VALUE`
+
 	/**
-	 * @class Rate
-	 * @brief Rational rate. For video, Num()/Den() is frames per second.
-	 *
-	 * 23.976 fps is `{24000, 1001}`. 24 fps is `{24, 1}`.
-	 * This is not an encoder time base and not a Matroska tick rate.
+	 * @brief `av_rescale_q(ticks, src, dst)`.
+	 * @param ticks Source ticks.
+	 * @param src Source time base.
+	 * @param dst Destination time base.
+	 * @return Scaled ticks, or `NoPts` when either side is invalid.
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Rate final {
-		public:
-			/**
-			 * @brief Constructs a rate.
-			 * @param num Numerator. For fps, frame count.
-			 * @param den Denominator. For fps, seconds. If @p den is &lt;= 0, stores `{0, 1}`.
-			 */
-			Rate(int num, int den) noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 */
-			Rate(const Rate&) = default;
-
-			/**
-			 * @brief Move constructor.
-			 */
-			Rate(Rate&&) noexcept = default;
-
-			/**
-			 * @brief Destructor.
-			 */
-			~Rate() noexcept = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @return *this.
-			 */
-			Rate& operator=(const Rate&) = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @return *this.
-			 */
-			Rate& operator=(Rate&&) noexcept = default;
-
-			/**
-			 * @brief Numerator.
-			 * @return Numerator.
-			 */
-			int Num() const noexcept;
-
-			/**
-			 * @brief Denominator.
-			 * @return Denominator, always &gt; 0.
-			 */
-			int Den() const noexcept;
-
-			/**
-			 * @brief Whether the rate can be used as fps.
-			 * @return true if both terms are positive.
-			 */
-			bool Valid() const noexcept;
-
-		private:
-			int m_num;	///< Numerator
-			int m_den;	///< Denominator
-	};
+	inline std::int64_t Rescale(std::int64_t ticks, const AVRational& src, const AVRational& dst) noexcept {
+		return src.Rescale(ticks, dst);
+	}
 }

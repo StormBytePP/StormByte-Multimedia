@@ -36,22 +36,32 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/property/rate.hxx>
+#pragma once
 
-using namespace StormByte::Multimedia::Property;
+/**
+ * @file fwd.hxx
+ * @brief Incomplete FFmpeg types for RAII headers. Do not include libav* here.
+ *
+ * The C tag `AVChannelLayout` is `::AVChannelLayout`. The RAII class is
+ * `StormByte::Multimedia::Backend::FFmpeg::AVChannelLayout`. Always qualify
+ * the C type with `::` inside the FFmpeg namespace.
+ */
 
-Rate::Rate(int num, int den) noexcept:
-m_num(den > 0 ? num : 0),
-m_den(den > 0 ? den : 1) {}
-
-int Rate::Num() const noexcept {
-	return m_num;
-}
-
-int Rate::Den() const noexcept {
-	return m_den;
-}
-
-bool Rate::Valid() const noexcept {
-	return m_num > 0 && m_den > 0;
+extern "C" {
+	struct AVAudioFifo;
+	struct AVBSFContext;
+	struct AVChannelLayout;
+	struct AVCodec;
+	struct AVCodecContext;
+	struct AVCodecParameters;
+	struct AVDictionary;
+	struct AVFormatContext;
+	struct AVFrame;
+	struct AVFrameSideData;
+	struct AVIOContext;
+	struct AVPacket;
+	struct AVStream;
+	struct AVSubtitle;
+	struct SwrContext;
+	struct SwsContext;
 }

@@ -39,13 +39,10 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <string>
-
-extern "C" {
-	#include <libavutil/dict.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -56,7 +53,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @class Dictionary
 	 * @brief RAII `AVDictionary` for muxer metadata / options.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Dictionary: public AVPointer<AVDictionary> {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Dictionary: public AVPointer<::AVDictionary> {
 		friend class AVFormatContext;
 		public:
 			/**
@@ -116,8 +113,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			void Free() noexcept override;
 
-			using AVPointer<AVDictionary>::Get;
+			using AVPointer<::AVDictionary>::Get;
 	};
 
-	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<AVDictionary>;
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVDictionary>;
 }

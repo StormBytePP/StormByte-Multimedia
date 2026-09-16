@@ -39,20 +39,16 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVBSFPipeline.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVChannelLayout.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
-
-extern "C" {
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/channel_layout.h>
-	#include <libavutil/rational.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -224,7 +220,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Channel layout owned by the context.
 			 * @return Layout, or nullptr.
 			 */
-			const AVChannelLayout* ChannelLayout() const noexcept;
+			AVChannelLayout ChannelLayout() const noexcept;
 
 			/**
 			 * @brief Whether the codec uses B-frames.

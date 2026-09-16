@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 
 #include <cstring>
 #include <string>
@@ -219,7 +220,7 @@ FFmpeg::AVEncoder::~AVEncoder() noexcept {
 }
 
 FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecParameters& params, int stream_index,
-	const std::map<std::string, std::string>& options, AVRational time_base) noexcept {
+	const std::map<std::string, std::string>& options, FFmpeg::AVRational time_base) noexcept {
 	if (!codec || !params.Get())
 		return Unexpected<FFmpeg::EncoderError>("Invalid codec or parameters");
 
@@ -239,8 +240,8 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 	ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
 	if (time_base.num > 0 && time_base.den > 0) {
-		ctx->time_base = time_base;
-		ctx->pkt_timebase = time_base;
+		ctx->time_base = FFmpeg::ToRaw(time_base);
+		ctx->pkt_timebase = FFmpeg::ToRaw(time_base);
 		if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 			ctx->framerate.num = time_base.den;
 			ctx->framerate.den = time_base.num;
@@ -277,9 +278,9 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 
 	if (ctx->time_base.num <= 0 || ctx->time_base.den <= 0) {
 		if (time_base.num > 0 && time_base.den > 0)
-			ctx->time_base = time_base;
+			ctx->time_base = FFmpeg::ToRaw(time_base);
 		else
-			ctx->time_base = AVRational{1, 1000};
+			ctx->time_base = ::AVRational{1, 1000};
 	}
 
 	if (ctx->pkt_timebase.num <= 0 || ctx->pkt_timebase.den <= 0)
@@ -297,7 +298,7 @@ FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecP
 }
 
 FFmpeg::ExpectedAVEncoder FFmpeg::AVEncoder::Open(AVCodec* codec, const AVCodecParameters& params, const FFmpeg::AVFormatContext& fmt, int stream_index) noexcept {
-	auto opened = Open(codec, params, stream_index, {}, AVRational{0, 1});
+	auto opened = Open(codec, params, stream_index, {}, FFmpeg::AVRational{0, 1});
 	if (!opened.has_value())
 		return opened;
 	auto bsf = fmt.Mp4ToAnnexB(params.CodecId(), stream_index, params);
@@ -343,12 +344,12 @@ FFmpeg::OperationResult FFmpeg::AVEncoder::EncodeSubtitle(AVSubtitle& sub, AVPac
 		return OperationResult::Error;
 
 	const std::int64_t pts = sub.Pts();
-	const AVRational tb = (m_ptr->time_base.num > 0) ? m_ptr->time_base : AVRational{1, AV_TIME_BASE};
+	const ::AVRational tb = (m_ptr->time_base.num > 0) ? m_ptr->time_base : ::AVRational{1, AV_TIME_BASE};
 	const std::int64_t duration = av_rescale_q(static_cast<std::int64_t>(sub.DisplayDurationMs()),
-		AVRational{1, 1000}, tb);
+		::AVRational{1, 1000}, tb);
 	const std::int64_t scaled = (pts == AV_NOPTS_VALUE)
 		? AV_NOPTS_VALUE
-		: av_rescale_q(pts, AVRational{1, AV_TIME_BASE}, tb);
+		: av_rescale_q(pts, ::AVRational{1, AV_TIME_BASE}, tb);
 	pkt.Timestamps(scaled, scaled, duration);
 	return OperationResult::Success;
 }
@@ -402,10 +403,10 @@ int FFmpeg::AVEncoder::StreamIndex() const noexcept {
 	return m_stream_index;
 }
 
-AVRational FFmpeg::AVEncoder::TimeBase() const noexcept {
+FFmpeg::AVRational FFmpeg::AVEncoder::TimeBase() const noexcept {
 	if (!m_ptr)
-		return AVRational{0, 1};
-	return m_ptr->time_base;
+		return FFmpeg::AVRational{0, 1};
+	return FFmpeg::FromRaw(m_ptr->time_base);
 }
 
 bool FFmpeg::AVEncoder::IsSubtitle() const noexcept {
@@ -463,16 +464,16 @@ int FFmpeg::AVEncoder::SampleRate() const noexcept {
 	return m_ptr ? m_ptr->sample_rate : 0;
 }
 
-const AVChannelLayout* FFmpeg::AVEncoder::ChannelLayout() const noexcept {
-	return m_ptr ? &m_ptr->ch_layout : nullptr;
+FFmpeg::AVChannelLayout FFmpeg::AVEncoder::ChannelLayout() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->ch_layout) : FFmpeg::AVChannelLayout{};
 }
 
 bool FFmpeg::AVEncoder::HasBFrames() const noexcept {
 	return m_ptr && m_ptr->has_b_frames;
 }
 
-AVRational FFmpeg::AVEncoder::FrameRate() const noexcept {
-	return m_ptr ? m_ptr->framerate : AVRational{0, 1};
+FFmpeg::AVRational FFmpeg::AVEncoder::FrameRate() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->framerate) : FFmpeg::AVRational{0, 1};
 }
 
 const ::AVCodecContext* FFmpeg::AVEncoder::Context() const noexcept {

@@ -38,15 +38,12 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
 #include <optional>
 #include <string>
-
-extern "C" {
-	#include <libavcodec/avcodec.h>
-}
 
 namespace StormByte::Multimedia::Backend::FFmpeg {
 	class AVSubtitle;
@@ -147,7 +144,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			const ::AVSubtitle* Get() const noexcept;
 
-			::AVSubtitle m_sub;
+			::AVSubtitle* m_sub = nullptr;	///< Owned C subtitle (heap, incomplete in this header)
 
 			friend class AVDecoder;
 			friend class AVEncoder;

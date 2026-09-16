@@ -40,12 +40,13 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 
 extern "C" {
+	#include <libavutil/audio_fifo.h>
 	#include <libavutil/samplefmt.h>
 }
 
 using namespace StormByte::Multimedia::Backend;
 
-FFmpeg::AudioFifo::AudioFifo(AVAudioFifo* fifo) noexcept
+FFmpeg::AudioFifo::AudioFifo(::AVAudioFifo* fifo) noexcept
 : AVPointer(fifo) {}
 
 FFmpeg::AudioFifo::~AudioFifo() noexcept {
@@ -100,4 +101,4 @@ void FFmpeg::AudioFifo::Free() noexcept {
 	}
 }
 
-template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<AVAudioFifo>;
+template class StormByte::Multimedia::Backend::FFmpeg::AVPointer<::AVAudioFifo>;

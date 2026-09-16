@@ -37,6 +37,7 @@
  */
 
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 #include <StormByte/multimedia/backend/pipeline/encoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -67,26 +68,25 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Pipeline::SideDataKind;
 
 namespace {
-	constexpr AVRational NanoTimeBase{1, 1000000000};
-
-	std::optional<Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || timeBase.num <= 0 || timeBase.den <= 0)
+	std::optional<Property::Duration> TicksToPts(std::int64_t ticks, FFmpeg::AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || !timeBase.Valid())
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, NanoTimeBase);
+		const std::int64_t ns = timeBase.Rescale(ticks, FFmpeg::Nanosecond);
 		if (ns < 0)
 			return std::nullopt;
 		return Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	std::optional<Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
-		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
+	std::optional<Property::Duration> TicksToDuration(std::int64_t ticks, FFmpeg::AVRational timeBase) noexcept {
+		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || !timeBase.Valid())
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, NanoTimeBase);
+		const std::int64_t ns = timeBase.Rescale(ticks, FFmpeg::Nanosecond);
 		if (ns <= 0)
 			return std::nullopt;
 		return Property::Duration{std::chrono::nanoseconds{ns}};
@@ -177,10 +177,10 @@ namespace {
 	}
 }
 
-std::int64_t Encoder::NsToTicks(std::int64_t ns, AVRational timeBase) noexcept {
-	if (ns < 0 || timeBase.num <= 0 || timeBase.den <= 0)
-		return AV_NOPTS_VALUE;
-	return av_rescale_q(ns, NanoTimeBase, timeBase);
+std::int64_t Encoder::NsToTicks(std::int64_t ns, FFmpeg::AVRational timeBase) noexcept {
+	if (ns < 0 || !timeBase.Valid())
+		return FFmpeg::NoPts;
+	return FFmpeg::Nanosecond.Rescale(ns, timeBase);
 }
 
 std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Encoder::MakePacket(
@@ -406,12 +406,13 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 				int count = 0;
 				if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_CHANNEL_LAYOUT,
 						0, &layouts, &count) >= 0 && layouts && count > 0) {
-					const auto* list = static_cast<const AVChannelLayout*>(layouts);
-					const auto* have = params.ChannelLayout();
+					const auto* list = static_cast<const ::AVChannelLayout*>(layouts);
+					const auto have = params.ChannelLayout();
 					bool supported = false;
 					if (have) {
+						const auto* haveRaw = FFmpeg::ToRaw(have);
 						for (int i = 0; i < count; ++i) {
-							if (av_channel_layout_compare(have, &list[i]) == 0) {
+							if (haveRaw && av_channel_layout_compare(haveRaw, &list[i]) == 0) {
 								supported = true;
 								break;
 							}
@@ -419,15 +420,15 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 					}
 
 					if (!supported) {
-						const AVChannelLayout* best = &list[0];
-						const int n = have ? have->nb_channels : 0;
+						const ::AVChannelLayout* best = &list[0];
+						const int n = have.NbChannels();
 						for (int i = 0; i < count; ++i) {
 							if (list[i].nb_channels <= n
 								&& list[i].nb_channels >= best->nb_channels)
 								best = &list[i];
 						}
 
-						params.CopyChannelLayout(*best);
+						params.CopyChannelLayout(FFmpeg::FromRaw(*best));
 					}
 				}
 			}

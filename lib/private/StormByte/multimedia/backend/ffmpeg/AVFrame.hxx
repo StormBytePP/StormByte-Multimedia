@@ -39,17 +39,15 @@
 #pragma once
 
 #include <StormByte/buffer/typedefs.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVChannelLayout.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/pipeline/side_data.hxx>
 #include <StormByte/multimedia/property/hdr10.hxx>
 
 #include <cstdint>
 #include <vector>
-
-extern "C" {
-	#include <libavutil/channel_layout.h>
-	#include <libavutil/frame.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -526,7 +524,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Channel layout owned by this frame.
 			 * @return Layout, or nullptr.
 			 */
-			const AVChannelLayout* ChannelLayout() const noexcept;
+			AVChannelLayout ChannelLayout() const noexcept;
 
 			/**
 			 * @brief Replaces the channel layout.

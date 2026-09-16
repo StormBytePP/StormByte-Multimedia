@@ -40,6 +40,7 @@
 
 #include <StormByte/buffer/consumer.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
 
 #include <chrono>
@@ -47,10 +48,6 @@
 #include <memory>
 #include <optional>
 #include <unordered_set>
-
-extern "C" {
-	#include <libavformat/avformat.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg

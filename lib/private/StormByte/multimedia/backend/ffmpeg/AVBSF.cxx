@@ -40,6 +40,12 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPacket.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+
+extern "C" {
+	#include <libavcodec/avcodec.h>
+	#include <libavcodec/bsf.h>
+}
 
 using namespace StormByte::Multimedia::Backend;
 
@@ -50,7 +56,7 @@ FFmpeg::AVBSF::~AVBSF() noexcept {
 	Free();
 }
 
-FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(const std::string& name, const AVCodecParameters& params, AVRational time_base) noexcept {
+FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(const std::string& name, const AVCodecParameters& params, FFmpeg::AVRational time_base) noexcept {
 	if (name.empty() || !params.Get())
 		return Unexpected<BSFError>("Invalid BSF name or parameters");
 
@@ -66,7 +72,7 @@ FFmpeg::ExpectedAVBSF FFmpeg::AVBSF::Create(const std::string& name, const AVCod
 		return Unexpected<BSFError>("Failed to copy parameters to BSF");
 	}
 
-	ctx->time_base_in = time_base;
+	ctx->time_base_in = FFmpeg::ToRaw(time_base);
 
 	if (av_bsf_init(ctx) < 0) {
 		av_bsf_free(&ctx);

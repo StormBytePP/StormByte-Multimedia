@@ -38,6 +38,8 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/backend/pipeline/muxer.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
@@ -53,11 +55,6 @@
 #include <optional>
 #include <string>
 
-extern "C" {
-	#include <libavcodec/codec_par.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/rational.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
@@ -66,6 +63,7 @@ extern "C" {
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
+	using FFmpeg::AVRational;
 	/**
 	 * @class Container
 	 * @brief Matroska / WebM mux backend.
@@ -195,7 +193,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 					AVRational srcTb{0, 1};											///< Source time base if remux
 					int avIndex = -1;												///< Index in AVFormatContext
 					AVRational timeBase{0, 1};										///< Mux time base
-					std::int64_t lastDts = AV_NOPTS_VALUE;							///< Last written DTS
+					std::int64_t lastDts = StormByte::Multimedia::Backend::FFmpeg::NoPts;	///< Last written DTS
 					std::optional<std::string> language;							///< Header language
 					std::optional<std::string> title;								///< Header title
 			};

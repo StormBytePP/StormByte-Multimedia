@@ -38,15 +38,12 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/AVChannelLayout.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
-
-extern "C" {
-	#include <libavutil/channel_layout.h>
-	#include <libswresample/swresample.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -59,7 +56,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @class Swr
 	 * @brief RAII `SwrContext` for audio convert / resample.
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Swr: public AVPointer<SwrContext> {
+	class STORMBYTE_MULTIMEDIA_PRIVATE Swr: public AVPointer<::SwrContext> {
 		public:
 			/**
 			 * @brief Move constructor. Transfers the resampler.
@@ -125,7 +122,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Adopts an opened `SwrContext`.
 			 * @param ctx libswresample context, or nullptr.
 			 */
-			explicit Swr(SwrContext* ctx) noexcept;
+			explicit Swr(::SwrContext* ctx) noexcept;
 
 			/**
 			 * @brief Deleted. Use @ref Open; an empty resampler is not useful.
@@ -137,8 +134,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			void Free() noexcept override;
 
-			using AVPointer<SwrContext>::Get;
+			using AVPointer<::SwrContext>::Get;
 	};
 
-	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<SwrContext>;
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::SwrContext>;
 }

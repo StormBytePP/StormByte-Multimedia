@@ -40,14 +40,10 @@
 
 #include <StormByte/multimedia/backend/ffmpeg/AVBSFPipeline.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
-
-extern "C" {
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/rational.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg

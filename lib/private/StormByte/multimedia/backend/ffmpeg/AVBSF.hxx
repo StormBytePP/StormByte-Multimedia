@@ -39,12 +39,9 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/backend/ffmpeg/typedefs.hxx>
-
-extern "C" {
-	#include <libavcodec/avcodec.h>
-	#include <libavcodec/bsf.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg

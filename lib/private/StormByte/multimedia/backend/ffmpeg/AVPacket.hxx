@@ -39,12 +39,9 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 
 #include <cstdint>
-
-extern "C" {
-	#include <libavcodec/packet.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter

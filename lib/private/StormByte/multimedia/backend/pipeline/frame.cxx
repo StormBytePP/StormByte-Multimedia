@@ -72,6 +72,7 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 				return;
 			if (m_handle.Width() <= 0 || m_handle.Height() <= 0)
 				return;
+			const auto sar = m_handle.SampleAspectRatio();
 			frame.m_video = Property::Video(
 				frame.m_video->Color(),
 				Property::Resolution{
@@ -79,7 +80,8 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 					static_cast<std::uint32_t>(m_handle.Height())
 				},
 				frame.m_video->HDR10(),
-				frame.m_video->FrameRate());
+				frame.m_video->FrameRate(),
+				sar.Valid() ? std::optional<Property::AVRational>{sar} : frame.m_video->SampleAspectRatio());
 			break;
 		}
 

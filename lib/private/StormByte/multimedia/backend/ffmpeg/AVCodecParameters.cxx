@@ -37,10 +37,12 @@
  */
 
 #include <StormByte/multimedia/backend/ffmpeg/AVCodecParameters.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
 
 #include <cstring>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavutil/mastering_display_metadata.h>
 }
@@ -107,6 +109,15 @@ int FFmpeg::AVCodecParameters::Height() const noexcept {
 void FFmpeg::AVCodecParameters::Height(int height) noexcept {
 	if (m_ptr)
 		m_ptr->height = height;
+}
+
+FFmpeg::AVRational FFmpeg::AVCodecParameters::SampleAspectRatio() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->sample_aspect_ratio) : FFmpeg::AVRational{0, 1};
+}
+
+void FFmpeg::AVCodecParameters::SampleAspectRatio(FFmpeg::AVRational sar) noexcept {
+	if (m_ptr)
+		m_ptr->sample_aspect_ratio = FFmpeg::ToRaw(sar);
 }
 
 int FFmpeg::AVCodecParameters::Format() const noexcept {
@@ -176,8 +187,8 @@ void FFmpeg::AVCodecParameters::Profile(int profile) noexcept {
 		m_ptr->profile = profile;
 }
 
-const AVChannelLayout* FFmpeg::AVCodecParameters::ChannelLayout() const noexcept {
-	return m_ptr ? &m_ptr->ch_layout : nullptr;
+FFmpeg::AVChannelLayout FFmpeg::AVCodecParameters::ChannelLayout() const noexcept {
+	return m_ptr ? FFmpeg::FromRaw(m_ptr->ch_layout) : FFmpeg::AVChannelLayout{};
 }
 
 void FFmpeg::AVCodecParameters::DefaultChannelLayout(int channels) noexcept {
@@ -200,8 +211,9 @@ FFmpeg::AVCodecParameters::operator bool() const noexcept {
 	return m_ptr != nullptr;
 }
 
-bool FFmpeg::AVCodecParameters::CopyChannelLayout(const AVChannelLayout& layout) noexcept {
-	return m_ptr && av_channel_layout_copy(&m_ptr->ch_layout, &layout) >= 0;
+bool FFmpeg::AVCodecParameters::CopyChannelLayout(const FFmpeg::AVChannelLayout& layout) noexcept {
+	const auto* raw = FFmpeg::ToRaw(layout);
+	return m_ptr && raw && av_channel_layout_copy(&m_ptr->ch_layout, raw) >= 0;
 }
 
 bool FFmpeg::AVCodecParameters::Export(::AVCodecParameters* dest) const noexcept {

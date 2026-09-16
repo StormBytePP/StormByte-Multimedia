@@ -39,11 +39,8 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/ffmpeg/AVPointer.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
-
-extern "C" {
-	#include <libavutil/audio_fifo.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -56,7 +53,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 	 * @class AudioFifo
 	 * @brief RAII `AVAudioFifo` for sample buffering (loudnorm / encoder).
 	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE AudioFifo: public AVPointer<AVAudioFifo> {
+	class STORMBYTE_MULTIMEDIA_PRIVATE AudioFifo: public AVPointer<::AVAudioFifo> {
 		public:
 			/**
 			 * @brief Move constructor. Transfers the fifo.
@@ -130,7 +127,7 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @brief Adopts an allocated fifo.
 			 * @param fifo libavutil fifo, or nullptr.
 			 */
-			explicit AudioFifo(AVAudioFifo* fifo) noexcept;
+			explicit AudioFifo(::AVAudioFifo* fifo) noexcept;
 
 			/**
 			 * @brief Deleted. Use @ref Open; an empty fifo is not useful.
@@ -142,8 +139,8 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 */
 			void Free() noexcept override;
 
-			using AVPointer<AVAudioFifo>::Get;
+			using AVPointer<::AVAudioFifo>::Get;
 	};
 
-	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<AVAudioFifo>;
+	extern template class STORMBYTE_MULTIMEDIA_PRIVATE AVPointer<::AVAudioFifo>;
 }

@@ -38,14 +38,12 @@
 
 #pragma once
 
+#include <StormByte/multimedia/backend/ffmpeg/AVRational.hxx>
+#include <StormByte/multimedia/backend/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <chrono>
 #include <optional>
-
-extern "C" {
-	#include <libavformat/avformat.h>
-}
 
 /**
  * @namespace StormByte::Multimedia::Backend::FFmpeg
@@ -143,6 +141,12 @@ namespace StormByte::Multimedia::Backend::FFmpeg {
 			 * @return `{num, den}` with den &gt; 0. `{0, 1}` if unknown.
 			 */
 			AVRational FrameRateRational() const noexcept;
+
+			/**
+			 * @brief Pixel aspect ratio (`codecpar`, else stream `sample_aspect_ratio`).
+			 * @return `{num, den}` with den > 0. `{0, 1}` if unknown.
+			 */
+			AVRational SampleAspectRatio() const noexcept;
 
 			/**
 			 * @brief Looks up a stream metadata tag.

@@ -39,6 +39,7 @@
 #include <StormByte/multimedia/backend/ffmpeg/AVSubtitle.hxx>
 
 extern "C" {
+	#include <libavcodec/avcodec.h>
 	#include <libavutil/avutil.h>
 	#include <libavutil/mem.h>
 }
@@ -46,43 +47,46 @@ extern "C" {
 using namespace StormByte::Multimedia::Backend;
 
 FFmpeg::AVSubtitle::AVSubtitle() noexcept
-: m_sub{} {}
+: m_sub(new ::AVSubtitle{}) {}
 
 FFmpeg::AVSubtitle::AVSubtitle(AVSubtitle&& other) noexcept
 : m_sub(other.m_sub) {
-	other.m_sub = {};
+	other.m_sub = nullptr;
 }
 
 FFmpeg::AVSubtitle::~AVSubtitle() noexcept {
 	Free();
+	delete m_sub;
+	m_sub = nullptr;
 }
 
 FFmpeg::AVSubtitle& FFmpeg::AVSubtitle::operator=(AVSubtitle&& other) noexcept {
 	if (this != &other) {
 		Free();
+		delete m_sub;
 		m_sub = other.m_sub;
-		other.m_sub = {};
+		other.m_sub = nullptr;
 	}
 
 	return *this;
 }
 
 ::AVSubtitle* FFmpeg::AVSubtitle::Get() noexcept {
-	return &m_sub;
+	return m_sub;
 }
 
 const ::AVSubtitle* FFmpeg::AVSubtitle::Get() const noexcept {
-	return &m_sub;
+	return m_sub;
 }
 
 std::int64_t FFmpeg::AVSubtitle::Pts() const noexcept {
-	return m_sub.pts;
+	return m_sub ? m_sub->pts : AV_NOPTS_VALUE;
 }
 
 std::uint32_t FFmpeg::AVSubtitle::DisplayDurationMs() const noexcept {
-	if (m_sub.end_display_time < m_sub.start_display_time)
+	if (!m_sub || m_sub->end_display_time < m_sub->start_display_time)
 		return 0;
-	const auto ms = m_sub.end_display_time - m_sub.start_display_time;
+	const auto ms = m_sub->end_display_time - m_sub->start_display_time;
 	if (ms == 0 || ms > 600000)
 		return 0;
 	return ms;
@@ -90,8 +94,10 @@ std::uint32_t FFmpeg::AVSubtitle::DisplayDurationMs() const noexcept {
 
 std::string FFmpeg::AVSubtitle::Text() const noexcept {
 	std::string out;
-	for (unsigned i = 0; i < m_sub.num_rects; ++i) {
-		const AVSubtitleRect* rect = m_sub.rects[i];
+	if (!m_sub)
+		return out;
+	for (unsigned i = 0; i < m_sub->num_rects; ++i) {
+		const AVSubtitleRect* rect = m_sub->rects[i];
 		if (!rect)
 			continue;
 		const char* text = rect->text ? rect->text : rect->ass;
@@ -107,36 +113,40 @@ std::string FFmpeg::AVSubtitle::Text() const noexcept {
 
 void FFmpeg::AVSubtitle::FillText(std::string text, std::int64_t pts, std::uint32_t duration_ms, bool ass) noexcept {
 	Free();
-	m_sub.pts = pts;
-	m_sub.start_display_time = 0;
-	m_sub.end_display_time = duration_ms;
-	m_sub.num_rects = 1;
-	m_sub.rects = static_cast<AVSubtitleRect**>(av_mallocz(sizeof(AVSubtitleRect*)));
-	if (!m_sub.rects) {
-		m_sub.num_rects = 0;
+	if (!m_sub)
+		m_sub = new ::AVSubtitle{};
+	m_sub->pts = pts;
+	m_sub->start_display_time = 0;
+	m_sub->end_display_time = duration_ms;
+	m_sub->num_rects = 1;
+	m_sub->rects = static_cast<AVSubtitleRect**>(av_mallocz(sizeof(AVSubtitleRect*)));
+	if (!m_sub->rects) {
+		m_sub->num_rects = 0;
 		return;
 	}
 
-	m_sub.rects[0] = static_cast<AVSubtitleRect*>(av_mallocz(sizeof(AVSubtitleRect)));
-	if (!m_sub.rects[0]) {
-		av_free(m_sub.rects);
-		m_sub.rects = nullptr;
-		m_sub.num_rects = 0;
+	m_sub->rects[0] = static_cast<AVSubtitleRect*>(av_mallocz(sizeof(AVSubtitleRect)));
+	if (!m_sub->rects[0]) {
+		av_free(m_sub->rects);
+		m_sub->rects = nullptr;
+		m_sub->num_rects = 0;
 		return;
 	}
 
 	if (ass) {
-		m_sub.rects[0]->type = SUBTITLE_ASS;
-		m_sub.rects[0]->ass = av_strdup(text.c_str());
+		m_sub->rects[0]->type = SUBTITLE_ASS;
+		m_sub->rects[0]->ass = av_strdup(text.c_str());
 	}
 
 	else {
-		m_sub.rects[0]->type = SUBTITLE_TEXT;
-		m_sub.rects[0]->text = av_strdup(text.c_str());
+		m_sub->rects[0]->type = SUBTITLE_TEXT;
+		m_sub->rects[0]->text = av_strdup(text.c_str());
 	}
 }
 
 void FFmpeg::AVSubtitle::Free() noexcept {
-	avsubtitle_free(&m_sub);
-	m_sub = {};
+	if (!m_sub)
+		return;
+	avsubtitle_free(m_sub);
+	*m_sub = {};
 }
