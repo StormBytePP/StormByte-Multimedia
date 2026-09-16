@@ -78,19 +78,19 @@ using namespace StormByte::Multimedia;
 namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
-	std::optional<Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<Property::Duration> TicksToPts(std::int64_t ticks, Property::AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, Property::AVRational{1, 1000000000});
 		if (ns < 0)
 			return std::nullopt;
 		return Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	std::optional<Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<Property::Duration> TicksToDuration(std::int64_t ticks, Property::AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, Property::AVRational{1, 1000000000});
 		if (ns <= 0)
 			return std::nullopt;
 		return Property::Duration{std::chrono::nanoseconds{ns}};
@@ -125,7 +125,7 @@ class StormByte::Multimedia::Backend::Pipeline::Demuxer::Context {
 	public:
 		std::optional<FFmpeg::AVFormatContext> format;
 		FFmpeg::AVPacket scratch;
-		std::unordered_map<int, AVRational> timeBase;
+		std::unordered_map<int, FFmpeg::AVRational> timeBase;
 		std::unordered_set<int> wanted;
 };
 
@@ -204,7 +204,7 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 			continue;
 		}
 
-		AVRational tb{0, 1};
+		FFmpeg::AVRational tb{0, 1};
 		if (const auto found = m_ctx->timeBase.find(index); found != m_ctx->timeBase.end())
 			tb = found->second;
 
@@ -250,7 +250,7 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::OpenDecoder(
 
 	std::optional<FFmpeg::AVCodecParameters> params;
 	std::optional<Stream::Properties> mapped;
-	AVRational timeBase{0, 1};
+	FFmpeg::AVRational timeBase{0, 1};
 	bool found = false;
 	for (const auto& stream : m_ctx->format->Streams()) {
 		if (stream.Index() != decoder.Index())
@@ -292,9 +292,9 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::OpenDecoder(
 }
 
 bool StormByte::Multimedia::Backend::Pipeline::Demuxer::CloneStream(
-	int index, ::AVCodecParameters*& params, AVRational& timeBase) noexcept {
+	int index, ::AVCodecParameters*& params, FFmpeg::AVRational& timeBase) noexcept {
 	params = nullptr;
-	timeBase = AVRational{0, 1};
+	timeBase = FFmpeg::AVRational{0, 1};
 	if (!m_ctx || !m_ctx->format)
 		return false;
 	for (const auto& stream : m_ctx->format->Streams()) {
