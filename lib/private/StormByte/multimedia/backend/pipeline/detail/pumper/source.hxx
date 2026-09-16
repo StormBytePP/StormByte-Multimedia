@@ -61,7 +61,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Pumper {
 		public:
 			/**
 			 * @brief Source pumper in State::Created.
-			 * @param host Owner surface (the Step).
+			 * @param host Owner surface (the Step, via Host).
 			 */
 			explicit Source(StormByte::Multimedia::Backend::Pipeline::Host& host) noexcept;
 

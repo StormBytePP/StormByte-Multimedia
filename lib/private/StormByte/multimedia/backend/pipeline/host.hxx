@@ -57,11 +57,11 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * @class Host
 	 * @brief Owner surface that a Worker and a Pumper may call.
 	 *
-	 * Implemented by a private nested type of
-	 * @ref StormByte::Multimedia::Pipeline::Step. Hoppers, logging
-	 * and Plan stay on the Step. The Pumper is not a Host and is
-	 * not a friend of Step: it only holds a Host&. No friends on
-	 * this type.
+	 * Implemented by a private nested Surface of
+	 * @ref StormByte::Multimedia::Pipeline::Step and of
+	 * @ref StormByte::Multimedia::Pipeline::Filter::FFmpeg.
+	 * Hoppers and logging stay on the owner. The Pumper is
+	 * not a Host: it holds a Host&. No friends on this type.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */

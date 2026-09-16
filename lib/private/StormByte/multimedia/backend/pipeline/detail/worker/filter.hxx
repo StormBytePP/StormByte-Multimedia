@@ -66,7 +66,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 		public:
 			/**
 			 * @brief Filter body bound to @p owner.
-			 * @param owner Public FFmpeg plugin base (also the Host).
+			 * @param owner Public FFmpeg plugin base. Host is owner.Face().
 			 */
 			explicit Filter(StormByte::Multimedia::Pipeline::Filter::FFmpeg& owner) noexcept;
 

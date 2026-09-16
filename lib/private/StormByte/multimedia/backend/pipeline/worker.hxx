@@ -59,10 +59,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * A Pumper calls @ref Setup once and @ref Process for each
 	 * unit. The Worker emits 0..N results through @ref Emit
 	 * before returning. It has no State: on error it calls
-	 * @ref Fail, which goes to the Host (the Step).
+	 * @ref Fail, which goes to the Host (Step or Filter::FFmpeg).
 	 *
 	 * Concretes live under Detail::Worker (Demux, Decode,
-	 * Encode, Remux, Mux, Filter). Hoppers belong to the Step.
+	 * Encode, Remux, Mux, Filter). Hoppers belong to the owner.
 	 * No friends.
 	 *
 	 * @ingroup multimedia_pipeline
@@ -106,7 +106,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 		protected:
 			/**
 			 * @brief Worker bound to @p host.
-			 * @param host Owner surface (the Step).
+			 * @param host Owner surface (Step or Filter::FFmpeg).
 			 */
 			explicit Worker(Host& host) noexcept;
 
@@ -155,6 +155,6 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void Ended() noexcept;
 
 		private:
-			Host& m_host;	///< Step, via Host
+			Host& m_host;	///< Owner, via Host
 	};
 }

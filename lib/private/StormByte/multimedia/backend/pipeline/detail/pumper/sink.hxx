@@ -60,7 +60,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Pumper {
 		public:
 			/**
 			 * @brief Sink pumper in State::Created.
-			 * @param host Owner surface (the Step).
+			 * @param host Owner surface (the Step, via Host).
 			 */
 			explicit Sink(StormByte::Multimedia::Backend::Pipeline::Host& host) noexcept;
 

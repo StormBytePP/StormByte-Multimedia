@@ -60,7 +60,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Pumper {
 		public:
 			/**
 			 * @brief Through pumper in State::Created.
-			 * @param host Owner surface (the Step).
+			 * @param host Owner surface (Step or Filter::FFmpeg).
 			 */
 			explicit Through(StormByte::Multimedia::Backend::Pipeline::Host& host) noexcept;
 
