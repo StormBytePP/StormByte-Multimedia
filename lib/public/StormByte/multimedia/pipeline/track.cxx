@@ -61,7 +61,8 @@ Track& Track::operator=(const Track& other) {
 	return *this;
 }
 
-Tracks::Tracks(const Tracks& other) {
+Tracks::Tracks(const Tracks& other)
+:	Iterable() {
 	for (const std::unique_ptr<Track>& track : other)
 		add(*track);
 }
