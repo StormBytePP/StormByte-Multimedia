@@ -36,8 +36,13 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/logger/manipulators.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/filter.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
+#include <StormByte/multimedia/backend/pipeline/host.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
+#include <StormByte/multimedia/backend/pipeline/pumper.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -52,8 +57,10 @@ using StormByte::Multimedia::Pipeline::Filter::Analytics;
 using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
 using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
+using StormByte::Multimedia::Pipeline::Item;
 using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Kinds;
+using StormByte::Multimedia::Pipeline::State;
 using StormByte::Multimedia::ToString;
 using StormByte::Logger::Level;
 
@@ -81,12 +88,95 @@ namespace {
 	}
 }
 
+class FFmpeg::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host {
+	public:
+		explicit Surface(FFmpeg& owner) noexcept
+		:	m_owner(owner) {}
+
+		void Emit(Item::PointerType item) noexcept override {
+			m_owner.Emit(std::move(item));
+		}
+
+		void Wait() noexcept override {
+			m_owner.Wait();
+		}
+
+		bool Stopping() const noexcept override {
+			return m_owner.Stopping();
+		}
+
+		void Fail(std::string reason) noexcept override {
+			m_owner.Fail(std::move(reason));
+		}
+
+		void Log(StormByte::Logger::Level level, std::string_view message) noexcept override {
+			m_owner.Log(level, message);
+		}
+
+		void Ended() noexcept override {
+			m_owner.m_exhausted = true;
+		}
+
+		bool Exhausted() const noexcept override {
+			return m_owner.m_exhausted;
+		}
+
+		Item::PointerType Pull() noexcept override {
+			return m_owner.m_in.Pop();
+		}
+
+		bool InputEof() const noexcept override {
+			return m_owner.m_in.EoF();
+		}
+
+		void CloseOutput() noexcept override {
+			m_owner.m_out.Eof();
+		}
+
+		void BecameReady() noexcept override {
+			m_owner.Log(Level::Debug, "ready");
+			m_owner.m_wake.notify_all();
+		}
+
+		void RecordWork(std::int64_t microseconds) noexcept override {
+			m_owner.RecordWork(microseconds);
+		}
+
+		void DumpWork() noexcept override {
+			m_owner.DumpWork();
+		}
+
+	private:
+		FFmpeg& m_owner;
+};
+
 FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 	std::string name, Kinds receives, Kinds produces) noexcept
-: Step(std::move(log), Producer::Filter, receives, produces),
-	m_name(std::move(name)), m_hold(0), m_heldFor(0) {}
+:	m_log(std::move(log)),
+	m_name(std::move(name)),
+	m_receives(receives),
+	m_produces(produces),
+	m_surface(std::make_unique<Surface>(*this)),
+	m_exhausted(false),
+	m_workN(0),
+	m_workMin(std::numeric_limits<std::int64_t>::max()),
+	m_workMax(0),
+	m_lastWork(0),
+	m_hold(0),
+	m_heldFor(0) {
+	m_tap.Drain();
+	m_pumper = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Pumper::Through>(Face());
+	m_pumper->Bind(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Filter>(*this));
+	if (m_log) {
+		*m_log << StormByte::Logger::component("STMM")
+			<< StormByte::Logger::group(m_name)
+			<< Level::Notice << (m_name + " created") << std::endl;
+	}
+}
 
-FFmpeg::~FFmpeg() noexcept = default;
+FFmpeg::~FFmpeg() noexcept {
+	Halt();
+}
 
 std::string FFmpeg::Name() const noexcept {
 	return std::string(ToString(Media())) + "/" + m_name;
@@ -100,11 +190,42 @@ class StormByte::Multimedia::Pipeline::Filter::Report FFmpeg::Report() const noe
 	return {};
 }
 
+State FFmpeg::Status() const noexcept {
+	if (m_pumper)
+		return m_pumper->Status();
+	return m_error ? State::Failed : State::Created;
+}
+
+bool FFmpeg::Failed() const noexcept {
+	return Status() == State::Failed;
+}
+
+const std::optional<std::string>& FFmpeg::Error() const noexcept {
+	return m_error;
+}
+
+std::size_t FFmpeg::InputCeiling() const noexcept {
+	return 0;
+}
+
+void FFmpeg::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
+	if (!m_log)
+		return;
+	*m_log << StormByte::Logger::component("STMM")
+		<< StormByte::Logger::group(Name())
+		<< level << std::string(message) << std::endl;
+}
+
 void FFmpeg::Fail(std::string reason) noexcept {
 	m_hold = 0;
 	m_heldFor = 0;
 	m_queue.clear();
-	Pipeline::Step::Fail(std::move(reason));
+	m_error = std::move(reason);
+	Log(Level::Error, *m_error);
+	if (m_pumper)
+		m_pumper->Fail(*m_error);
+	CloseHoppers();
+	m_wake.notify_all();
 }
 
 void FFmpeg::Hold(std::uint8_t n) noexcept {
@@ -205,9 +326,6 @@ void FFmpeg::Open() noexcept {
 	Log(Level::Notice, Name() + " setup");
 	Clean();
 	Setup();
-	if (Failed())
-		return;
-	Step::Open();
 }
 
 void FFmpeg::LastChance(const Pipeline::Frame&) noexcept {}
@@ -289,6 +407,86 @@ void FFmpeg::Finish() noexcept {
 
 	if (!Failed())
 		Eof();
+}
+
+void FFmpeg::Emit(Pipeline::Item::PointerType item) noexcept {
+	if (!item)
+		return;
+	const int key = item->Track();
+	if (auto copy = item->Clone())
+		m_tap.Push(key, std::move(copy));
+	m_out.Push(key, std::move(item));
+}
+
+void FFmpeg::Wait() noexcept {
+	Log(Level::LowLevel, "wait");
+	std::unique_lock lock(m_wait);
+	m_wake.wait(lock, [this] {
+		return Stopping() || m_in.Ready();
+	});
+	Log(Level::LowLevel, "wake");
+}
+
+void FFmpeg::Launch() noexcept {
+	if (!m_pumper || Stopping())
+		return;
+	Log(Level::LowLevel, "launch");
+	m_in.Notify(m_wake);
+	m_pumper->Launch();
+}
+
+void FFmpeg::Halt() noexcept {
+	Stop();
+	if (m_pumper)
+		m_pumper->Halt();
+}
+
+void FFmpeg::Stop() noexcept {
+	const State state = Status();
+	const bool signaled = state == State::Created || state == State::Ready;
+	if (m_pumper)
+		m_pumper->Stop();
+	if (signaled)
+		Log(Level::LowLevel, "stop");
+	CloseHoppers();
+	m_wake.notify_all();
+}
+
+bool FFmpeg::Stopping() const noexcept {
+	const State state = Status();
+	return state == State::Stopping || state == State::Stopped || state == State::Failed;
+}
+
+StormByte::Multimedia::Backend::Pipeline::Host& FFmpeg::Face() noexcept {
+	return *m_surface;
+}
+
+std::condition_variable& FFmpeg::Wake() noexcept {
+	return m_wake;
+}
+
+void FFmpeg::CloseHoppers() noexcept {
+	m_in.Eof();
+	m_out.Eof();
+	m_tap.Eof();
+}
+
+void FFmpeg::RecordWork(std::int64_t microseconds) noexcept {
+	if (microseconds < 0)
+		microseconds = 0;
+	++m_workN;
+	m_lastWork = microseconds;
+	if (microseconds < m_workMin)
+		m_workMin = microseconds;
+	if (microseconds > m_workMax)
+		m_workMax = microseconds;
+}
+
+void FFmpeg::DumpWork() noexcept {
+	if (m_workN == 0)
+		return;
+	Log(Level::Debug, std::format("work n={} min={}us max={}us",
+		m_workN, m_workMin, m_workMax));
 }
 
 Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
