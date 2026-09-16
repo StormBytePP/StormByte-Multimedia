@@ -60,6 +60,7 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline::Detail::Encoder;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
 	int ToAVPixelFormat(Property::PixelFormat format) noexcept {
