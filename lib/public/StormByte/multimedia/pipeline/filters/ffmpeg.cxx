@@ -41,8 +41,8 @@
 #include <StormByte/multimedia/backend/pipeline/detail/worker/filter.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
-#include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/backend/pipeline/pumper.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
+
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -122,15 +122,17 @@ class FFmpeg::Surface final: public StormByte::Multimedia::Backend::Pipeline::Ho
 		}
 
 		Item::PointerType Pull() noexcept override {
-			return m_owner.m_in.Pop();
+			Item::PointerType item;
+			m_owner.pipe() >> item;
+			return item;
 		}
 
 		bool InputEof() const noexcept override {
-			return m_owner.m_in.EoF();
+			return m_owner.pipe().InputEof();
 		}
 
 		void CloseOutput() noexcept override {
-			m_owner.m_out.Eof();
+			m_owner.pipe().Out().Eof();
 		}
 
 		void BecameReady() noexcept override {
@@ -156,6 +158,10 @@ FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 	m_name(std::move(name)),
 	m_receives(receives),
 	m_produces(produces),
+	m_wake(),
+	m_pipe(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Pipe>(m_wake)),
+	m_in(m_pipe->In()),
+	m_out(m_pipe->Out()),
 	m_surface(std::make_unique<Surface>(*this)),
 	m_exhausted(false),
 	m_workN(0),
@@ -415,14 +421,14 @@ void FFmpeg::Emit(Pipeline::Item::PointerType item) noexcept {
 	const int key = item->Track();
 	if (auto copy = item->Clone())
 		m_tap.Push(key, std::move(copy));
-	m_out.Push(key, std::move(item));
+	item >> *m_pipe;
 }
 
 void FFmpeg::Wait() noexcept {
 	Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Stopping() || m_in.Ready();
+		return Stopping() || m_pipe->Ready();
 	});
 	Log(Level::LowLevel, "wake");
 }
@@ -431,7 +437,7 @@ void FFmpeg::Launch() noexcept {
 	if (!m_pumper || Stopping())
 		return;
 	Log(Level::LowLevel, "launch");
-	m_in.Notify(m_wake);
+	m_pipe->Listen();
 	m_pumper->Launch();
 }
 
@@ -465,9 +471,16 @@ std::condition_variable& FFmpeg::Wake() noexcept {
 	return m_wake;
 }
 
+StormByte::Multimedia::Backend::Pipeline::Pipe& FFmpeg::pipe() noexcept {
+	return *m_pipe;
+}
+
+const StormByte::Multimedia::Backend::Pipeline::Pipe& FFmpeg::pipe() const noexcept {
+	return *m_pipe;
+}
+
 void FFmpeg::CloseHoppers() noexcept {
-	m_in.Eof();
-	m_out.Eof();
+	m_pipe->Close();
 	m_tap.Eof();
 }
 

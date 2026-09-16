@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/remux.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -83,10 +84,9 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& 
 		return remuxer;
 	}
 
-	remuxer.m_in.Notify(remuxer.Wake());
-	demuxer.m_out.Bind(remuxer.In(), remuxer.m_in);
+	demuxer.pipe().To(remuxer.In()) >> remuxer.pipe();
 	if (const std::size_t cap = remuxer.InputCeiling(); cap > 0)
-		remuxer.m_in.Capacity(remuxer.In(), cap);
+		remuxer.pipe().Capacity(remuxer.In(), cap);
 	demuxer.Log(Level::Debug, std::format("bind remuxer t={}", remuxer.In()));
 	return remuxer;
 }

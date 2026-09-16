@@ -57,6 +57,7 @@
 
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Host;
+	class Pipe;
 	class Pumper;
 	class Worker;
 }
@@ -93,8 +94,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Step
-	 * @brief One stage with an input @ref ItemSink, an output
-	 *        @ref ItemSink and an analytics tap @ref ItemSink.
+	 * @brief One stage with a @ref Backend::Pipeline::Pipe (in / out),
+	 *        an analytics tap @ref ItemSink and a look side channel.
 	 *
 	 * Owns a Pumper (thread + @ref State) and exposes hoppers to
 	 * that pumper through a private Host surface. Leaves Mount a
@@ -104,8 +105,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Volume is a Logger throttle on that component/group, not a
 	 * per-step counter.
 	 *
-	 * @ref Emit clones into @ref m_tap and then pushes the original
-	 * to @ref m_out so a later @c Save cannot race the analytics look.
+	 * @ref Emit clones into @ref m_tap and then writes the original
+	 * through the Pipe (@c item >> pipe) so a later @c Save cannot
+	 * race the analytics look.
 	 * @ref m_tap is constructed @c Drain: an unbound key drops the
 	 * clone. @ref Route binds the tap before the origin emits.
 	 *
@@ -325,7 +327,7 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void Look(ItemSink& sink) noexcept;
 
 			/**
-			 * @brief Clone into @ref m_tap, then push @p item to @ref m_out.
+			 * @brief Clone into @ref m_tap, then write the original to the Pipe.
 			 * @param item Unit to emit. Empty is a no-op.
 			 *
 			 * Always clones when @p item is set. If @ref m_tap has no
@@ -468,25 +470,42 @@ namespace StormByte::Multimedia::Pipeline {
 
 			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger (ThreadedLog preferred)
 			enum Producer m_name;								///< Default Label / Logger group
-			ItemSink m_in;										///< Input buckets
-			ItemSink m_out;									///< Output buckets (process path)
-			ItemSink m_tap;									///< Analytics tap; Drain until Route binds
-			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 			Kinds m_receives;									///< Receives
 			Kinds m_produces;									///< Produces
+
+		private:
+			std::condition_variable m_wake;						///< Single consumer CV
+			std::unique_ptr<Backend::Pipeline::Pipe> m_pipe;	///< In / out hoppers
+
+		protected:
+			/**
+			 * @brief In / out hoppers of this stage.
+			 * @return The composed Pipe.
+			 */
+			Backend::Pipeline::Pipe& pipe() noexcept;
+
+			/**
+			 * @brief In / out hoppers of this stage.
+			 * @return The composed Pipe.
+			 */
+			const Backend::Pipeline::Pipe& pipe() const noexcept;
+
+			ItemSink& m_in;										///< Input; alias of pipe().In()
+			ItemSink& m_out;									///< Output; alias of pipe().Out()
+			ItemSink m_tap;									///< Analytics tap; Drain until Route binds
+			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 
 		private:
 			class Surface;
 
 			/**
-			 * @brief Eof on @ref m_in, @ref m_out and @ref m_tap.
+			 * @brief Eof on the Pipe and @ref m_tap.
 			 */
 			void CloseHoppers() noexcept;
 
 			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
 			std::shared_ptr<class Plan> m_plan;					///< Current plan
-			std::condition_variable m_wake;						///< Single consumer CV
 			std::mutex m_wait;									///< Mutex for m_wake
 			std::optional<std::string> m_error;					///< Fail message
 			bool m_exhausted;									///< Source Ended()

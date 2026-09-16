@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/source.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/demux.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
@@ -187,10 +188,9 @@ Decoder& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Decoder& 
 	}
 
 	decoder.AttachOrigin(demuxer);
-	decoder.m_in.Notify(decoder.Wake());
-	demuxer.m_out.Bind(decoder.Index(), decoder.m_in);
+	demuxer.pipe().To(decoder.Index()) >> decoder.pipe();
 	if (const std::size_t cap = decoder.InputCeiling(); cap > 0)
-		decoder.m_in.Capacity(decoder.Index(), cap);
+		decoder.pipe().Capacity(decoder.Index(), cap);
 	demuxer.Log(Level::Debug, std::format("bind decoder t={}", decoder.Index()));
 	return decoder;
 }

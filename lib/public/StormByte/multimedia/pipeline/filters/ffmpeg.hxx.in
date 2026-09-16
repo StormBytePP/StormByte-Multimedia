@@ -62,6 +62,7 @@ struct AVPacket;
 
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Host;
+	class Pipe;
 	class Pumper;
 	class Worker;
 }
@@ -495,7 +496,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			void CallLastChance() noexcept;
 
 			/**
-			 * @brief Clone into @ref m_tap, then push @p item to @ref m_out.
+			 * @brief Clone into @ref m_tap, then write the original to the Pipe.
 			 */
 			void Emit(Pipeline::Item::PointerType item) noexcept;
 
@@ -535,7 +536,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::condition_variable& Wake() noexcept;
 
 			/**
-			 * @brief Eof on @ref m_in, @ref m_out and @ref m_tap.
+			 * @brief Eof on the Pipe and @ref m_tap.
 			 */
 			void CloseHoppers() noexcept;
 
@@ -544,14 +545,31 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger
 			std::string m_name;									///< Leaf name
-			ItemSink m_in;										///< Input buckets
-			ItemSink m_out;										///< Output buckets
-			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
 			Pipeline::Kinds m_receives;							///< Receives
 			Pipeline::Kinds m_produces;							///< Produces
+
+		private:
+			std::condition_variable m_wake;						///< Single consumer CV
+			std::unique_ptr<Backend::Pipeline::Pipe> m_pipe;	///< In / out hoppers
+
+		protected:
+			/**
+			 * @brief In / out hoppers of this filter.
+			 * @return The composed Pipe.
+			 */
+			Backend::Pipeline::Pipe& pipe() noexcept;
+
+			/**
+			 * @brief In / out hoppers of this filter.
+			 * @return The composed Pipe.
+			 */
+			const Backend::Pipeline::Pipe& pipe() const noexcept;
+
+			ItemSink& m_in;										///< Input; alias of pipe().In()
+			ItemSink& m_out;									///< Output; alias of pipe().Out()
+			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
 			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
-			std::condition_variable m_wake;						///< Single consumer CV
 			std::mutex m_wait;									///< Mutex for m_wake
 			std::optional<std::string> m_error;					///< Fail message
 			bool m_exhausted;									///< Source Ended(); unused on Through

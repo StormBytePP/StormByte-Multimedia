@@ -37,58 +37,89 @@
  */
 
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
-#include <StormByte/multimedia/exception.hxx>
-#include <StormByte/multimedia/pipeline/muxer.hxx>
-#include <StormByte/multimedia/pipeline/router.hxx>
 
-using namespace StormByte::Multimedia::Pipeline;
+#include <utility>
 
-Router::Router(std::shared_ptr<Muxer> muxer)
-: m_muxer(std::move(muxer)) {
-	if (!m_muxer)
-		throw StormByte::Multimedia::Exception("Router", "muxer is empty");
+using StormByte::Multimedia::Backend::Pipeline::Pipe;
+
+Pipe::Pipe(std::condition_variable& wake) noexcept
+:	m_wake(&wake) {}
+
+Pipe::ItemSink& Pipe::In() noexcept {
+	return m_in;
 }
 
-void Router::Bind(Step& from, Step& to) noexcept {
-	from.pipe() >> to.pipe();
+const Pipe::ItemSink& Pipe::In() const noexcept {
+	return m_in;
 }
 
-void Router::Bind(int track, Step& from, Step& to) noexcept {
-	from.pipe().To(track) >> to.pipe();
+Pipe::ItemSink& Pipe::Out() noexcept {
+	return m_out;
 }
 
-Router& Router::Add(std::unique_ptr<Route> route) noexcept {
-	if (route)
-		m_routes.push_back(std::move(route));
+const Pipe::ItemSink& Pipe::Out() const noexcept {
+	return m_out;
+}
+
+void Pipe::Capacity(int track, std::size_t n) noexcept {
+	m_in.Capacity(track, n);
+}
+
+void Pipe::Listen() noexcept {
+	m_in.Notify(*m_wake);
+}
+
+void Pipe::Close() noexcept {
+	m_in.Eof();
+	m_out.Eof();
+}
+
+bool Pipe::Ready() const noexcept {
+	return m_in.Ready();
+}
+
+bool Pipe::InputEof() const noexcept {
+	return m_in.EoF();
+}
+
+Pipe::Lane::Lane(Pipe& from, int track) noexcept
+:	m_from(&from), m_track(track) {}
+
+Pipe::Lane Pipe::To(int track) noexcept {
+	return Lane(*this, track);
+}
+
+Pipe& Pipe::Lane::operator>>(Pipe& dest) noexcept {
+	dest.Listen();
+	m_from->m_out.Bind(m_track, dest.m_in);
+	return dest;
+}
+
+Pipe& Pipe::operator>>(Pipe& dest) noexcept {
+	dest.Listen();
+	m_out.Bind(dest.m_in);
+	return dest;
+}
+
+Pipe& Pipe::operator>>(Item::PointerType& item) noexcept {
+	item = m_in.Pop();
 	return *this;
 }
 
-void Router::Close() noexcept {
-	if (!m_muxer->Failed() && !m_muxer->Armed())
-		m_muxer->Fail("muxer is not armed; missing encoder or remuxer >> muxer");
-	for (auto& route : m_routes) {
-		if (route)
-			route->Close();
-	}
+Pipe& Pipe::operator<<(Item::PointerType item) noexcept {
+	if (!item)
+		return *this;
+	const int key = item->Track();
+	m_out.Push(key, std::move(item));
+	return *this;
 }
 
-bool Router::Idle() const noexcept {
-	for (const auto& route : m_routes) {
-		if (route && !route->Idle())
-			return false;
-	}
-
-	return true;
+Pipe& StormByte::Multimedia::Backend::Pipeline::operator>>(Pipe::Item::PointerType& item, Pipe& pipe) noexcept {
+	pipe << std::move(item);
+	return pipe;
 }
 
-std::vector<Filter::Report> Router::Reports() const noexcept {
-	std::vector<Filter::Report> reports;
-	for (const auto& route : m_routes) {
-		if (!route)
-			continue;
-		auto part = route->Reports();
-		reports.insert(reports.end(), part.begin(), part.end());
-	}
-
-	return reports;
+Pipe& StormByte::Multimedia::Backend::Pipeline::operator>>(Pipe::Item::PointerType&& item, Pipe& pipe) noexcept {
+	pipe << std::move(item);
+	return pipe;
 }

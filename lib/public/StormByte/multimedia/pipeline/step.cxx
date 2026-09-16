@@ -38,6 +38,7 @@
 
 #include <StormByte/logger/manipulators.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/backend/pipeline/pumper.hxx>
 #include <StormByte/multimedia/backend/pipeline/worker.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
@@ -85,15 +86,17 @@ class Step::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host
 		}
 
 		Item::PointerType Pull() noexcept override {
-			return m_step.m_in.Pop();
+			Item::PointerType item;
+			m_step.pipe() >> item;
+			return item;
 		}
 
 		bool InputEof() const noexcept override {
-			return m_step.m_in.EoF();
+			return m_step.pipe().InputEof();
 		}
 
 		void CloseOutput() noexcept override {
-			m_step.m_out.Eof();
+			m_step.pipe().Out().Eof();
 		}
 
 		void BecameReady() noexcept override {
@@ -120,6 +123,10 @@ Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	m_name(name),
 	m_receives(receives),
 	m_produces(produces),
+	m_wake(),
+	m_pipe(std::make_unique<Backend::Pipeline::Pipe>(m_wake)),
+	m_in(m_pipe->In()),
+	m_out(m_pipe->Out()),
 	m_surface(std::make_unique<Surface>(*this)),
 	m_exhausted(false),
 	m_workN(0),
@@ -141,8 +148,7 @@ State Step::Status() const noexcept {
 }
 
 void Step::CloseHoppers() noexcept {
-	m_in.Eof();
-	m_out.Eof();
+	m_pipe->Close();
 	m_tap.Eof();
 }
 
@@ -191,11 +197,19 @@ std::condition_variable& Step::Wake() noexcept {
 	return m_wake;
 }
 
+Backend::Pipeline::Pipe& Step::pipe() noexcept {
+	return *m_pipe;
+}
+
+const Backend::Pipeline::Pipe& Step::pipe() const noexcept {
+	return *m_pipe;
+}
+
 void Step::Wait() noexcept {
 	Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Stopping() || m_in.Ready();
+		return Stopping() || m_pipe->Ready();
 	});
 	Log(Level::LowLevel, "wake");
 }
@@ -208,7 +222,7 @@ void Step::Emit(Item::PointerType item) noexcept {
 	const int key = item->Track();
 	if (auto copy = item->Clone())
 		m_tap.Push(key, std::move(copy));
-	m_out.Push(key, std::move(item));
+	item >> *m_pipe;
 }
 
 Item::PointerType Step::CloneItem(const Item& item) const noexcept {
@@ -265,7 +279,7 @@ void Step::Launch() noexcept {
 	if (!m_pumper || Stopping())
 		return;
 	Log(Level::LowLevel, "launch");
-	m_in.Notify(m_wake);
+	m_pipe->Listen();
 	m_pumper->Launch();
 }
 
@@ -278,8 +292,7 @@ void Step::Halt() noexcept {
 Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept {
 	if (!to.m_plan)
 		to.m_plan = from.m_plan;
-	to.m_in.Notify(to.Wake());
-	from.m_out.Bind(to.m_in);
+	from.pipe() >> to.pipe();
 	from.Log(Level::Debug, "bound to " + std::string(ToString(to.m_name)));
 	return to;
 }
