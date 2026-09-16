@@ -69,40 +69,41 @@ using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::SideData;
 using StormByte::Multimedia::Pipeline::SideDataKind;
 using StormByte::Multimedia::Type;
+namespace FFmpeg = StormByte::Multimedia::Backend::FFmpeg;
 
 namespace {
 	constexpr int ChromaDenominator = 50000;
 	constexpr int LuminanceDenominator = 10000;
 
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToPts(std::int64_t ticks, FFmpeg::AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks < 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, FFmpeg::AVRational{1, 1000000000});
 		if (ns < 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<StormByte::Multimedia::Property::Duration> TicksToDuration(std::int64_t ticks, FFmpeg::AVRational timeBase) noexcept {
 		if (ticks == AV_NOPTS_VALUE || ticks <= 0 || timeBase.num <= 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, FFmpeg::AVRational{1, 1000000000});
 		if (ns <= 0)
 			return std::nullopt;
 		return StormByte::Multimedia::Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	std::int64_t NsToTicks(const std::optional<StormByte::Multimedia::Property::Duration>& value, AVRational timeBase) noexcept {
+	std::int64_t NsToTicks(const std::optional<StormByte::Multimedia::Property::Duration>& value, FFmpeg::AVRational timeBase) noexcept {
 		if (!value.has_value() || timeBase.num <= 0 || timeBase.den <= 0)
 			return AV_NOPTS_VALUE;
-		return av_rescale_q(value->Nanoseconds().count(), AVRational{1, 1000000000}, timeBase);
+		return FFmpeg::AVRational{1, 1000000000}.Rescale(value->Nanoseconds().count(), timeBase);
 	}
 
-	StormByte::Multimedia::Property::Point FromChromaPair(const AVRational& x, const AVRational& y) noexcept {
+	StormByte::Multimedia::Property::Point FromChromaPair(const ::AVRational& x, const ::AVRational& y) noexcept {
 		return StormByte::Multimedia::Property::Point::Normalized(x.num, x.den, y.num, y.den, ChromaDenominator);
 	}
 
-	StormByte::Multimedia::Property::Point FromLuminancePair(const AVRational& minNits, const AVRational& maxNits) noexcept {
+	StormByte::Multimedia::Property::Point FromLuminancePair(const ::AVRational& minNits, const ::AVRational& maxNits) noexcept {
 		return StormByte::Multimedia::Property::Point::Normalized(
 			minNits.num, minNits.den, maxNits.num, maxNits.den, LuminanceDenominator);
 	}
@@ -212,7 +213,7 @@ namespace {
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
-	Video::Video(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, AVRational timeBase,
+	Video::Video(StormByte::Multimedia::Backend::FFmpeg::AVDecoder decoder, FFmpeg::AVRational timeBase,
 		std::optional<StormByte::Multimedia::Property::Video> video) noexcept
 	: m_decoder(std::move(decoder)), m_video(std::move(video)), m_timeBase(timeBase), m_flushed(false) {}
 
@@ -246,7 +247,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 		}
 
 		const std::int64_t duration = packet->Duration()
-			? av_rescale_q(packet->Duration()->Nanoseconds().count(), AVRational{1, 1000000000}, m_timeBase)
+			? FFmpeg::AVRational{1, 1000000000}.Rescale(packet->Duration()->Nanoseconds().count(), m_timeBase)
 			: 0;
 		raw.Timestamps(NsToTicks(packet->Pts(), m_timeBase), NsToTicks(packet->Dts(), m_timeBase), duration);
 
