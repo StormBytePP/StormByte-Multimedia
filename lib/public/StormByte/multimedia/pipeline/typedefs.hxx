@@ -150,23 +150,70 @@ namespace StormByte::Multimedia::Pipeline {
 			using StormByte::Bitmask<Kinds, Kind>::Bitmask;
 	};
 
-    /**
-     * @enum State
-     * @brief Lifecycle of a Step, Worker or Pumper.
-     *
-     * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
-     * Ready→Stopping, Ready→Failed, Ready→Stopped, Stopping→Stopped.
-     * Failed and Stopped do not leave.
-     *
-     * Source EOF is not a State.
-     *
-     * @ingroup multimedia_pipeline
-     */
-    enum class State: std::uint8_t {
-        Created,
-        Ready,
-        Stopping,
-        Stopped,
-        Failed
-    };
+	/**
+	 * @enum State
+	 * @brief Lifecycle of the stage thread. Values are mutually exclusive.
+	 *
+	 * This is the state of *this* stage, not of the job and not of
+	 * the bound neighbor. A neighbor learns that this stage is dead
+	 * because the shared hopper is Eof, not by reading this enum.
+	 *
+	 * Owned by the Pumper. A Worker has no State: it only Fail()s
+	 * into the Host. Step::Status exposes this value (today the
+	 * atomic still lives on Step; it moves to the Pumper when
+	 * the leaves switch over).
+	 *
+	 * Created
+	 *   Constructor finished. The object is usable: Plan can be
+	 *   bound, operator>> can wire hoppers, Stop/Fail are legal.
+	 *   Setup/Open has not returned. Pump must not take units
+	 *   from the input hopper. Launch has usually already spawned
+	 *   the thread; the thread is blocked inside Setup (waiting
+	 *   for a Plan, an origin, a path, …). This is the only state
+	 *   in which Setup may run to completion.
+	 *
+	 * Ready
+	 *   Setup returned. The backend (if any) can take work. Pump
+	 *   may pop and call Process. There is no separate "running"
+	 *   value: pumping is what a Ready thread does, not a new
+	 *   phase. Fail or Stop may still fire from here.
+	 *   When the input hopper reaches Eof and Pump returns without
+	 *   Stop(), Launch moves Ready → Stopped. That is how a stage
+	 *   ends in a live tube (Analytics after the last look, Muxer
+	 *   after the last packet). Route::Idle and Transcoder wait
+	 *   that Stopped before Reports / OnDone.
+	 *
+	 * Stopping
+	 *   Stop() was called, or Halt() from a destructor. Hoppers
+	 *   are Eof and waiters are notified. The thread has not
+	 *   joined yet. Pump and Setup must return. This is not a
+	 *   failure; the last Process({}) flush may still run.
+	 *
+	 * Stopped
+	 *   The thread has left. Hoppers stay Eof. Reached from
+	 *   Stopping after Halt/Stop, or from Ready after a natural
+	 *   hopper Eof. The tube is not reused: there is no restart
+	 *   back to Created.
+	 *
+	 * Failed
+	 *   Fail() latched a reason. Hoppers are Eof. Terminal, like
+	 *   Stopped, but Error() is set. May be entered from Created
+	 *   (Setup never succeeded) or from Ready. Does not pass
+	 *   through Stopping.
+	 *
+	 * Legal moves: Created→Ready, Created→Failed, Created→Stopping,
+	 * Ready→Stopping, Ready→Failed, Ready→Stopped, Stopping→Stopped.
+	 * Failed and Stopped do not leave.
+	 *
+	 * Source EOF is not a State. Demuxer keeps m_eof next to this.
+	 *
+	 * @ingroup multimedia_pipeline
+	 */
+	enum class State: std::uint8_t {
+		Created,
+		Ready,
+		Stopping,
+		Stopped,
+		Failed
+	};
 }
