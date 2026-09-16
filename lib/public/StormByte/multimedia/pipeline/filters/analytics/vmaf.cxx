@@ -133,9 +133,10 @@ namespace {
 * Debug is the bugreport level: first looks, latch, ignore, paced
 * scored count, eof. Per-frame park/score stays at LowLevel.
 */
-VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model) noexcept
+VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model,
+	std::optional<unsigned short> threads) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),
-	m_modelName(std::move(model)) {}
+	m_modelName(std::move(model)), m_threads(threads) {}
 
 VMAF::~VMAF() noexcept {
 	Clean();
@@ -179,10 +180,16 @@ void VMAF::Clean() noexcept {
 bool VMAF::OpenLane(Lane& lane) noexcept {
 	VmafConfiguration cfg{};
 	cfg.log_level = VMAF_LOG_LEVEL_WARNING;
-	cfg.n_threads = std::max(1u, std::thread::hardware_concurrency());
+	unsigned threads = 1;
+	if (m_threads)
+		threads = std::max<unsigned>(1u, *m_threads);
+	else if (const unsigned hw = std::thread::hardware_concurrency(); hw > 0)
+		threads = hw;
+	cfg.n_threads = threads;
 	cfg.n_subsample = 1;
 	if (vmaf_init(&lane.vmaf, cfg) != 0) {
 		Log(Level::Error, Name() + " vmaf_init failed");
+		lane.vmaf = nullptr;
 		lane.failed = true;
 		return false;
 	}
@@ -192,16 +199,24 @@ bool VMAF::OpenLane(Lane& lane) noexcept {
 	modelCfg.flags = VMAF_MODEL_FLAGS_DEFAULT;
 	if (vmaf_model_load(&lane.model, &modelCfg, m_modelName.c_str()) != 0) {
 		Log(Level::Error, std::format("{} vmaf_model_load({}) failed", Name(), m_modelName));
+		vmaf_close(lane.vmaf);
+		lane.vmaf = nullptr;
 		lane.failed = true;
 		return false;
 	}
 
 	if (vmaf_use_features_from_model(lane.vmaf, lane.model) != 0) {
 		Log(Level::Error, Name() + " vmaf_use_features_from_model failed");
+		vmaf_close(lane.vmaf);
+		lane.vmaf = nullptr;
+		vmaf_model_destroy(lane.model);
+		lane.model = nullptr;
 		lane.failed = true;
 		return false;
 	}
 
+	Log(Level::Debug, std::format("{} libvmaf ready threads={} subsample=1",
+		Name(), cfg.n_threads));
 	return true;
 }
 
@@ -314,6 +329,8 @@ void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsign
 
 	if (vmaf_read_pictures(lane.vmaf, &pref, &pdist, index) != 0) {
 		Log(Level::Warning, Name() + " skip pair, vmaf_read_pictures failed");
+		vmaf_picture_unref(&pref);
+		vmaf_picture_unref(&pdist);
 		return;
 	}
 

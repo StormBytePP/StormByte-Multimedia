@@ -61,7 +61,8 @@ struct AVFrame;
  * Inherit @ref Filter::Process to rewrite frames, or
  * @ref Filter::Analytics to observe them. Do not inherit
  * @ref Filter::FFmpeg. Attach with
- * @c job.Filter<VMAF>(log, "vmaf_4k_v0.6.1").
+ * @c job.Filter<VMAF>(log, "vmaf_4k_v0.6.1") or
+ * @c job.Filter<VMAF>(log, "vmaf_4k_v0.6.1", 8).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -102,7 +103,19 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * clones into per-track parks with no bound: the
 	 * park must cover encoder delay. @ref Drain frees a
 	 * pair as soon as both heads exist. After a successful
-	 * @c vmaf_read_pictures libvmaf owns the VmafPictures.
+	 * @c vmaf_read_pictures libvmaf owns the VmafPictures
+	 * and unrefs them. A failed read still belongs to us:
+	 * Score unrefs both pictures.
+	 *
+	 * libvmaf feature extractors scale with n_threads ×
+	 * resolution, not duration. Default n_threads is
+	 * @c std::thread::hardware_concurrency() (all cores).
+	 * 4K 10-bit (`vmaf_4k_v0.6.1`, subsample 1) at 32
+	 * threads holds ~18.5 GiB for the whole job (massif
+	 * plateau; peak ~20.5 GiB at extractor init). RSS is
+	 * the same order. A second video track opens another
+	 * context of that size. Pass a smaller thread count in
+	 * the constructor to cap it.
 	 *
 	 * @par When to read @ref Report
 	 * Muxer closed is not Eof on this node. Wait Filters::Idle
@@ -121,8 +134,17 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @brief VMAF with a built-in libvmaf model version.
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param model libvmaf version key (`vmaf_4k_v0.6.1`).
+			 * @param threads libvmaf worker count. Empty uses all
+			 *        cores (`std::thread::hardware_concurrency()`).
+			 *
+			 * RAM follows threads × resolution, not duration. 4K
+			 * 10-bit (`vmaf_4k_v0.6.1`, subsample 1) at 32 threads
+			 * holds ~18.5 GiB for the job (peak ~20.5 GiB). A
+			 * second video track opens another context of the
+			 * same size.
 			 */
-			VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model) noexcept;
+			VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model,
+				std::optional<unsigned short> threads = {}) noexcept;
 
 			VMAF(const VMAF& other) = delete;
 			VMAF(VMAF&& other) noexcept = delete;
@@ -212,6 +234,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 *
 			 * On success libvmaf takes the picture in
 			 * @c vmaf_read_pictures. Do not unref after that.
+			 * On a failed read, the caller still owns both
+			 * pictures and must unref them.
 			 */
 			bool Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept;
 
@@ -248,6 +272,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 
 			static constexpr std::size_t Ceiling = 512;	///< Analytics hopper only
 			std::string m_modelName;					///< libvmaf built-in version
+			std::optional<unsigned short> m_threads;	///< Empty: all cores
 			std::map<int, Lane> m_lanes;				///< One context per Frame::Track
 	};
 }

@@ -241,7 +241,7 @@ graph.Close();
 
 Filters are leaves, not a second pipeline language. `Scale` is resize (that is the name). `Watermark` is a still image on decoded video, with Hold so a black slate at the start does not pin the letterbox probe too early.
 
-Analytics never emit into the encode lane. The last analytics node is a drain. VMAF (when built) compares a reference decode against a post-encode look: `Filters` mounts an internal decoder in EncodeLook mode, scales the distorted geometry to the latched reference, and reports mean / min against model `vmaf_4k_v0.6.1`. One libvmaf context per `Frame::Track`. That look is not a user API.
+Analytics never emit into the encode lane. The last analytics node is a drain. VMAF (when built) compares a reference decode against a post-encode look: `Filters` mounts an internal decoder in EncodeLook mode, scales the distorted geometry to the latched reference, and reports mean / min against model `vmaf_4k_v0.6.1`. One libvmaf context per `Frame::Track`. Default `n_threads` is all cores; 4K 10-bit at 32 threads holds ~18.5 GiB for the job (peak ~20.5 GiB). Pass a smaller count as the third constructor argument. That look is not a user API.
 
 Write a new filter the same way `Scale` and `Watermark` are written. Do not add public friends so a coordinator can peek.
 
