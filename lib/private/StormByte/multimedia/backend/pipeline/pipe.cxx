@@ -74,6 +74,10 @@ void Pipe::Close() noexcept {
 	m_out.Eof();
 }
 
+void Pipe::Drain() noexcept {
+	m_out.Drain();
+}
+
 bool Pipe::Ready() const noexcept {
 	return m_in.Ready();
 }

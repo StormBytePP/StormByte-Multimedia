@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/backend/pipeline/detail/worker/mux.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/backend/pipeline/muxer.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
@@ -218,7 +219,7 @@ bool Muxer::RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept {
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = encoder.m_plan;
-	muxer.m_in.Notify(muxer.Wake());
+	muxer.pipe().Listen();
 	if (muxer.Failed() || encoder.Failed())
 		return encoder;
 	if (!muxer.m_backend) {
@@ -227,9 +228,9 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 	}
 
 	muxer.m_backend->ReserveEncoder(muxer, encoder);
-	encoder.m_out.Bind(encoder.Index(), muxer.m_in);
+	encoder.pipe().To(encoder.Index()) >> muxer.pipe();
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
-		muxer.m_in.Capacity(encoder.Index(), cap);
+		muxer.pipe().Capacity(encoder.Index(), cap);
 	muxer.m_reserved.fetch_add(1, std::memory_order_acq_rel);
 	muxer.Log(Level::Debug, std::format("reserve encoder t={}", encoder.Index()));
 	if (muxer.Armed())
@@ -240,7 +241,7 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = remuxer.m_plan;
-	muxer.m_in.Notify(muxer.Wake());
+	muxer.pipe().Listen();
 	if (muxer.Failed() || remuxer.Failed())
 		return remuxer;
 	if (!muxer.m_backend) {
@@ -250,9 +251,9 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 
 	if (!muxer.m_backend->ReserveRemux(muxer, remuxer.In()))
 		return remuxer;
-	remuxer.m_out.Bind(remuxer.In(), muxer.m_in);
+	remuxer.pipe().To(remuxer.In()) >> muxer.pipe();
 	if (const std::size_t cap = muxer.InputCeiling(); cap > 0)
-		muxer.m_in.Capacity(remuxer.In(), cap);
+		muxer.pipe().Capacity(remuxer.In(), cap);
 	muxer.m_reserved.fetch_add(1, std::memory_order_acq_rel);
 	muxer.Log(Level::Debug, std::format("reserve remux t={}", remuxer.In()));
 	if (muxer.Armed())

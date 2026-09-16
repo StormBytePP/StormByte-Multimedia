@@ -76,7 +76,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Step::Emit). Packet origins spawn a Route-owned
 	 * Decoder so Analytics still sees frames with
 	 * @ref Producer::Decoder. Destination packet producers
-	 * expose @ref Step::Look. The last Analytics @c m_out is
+	 * expose @ref Step::Look. The last Analytics Pipe Out is
 	 * @c StormByte::Buffer::Sink::Drain.
 	 *
 	 * Close is private: add Routes to a @ref Router and call
@@ -158,7 +158,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * A leaf that is not Process, Packet or Analytics fails
 			 * the filter. Launch starts the worker; the worker waits
-			 * on @c m_in until @ref Router::Close binds a hopper.
+			 * on the Pipe until @ref Router::Close binds a hopper.
 			 */
 			Route& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
@@ -198,9 +198,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Wires this track from the stored origin to destination.
 			 *
 			 * Private: @ref Router is the only caller. O(1) at the
-			 * ends. Uses @c Bind(track, …) for Process. Analytics
+			 * ends. Process uses Pipe @c >> . Analytics
 			 * receives a source look and a dest look via
-			 * destination.Look. Last Analytics @c m_out is Drained.
+			 * destination.Look. Last Analytics Pipe Out is Drained.
 			 */
 			void Close() noexcept;
 
@@ -250,7 +250,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * No-op when the lane has no Analytics. Frame producers
 			 * bind @c origin.m_tap. Packet producers spawn a Decoder
 			 * on that tap (@ref Producer::Decoder frames). Does not
-			 * share @c origin.m_out.
+			 * share the origin Pipe Out.
 			 */
 			void TapDecode(Step& origin, Lane& lane) noexcept;
 

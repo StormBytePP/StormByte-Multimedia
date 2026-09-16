@@ -131,6 +131,11 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void Close() noexcept;
 
 			/**
+			 * @brief Drain Out until a consumer Binds.
+			 */
+			void Drain() noexcept;
+
+			/**
 			 * @brief Whether In has a unit or is EoF.
 			 * @return @c In().Ready().
 			 */

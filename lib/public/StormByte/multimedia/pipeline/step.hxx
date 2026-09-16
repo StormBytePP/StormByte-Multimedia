@@ -114,7 +114,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Look is the encode-look hook. Default is a no-op.
 	 * Encoder overrides it and deep-copies encoded packets into
 	 * the look decoder sink. It is not a public Encoder API and
-	 * it is not a copy of @ref m_out. @ref Route::TapEncode calls
+	 * it is not a copy of the encode Pipe. @ref Route::TapEncode calls
 	 * it through this Step hook.
 	 *
 	 * @ingroup multimedia_pipeline
@@ -317,11 +317,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Encode-look side channel. Default no-op.
-			 * @param sink Look decoder @c m_in.
+			 * @param sink Look decoder input hopper.
 			 *
 			 * Encoder overrides and deep-copies each encoded packet
 			 * into @p sink. Other leaves leave this empty. Not a copy
-			 * of @ref m_out. @ref Route::TapEncode calls this hook;
+			 * of the encode Pipe. @ref Route::TapEncode calls this hook;
 			 * there is no public Encoder method for it.
 			 */
 			virtual void Look(ItemSink& sink) noexcept;
@@ -332,8 +332,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Always clones when @p item is set. If @ref m_tap has no
 			 * hopper for that key, Drain drops the clone. Serial, Part
-			 * and timing stay on the copy. Call this instead of pushing
-			 * @ref m_out directly.
+			 * and timing stay on the copy. Call this instead of writing
+			 * the Pipe Out directly.
 			 */
 			void Emit(Item::PointerType item) noexcept;
 
@@ -490,8 +490,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
 
-			ItemSink& m_in;										///< Input; alias of pipe().In()
-			ItemSink& m_out;									///< Output; alias of pipe().Out()
 			ItemSink m_tap;									///< Analytics tap; Drain until Route binds
 			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 

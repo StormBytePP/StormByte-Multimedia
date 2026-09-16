@@ -97,7 +97,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * pinned or selected, otherwise `Encoder(<registry name>)`.
 	 *
 	 * Encode-look is @ref Step::Look. This class overrides it
-	 * privately. It is not @ref m_out and it is not
+	 * privately. It is not the encode Pipe and it is not
 	 * @ref Step::Emit 's analytics tap. The look packet is a
 	 * deep copy: Muxer and the look decoder both Extract the
 	 * Packet FIFO; one cursor cannot serve two consumers.
@@ -423,9 +423,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Encode-look side channel. Deep-copies each encoded packet into @p sink.
-			 * @param sink Look decoder @c m_in.
+			 * @param sink Look decoder input hopper.
 			 *
-			 * Overrides the Step no-op. Not @ref m_out and not
+			 * Overrides the Step no-op. Not the encode Pipe and not
 			 * @ref Step::Emit. @ref Route::TapEncode calls this hook.
 			 */
 			void Look(ItemSink& sink) noexcept override;
@@ -506,7 +506,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;			///< Encode backend
 			std::optional<std::uint64_t> m_serial;							///< Lineage of the last accepted frame
 			std::uint64_t m_part;											///< Part of the last accepted frame
-			ItemSink m_lookOut;												///< Encode-look producer; not m_out
+			ItemSink m_lookOut;												///< Encode-look producer; not the Pipe
 			Join m_join{*this};												///< Halt before other members die
 	};
 }

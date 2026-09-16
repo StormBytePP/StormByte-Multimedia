@@ -565,8 +565,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
 
-			ItemSink& m_in;										///< Input; alias of pipe().In()
-			ItemSink& m_out;									///< Output; alias of pipe().Out()
 			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
 			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
@@ -675,7 +673,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * Decoder on the pre-encode look and Encoder on the
 	 * post-encode look. Match units with Serial / Part / Dts.
 	 *
-	 * Decode and encode looks share one @c m_in. A Hold would
+	 * Decode and encode looks share one input hopper. A Hold would
 	 * park both looks in one FIFO and break pairing. Buffer
 	 * unmatched frames in the plugin (map by Serial / Part).
 	 *

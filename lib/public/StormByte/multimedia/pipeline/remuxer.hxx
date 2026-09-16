@@ -78,7 +78,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * born at the demuxer.
 	 *
 	 * Dest-look is @ref Look / @ref m_lookOut, the same side
-	 * channel Encoder uses. Not @ref m_out and not @ref m_tap.
+	 * channel Encoder uses. Not the Pipe Out and not @ref m_tap.
 	 * The look packet is a deep copy so Muxer and the look
 	 * decoder do not share a Packet FIFO cursor.
 	 *
@@ -178,7 +178,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Dest-look side channel. Shares @ref m_lookOut with @p sink.
-			 * @param sink Look decoder @c m_in.
+			 * @param sink Look decoder input hopper.
 			 *
 			 * Same contract as Encoder::Look. @ref Route::TapEncode
 			 * calls this on a remux stretch.
