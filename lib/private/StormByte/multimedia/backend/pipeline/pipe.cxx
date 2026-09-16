@@ -141,12 +141,14 @@ Pipe& Pipe::operator<<(Item::PointerType item) noexcept {
 	return *this;
 }
 
-Pipe& StormByte::Multimedia::Backend::Pipeline::operator>>(Pipe::Item::PointerType& item, Pipe& pipe) noexcept {
-	pipe << std::move(item);
-	return pipe;
-}
+namespace StormByte::Multimedia::Backend::Pipeline {
+	Pipe& operator>>(Pipe::Item::PointerType& item, Pipe& pipe) noexcept {
+		pipe << std::move(item);
+		return pipe;
+	}
 
-Pipe& StormByte::Multimedia::Backend::Pipeline::operator>>(Pipe::Item::PointerType&& item, Pipe& pipe) noexcept {
-	pipe << std::move(item);
-	return pipe;
+	Pipe& operator>>(Pipe::Item::PointerType&& item, Pipe& pipe) noexcept {
+		pipe << std::move(item);
+		return pipe;
+	}
 }

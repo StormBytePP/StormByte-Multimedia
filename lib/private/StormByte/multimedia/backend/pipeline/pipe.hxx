@@ -69,6 +69,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * blocks on the bound consumer Capacity). @c pipe >> item
 	 * is Pop from In only; Wait stays on the Host.
 	 *
+	 * The free @c operator>>(item, pipe) overloads are declared
+	 * in this namespace (not friend-only) so GCC can define them
+	 * out of line. They move the unit into @c pipe Out.
+	 *
 	 * @ref CloneTo may be called more than once (per-track VMAF
 	 * plus a general VMAF). Each write clones to every dest.
 	 *
@@ -183,7 +187,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 					 */
 					Pipe& operator>>(Pipe& dest) noexcept;
 
-				private:
+			    private:
 					friend class Pipe;
 					Lane(Pipe& from, int track) noexcept;
 					Pipe* m_from;
@@ -227,6 +231,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param item Unit. Moved. Empty is a no-op.
 			 * @param pipe Destination pipe.
 			 * @return @p pipe.
+			 *
+			 * Friend so the free function can call @c operator<<.
+			 * A matching namespace declaration lives after this class
+			 * (GCC will not define a friend-only operator out of line).
 			 */
 			friend Pipe& operator>>(Item::PointerType& item, Pipe& pipe) noexcept;
 
@@ -235,6 +243,9 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param item Unit. Empty is a no-op.
 			 * @param pipe Destination pipe.
 			 * @return @p pipe.
+			 *
+			 * Rvalue overload of the free write. Same namespace
+			 * declaration as the lvalue overload.
 			 */
 			friend Pipe& operator>>(Item::PointerType&& item, Pipe& pipe) noexcept;
 
@@ -249,4 +260,26 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::deque<Fork> m_forks;			///< CloneTo dests
 			std::unordered_set<int> m_inTracks;	///< Keys already wired on In
 	};
+
+	/**
+	 * @brief Write: lvalue @p item flows into @p pipe Out.
+	 * @param item Unit. Moved. Empty is a no-op.
+	 * @param pipe Destination pipe.
+	 * @return @p pipe.
+	 *
+	 * Namespace declaration required by GCC next to the friend
+	 * inside @ref Pipe. Implementation is @c pipe << std::move(item).
+	 */
+	Pipe& operator>>(Pipe::Item::PointerType& item, Pipe& pipe) noexcept;
+
+	/**
+	 * @brief Write: rvalue @p item flows into @p pipe Out.
+	 * @param item Unit. Empty is a no-op.
+	 * @param pipe Destination pipe.
+	 * @return @p pipe.
+	 *
+	 * Namespace declaration required by GCC next to the friend
+	 * inside @ref Pipe. Implementation is @c pipe << std::move(item).
+	 */
+	Pipe& operator>>(Pipe::Item::PointerType&& item, Pipe& pipe) noexcept;
 }
