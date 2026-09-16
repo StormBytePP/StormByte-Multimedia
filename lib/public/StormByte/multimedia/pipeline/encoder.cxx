@@ -97,9 +97,7 @@ Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
 	Launch();
 }
 
-Encoder::~Encoder() noexcept {
-	Halt();
-}
+Encoder::~Encoder() noexcept = default;
 
 Encoder::operator bool() const noexcept {
 	return !Failed() && Ready() && m_backend && m_backend->IsOpen();
