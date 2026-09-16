@@ -16,7 +16,7 @@ The suite is split on purpose. Base, Buffer, Config, Crypto, Database, Logger, N
 ## What this module does
 
 - **A closed job intention** — `Plan` owns the origin `File` (move-only), the destination `Container`, the output path and the **output** track list. `add` order is mux order. Omit a stream and it is dropped. `Check()` asks whether the intention is well formed, not whether FFmpeg will succeed.
-- **A tube of workers** — `Plan >> Demuxer >> (Decoder | Remuxer) [>> Route / filters] >> Encoder? >> Muxer`. Each `Step` is a worker with hoppers. Items are `Packet` (compressed AU) or `Frame` (decoded AU). Timing has no public setters. `Serial` is a monotone tube id, not `nb_frames`.
+- **A tube of workers** — `Plan >> Demuxer >> (Decoder | Remuxer) [>> Filters] >> Encoder? >> Muxer`. Each `Step` is a worker with hoppers. Items are `Packet` (compressed AU) or `Frame` (decoded AU). Timing has no public setters. `Serial` is a monotone tube id, not `nb_frames`.
 - **Two ways in** — `Transcoder` is the File→File facade (inheritable, hookable, zero hacks). The same tube can be wired by hand with `operator>>`. Anything `Transcoder` can do, a hand-built tube can do. If a user-built tube fails, `Transcoder` fails the same way.
 - **Registry** — codecs and containers that actually exist in this build. Look up `"H.265"` / `"hevc"` or `"Matroska"` / `"matroska"`. Missing name is an error, not a silent fallback.
 - **Filters** — typed leaves on decoded frames or compressed packets (`Scale`, `Watermark`, analytics / VMAF, …). A bad filter is a Warning and the job continues. A broken tube frame is a Fail.
@@ -217,7 +217,16 @@ demux >> decode >> encode >> mux >> std::filesystem::path{"out.mkv"};
 
 `operator>>` shares the `Plan` and binds hoppers. `Demuxer` produces `Packet`s and receives nothing. `Decoder` turns those into `Frame`s. `Encoder` produces `Packet`s again. `Muxer` reserves the output slot — remux does not. Fan-out from one demuxer to several decoders / remuxers is the same operator.
 
-`Route` sits between a decoder and an encoder when you need a filter chain or analytics on that track. `Transcoder` builds those routes for you. By hand you construct a `Route(track)`, `Add` filters, and `Close(origin, destination)`.
+`Filters` sits between two `shared_ptr<Step>` ends when you need a filter chain or analytics. `Transcoder` builds that graph for you. By hand:
+
+```cpp
+auto decode = std::make_shared<Decoder>(logger, 0);
+auto encode = std::make_shared<Encoder>(logger, 0, *hevc);
+Filters graph;
+graph.Between(decode, encode).Add<Scale>(logger, 1920, 1080);
+graph.Add<Filter::Video::VMAF>(logger, "vmaf_4k_v0.6.1");	// one node, every matching stretch
+graph.Close();
+```
 
 ## Plan, items and the tube contract
 
@@ -232,7 +241,7 @@ demux >> decode >> encode >> mux >> std::filesystem::path{"out.mkv"};
 
 Filters are leaves, not a second pipeline language. `Scale` is resize (that is the name). `Watermark` is a still image on decoded video, with Hold so a black slate at the start does not pin the letterbox probe too early.
 
-Analytics never emit into the encode lane. The last analytics node is a drain. VMAF (when built) compares a reference decode against a post-encode look: `Route` mounts an internal decoder in EncodeLook mode, scales the distorted geometry to the latched reference, and reports mean / min against model `vmaf_4k_v0.6.1`. That look is not a user API.
+Analytics never emit into the encode lane. The last analytics node is a drain. VMAF (when built) compares a reference decode against a post-encode look: `Filters` mounts an internal decoder in EncodeLook mode, scales the distorted geometry to the latched reference, and reports mean / min against model `vmaf_4k_v0.6.1`. One libvmaf context per `Frame::Track`. That look is not a user API.
 
 Write a new filter the same way `Scale` and `Watermark` are written. Do not add public friends so a coordinator can peek.
 

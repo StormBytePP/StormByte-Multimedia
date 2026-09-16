@@ -96,12 +96,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Label is `Encoder(libx265)` when an implementation is
 	 * pinned or selected, otherwise `Encoder(<registry name>)`.
 	 *
-	 * Encode-look is @ref Step::Look. This class overrides it
-	 * privately. It is not the encode Pipe and it is not
-	 * @ref Step::Emit 's analytics tap. The look packet is a
-	 * deep copy: Muxer and the look decoder both Extract the
-	 * Packet FIFO; one cursor cannot serve two consumers.
-	 *
+	 * Encode-look is @ref Backend::Pipeline::Pipe::CloneTo on the
+	 * encode Pipe (Filters dest look). There is no side hopper.
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Encoder final: public Step {
@@ -422,15 +418,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Encode-look side channel. Deep-copies each encoded packet into @p sink.
-			 * @param sink Look decoder input hopper.
-			 *
-			 * Overrides the Step no-op. Not the encode Pipe and not
-			 * @ref Step::Emit. @ref Route::TapEncode calls this hook.
-			 */
-			void Look(ItemSink& sink) noexcept override;
-
-			/**
 			 * @brief Builds an encoded packet. Called from the encode backend.
 			 * @param type Destination codec type.
 			 * @param index Mux destination order key.
@@ -481,12 +468,8 @@ namespace StormByte::Multimedia::Pipeline {
 			const void* FrameHandle(const Frame& frame) noexcept;
 
 			/**
-			 * @brief Deep-copies @p packet to the look sink, then
-			 *        @ref StormByte::Multimedia::Pipeline::Step::Emit s the original.
+			 * @brief @ref StormByte::Multimedia::Pipeline::Step::Emit of the encoded packet.
 			 * @param packet Encoded unit. Empty pointers are ignored.
-			 *
-			 * Not @ref Step::Emit. Hides that name on purpose: look
-			 * copy must happen before the mux packet moves.
 			 */
 			void Emit(Packet::PointerType packet) noexcept;
 
@@ -506,7 +489,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::unique_ptr<Backend::Pipeline::Encoder> m_backend;			///< Encode backend
 			std::optional<std::uint64_t> m_serial;							///< Lineage of the last accepted frame
 			std::uint64_t m_part;											///< Part of the last accepted frame
-			ItemSink m_lookOut;												///< Encode-look producer; not the Pipe
 			Join m_join{*this};												///< Halt before other members die
 	};
 }

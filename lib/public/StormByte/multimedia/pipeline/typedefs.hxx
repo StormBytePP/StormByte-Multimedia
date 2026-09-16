@@ -108,7 +108,7 @@ namespace StormByte::Multimedia::Pipeline {
 		Remuxer,	///< @ref Remuxer
 		Filter,		///< @ref Filter::FFmpeg
 		Route,		///< @ref Route
-		Router,		///< @ref Router
+		Filters,	///< @ref Filters
 		Encoder,	///< @ref Encoder
 		Muxer		///< @ref Muxer
 	};
@@ -125,7 +125,7 @@ namespace StormByte::Multimedia::Pipeline {
 			case Producer::Remuxer:	return "Remuxer";
 			case Producer::Filter:	return "Filter";
 			case Producer::Route:	return "Route";
-			case Producer::Router:	return "Router";
+			case Producer::Filters:	return "Filters";
 			case Producer::Encoder:	return "Encoder";
 			case Producer::Muxer:	return "Muxer";
 			default:				return "Invalid";
@@ -179,7 +179,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   When the input hopper reaches Eof and Pump returns without
 	 *   Stop(), Launch moves Ready → Stopped. That is how a stage
 	 *   ends in a live tube (Analytics after the last look, Muxer
-	 *   after the last packet). Route::Idle and Transcoder wait
+	 *   after the last packet). Filters::Idle and Transcoder wait
 	 *   that Stopped before Reports / OnDone.
 	 *
 	 * Stopping

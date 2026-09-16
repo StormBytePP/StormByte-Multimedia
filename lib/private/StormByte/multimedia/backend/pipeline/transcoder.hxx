@@ -54,6 +54,7 @@
 #include <stop_token>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 /**
@@ -138,6 +139,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::filesystem::path Path;
 			std::vector<TranscoderSlot> Mapped;
 			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Analytics;
+			std::vector<std::pair<std::string, StormByte::Multimedia::Pipeline::Filter::Report>> Reports;
 
 		private:
 			/**

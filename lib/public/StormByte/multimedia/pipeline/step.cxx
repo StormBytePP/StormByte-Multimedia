@@ -210,8 +210,6 @@ void Step::Wait() noexcept {
 	Log(Level::LowLevel, "wake");
 }
 
-void Step::Look(ItemSink&) noexcept {}
-
 void Step::Emit(Item::PointerType item) noexcept {
 	item >> *m_pipe;
 }

@@ -45,6 +45,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -68,7 +69,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @brief Full-reference VMAF. Reference Analytics leaf.
 	 *
 	 * @par What an Analytics leaf is
-	 * Analytics is not on the encode path. Route binds the
+	 * Analytics is not on the encode path. Filters CloneTo s the
 	 * Decoder tap (reference look, cloned before Process) and
 	 * a Route-owned dest look (distorted look) onto this
 	 * node. @ref Process sees only @ref Pipeline::Frame.
@@ -78,14 +79,16 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @ref FFmpeg::Save.
 	 *
 	 * Implement @ref Setup, @ref Process, @ref Eof, @ref Clean,
-	 * @ref Report, @ref Media. Route launches the worker.
+	 * @ref Report, @ref Media. Filters launches the worker.
 	 *
 	 * @par Pairing
-	 * Presentation FIFOs, not Serial or PTS. Serial is tube
-	 * lineage and does not identify a reconstructed picture
-	 * when the encoder has delay. Each look leaves avcodec
-	 * in presentation order, so the nth Decoder tap frame is
-	 * the same picture as the nth dest-look frame.
+	 * Presentation FIFOs per @ref Pipeline::Frame::Track, not Serial
+	 * or PTS. Serial is tube lineage and does not identify a
+	 * reconstructed picture when the encoder has delay. Each look
+	 * leaves avcodec in presentation order, so the nth Decoder tap
+	 * frame of a track is the same picture as the nth dest-look
+	 * frame of that track. One libvmaf context per track. There is
+	 * no pooled mean across tracks.
 	 *
 	 * @par Geometry
 	 * Latched on the first valid reference. Distorted looks
@@ -96,19 +99,21 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @par Memory
 	 * @ref InputCeiling sizes the analytics hopper (tap +
 	 * look). That is backpressure, not a park cap. Process
-	 * clones into @c m_ref / @c m_dist with no bound: the
+	 * clones into per-track parks with no bound: the
 	 * park must cover encoder delay. @ref Drain frees a
 	 * pair as soon as both heads exist. After a successful
 	 * @c vmaf_read_pictures libvmaf owns the VmafPictures.
 	 *
 	 * @par When to read @ref Report
-	 * Muxer closed is not Eof on this node. Halt the Route
+	 * Muxer closed is not Eof on this node. Wait Filters::Idle
 	 * first. A low score is not Fail. @ref Report::Failed
-	 * only when the context or model could not be opened, or
-	 * no pair was scored.
+	 * only when a context or model could not be opened, or
+	 * no pair was scored. One track keeps flat keys
+	 * (`vmaf_mean`). Several tracks prefix with the origin
+	 * index (`0.vmaf_mean`, `1.vmaf_mean`).
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Analytics
-	 * @see StormByte::Multimedia::Pipeline::Route
+	 * @see StormByte::Multimedia::Pipeline::Filters
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC VMAF: public Filter::Analytics {
 		public:
@@ -150,6 +155,10 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			/**
 			 * @brief Pooled VMAF after EoF.
 			 * @return Ok with mean/min/frames, or Failed.
+			 *
+			 * One scored track: `vmaf_mean` / `vmaf_min` / `frames`.
+			 * Several: `0.vmaf_mean`, `1.vmaf_mean` (origin index).
+			 * No mean of means.
 			 */
 			class Filter::Report Report() const noexcept override;
 
@@ -160,15 +169,16 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Clean() noexcept override;
 
 			/**
-			 * @brief Opens libvmaf and loads @ref m_modelName.
-			 *
-			 * Failure sets @ref m_failed. Process becomes a no-op.
+			 * @brief Names the model. Contexts open on the first look of each track.
 			 */
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Parks one look and scores when both FIFOs have a head.
+			 * @brief Parks one look and scores when both FIFOs of that track have a head.
 			 * @param frame Decoder (ref) or Encoder/Remuxer (dist) video frame.
+			 *
+			 * Lane is @ref Pipeline::Frame::Track. No extra constructor
+			 * argument for N videos.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
@@ -178,6 +188,20 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void Eof() noexcept override;
 
 		private:
+			struct Lane {
+				VmafContext* vmaf = nullptr;
+				VmafModel* model = nullptr;
+				std::deque<::AVFrame*> ref;
+				std::deque<::AVFrame*> dist;
+				int width = 0;
+				int height = 0;
+				unsigned index = 0;
+				unsigned scored = 0;
+				std::optional<double> mean;
+				std::optional<double> min;
+				bool failed = false;
+			};
+
 			/**
 			 * @brief Copies @p raw into a VmafPicture, scaling to @p tw x @p th.
 			 * @param raw Source libav frame.
@@ -192,37 +216,38 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			bool Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept;
 
 			/**
+			 * @brief Opens a libvmaf context and model on @p lane.
+			 */
+			bool OpenLane(Lane& lane) noexcept;
+
+			/**
 			 * @brief Hands one pair to libvmaf at contiguous @p index.
+			 * @param lane Track context.
 			 * @param ref Decoder tap look.
 			 * @param dist Dest look (Encoder or Remuxer).
 			 * @param index Next libvmaf picture index (0..n).
 			 *
 			 * Does not free @p ref / @p dist. @ref Drain does.
 			 */
-			void Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept;
+			void Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept;
 
 			/**
-			 * @brief Scores while both presentation FIFOs have a frame.
+			 * @brief Scores while both presentation FIFOs of @p lane have a frame.
 			 */
-			void Drain() noexcept;
+			void Drain(Lane& lane) noexcept;
 
 			/**
-			 * @brief Frees every parked clone.
+			 * @brief Frees parked clones of @p lane.
 			 */
-			void DropParked() noexcept;
+			void DropParked(Lane& lane) noexcept;
+
+			/**
+			 * @brief Closes libvmaf and drops parked looks of every lane.
+			 */
+			void DropAll() noexcept;
 
 			static constexpr std::size_t Ceiling = 512;	///< Analytics hopper only
 			std::string m_modelName;					///< libvmaf built-in version
-			VmafContext* m_vmaf;						///< libvmaf context
-			VmafModel* m_model;							///< Loaded model
-			std::deque<::AVFrame*> m_ref;				///< Decoder looks, presentation order
-			std::deque<::AVFrame*> m_dist;				///< Encoder/Remuxer looks, presentation order
-			int m_width;								///< Latched picture width
-			int m_height;								///< Latched picture height
-			unsigned m_index;							///< Next contiguous libvmaf index
-			unsigned m_scored;							///< Pairs accepted by libvmaf
-			std::optional<double> m_mean;				///< Pooled mean after Eof
-			std::optional<double> m_min;				///< Pooled min after Eof
-			bool m_failed;								///< Context or model failed to open
+			std::map<int, Lane> m_lanes;				///< One context per Frame::Track
 	};
 }

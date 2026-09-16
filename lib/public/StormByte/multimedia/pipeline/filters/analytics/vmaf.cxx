@@ -44,6 +44,7 @@
 #include <algorithm>
 #include <cstring>
 #include <format>
+#include <map>
 #include <thread>
 
 extern "C" {
@@ -115,27 +116,26 @@ namespace {
 }
 
 /*
-* Analytics leaf. Route::Add only accepts Process / Packet / Analytics.
+* Analytics leaf. Filters::Add / Between::Add only accept
+* Process / Packet / Analytics.
 *
 * Construction names the node ("vmaf") so logs and Report dumps
-* can tell filters apart. Do not Launch() here: Route::Add does.
+* can tell filters apart. Do not Launch() here: Filters does.
 *
 * Two looks arrive on the same Process: Producer::Decoder is the
 * reference, Producer::Encoder or Producer::Remuxer is the distorted
 * reconstruct. Clone the raw AVFrame; Work will Drain the StormByte
 * Frame after this returns.
 *
-* Pairing is presentation FIFO, not Serial and not container PTS.
+* Pairing is presentation FIFO per Frame::Track, not Serial and
+* not container PTS. One libvmaf context per track.
 *
 * Debug is the bugreport level: first looks, latch, ignore, paced
 * scored count, eof. Per-frame park/score stays at LowLevel.
 */
 VMAF::VMAF(std::shared_ptr<StormByte::Logger::Log> log, std::string model) noexcept
 : Filter::Analytics(std::move(log), "vmaf"),
-	m_modelName(std::move(model)),
-	m_vmaf(nullptr), m_model(nullptr),
-	m_width(0), m_height(0),
-	m_index(0), m_scored(0), m_failed(false) {}
+	m_modelName(std::move(model)) {}
 
 VMAF::~VMAF() noexcept {
 	Clean();
@@ -145,66 +145,69 @@ enum Type VMAF::Media() const noexcept {
 	return Type::Video;
 }
 
-void VMAF::DropParked() noexcept {
-	for (auto* raw : m_ref)
+void VMAF::DropParked(Lane& lane) noexcept {
+	for (auto* raw : lane.ref)
 		av_frame_free(&raw);
-	for (auto* raw : m_dist)
+	for (auto* raw : lane.dist)
 		av_frame_free(&raw);
-	m_ref.clear();
-	m_dist.clear();
+	lane.ref.clear();
+	lane.dist.clear();
+}
+
+void VMAF::DropAll() noexcept {
+	for (auto& [track, lane] : m_lanes) {
+		(void)track;
+		DropParked(lane);
+		if (lane.vmaf) {
+			vmaf_close(lane.vmaf);
+			lane.vmaf = nullptr;
+		}
+
+		if (lane.model) {
+			vmaf_model_destroy(lane.model);
+			lane.model = nullptr;
+		}
+	}
+
+	m_lanes.clear();
 }
 
 void VMAF::Clean() noexcept {
-	DropParked();
-	if (m_vmaf) {
-		vmaf_close(m_vmaf);
-		m_vmaf = nullptr;
-	}
-
-	if (m_model) {
-		vmaf_model_destroy(m_model);
-		m_model = nullptr;
-	}
-
-	m_width = 0;
-	m_height = 0;
-	m_index = 0;
-	m_scored = 0;
-	m_mean.reset();
-	m_min.reset();
-	m_failed = false;
+	DropAll();
 }
 
-void VMAF::Setup() noexcept {
-	Clean();
-	Log(Level::Debug, std::format("{} setup model={}", Name(), m_modelName));
+bool VMAF::OpenLane(Lane& lane) noexcept {
 	VmafConfiguration cfg{};
 	cfg.log_level = VMAF_LOG_LEVEL_WARNING;
 	cfg.n_threads = std::max(1u, std::thread::hardware_concurrency());
 	cfg.n_subsample = 1;
-	if (vmaf_init(&m_vmaf, cfg) != 0) {
+	if (vmaf_init(&lane.vmaf, cfg) != 0) {
 		Log(Level::Error, Name() + " vmaf_init failed");
-		m_failed = true;
-		return;
+		lane.failed = true;
+		return false;
 	}
 
 	VmafModelConfig modelCfg{};
 	modelCfg.name = "vmaf";
 	modelCfg.flags = VMAF_MODEL_FLAGS_DEFAULT;
-	if (vmaf_model_load(&m_model, &modelCfg, m_modelName.c_str()) != 0) {
+	if (vmaf_model_load(&lane.model, &modelCfg, m_modelName.c_str()) != 0) {
 		Log(Level::Error, std::format("{} vmaf_model_load({}) failed", Name(), m_modelName));
-		m_failed = true;
-		return;
+		lane.failed = true;
+		return false;
 	}
 
-	if (vmaf_use_features_from_model(m_vmaf, m_model) != 0) {
+	if (vmaf_use_features_from_model(lane.vmaf, lane.model) != 0) {
 		Log(Level::Error, Name() + " vmaf_use_features_from_model failed");
-		m_failed = true;
-		return;
+		lane.failed = true;
+		return false;
 	}
 
-	Log(Level::Debug, std::format("{} libvmaf ready threads={} subsample={}",
-		Name(), cfg.n_threads, cfg.n_subsample));
+	return true;
+}
+
+void VMAF::Setup() noexcept {
+	Clean();
+	Log(Level::Debug, std::format("{} setup model={}", Name(), m_modelName));
 }
 
 bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
@@ -268,55 +271,55 @@ bool VMAF::Fill(const ::AVFrame* raw, int tw, int th, void* out) noexcept {
 	return true;
 }
 
-void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept {
-	if (!m_vmaf || !ref || !dist)
+void VMAF::Score(Lane& lane, const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) noexcept {
+	if (!lane.vmaf || !ref || !dist)
 		return;
 	if (ref->width <= 0 || ref->height <= 0 || dist->width <= 0 || dist->height <= 0) {
 		Log(Level::Warning, Name() + " look has no picture size, skip pair");
 		return;
 	}
 
-	if (m_width == 0) {
-		m_width = ref->width;
-		m_height = ref->height;
+	if (lane.width == 0) {
+		lane.width = ref->width;
+		lane.height = ref->height;
 		Log(Level::Debug, std::format(
 			"{} first pair index={} latch={}x{} ref_fmt={} ref_bpc={} ref_pts={} dist={}x{} dist_fmt={} dist_bpc={} dist_pts={}",
-			Name(), index, m_width, m_height,
+			Name(), index, lane.width, lane.height,
 			PixName(ref), Bpc(ref), ref->pts,
 			dist->width, dist->height,
 			PixName(dist), Bpc(dist), dist->pts));
-		if (dist->width != m_width || dist->height != m_height)
+		if (dist->width != lane.width || dist->height != lane.height)
 			Log(Level::Notice, std::format("{} geometry ref={}x{} dist={}x{}, scaling dist",
-				Name(), m_width, m_height, dist->width, dist->height));
+				Name(), lane.width, lane.height, dist->width, dist->height));
 	}
 
-	else if (ref->width != m_width || ref->height != m_height) {
+	else if (ref->width != lane.width || ref->height != lane.height) {
 		Log(Level::Warning, std::format("{} skip pair, ref size {}x{} latch {}x{}",
-			Name(), ref->width, ref->height, m_width, m_height));
+			Name(), ref->width, ref->height, lane.width, lane.height));
 		return;
 	}
 
 	VmafPicture pref{};
 	VmafPicture pdist{};
-	if (!Fill(ref, m_width, m_height, &pref)
-		|| !Fill(dist, m_width, m_height, &pdist)) {
+	if (!Fill(ref, lane.width, lane.height, &pref)
+		|| !Fill(dist, lane.width, lane.height, &pdist)) {
 		Log(Level::Warning, std::format(
 			"{} skip pair, fill failed ref={}x{} dist={}x{} latch={}x{}",
 			Name(), ref->width, ref->height, dist->width, dist->height,
-			m_width, m_height));
+			lane.width, lane.height));
 		vmaf_picture_unref(&pref);
 		vmaf_picture_unref(&pdist);
 		return;
 	}
 
-	if (vmaf_read_pictures(m_vmaf, &pref, &pdist, index) != 0) {
+	if (vmaf_read_pictures(lane.vmaf, &pref, &pdist, index) != 0) {
 		Log(Level::Warning, Name() + " skip pair, vmaf_read_pictures failed");
 		return;
 	}
 
-	++m_scored;
+	++lane.scored;
 	Log(Level::LowLevel, std::format("{} scored index={} n={} ref_pts={} dist_pts={}",
-		Name(), index, m_scored, ref->pts, dist->pts));
+		Name(), index, lane.scored, ref->pts, dist->pts));
 }
 
 /*
@@ -324,24 +327,22 @@ void VMAF::Score(const ::AVFrame* ref, const ::AVFrame* dist, unsigned index) no
 * makes vmaf_score_pooled walk empty slots and fail the Report
 * after hundreds of good scores.
 */
-void VMAF::Drain() noexcept {
-	while (!m_ref.empty() && !m_dist.empty()) {
-		::AVFrame* ref = m_ref.front();
-		::AVFrame* dist = m_dist.front();
-		m_ref.pop_front();
-		m_dist.pop_front();
-		const unsigned before = m_scored;
-		Score(ref, dist, m_index);
-		if (m_scored > before)
-			++m_index;
+void VMAF::Drain(Lane& lane) noexcept {
+	while (!lane.ref.empty() && !lane.dist.empty()) {
+		::AVFrame* ref = lane.ref.front();
+		::AVFrame* dist = lane.dist.front();
+		lane.ref.pop_front();
+		lane.dist.pop_front();
+		const unsigned before = lane.scored;
+		Score(lane, ref, dist, lane.index);
+		if (lane.scored > before)
+			++lane.index;
 		av_frame_free(&ref);
 		av_frame_free(&dist);
 	}
 }
 
 void VMAF::Process(const Pipeline::Frame& frame) noexcept {
-	if (m_failed)
-		return;
 	if (frame.Type() != Type::Video)
 		return;
 	const Producer producer = frame.Producer();
@@ -357,6 +358,12 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 		return;
 	}
 
+	Lane& lane = m_lanes[frame.Track()];
+	if (lane.failed)
+		return;
+	if (!lane.vmaf && !OpenLane(lane))
+		return;
+
 	::AVFrame* clone = av_frame_clone(raw);
 	if (!clone) {
 		Log(Level::Warning, Name() + " av_frame_clone failed");
@@ -364,72 +371,99 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 	}
 
 	if (producer == Producer::Decoder) {
-		if (m_scored == 0 && m_ref.empty())
-			Log(Level::Debug, std::format("{} first ref {}x{} fmt={} bpc={} pts={}",
-				Name(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		m_ref.push_back(clone);
+		if (lane.scored == 0 && lane.ref.empty())
+			Log(Level::Debug, std::format("{} first ref t={} {}x{} fmt={} bpc={} pts={}",
+				Name(), frame.Track(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
+		lane.ref.push_back(clone);
 	}
 
 	else {
-		if (m_scored == 0 && m_dist.empty())
-			Log(Level::Debug, std::format("{} first dist producer={} {}x{} fmt={} bpc={} pts={}",
-				Name(), ToString(producer),
+		if (lane.scored == 0 && lane.dist.empty())
+			Log(Level::Debug, std::format("{} first dist t={} producer={} {}x{} fmt={} bpc={} pts={}",
+				Name(), frame.Track(), ToString(producer),
 				raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		m_dist.push_back(clone);
+		lane.dist.push_back(clone);
 	}
 
-	Log(Level::LowLevel, std::format("{} park producer={} ref={} dist={}",
-		Name(), ToString(producer), m_ref.size(), m_dist.size()));
-	Drain();
+	Log(Level::LowLevel, std::format("{} park t={} producer={} ref={} dist={}",
+		Name(), frame.Track(), ToString(producer), lane.ref.size(), lane.dist.size()));
+	Drain(lane);
 }
 
 void VMAF::Eof() noexcept {
-	Drain();
-	Log(Level::Debug, std::format("{} eof scored={} ref={} dist={} failed={} latch={}x{}",
-		Name(), m_scored, m_ref.size(), m_dist.size(), m_failed, m_width, m_height));
-	if (!m_ref.empty() || !m_dist.empty())
-		Log(Level::Warning, std::format("{} leftover looks ref={} dist={}",
-			Name(), m_ref.size(), m_dist.size()));
-	DropParked();
-	if (m_vmaf && m_scored > 0)
-		vmaf_read_pictures(m_vmaf, nullptr, nullptr, 0);
-	if (m_failed || !m_vmaf || !m_model || m_scored == 0) {
-		if (!m_failed)
-			Log(Level::Error, std::format("{} no scored pairs", Name()));
-		m_failed = true;
-		return;
+	unsigned scored = 0;
+	for (auto& [track, lane] : m_lanes) {
+		Drain(lane);
+		Log(Level::Debug, std::format("{} eof t={} scored={} ref={} dist={} failed={} latch={}x{}",
+			Name(), track, lane.scored, lane.ref.size(), lane.dist.size(), lane.failed,
+			lane.width, lane.height));
+		if (!lane.ref.empty() || !lane.dist.empty())
+			Log(Level::Warning, std::format("{} leftover looks t={} ref={} dist={}",
+				Name(), track, lane.ref.size(), lane.dist.size()));
+		DropParked(lane);
+		if (lane.vmaf && lane.scored > 0)
+			vmaf_read_pictures(lane.vmaf, nullptr, nullptr, 0);
+		if (lane.failed || !lane.vmaf || !lane.model || lane.scored == 0) {
+			if (!lane.failed)
+				Log(Level::Error, std::format("{} t={} no scored pairs", Name(), track));
+			lane.failed = true;
+			continue;
+		}
+
+		double mean = 0;
+		double mn = 0;
+		const unsigned last = lane.scored - 1;
+		if (vmaf_score_pooled(lane.vmaf, lane.model, VMAF_POOL_METHOD_MEAN, &mean, 0, last) != 0
+			|| vmaf_score_pooled(lane.vmaf, lane.model, VMAF_POOL_METHOD_MIN, &mn, 0, last) != 0) {
+			Log(Level::Error, std::format("{} t={} vmaf_score_pooled failed", Name(), track));
+			lane.failed = true;
+			continue;
+		}
+
+		lane.mean = mean;
+		lane.min = mn;
+		scored += lane.scored;
+		Log(Level::Notice, std::format("{} t={} mean={:.3f} min={:.3f} n={} latch={}x{}",
+			Name(), track, mean, mn, lane.scored, lane.width, lane.height));
 	}
 
-	double mean = 0;
-	double mn = 0;
-	const unsigned last = m_scored - 1;
-	if (vmaf_score_pooled(m_vmaf, m_model, VMAF_POOL_METHOD_MEAN, &mean, 0, last) != 0
-		|| vmaf_score_pooled(m_vmaf, m_model, VMAF_POOL_METHOD_MIN, &mn, 0, last) != 0) {
-		Log(Level::Error, Name() + " vmaf_score_pooled failed");
-		m_failed = true;
-		return;
-	}
-
-	m_mean = mean;
-	m_min = mn;
-	Log(Level::Notice, std::format("{} mean={:.3f} min={:.3f} n={} latch={}x{}",
-		Name(), mean, mn, m_scored, m_width, m_height));
+	if (m_lanes.empty())
+		Log(Level::Error, std::format("{} no scored pairs", Name()));
+	else if (scored > 0)
+		Log(Level::Debug, std::format("{} eof tracks={} scored={}", Name(), m_lanes.size(), scored));
 }
 
 class StormByte::Multimedia::Pipeline::Filter::Report VMAF::Report() const noexcept {
-	if (m_failed || !m_mean)
-		return {Filter::Report::Status::Failed, {
-			{"model", m_modelName},
-			{"scored", std::to_string(m_scored)},
-			{"width", std::to_string(m_width)},
-			{"height", std::to_string(m_height)}
-		}};
-	return {Filter::Report::Status::Ok, {
-		{"model", m_modelName},
-		{"vmaf_mean", std::format("{:.6f}", *m_mean)},
-		{"vmaf_min", std::format("{:.6f}", *m_min)},
-		{"frames", std::to_string(m_scored)},
-		{"width", std::to_string(m_width)},
-		{"height", std::to_string(m_height)}
-	}};
+	std::map<std::string, std::string> data;
+	data.emplace("model", m_modelName);
+	bool failed = m_lanes.empty();
+	unsigned ok = 0;
+	for (const auto& [track, lane] : m_lanes) {
+		if (lane.failed || !lane.mean)
+			failed = true;
+		else
+			++ok;
+	}
+
+	const bool prefix = m_lanes.size() > 1;
+	auto key = [prefix](int track, const char* name) {
+		if (!prefix)
+			return std::string(name);
+		return std::to_string(track) + "." + name;
+	};
+
+	for (const auto& [track, lane] : m_lanes) {
+		if (lane.mean) {
+			data.emplace(key(track, "vmaf_mean"), std::format("{:.6f}", *lane.mean));
+			data.emplace(key(track, "vmaf_min"), std::format("{:.6f}", *lane.min));
+		}
+
+		data.emplace(key(track, "frames"), std::to_string(lane.scored));
+		data.emplace(key(track, "width"), std::to_string(lane.width));
+		data.emplace(key(track, "height"), std::to_string(lane.height));
+	}
+
+	if (failed || ok == 0)
+		return {Filter::Report::Status::Failed, std::move(data)};
+	return {Filter::Report::Status::Ok, std::move(data)};
 }

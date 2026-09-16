@@ -239,8 +239,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * true when reserved slots equal that count. false with no Plan,
 			 * or while @c operator>> is still running.
 			 *
-			 * Does not Fail. @ref Router::Close calls this after the graph
-			 * is closed and Fails the Muxer if it is still false.
+			 * Does not Fail. The owner of the graph (@ref Filters::Close
+			 * or Transcoder) checks this after wiring and Fails the Muxer
+			 * if it is still false.
 			 *
 			 * @return Arming state of the output graph.
 			 */

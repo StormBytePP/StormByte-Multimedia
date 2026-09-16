@@ -54,7 +54,6 @@ using StormByte::Logger::Level;
 Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 :	Step(std::move(log), Producer::Remuxer, Kinds{Kind::Packet}, Kinds{Kind::Packet}),
 	m_index(in) {
-	m_lookOut.Drain();
 	Mount(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Pumper::Through>(Face()),
 		std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Remux>(*this));
 	Launch();
@@ -62,15 +61,7 @@ Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 
 Remuxer::~Remuxer() noexcept = default;
 
-void Remuxer::Look(ItemSink& sink) noexcept {
-	m_lookOut.Bind(m_index, sink);
-}
-
 void Remuxer::Emit(Packet::PointerType packet) noexcept {
-	if (!packet)
-		return;
-	if (auto copy = CloneItem(*packet))
-		m_lookOut.Push(m_index, std::move(copy));
 	Step::Emit(std::move(packet));
 }
 

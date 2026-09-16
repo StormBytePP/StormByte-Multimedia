@@ -44,6 +44,7 @@
 
 #include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <unordered_set>
 
 /**
@@ -68,8 +69,8 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * blocks on the bound consumer Capacity). @c pipe >> item
 	 * is Pop from In only; Wait stays on the Host.
 	 *
-	 * @ref CloneTo forks a copy of each write onto another Pipe
-	 * (Route analytics look). No CloneTo means no clone.
+	 * @ref CloneTo may be called more than once (per-track VMAF
+	 * plus a general VMAF). Each write clones to every dest.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -130,7 +131,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void Listen() noexcept;
 
 			/**
-			 * @brief Eof on In, Out and the optional clone hopper.
+			 * @brief Eof on In, Out and every clone hopper.
 			 */
 			void Close() noexcept;
 
@@ -140,9 +141,8 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param dest Analytics (or look) consumer.
 			 * @return @p dest.
 			 *
-			 * Notify dest In, Bind the clone hopper. @c operator<<
-			 * then Clone s. Call before the producer Emits. No-op
-			 * as a method if Route never calls it: writes do not clone.
+			 * Notify dest In, Bind a clone hopper. Several CloneTo
+			 * calls fork to several dests. Call before Emit.
 			 */
 			Pipe& CloneTo(int track, Pipe& dest) noexcept;
 
@@ -239,8 +239,11 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::condition_variable* m_wake;	///< Owner Wait CV
 			ItemSink m_in;						///< Input buckets
 			ItemSink m_out;						///< Output buckets
-			ItemSink m_clone;					///< Analytics fork; unused until CloneTo
-			bool m_fork;						///< CloneTo has bound m_clone
+			struct Fork {
+				int track;
+				ItemSink hopper;
+			};
+			std::deque<Fork> m_forks;			///< CloneTo dests
 			std::unordered_set<int> m_inTracks;	///< Keys already wired on In
 	};
 }

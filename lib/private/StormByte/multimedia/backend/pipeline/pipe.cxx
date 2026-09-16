@@ -43,7 +43,7 @@
 using StormByte::Multimedia::Backend::Pipeline::Pipe;
 
 Pipe::Pipe(std::condition_variable& wake) noexcept
-:	m_wake(&wake), m_fork(false) {}
+:	m_wake(&wake) {}
 
 Pipe::ItemSink& Pipe::In() noexcept {
 	return m_in;
@@ -72,13 +72,15 @@ void Pipe::Listen() noexcept {
 void Pipe::Close() noexcept {
 	m_in.Eof();
 	m_out.Eof();
-	m_clone.Eof();
+	for (auto& fork : m_forks)
+		fork.hopper.Eof();
 }
 
 Pipe& Pipe::CloneTo(int track, Pipe& dest) noexcept {
 	dest.Listen();
-	m_clone.Bind(track, dest.In());
-	m_fork = true;
+	m_forks.emplace_back();
+	m_forks.back().track = track;
+	m_forks.back().hopper.Bind(track, dest.In());
 	dest.m_inTracks.insert(track);
 	return dest;
 }
@@ -129,9 +131,11 @@ Pipe& Pipe::operator<<(Item::PointerType item) noexcept {
 	if (!item)
 		return *this;
 	const int key = item->Track();
-	if (m_fork) {
+	for (auto& fork : m_forks) {
+		if (fork.track != key)
+			continue;
 		if (auto copy = item->Clone())
-			m_clone.Push(key, std::move(copy));
+			fork.hopper.Push(key, std::move(copy));
 	}
 	m_out.Push(key, std::move(item));
 	return *this;

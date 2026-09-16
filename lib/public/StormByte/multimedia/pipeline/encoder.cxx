@@ -76,7 +76,6 @@ Encoder::Encoder(std::shared_ptr<StormByte::Logger::Log> log,
 : Step(std::move(log), Producer::Encoder, Kinds{Kind::Frame}, Kinds{Kind::Packet}),
 	m_index(output_index), m_codec(&codec),
 	m_encoderTag("StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION), m_part(0) {
-	m_lookOut.Drain();
 	switch (codec.Type()) {
 		case Type::Video:
 			m_backend = std::make_unique<Backend::Pipeline::Detail::Encoder::Video>();
@@ -169,14 +168,7 @@ void Encoder::Tune(std::string name) noexcept {
 	m_tune = std::move(name);
 }
 
-void Encoder::Look(ItemSink& sink) noexcept {
-	m_lookOut.Bind(m_index, sink);
-}
-
 void Encoder::Emit(Packet::PointerType packet) noexcept {
-	if (!packet)
-		return;
-	m_lookOut.Push(m_index, Packet::PointerType(new Packet(*packet)));
 	Step::Emit(std::move(packet));
 }
 

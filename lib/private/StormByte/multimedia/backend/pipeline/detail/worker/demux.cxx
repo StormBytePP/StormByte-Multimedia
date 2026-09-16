@@ -93,15 +93,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 			return;
 		if (!packet) {
 			m_owner.ReachedEof();
-			m_owner.m_lookOut.Eof();
 			Ended();
 			return;
 		}
 
 		if (const auto& pts = packet->Pts(); pts)
 			m_owner.m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-		if (auto copy = m_owner.CloneItem(*packet))
-			m_owner.m_lookOut.Push(packet->Track(), std::move(copy));
 		Emit(std::move(packet));
 	}
 

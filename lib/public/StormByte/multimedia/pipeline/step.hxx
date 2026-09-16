@@ -75,7 +75,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class Muxer;
 	class Remuxer;
 	class Route;
-	class Router;
+	class Filters;
 	class Step;
 
 	/**
@@ -94,8 +94,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Step
-	 * @brief One stage with a @ref Backend::Pipeline::Pipe (in / out)
-	 *        and a look side channel.
+	 * @brief One stage with a @ref Backend::Pipeline::Pipe (in / out).
 	 *
 	 * Owns a Pumper (thread + @ref State) and exposes hoppers to
 	 * that pumper through a private Host surface. Leaves Mount a
@@ -107,14 +106,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * @ref Emit writes @c item >> pipe. Analytics looks are a
 	 * @ref Backend::Pipeline::Pipe::CloneTo on that Pipe, bound
-	 * by @ref Route before the origin emits. Without CloneTo
+	 * by @ref Filters before the origin emits. Without CloneTo
 	 * there is no clone.
-	 *
-	 * @ref Look is the encode-look hook. Default is a no-op.
-	 * Encoder overrides it and deep-copies encoded packets into
-	 * the look decoder sink. It is not a public Encoder API and
-	 * it is not a copy of the encode Pipe. @ref Route::TapEncode calls
-	 * it through this Step hook.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -123,7 +116,7 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Muxer;
 		friend class Remuxer;
 		friend class Route;
-		friend class Router;
+		friend class Filters;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
 		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
@@ -282,7 +275,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 		protected:
-			using ItemSink = StormByte::Buffer::Sink<Item::PointerType>;
 
 			/**
 			 * @name Construction
@@ -310,17 +302,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @name Work
 			 * @{
 			 */
-
-			/**
-			 * @brief Encode-look side channel. Default no-op.
-			 * @param sink Look decoder input hopper.
-			 *
-			 * Encoder overrides and deep-copies each encoded packet
-			 * into @p sink. Other leaves leave this empty. Not a copy
-			 * of the encode Pipe. @ref Route::TapEncode calls this hook;
-			 * there is no public Encoder method for it.
-			 */
-			virtual void Look(ItemSink& sink) noexcept;
 
 			/**
 			 * @brief Write @p item to the Pipe (@c item >> pipe).
@@ -482,8 +463,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @return The composed Pipe.
 			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
-
-			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 
 		private:
 			class Surface;

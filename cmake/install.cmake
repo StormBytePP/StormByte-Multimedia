@@ -8,6 +8,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/lib/public/StormByte/"
 	FILES_MATCHING
 	PATTERN "*.h"
 	PATTERN "*.hxx"
+	PATTERN "pipeline/route.hxx" EXCLUDE
 )
 if(ENABLE_ADVANCED_INSTALL)
 	install(DIRECTORY "${CMAKE_SOURCE_DIR}/lib/advanced/StormByte/"

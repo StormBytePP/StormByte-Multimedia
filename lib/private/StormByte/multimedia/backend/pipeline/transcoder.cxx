@@ -44,11 +44,10 @@
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
+#include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
-#include <StormByte/multimedia/pipeline/route.hxx>
-#include <StormByte/multimedia/pipeline/router.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -246,7 +245,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	StormByte::Multimedia::Pipeline::Router router(mux);
+	StormByte::Multimedia::Pipeline::Filters graph;
 
 	struct EncodeLane {
 		int In = -1;
@@ -274,21 +273,9 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				return;
 			}
 
-			const bool videoAnalytics = slot.Kind == StormByte::Multimedia::Type::Video
-				&& !Analytics.empty();
-			if (!slot.Filters.empty() || videoAnalytics) {
-				auto route = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
-					slot.In, demux, remux);
-				for (const auto& filter : slot.Filters)
-					route->Add(filter);
-				if (videoAnalytics) {
-					for (const auto& filter : Analytics)
-						route->Add(filter);
-				}
-
-				router.Add(std::move(route));
-			}
-
+			auto stretch = graph.Between(demux, remux);
+			for (const auto& filter : slot.Filters)
+				stretch.Add(filter);
 			remuxes.push_back(std::move(remux));
 		}
 
@@ -307,18 +294,9 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				return;
 			}
 
-			auto frames = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
-				slot.In, decoder, encoder);
+			auto stretch = graph.Between(decoder, encoder);
 			for (const auto& filter : slot.Filters)
-				frames->Add(filter);
-			if (slot.Kind == StormByte::Multimedia::Type::Video) {
-				for (const auto& filter : Analytics)
-					frames->Add(filter);
-			}
-
-			auto packets = std::make_unique<StormByte::Multimedia::Pipeline::Route>(
-				slot.In, encoder, mux);
-			router.Add(std::move(frames)).Add(std::move(packets));
+				stretch.Add(filter);
 			EncodeLane lane;
 			lane.In = slot.In;
 			lane.Decoder = std::move(decoder);
@@ -329,7 +307,11 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		++muxIndex;
 	}
 
-	router.Close();
+	if (!mux->Armed())
+		mux->Fail("muxer is not armed; missing encoder or remuxer >> muxer");
+	for (const auto& filter : Analytics)
+		graph.Add(filter);
+	graph.Close();
 
 	job.SetProgress(0);
 	const auto total = job.Source().Duration();
@@ -409,8 +391,10 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	while (!Stopping(*this, token) && !router.Idle())
+	while (!Stopping(*this, token) && !graph.Idle())
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+	Reports = graph.Reports();
 
 	job.SetProgress(100);
 	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);

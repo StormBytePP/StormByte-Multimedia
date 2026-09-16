@@ -77,10 +77,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * the shared logger throttles. The packet keeps the lineage
 	 * born at the demuxer.
 	 *
-	 * Dest-look is @ref Look / @ref m_lookOut, the same side
-	 * channel Encoder uses. Not the Pipe Out.
-	 * The look packet is a deep copy so Muxer and the look
-	 * decoder do not share a Packet FIFO cursor.
+	 * Dest-look is @ref Backend::Pipeline::Pipe::CloneTo on the
+	 * remux Pipe (Filters dest look). There is no side hopper.
 	 *
 	 * @ref Label is `Remuxer(<origin codec>)` when a Plan is bound
 	 * and that stream exists, otherwise `Remuxer(t=<origin index>)`.
@@ -177,24 +175,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Dest-look side channel. Shares @ref m_lookOut with @p sink.
-			 * @param sink Look decoder input hopper.
-			 *
-			 * Same contract as Encoder::Look. @ref Route::TapEncode
-			 * calls this on a remux stretch.
-			 */
-			void Look(ItemSink& sink) noexcept override;
-
-			/**
-			 * @brief Deep-copies @p packet to @ref m_lookOut, then
-			 *        @ref Step::Emit s the original.
+			 * @brief @ref Step::Emit of the forwarded packet.
 			 * @param packet Forwarded unit. Empty pointers are ignored.
 			 */
 			void Emit(Packet::PointerType packet) noexcept;
 
 			static constexpr std::size_t Ceiling = 32;	///< Input hopper ceiling
 			int m_index;								///< Origin stream index
-			ItemSink m_lookOut;							///< Dest-look producer; Drain until Look
 			Join m_join{*this};							///< Halt before other members die
 	};
 }

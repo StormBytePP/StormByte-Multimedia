@@ -82,9 +82,6 @@ namespace {
 Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 : Step(std::move(log), Producer::Demuxer, Kinds{}, Kinds{Kind::Packet}),
 	m_eof(false), m_positionNs(-1) {
-	// Unbound keys must drop. Route only Binds the look track.
-	// Without Drain, the next audio/subtitle packet blocks Push forever.
-	m_lookOut.Drain();
 	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Source>(Face()),
 		std::make_unique<Backend::Pipeline::Detail::Worker::Demux>(*this));
 	Launch();

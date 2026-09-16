@@ -131,7 +131,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * table row, otherwise `Decoder(t=<origin index>)`. Look mode
 	 * is `Decoder(look encode|remux|src t=<index>)`.
 	 *
-	 * Look modes are not public constructors. Route builds them
+	 * Look modes are not public constructors. Filters builds them
 	 * when Analytics needs pictures from a packet stretch. Those
 	 * decoders have no Demuxer: they open from the first Packet's
 	 * codec parameters. The public ctor never enters look mode.

@@ -205,7 +205,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Transcoder
 	 * @brief Facade that maps tracks and runs one file-to-file job.
 	 *
-	 * Connects operator>> and Route for you. The stock class is a
+	 * Connects operator>> and Filters for you. The stock class is a
 	 * complete job: open a File, choose origin streams, remux or
 	 * encode each one, write another file. You do not have to derive
 	 * anything to transcode.
@@ -374,20 +374,18 @@ namespace StormByte::Multimedia::Pipeline {
 					Track& Title(std::string title) noexcept;
 
 					/**
-					 * @brief Appends a Process or Packet filter to this track.
-					 * @tparam FilterType Child of Filter::Process or Filter::Packet.
-					 *         Not Filter::Analytics.
+					 * @brief Appends a Process, Packet or Analytics filter to this track.
+					 * @tparam FilterType Child of Filter::Process, Filter::Packet
+					 *         or Filter::Analytics.
 					 * @param args Constructor arguments, forwarded.
 					 * @return *this.
 					 *
 					 * Call before Transcoder::Run. Frame filters on a remux
-					 * track are dropped by Route. Analytics attach on
-					 * Transcoder::Filter.
+					 * track Fail the stretch. Global analytics attach on
+					 * Transcoder::Filter. Both are allowed; there is no dedup.
 					 */
 					template<typename FilterType, typename... Args>
 					Track& Filter(Args&&... args) noexcept {
-						static_assert(!std::is_base_of_v<Filter::Analytics, FilterType>,
-							"Analytics attach on Transcoder::Filter, not Track::Filter");
 						m_owner->AttachFilter(m_slot,
 							std::make_shared<FilterType>(std::forward<Args>(args)...));
 						return *this;
@@ -563,10 +561,13 @@ namespace StormByte::Multimedia::Pipeline {
 			Transcoder& Ignore(int in) noexcept;
 
 			/**
-			 * @brief Appends an analytics filter to every encode lane.
+			 * @brief Appends a global analytics filter. One node, every matching stretch.
 			 * @tparam FilterType Child of Filter::Analytics.
 			 * @param args Constructor arguments, forwarded.
 			 * @return *this.
+			 *
+			 * Track-scoped analytics attach on Track::Filter. Both
+			 * are allowed; there is no dedup.
 			 */
 			template<typename FilterType, typename... Args>
 			Transcoder& Filter(Args&&... args) noexcept {
@@ -645,17 +646,17 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<unsigned> Progress() const noexcept;
 
 			/**
-			 * @brief Analytics snapshots in attach order.
-			 * @return Pair of leaf @ref Filter::FFmpeg::Name and
+			 * @brief Analytics snapshots after the job is Idle.
+			 * @return Pair of flattened key (`vmaf[0]`, `vmaf[general]`,
+			 *         `vmaf[0]#2` on an exact-key repeat) and
 			 *         @ref Filter::Report.
 			 *
-			 * Same contract as calling
-			 * @ref Filter::Analytics::Report on a leaf the caller
-			 * kept when wiring Route by hand. Snapshots only; the
-			 * leaves stay owned by the job. Meaningful after
-			 * Status::Done (Eof has pooled). Before Eof the status
-			 * may be None or Failed. A low score is still Ok.
-			 * Notice lines from a leaf are log, not this API.
+			 * Track-scoped leaves use the origin index. Global Add
+			 * uses `general`. Same contract as
+			 * @ref Filters::Reports. Snapshots only; the leaves stay
+			 * owned by the job. Meaningful after Status::Done.
+			 * A low score is still Ok. Notice lines from a leaf
+			 * are log, not this API.
 			 */
 			std::vector<std::pair<std::string, Filter::Report>> Reports() const noexcept;
 
@@ -786,14 +787,14 @@ namespace StormByte::Multimedia::Pipeline {
 			bool ValidSlot(std::size_t slot) const noexcept;
 
 			/**
-			 * @brief Appends a track filter to @p slot.
+			 * @brief Appends a track filter (Process, Packet or Analytics) to @p slot.
 			 * @param slot Job map index.
 			 * @param filter Filter instance.
 			 */
 			void AttachFilter(std::size_t slot, std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
 			/**
-			 * @brief Appends an analytics filter to every encode lane.
+			 * @brief Appends a global analytics filter (one node).
 			 * @param filter Filter instance.
 			 */
 			void AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept;

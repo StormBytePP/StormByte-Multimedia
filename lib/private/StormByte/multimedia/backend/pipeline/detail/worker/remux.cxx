@@ -100,7 +100,5 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 		m_owner.Emit(std::move(packet));
 	}
 
-	void Remux::Flush() noexcept {
-		m_owner.m_lookOut.Eof();
-	}
+	void Remux::Flush() noexcept {}
 }

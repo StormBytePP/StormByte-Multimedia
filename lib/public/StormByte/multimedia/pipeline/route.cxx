@@ -37,17 +37,33 @@
  */
 
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
+#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
+#include <StormByte/multimedia/stream.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 using namespace StormByte::Multimedia::Pipeline;
 
 namespace {
 	bool Terminal(State state) noexcept {
 		return state == State::Stopped || state == State::Failed;
+	}
+
+	enum StormByte::Multimedia::Type StreamMedia(const Step& origin, int track) noexcept {
+		const auto& plan = origin.Plan();
+		if (!plan)
+			return StormByte::Multimedia::Type::Unknown;
+		for (const auto& stream : plan->Source().Streams()) {
+			if (stream.Index() == track)
+				return stream.Type();
+		}
+
+		return StormByte::Multimedia::Type::Unknown;
 	}
 }
 
@@ -74,6 +90,10 @@ int Route::Track() const noexcept {
 	return m_track;
 }
 
+void Route::Observe(Filter::FFmpeg& analytics) noexcept {
+	m_analytics.push_back(&analytics);
+}
+
 Route& Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	if (!filter)
 		return *this;
@@ -91,10 +111,14 @@ Route& Route::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 
 	Filter::FFmpeg& node = *filter;
 	const bool analytics = dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr;
-	if (packet)
-		Hook(m_packets, node, analytics);
-	if (frame)
-		Hook(m_frames, node, analytics);
+	if (analytics)
+		m_analytics.push_back(filter.get());
+	else {
+		if (packet)
+			Hook(m_packets, node);
+		if (frame)
+			Hook(m_frames, node);
+	}
 
 	m_filters.push_back(std::move(filter));
 	m_filters.back()->Launch();
@@ -113,11 +137,16 @@ void Route::Close() noexcept {
 		return;
 	}
 
+	const auto media = StreamMedia(origin, m_track);
 	for (const auto& filter : m_filters) {
-		if (dynamic_cast<Filter::Analytics*>(filter.get()) != nullptr)
-			continue;
-		if (!filter->Receives().Has(stretch)) {
+		if (dynamic_cast<Filter::Analytics*>(filter.get()) == nullptr
+			&& !filter->Receives().Has(stretch)) {
 			destination.Fail(filter->Name() + " does not cover this stretch");
+			return;
+		}
+
+		if (media != StormByte::Multimedia::Type::Unknown && filter->Media() != media) {
+			destination.Fail(filter->Name() + " media does not match this stretch");
 			return;
 		}
 	}
@@ -145,18 +174,15 @@ void Route::Close() noexcept {
 	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
 		destination.pipe().Capacity(m_track, cap);
 
-	TapDecode(origin, m_frames);
-	TapEncode(destination, m_frames);
-	if (m_frames.FirstAnalytics != nullptr) {
-		if (const std::size_t cap = m_frames.FirstAnalytics->InputCeiling(); cap > 0)
-			m_frames.FirstAnalytics->pipe().Capacity(m_track, cap);
+	for (Filter::FFmpeg* analytics : m_analytics) {
+		if (!analytics)
+			continue;
+		TapDecode(origin, *analytics);
+		TapEncode(destination, *analytics);
+		if (const std::size_t cap = analytics->InputCeiling(); cap > 0)
+			analytics->pipe().Capacity(m_track, cap);
+		analytics->pipe().Drain();
 	}
-
-	if (m_frames.LastAnalytics != nullptr)
-		m_frames.LastAnalytics->pipe().Drain();
-	if (m_packets.LastAnalytics != nullptr
-		&& m_packets.LastAnalytics != m_frames.LastAnalytics)
-		m_packets.LastAnalytics->pipe().Drain();
 }
 
 bool Route::Idle() const noexcept {
@@ -181,17 +207,8 @@ std::vector<Filter::Report> Route::Reports() const noexcept {
 	return reports;
 }
 
-void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
+void Route::Hook(Lane& lane, Filter::FFmpeg& filter) noexcept {
 	filter.pipe().Listen();
-	if (analytics) {
-		if (lane.LastAnalytics != nullptr)
-			lane.LastAnalytics->pipe().To(m_track) >> filter.pipe();
-		if (lane.FirstAnalytics == nullptr)
-			lane.FirstAnalytics = &filter;
-		lane.LastAnalytics = &filter;
-		return;
-	}
-
 	if (lane.LastProcess != nullptr)
 		lane.LastProcess->pipe().To(m_track) >> filter.pipe();
 	if (lane.FirstProcess == nullptr)
@@ -199,34 +216,30 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter, bool analytics) noexcept {
 	lane.LastProcess = &filter;
 }
 
-void Route::TapDecode(Step& origin, Lane& lane) noexcept {
-	if (lane.FirstAnalytics == nullptr)
-		return;
-	lane.FirstAnalytics->pipe().Listen();
+void Route::TapDecode(Step& origin, Filter::FFmpeg& analytics) noexcept {
 	if (origin.Produces().Has(Kind::Frame)) {
-		origin.pipe().CloneTo(m_track, lane.FirstAnalytics->pipe());
+		origin.pipe().CloneTo(m_track, analytics.pipe());
 		return;
 	}
 
 	if (!origin.Produces().Has(Kind::Packet))
 		return;
 	std::unique_ptr<Decoder> look(new Decoder(origin.m_log, m_track, Decoder::SourceLook{}));
-	look->pipe().Listen();
-	origin.m_lookOut.Bind(m_track, look->pipe().In());
-	look->pipe().To(m_track) >> lane.FirstAnalytics->pipe();
+	origin.pipe().CloneTo(m_track, look->pipe());
+	look->pipe().To(m_track) >> analytics.pipe();
 	m_looks.push_back(std::move(look));
 }
 
-void Route::TapEncode(Step& destination, Lane& lane) noexcept {
-	if (lane.FirstAnalytics == nullptr)
-		return;
+void Route::TapEncode(Step& destination, Filter::FFmpeg& analytics) noexcept {
 	std::unique_ptr<Decoder> look;
 	if (destination.m_name == Producer::Remuxer)
 		look.reset(new Decoder(destination.m_log, m_track, Decoder::RemuxLook{}));
-	else
+	else if (destination.m_name == Producer::Encoder)
 		look.reset(new Decoder(destination.m_log, m_track, Decoder::EncodeLook{}));
+	else
+		return;
 	look->pipe().Listen();
-	destination.Look(look->pipe().In());
-	look->pipe().To(m_track) >> lane.FirstAnalytics->pipe();
+	destination.pipe().CloneTo(m_track, look->pipe());
+	look->pipe().To(m_track) >> analytics.pipe();
 	m_looks.push_back(std::move(look));
 }

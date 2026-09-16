@@ -71,6 +71,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 }
 
 namespace StormByte::Multimedia::Pipeline {
+	class Filters;
 	class Route;
 }
 
@@ -85,21 +86,22 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * FFmpeg is not a @ref StormByte::Multimedia::Pipeline::Step.
 	 * A Step is a named node of the public graph (Demuxer, Decoder,
-	 * Encoder, Muxer, Remuxer). A filter is a plugin that Route
+	 * Encoder, Muxer, Remuxer). A filter is a plugin that Filters
 	 * mounts between two Steps. The plugin composes its own
-	 * Worker and Pumper; hoppers exist so Route can wire the
+	 * Worker and Pumper; hoppers exist so Filters can wire the
 	 * tube. That does not make the plugin a Step.
 	 *
 	 * @par How to write a plugin
 	 * Inherit @ref Process, @ref Packet or @ref Analytics. Never
-	 * inherit FFmpeg. Never inherit Step. @ref Route::Add
-	 * compiles with a bare FFmpeg pointer and then @ref Fail at
-	 * wiring time: one failed node aborts the whole job.
+	 * inherit FFmpeg. Never inherit Step. @ref Filters::Between::Add
+	 * and @ref Filters::Add compile with a bare FFmpeg pointer
+	 * and then @ref Fail at wiring time: one failed node aborts
+	 * the whole job.
 	 *
 	 * Construct the leaf with a shared logger and a short name
 	 * (`scale`) via the base constructor. @ref Name is
 	 * `Media()/name`. Do not Launch, Stop, Halt or Mount from
-	 * the leaf: @ref Route::Add does that. A destructor only
+	 * the leaf: @ref Filters does that. A destructor only
 	 * releases plugin resources (a sws context, a libvmaf
 	 * model). Do not call Halt.
 	 *
@@ -114,10 +116,10 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 *
 	 * Optional: @ref Hold / @ref Release / @ref LastChance /
 	 * @ref Eof. The plugin does not see Sink, Hopper, Bind,
-	 * Route, Router, Worker or Pumper.
+	 * Route, Worker or Pumper.
 	 *
-	 * Attach with @c Route::Add or
-	 * @c job.Video(in, out).Filter<T>(…).
+	 * Attach with @c Filters::Between::Add, @c Filters::Add or
+	 * @c job.Video(in).Filter<T>(…).
 	 *
 	 * @par Kinds
 	 * @ref Receives and @ref Produces are fixed at construction.
@@ -198,6 +200,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC FFmpeg {
+		friend class StormByte::Multimedia::Pipeline::Filters;
 		friend class StormByte::Multimedia::Pipeline::Route;
 		friend class StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Filter;
 
@@ -211,7 +214,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			FFmpeg(FFmpeg&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Route already Halt s; this joins if Launch ran.
+			 * @brief Destructor. Filters already Halt s; this joins if Launch ran.
 			 */
 			virtual ~FFmpeg() noexcept;
 
@@ -238,6 +241,14 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * @return Identity string.
 			 */
 			std::string Name() const noexcept;
+
+			/**
+			 * @brief Leaf token used in @ref Filters reports (`vmaf`).
+			 * @return Constructor name, not `Media()/name`.
+			 */
+			inline const std::string& Leaf() const noexcept {
+				return m_name;
+			}
 
 			/**
 			 * @brief Kinds this filter consumes.
@@ -658,7 +669,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @class Analytics
 	 * @brief Measures units. Does not rewrite them.
 	 *
-	 * Not a node on the encode critical path. Route
+	 * Not a node on the encode critical path. Filters
 	 * @ref Backend::Pipeline::Pipe::CloneTo s the origin Pipe
 	 * onto this filter (decode look) and feeds a second look
 	 * that is already a decoded Frame taken from the Encoder
@@ -674,8 +685,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * park both looks in one FIFO and break pairing. Buffer
 	 * unmatched frames in the plugin (map by Serial / Part).
 	 *
-	 * The short constructor Receives Frame and Produces Frame
-	 * so a chain of Analytics can Bind. The last node is Drained.
+	 * The short constructor Receives Frame and Produces Frame.
+	 * Each Analytics is a CloneTo dest, not a process node.
+	 * The last node is Drained.
 	 *
 	 * @ref Save, @ref Hold, @ref Release, @ref Held, @ref HeldFor
 	 * and @ref LastChance are deleted. @ref Eof, @ref Clean,
