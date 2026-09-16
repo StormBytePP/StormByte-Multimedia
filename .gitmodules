@@ -13,7 +13,7 @@
 [submodule "FFmpeg"]
 	path = thirdparty/ffmpeg/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg.git
-	branch = meson-8.1
+	branch = meson-9.0
 [submodule "VPX codec"]
 	path = thirdparty/ffmpeg/plugins/codecs/video/vpx/src
 	url = https://gitlab.freedesktop.org/gstreamer/meson-ports/libvpx.git
