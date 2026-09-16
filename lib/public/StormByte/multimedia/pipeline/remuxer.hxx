@@ -78,7 +78,7 @@ namespace StormByte::Multimedia::Pipeline {
 	 * born at the demuxer.
 	 *
 	 * Dest-look is @ref Look / @ref m_lookOut, the same side
-	 * channel Encoder uses. Not the Pipe Out and not @ref m_tap.
+	 * channel Encoder uses. Not the Pipe Out.
 	 * The look packet is a deep copy so Muxer and the look
 	 * decoder do not share a Packet FIFO cursor.
 	 *

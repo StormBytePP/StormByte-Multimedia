@@ -131,7 +131,6 @@ Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	m_workMin(std::numeric_limits<std::int64_t>::max()),
 	m_workMax(0),
 	m_lastWork(0) {
-	m_tap.Drain();
 	Log(Level::Notice, "created");
 }
 
@@ -147,7 +146,6 @@ State Step::Status() const noexcept {
 
 void Step::CloseHoppers() noexcept {
 	m_pipe->Close();
-	m_tap.Eof();
 }
 
 void Step::Fail(std::string reason) noexcept {
@@ -215,11 +213,6 @@ void Step::Wait() noexcept {
 void Step::Look(ItemSink&) noexcept {}
 
 void Step::Emit(Item::PointerType item) noexcept {
-	if (!item)
-		return;
-	const int key = item->Track();
-	if (auto copy = item->Clone())
-		m_tap.Push(key, std::move(copy));
 	item >> *m_pipe;
 }
 

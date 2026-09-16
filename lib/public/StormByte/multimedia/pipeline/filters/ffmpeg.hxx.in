@@ -38,7 +38,6 @@
 
 #pragma once
 
-#include <StormByte/buffer/sink.hxx>
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -194,7 +193,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @par Mutation
 	 * Effect of a mutation is @ref Save inside Work.
 	 * @ref Analytics deletes @ref Save. @ref Save mutates the
-	 * process unit after the origin tap has already cloned.
+	 * process unit after CloneTo has already cloned.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -331,8 +330,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 
 		protected:
-			using ItemSink = StormByte::Buffer::Sink<Pipeline::Item::PointerType>;
-
 			/**
 			 * @name Construction
 			 * @{
@@ -496,7 +493,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			void CallLastChance() noexcept;
 
 			/**
-			 * @brief Clone into @ref m_tap, then write the original to the Pipe.
+			 * @brief Write @p item to the Pipe (@c item >> pipe).
 			 */
 			void Emit(Pipeline::Item::PointerType item) noexcept;
 
@@ -536,7 +533,7 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::condition_variable& Wake() noexcept;
 
 			/**
-			 * @brief Eof on the Pipe and @ref m_tap.
+			 * @brief Eof on the Pipe.
 			 */
 			void CloseHoppers() noexcept;
 
@@ -565,7 +562,6 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
 
-			ItemSink m_tap;										///< Analytics tap; Drain until Route binds
 			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
 			std::mutex m_wait;									///< Mutex for m_wake
@@ -662,11 +658,12 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @class Analytics
 	 * @brief Measures units. Does not rewrite them.
 	 *
-	 * Not a node on the encode critical path. Route binds
-	 * origin.m_tap onto this filter (decode look; the copy is
-	 * Emit) and feeds a second look that is already a decoded
-	 * Frame taken from the Encoder bitstream. The plugin does
-	 * not open a decoder and does not see packets.
+	 * Not a node on the encode critical path. Route
+	 * @ref Backend::Pipeline::Pipe::CloneTo s the origin Pipe
+	 * onto this filter (decode look) and feeds a second look
+	 * that is already a decoded Frame taken from the Encoder
+	 * bitstream. The plugin does not open a decoder and does
+	 * not see packets.
 	 *
 	 * Implement @ref Process(const Pipeline::Frame&) only.
 	 * @ref StormByte::Multimedia::Pipeline::Item::Producer is

@@ -169,7 +169,6 @@ FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 	m_lastWork(0),
 	m_hold(0),
 	m_heldFor(0) {
-	m_tap.Drain();
 	m_pumper = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Pumper::Through>(Face());
 	m_pumper->Bind(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Filter>(*this));
 	if (m_log) {
@@ -415,11 +414,6 @@ void FFmpeg::Finish() noexcept {
 }
 
 void FFmpeg::Emit(Pipeline::Item::PointerType item) noexcept {
-	if (!item)
-		return;
-	const int key = item->Track();
-	if (auto copy = item->Clone())
-		m_tap.Push(key, std::move(copy));
 	item >> *m_pipe;
 }
 
@@ -480,7 +474,6 @@ const StormByte::Multimedia::Backend::Pipeline::Pipe& FFmpeg::pipe() const noexc
 
 void FFmpeg::CloseHoppers() noexcept {
 	m_pipe->Close();
-	m_tap.Eof();
 }
 
 void FFmpeg::RecordWork(std::int64_t microseconds) noexcept {

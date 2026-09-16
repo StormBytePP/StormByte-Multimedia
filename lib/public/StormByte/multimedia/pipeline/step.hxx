@@ -94,8 +94,8 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Step
-	 * @brief One stage with a @ref Backend::Pipeline::Pipe (in / out),
-	 *        an analytics tap @ref ItemSink and a look side channel.
+	 * @brief One stage with a @ref Backend::Pipeline::Pipe (in / out)
+	 *        and a look side channel.
 	 *
 	 * Owns a Pumper (thread + @ref State) and exposes hoppers to
 	 * that pumper through a private Host surface. Leaves Mount a
@@ -105,11 +105,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Volume is a Logger throttle on that component/group, not a
 	 * per-step counter.
 	 *
-	 * @ref Emit clones into @ref m_tap and then writes the original
-	 * through the Pipe (@c item >> pipe) so a later @c Save cannot
-	 * race the analytics look.
-	 * @ref m_tap is constructed @c Drain: an unbound key drops the
-	 * clone. @ref Route binds the tap before the origin emits.
+	 * @ref Emit writes @c item >> pipe. Analytics looks are a
+	 * @ref Backend::Pipeline::Pipe::CloneTo on that Pipe, bound
+	 * by @ref Route before the origin emits. Without CloneTo
+	 * there is no clone.
 	 *
 	 * @ref Look is the encode-look hook. Default is a no-op.
 	 * Encoder overrides it and deep-copies encoded packets into
@@ -298,9 +297,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param name Stage name used as the default @ref Label (Logger group).
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
-			 *
-			 * @ref m_tap is @c Drain so an unbound analytics Push
-			 * is dropped instead of waiting for @ref Route.
 			 */
 			Step(std::shared_ptr<StormByte::Logger::Log> log,
 				enum Producer name,
@@ -327,13 +323,11 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void Look(ItemSink& sink) noexcept;
 
 			/**
-			 * @brief Clone into @ref m_tap, then write the original to the Pipe.
+			 * @brief Write @p item to the Pipe (@c item >> pipe).
 			 * @param item Unit to emit. Empty is a no-op.
 			 *
-			 * Always clones when @p item is set. If @ref m_tap has no
-			 * hopper for that key, Drain drops the clone. Serial, Part
-			 * and timing stay on the copy. Call this instead of writing
-			 * the Pipe Out directly.
+			 * Analytics clones, if any, happen inside the Pipe
+			 * after @ref Backend::Pipeline::Pipe::CloneTo.
 			 */
 			void Emit(Item::PointerType item) noexcept;
 
@@ -342,10 +336,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param item Unit to clone.
 			 * @return Owning pointer, or empty if @p item cannot clone.
 			 *
-			 * Packet/Frame copy constructors stay private. Looks and
-			 * the analytics tap must go through this helper (or
-			 * @ref Emit) so a leaf Step does not need to be a friend
-			 * of the unit types.
+			 * Packet/Frame copy constructors stay private. Looks
+			 * must go through this helper (or @ref Emit) so a leaf
+			 * Step does not need to be a friend of the unit types.
 			 */
 			Item::PointerType CloneItem(const Item& item) const noexcept;
 
@@ -490,14 +483,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			const Backend::Pipeline::Pipe& pipe() const noexcept;
 
-			ItemSink m_tap;									///< Analytics tap; Drain until Route binds
 			ItemSink m_lookOut;								///< Packet-look producer for Demuxer remux stretch
 
 		private:
 			class Surface;
 
 			/**
-			 * @brief Eof on the Pipe and @ref m_tap.
+			 * @brief Eof on the Pipe (In, Out, clone hopper).
 			 */
 			void CloseHoppers() noexcept;
 

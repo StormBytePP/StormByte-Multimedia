@@ -54,6 +54,7 @@
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Frame;	///< Decoded-AU holder behind @ref StormByte::Multimedia::Pipeline::Frame.
 	class Packet;	///< Compressed-AU holder behind @ref StormByte::Multimedia::Pipeline::Packet.
+	class Pipe;		///< In / out hoppers; CloneTo clones through Item::Clone.
 }
 
 /**
@@ -90,6 +91,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Item: protected Clonable<Item, std::shared_ptr<Item>> {
 		friend class Backend::Pipeline::Frame;
 		friend class Backend::Pipeline::Packet;
+		friend class Backend::Pipeline::Pipe;
 		friend class Decoder;
 		friend class Demuxer;
 		friend class Encoder;

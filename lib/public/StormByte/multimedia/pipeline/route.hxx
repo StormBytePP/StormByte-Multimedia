@@ -71,16 +71,16 @@ namespace StormByte::Multimedia::Pipeline {
 	 * and Encoder.
 	 *
 	 * Analytics is not a process node. Close wires Process from
-	 * origin to destination. Frame origins bind @c origin.m_tap
-	 * onto the first Analytics (decode look; a deep copy from
-	 * @ref Step::Emit). Packet origins spawn a Route-owned
+	 * origin to destination. Frame origins
+	 * @ref Backend::Pipeline::Pipe::CloneTo the origin Pipe
+	 * onto the first Analytics (decode look). Packet origins spawn a Route-owned
 	 * Decoder so Analytics still sees frames with
 	 * @ref Producer::Decoder. Destination packet producers
 	 * expose @ref Step::Look. The last Analytics Pipe Out is
 	 * @c StormByte::Buffer::Sink::Drain.
 	 *
 	 * Close is private: add Routes to a @ref Router and call
-	 * @ref Router::Close. Bind the tap before the origin emits.
+	 * @ref Router::Close. CloneTo the origin before it emits.
 	 *
 	 * Muxer closed is not the end of this Route. Wait @ref Idle
 	 * before @ref Reports.
@@ -248,8 +248,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param lane Lane whose FirstAnalytics is the consumer.
 			 *
 			 * No-op when the lane has no Analytics. Frame producers
-			 * bind @c origin.m_tap. Packet producers spawn a Decoder
-			 * on that tap (@ref Producer::Decoder frames). Does not
+			 * @ref Backend::Pipeline::Pipe::CloneTo the origin Pipe.
+			 * Packet producers spawn a Decoder
+			 * (@ref Producer::Decoder frames). Does not
 			 * share the origin Pipe Out.
 			 */
 			void TapDecode(Step& origin, Lane& lane) noexcept;

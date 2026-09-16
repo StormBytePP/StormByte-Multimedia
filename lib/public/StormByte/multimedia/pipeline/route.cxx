@@ -204,7 +204,7 @@ void Route::TapDecode(Step& origin, Lane& lane) noexcept {
 		return;
 	lane.FirstAnalytics->pipe().Listen();
 	if (origin.Produces().Has(Kind::Frame)) {
-		origin.m_tap.Bind(m_track, lane.FirstAnalytics->pipe().In());
+		origin.pipe().CloneTo(m_track, lane.FirstAnalytics->pipe());
 		return;
 	}
 

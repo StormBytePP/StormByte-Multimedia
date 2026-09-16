@@ -67,6 +67,9 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	 * blocks on the bound consumer Capacity). @c pipe >> item
 	 * is Pop from In only; Wait stays on the Host.
 	 *
+	 * @ref CloneTo forks a copy of each write onto another Pipe
+	 * (Route analytics look). No CloneTo means no clone.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Pipe {
@@ -126,9 +129,21 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void Listen() noexcept;
 
 			/**
-			 * @brief Eof on In and Out.
+			 * @brief Eof on In, Out and the optional clone hopper.
 			 */
 			void Close() noexcept;
+
+			/**
+			 * @brief Fork each write: clone onto @p dest In, original to Out.
+			 * @param track Hopper key.
+			 * @param dest Analytics (or look) consumer.
+			 * @return @p dest.
+			 *
+			 * Notify dest In, Bind the clone hopper. @c operator<<
+			 * then Clone s. Call before the producer Emits. No-op
+			 * as a method if Route never calls it: writes do not clone.
+			 */
+			Pipe& CloneTo(int track, Pipe& dest) noexcept;
 
 			/**
 			 * @brief Drain Out until a consumer Binds.
@@ -193,7 +208,9 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param item Unit. Empty is a no-op.
 			 * @return *this.
 			 *
-			 * Key is @c item->Track().
+			 * Key is @c item->Track(). If @ref CloneTo ran, a Clone
+			 * is Push ed to the clone hopper first (does not steal
+			 * the original; that still blocks on dest Capacity).
 			 */
 			Pipe& operator<<(Item::PointerType item) noexcept;
 
@@ -217,5 +234,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::condition_variable* m_wake;	///< Owner Wait CV
 			ItemSink m_in;						///< Input buckets
 			ItemSink m_out;						///< Output buckets
+			ItemSink m_clone;					///< Analytics fork; unused until CloneTo
+			bool m_fork;						///< CloneTo has bound m_clone
 	};
 }
