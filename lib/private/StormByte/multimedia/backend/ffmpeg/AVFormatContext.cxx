@@ -62,6 +62,8 @@ extern "C" {
 	#include <libavutil/mem.h>
 }
 
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+
 using namespace StormByte::Multimedia::Backend;
 using StormByte::Buffer::Consumer;
 using StormByte::Buffer::DataType;
@@ -385,7 +387,7 @@ std::optional<FFmpeg::AVBSF> FFmpeg::AVFormatContext::Mp4ToAnnexB(int codec_id, 
 	auto expected_bsf = FFmpeg::AVBSF::Create(
 		bsf_name,
 		params,
-		m_ptr->streams[stream_index]->time_base
+		FFmpeg::FromRaw(m_ptr->streams[stream_index]->time_base)
 	);
 
 	if (expected_bsf)
@@ -401,7 +403,7 @@ void FFmpeg::AVFormatContext::DiscardUnwanted(const std::unordered_set<int>& wan
 	if (!m_ptr)
 		return;
 	for (unsigned i = 0; i < m_ptr->nb_streams; ++i) {
-		AVStream* avs = m_ptr->streams[i];
+		::AVStream* avs = m_ptr->streams[i];
 		if (!avs)
 			continue;
 		avs->discard = wanted.contains(avs->index) ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
