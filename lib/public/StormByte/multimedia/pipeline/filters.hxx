@@ -69,13 +69,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Global @ref Add is one analytics node shared by every
 	 * matching Between (CloneTo, not N Launch). Per-stretch Add
-	 * is @ref Between::Add. Both are allowed; there is no dedup.
+	 * is @ref Handle::Add. Both are allowed; there is no dedup.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Filters {
 		public:
-			class Between;
+			class Handle;
 
 			Filters() noexcept;
 			Filters(const Filters&) = delete;
@@ -88,18 +88,18 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Stretch from @p origin to @p destination.
 			 * @param origin Decoder / Demuxer / Encoder.
 			 * @param destination Encoder / Remuxer / Muxer.
-			 * @return Handle for per-stretch Add.
+			 * @return @ref Handle for per-stretch Add.
 			 *
 			 * Hopper key: Decoder::Index, else Remuxer::In / Encoder::Index
 			 * of dest, else origin Encoder/Remuxer. Fail dest if unknown.
 			 */
-			Between Between(std::shared_ptr<Step> origin,
+			Handle Between(std::shared_ptr<Step> origin,
 				std::shared_ptr<Step> destination) noexcept;
 
 			/**
 			 * @brief Global analytics. One node, every matching stretch.
 			 *
-			 * Process / Packet leaves Fail: they go on @ref Between::Add.
+			 * Process / Packet leaves Fail: they go on @ref Handle::Add.
 			 */
 			Filters& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
@@ -113,19 +113,23 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Idle() const noexcept;
 			std::vector<std::pair<std::string, Filter::Report>> Reports() const noexcept;
 
-			class STORMBYTE_MULTIMEDIA_PUBLIC Between {
+			/**
+			 * @class Handle
+			 * @brief Per-stretch Add returned by @ref Between.
+			 */
+			class STORMBYTE_MULTIMEDIA_PUBLIC Handle {
 				public:
-					Between& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
+					Handle& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
 					template<typename T, typename... Args>
-					Between& Add(Args&&... args) noexcept {
+					Handle& Add(Args&&... args) noexcept {
 						return Add(std::shared_ptr<Filter::FFmpeg>(
 							std::make_shared<T>(std::forward<Args>(args)...)));
 					}
 
 				private:
 					friend class Filters;
-					Between(Filters& owner, std::size_t index) noexcept;
+					Handle(Filters& owner, std::size_t index) noexcept;
 					Filters* m_owner;
 					std::size_t m_index;
 			};

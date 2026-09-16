@@ -109,10 +109,10 @@ namespace {
 
 Filters::Filters() noexcept = default;
 
-Filters::Between::Between(Filters& owner, std::size_t index) noexcept
+Filters::Handle::Handle(Filters& owner, std::size_t index) noexcept
 : m_owner(&owner), m_index(index) {}
 
-Filters::Between& Filters::Between::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
+Filters::Handle& Filters::Handle::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	if (!filter || !m_owner || m_index >= m_owner->m_stretches.size())
 		return *this;
 	auto& stretch = m_owner->m_stretches[m_index];
@@ -123,7 +123,7 @@ Filters::Between& Filters::Between::Add(std::shared_ptr<Filter::FFmpeg> filter) 
 	return *this;
 }
 
-Filters::Between Filters::Between(std::shared_ptr<Step> origin,
+Filters::Handle Filters::Between(std::shared_ptr<Step> origin,
 	std::shared_ptr<Step> destination) noexcept {
 	Stretch stretch;
 	stretch.Origin = std::move(origin);
@@ -138,7 +138,7 @@ Filters::Between Filters::Between(std::shared_ptr<Step> origin,
 	}
 
 	m_stretches.push_back(std::move(stretch));
-	return Between(*this, m_stretches.size() - 1);
+	return Handle(*this, m_stretches.size() - 1);
 }
 
 Filters::~Filters() noexcept {
