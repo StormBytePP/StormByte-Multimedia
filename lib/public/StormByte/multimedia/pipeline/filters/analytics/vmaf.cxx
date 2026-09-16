@@ -46,6 +46,7 @@
 #include <format>
 #include <map>
 #include <thread>
+#include <utility>
 
 extern "C" {
 	#include <libavutil/frame.h>
@@ -58,6 +59,7 @@ extern "C" {
 }
 
 using StormByte::Multimedia::Pipeline::Filter::Video::VMAF;
+using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::ToString;
 using StormByte::Multimedia::Type;
@@ -179,12 +181,7 @@ void VMAF::Clean() noexcept {
 bool VMAF::OpenLane(Lane& lane) noexcept {
 	VmafConfiguration cfg{};
 	cfg.log_level = VMAF_LOG_LEVEL_WARNING;
-	unsigned threads = 1;
-	if (m_threads)
-		threads = std::max<unsigned>(1u, *m_threads);
-	else if (const unsigned hw = std::thread::hardware_concurrency(); hw > 0)
-		threads = hw;
-	cfg.n_threads = threads;
+	cfg.n_threads = Threads();
 	cfg.n_subsample = 1;
 	if (vmaf_init(&lane.vmaf, cfg) != 0) {
 		Log(Level::Error, Name() + " vmaf_init failed");
@@ -351,10 +348,103 @@ void VMAF::Drain(Lane& lane) noexcept {
 		lane.dist.pop_front();
 		const unsigned before = lane.scored;
 		Score(lane, ref, dist, lane.index);
-		if (lane.scored > before)
+		if (lane.scored > before) {
 			++lane.index;
+			Pace(lane);
+		}
 		av_frame_free(&ref);
 		av_frame_free(&dist);
+	}
+}
+
+unsigned VMAF::Threads() const noexcept {
+	if (m_threads)
+		return std::max<unsigned>(1u, *m_threads);
+	if (const unsigned hw = std::thread::hardware_concurrency(); hw > 0)
+		return hw;
+	return 1;
+}
+
+void VMAF::Pace(Lane& lane) noexcept {
+	const unsigned threads = Threads();
+	if (!lane.vmaf || !lane.model || lane.index < threads)
+		return;
+	double score = 0;
+	const unsigned ready = lane.index - threads;
+	if (vmaf_score_at_index(lane.vmaf, lane.model, &score, ready) != 0)
+		Log(Level::Warning, std::format("{} pace index={} failed", Name(), ready));
+}
+
+void VMAF::LogPark(const Lane& lane, int track) noexcept {
+	if (lane.scored == 0 || lane.scored % ParkLogEvery != 0)
+		return;
+	Log(Level::Notice, std::format(
+		"{} park t={} ref={} dist={} peak_ref={} peak_dist={} scored={}",
+		Name(), track, lane.ref.size(), lane.dist.size(),
+		lane.peakRef, lane.peakDist, lane.scored));
+}
+
+void VMAF::Take(const Pipeline::Frame& frame) noexcept {
+	if (frame.Type() != Type::Video)
+		return;
+	const Producer producer = frame.Producer();
+	if (producer != Producer::Decoder && !DistLook(producer))
+		return;
+	const ::AVFrame* raw = AVFrame();
+	if (!raw)
+		return;
+	Lane& lane = m_lanes[frame.Track()];
+	if (lane.failed || !lane.vmaf)
+		return;
+	::AVFrame* clone = av_frame_clone(raw);
+	if (!clone) {
+		Log(Level::Warning, Name() + " av_frame_clone failed");
+		return;
+	}
+
+	if (producer == Producer::Decoder) {
+		lane.ref.push_back(clone);
+		if (lane.ref.size() > lane.peakRef)
+			lane.peakRef = lane.ref.size();
+	}
+	else {
+		lane.dist.push_back(clone);
+		if (lane.dist.size() > lane.peakDist)
+			lane.peakDist = lane.dist.size();
+	}
+
+	Log(Level::LowLevel, std::format("{} park t={} producer={} ref={} dist={}",
+		Name(), frame.Track(), ToString(producer), lane.ref.size(), lane.dist.size()));
+	Drain(lane);
+	LogPark(lane, frame.Track());
+}
+
+void VMAF::Pull() noexcept {
+	Pipeline::Item::PointerType extra;
+	pipe() >> extra;
+	if (!extra || extra->Kind() != Kind::Frame)
+		return;
+	auto saved = std::move(m_current);
+	m_current = extra;
+	Take(static_cast<const Pipeline::Frame&>(*m_current));
+	extra = std::move(m_current);
+	m_current = std::move(saved);
+	if (extra)
+		Emit(std::move(extra));
+}
+
+void VMAF::Admit(Lane& lane, bool ref) noexcept {
+	auto& fifo = ref ? lane.ref : lane.dist;
+	while (fifo.size() >= ParkCap && !Stopping()) {
+		Drain(lane);
+		if (fifo.size() < ParkCap)
+			break;
+		if (pipe().InputEof() && !pipe().Ready())
+			break;
+		if (!pipe().Ready())
+			Wait();
+		else
+			Pull();
 	}
 }
 
@@ -380,38 +470,26 @@ void VMAF::Process(const Pipeline::Frame& frame) noexcept {
 	if (!lane.vmaf && !OpenLane(lane))
 		return;
 
-	::AVFrame* clone = av_frame_clone(raw);
-	if (!clone) {
-		Log(Level::Warning, Name() + " av_frame_clone failed");
-		return;
-	}
-
+	Admit(lane, producer == Producer::Decoder);
 	if (producer == Producer::Decoder) {
 		if (lane.scored == 0 && lane.ref.empty())
 			Log(Level::Debug, std::format("{} first ref t={} {}x{} fmt={} bpc={} pts={}",
 				Name(), frame.Track(), raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		lane.ref.push_back(clone);
 	}
-
-	else {
-		if (lane.scored == 0 && lane.dist.empty())
-			Log(Level::Debug, std::format("{} first dist t={} producer={} {}x{} fmt={} bpc={} pts={}",
-				Name(), frame.Track(), ToString(producer),
-				raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
-		lane.dist.push_back(clone);
-	}
-
-	Log(Level::LowLevel, std::format("{} park t={} producer={} ref={} dist={}",
-		Name(), frame.Track(), ToString(producer), lane.ref.size(), lane.dist.size()));
-	Drain(lane);
+	else if (lane.scored == 0 && lane.dist.empty())
+		Log(Level::Debug, std::format("{} first dist t={} producer={} {}x{} fmt={} bpc={} pts={}",
+			Name(), frame.Track(), ToString(producer),
+			raw->width, raw->height, PixName(raw), Bpc(raw), raw->pts));
+	Take(frame);
 }
 
 void VMAF::Eof() noexcept {
 	unsigned scored = 0;
 	for (auto& [track, lane] : m_lanes) {
 		Drain(lane);
-		Log(Level::Debug, std::format("{} eof t={} scored={} ref={} dist={} failed={} latch={}x{}",
-			Name(), track, lane.scored, lane.ref.size(), lane.dist.size(), lane.failed,
+		Log(Level::Debug, std::format("{} eof t={} scored={} ref={} dist={} peak_ref={} peak_dist={} failed={} latch={}x{}",
+			Name(), track, lane.scored, lane.ref.size(), lane.dist.size(),
+			lane.peakRef, lane.peakDist, lane.failed,
 			lane.width, lane.height));
 		if (!lane.ref.empty() || !lane.dist.empty())
 			Log(Level::Warning, std::format("{} leftover looks t={} ref={} dist={}",
