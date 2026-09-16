@@ -77,7 +77,8 @@ bool FFmpeg::AudioFifo::Write(const AVFrame& src) noexcept {
 	const auto* planes = src.ExtendedData();
 	if (!planes)
 		return false;
-	return av_audio_fifo_write(m_ptr, const_cast<void**>(reinterpret_cast<void* const*>(planes)),
+	uint8_t** writable = const_cast<uint8_t**>(planes);
+	return av_audio_fifo_write(m_ptr, reinterpret_cast<void**>(writable),
 		src.NbSamples()) >= src.NbSamples();
 }
 
