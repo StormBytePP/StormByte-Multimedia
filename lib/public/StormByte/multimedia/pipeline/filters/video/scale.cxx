@@ -47,19 +47,15 @@ extern "C" {
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 
 /*
-* Process leaf. Route::Add only accepts Process / Packet / Analytics.
-*
-* Construction names the node ("scale") so logs and Report dumps
-* can tell filters apart. Do not Launch() here: Route::Add does.
-*/
+ * Process leaf. Route::Add only accepts Process / Packet / Analytics.
+ *
+ * Construction names the node ("scale") so logs and Report dumps
+ * can tell filters apart. Do not Launch or Halt here: Route does.
+ */
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
 : Filter::Process(std::move(log), "scale"),
 	m_width(resolution.Width()), m_height(resolution.Height()) {}
-
-Scale::~Scale() noexcept {
-	Halt();
-}
 
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	std::uint32_t width, std::uint32_t height) noexcept
