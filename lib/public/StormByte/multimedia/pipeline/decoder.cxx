@@ -181,7 +181,7 @@ bool Decoder::OpenLook(const Packet& packet) noexcept {
 		return false;
 	}
 
-	const AVRational timeBase{1, 1000000000};
+	const StormByte::Multimedia::Backend::FFmpeg::AVRational timeBase{1, 1000000000};
 	if (packet.Type() == Type::Video) {
 		Bind(std::make_unique<Backend::Pipeline::Detail::Decoder::Video>(
 			std::move(*opened), timeBase, std::nullopt));
