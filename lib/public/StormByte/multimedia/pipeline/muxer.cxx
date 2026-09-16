@@ -37,11 +37,12 @@
  */
 
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/container.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/pumper/sink.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/worker/mux.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/backend/pipeline/muxer.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
@@ -52,6 +53,7 @@
 #include <cctype>
 #include <chrono>
 #include <format>
+#include <mutex>
 #include <string_view>
 #include <utility>
 
@@ -84,12 +86,6 @@ namespace {
 			|| EqualsIgnoreCase(name, "mkv");
 	}
 
-	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
-		if (!value)
-			return "-";
-		return std::format("{}", value->Nanoseconds().count());
-	}
-
 	bool Muxable(enum StormByte::Multimedia::Type type) noexcept {
 		return type == StormByte::Multimedia::Type::Video
 			|| type == StormByte::Multimedia::Type::Audio
@@ -118,6 +114,8 @@ Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
 		return;
 	}
 
+	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Sink>(Face()),
+		std::make_unique<Backend::Pipeline::Detail::Worker::Mux>(*this));
 	Launch();
 }
 
@@ -200,72 +198,11 @@ void Muxer::Title(int output_index, std::string title) noexcept {
 		m_title[output_index] = std::move(title);
 }
 
-void Muxer::Open() noexcept {
-	if (!m_backend) {
-		Fail("muxer has no backend");
-		return;
-	}
-
-	Step::Open();
-}
-
-void Muxer::Work(Item::PointerType item) noexcept {
-	NameThread("STMM:Muxer");
-
-	if (Failed() || !m_backend)
-		return;
-
-	if (!Armed()) {
-		std::unique_lock lock(m_wait);
-		m_wake.wait(lock, [this] {
-			return Failed() || Status() == State::Stopping || Armed();
-		});
-	}
-
-	if (Failed() || Status() == State::Stopping || !Armed())
-		return;
-
-	auto packet = std::dynamic_pointer_cast<Packet>(item);
-	if (!packet) {
-		Fail("muxer expected a packet");
-		return;
-	}
-
-	while (!m_backend->Push(*this, packet)) {
-		if (Failed())
-			return;
-		Wait();
-	}
-
-	const int track = packet->Track();
-	const auto type = packet->Type();
-	if (type == StormByte::Multimedia::Type::Video
-		|| type == StormByte::Multimedia::Type::Audio) {
-		if (const auto& pts = packet->Pts(); pts) {
-			auto ns = pts->Nanoseconds().count();
-			if (const auto& dur = packet->Duration(); dur)
-				ns += dur->Nanoseconds().count();
-			if (type == StormByte::Multimedia::Type::Video)
-				m_positionNs.store(ns, std::memory_order_release);
-			else {
-				const std::int64_t current = m_positionNs.load(std::memory_order_acquire);
-				if (current < 0)
-					m_positionNs.store(ns, std::memory_order_release);
-			}
-		}
-	}
-
-	Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
-		track, packet->Serial().value_or(0), packet->Part(),
-		Ns(packet->Pts()), Ns(packet->Dts()),
-		m_positionNs.load(std::memory_order_acquire)));
-}
-
-void Muxer::Finish() noexcept {
-	if (m_backend && !Failed())
-		m_backend->Flush(*this);
-	m_closed.store(true, std::memory_order_release);
-	Log(Level::Notice, "closed");
+void Muxer::WaitArmed() noexcept {
+	std::unique_lock lock(m_wait);
+	m_wake.wait(lock, [this] {
+		return Failed() || Status() == State::Stopping || Armed();
+	});
 }
 
 bool Muxer::BindEncoderStream(Encoder& encoder, void* avStream) noexcept {

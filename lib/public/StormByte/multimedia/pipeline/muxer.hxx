@@ -64,6 +64,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 	class Muxer;	///< Mux backend behind @ref StormByte::Multimedia::Pipeline::Muxer.
 }
 
+namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
+	class Mux;
+}
+
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
  * @brief Matroska mux leaf.
@@ -146,6 +150,7 @@ namespace StormByte::Multimedia::Pipeline {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
 		friend class Backend::Pipeline::Detail::Muxer::Matroska::Container;
 		friend class Backend::Pipeline::Muxer;
+		friend class Backend::Pipeline::Detail::Worker::Mux;
 		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
 		friend Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
 		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
@@ -296,20 +301,9 @@ namespace StormByte::Multimedia::Pipeline {
 			using Step::Log;
 
 			/**
-			 * @brief Marks Ready when a backend exists.
+			 * @brief Blocks until Armed, Failed or Stopping.
 			 */
-			void Open() noexcept override;
-
-			/**
-			 * @brief Writes one packet to the container.
-			 * @param item Incoming packet.
-			 */
-			void Work(Item::PointerType item) noexcept override;
-
-			/**
-			 * @brief Flushes leftover packets and the trailer.
-			 */
-			void Finish() noexcept override;
+			void WaitArmed() noexcept;
 
 			/**
 			 * @brief Copies an opened encoder into a libav output stream.
@@ -335,13 +329,13 @@ namespace StormByte::Multimedia::Pipeline {
 			std::size_t ExpectedSlots() const noexcept;
 
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
-			const Container* m_container;										///< Destination container
+			const Container* m_container;									///< Destination container
 			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
-			Demuxer* m_origin;													///< Set only by demuxer >> muxer. Not owned
-			std::map<int, std::string> m_language;								///< Per-output language
-			std::map<int, std::string> m_title;									///< Per-output title
-			std::atomic<bool> m_closed;											///< Set by Finish / Fail
+			Demuxer* m_origin;												///< Set only by demuxer >> muxer. Not owned
+			std::map<int, std::string> m_language;							///< Per-output language
+			std::map<int, std::string> m_title;								///< Per-output title
+			std::atomic<bool> m_closed;										///< Set by Finish / Fail
 			std::atomic<std::size_t> m_reserved;
-			std::atomic<std::int64_t> m_positionNs;								///< Last written Pts, or -1
+			std::atomic<std::int64_t> m_positionNs;							///< Last written Pts, or -1
 	};
 }
