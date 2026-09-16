@@ -122,7 +122,8 @@ namespace StormByte::Multimedia::Pipeline {
 			Route(Route&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor. Halts owned filters and look Decoders.
+			 * @brief Destructor. Halts owned filters and look Decoders
+			 *        while those objects are still complete.
 			 */
 			~Route() noexcept;
 
@@ -268,7 +269,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 			int m_track;													///< Origin stream index
 			std::shared_ptr<Step> m_origin;									///< Producer end
-			std::shared_ptr<Step> m_destination;							///< Consumer end
+			std::shared_ptr<Step> m_destination;								///< Consumer end
 			Lane m_frames;													///< Frame process + analytics
 			Lane m_packets;													///< Packet process + analytics
 			std::vector<std::shared_ptr<Filter::FFmpeg>> m_filters;			///< Owned leaves, Add order
