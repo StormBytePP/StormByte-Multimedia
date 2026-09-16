@@ -59,6 +59,8 @@ extern "C" {
 	#include <libavutil/samplefmt.h>
 }
 
+#include <StormByte/multimedia/backend/ffmpeg/convert.hxx>
+
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Logger::Level;
@@ -202,18 +204,18 @@ Packet::PointerType Encoder::Wrap(
 bool Encoder::MuxBindStream(void* avStream) noexcept {
 	if (!m_backend || !avStream)
 		return false;
-	auto* stream = static_cast<AVStream*>(avStream);
+	auto* stream = static_cast<::AVStream*>(avStream);
 	const auto* ctx = m_backend->Context();
 	if (!ctx)
 		return false;
 	if (avcodec_parameters_from_context(stream->codecpar, ctx) < 0)
 		return false;
-	AVRational tb = m_backend->TimeBase();
+	auto tb = m_backend->TimeBase();
 	if (tb.num <= 0 || tb.den <= 0)
-		tb = ctx->time_base;
+		tb = StormByte::Multimedia::Backend::FFmpeg::FromRaw(ctx->time_base);
 	if (tb.num <= 0 || tb.den <= 0)
-		tb = AVRational{1, 1000};
-	stream->time_base = tb;
+		tb = StormByte::Multimedia::Backend::FFmpeg::AVRational{1, 1000};
+	stream->time_base = ::AVRational{tb.num, tb.den};
 	if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 		if (ctx->framerate.num > 0 && ctx->framerate.den > 0) {
 			stream->avg_frame_rate = ctx->framerate;
@@ -221,7 +223,7 @@ bool Encoder::MuxBindStream(void* avStream) noexcept {
 		}
 
 		else if (tb.num > 0 && tb.den > 0) {
-			stream->avg_frame_rate = AVRational{tb.den, tb.num};
+			stream->avg_frame_rate = ::AVRational{tb.den, tb.num};
 			stream->r_frame_rate = stream->avg_frame_rate;
 		}
 
