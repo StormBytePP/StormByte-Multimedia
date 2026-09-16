@@ -119,11 +119,7 @@ Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
 	Launch();
 }
 
-Muxer::~Muxer() noexcept {
-	Halt();
-	if (m_backend)
-		m_backend->Close();
-}
+Muxer::~Muxer() noexcept = default;
 
 Muxer::operator bool() const noexcept {
 	return !Failed() && !m_closed.load(std::memory_order_acquire) && Ready()
