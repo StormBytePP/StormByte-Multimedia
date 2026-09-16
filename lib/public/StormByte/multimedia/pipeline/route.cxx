@@ -45,8 +45,7 @@
 using namespace StormByte::Multimedia::Pipeline;
 
 namespace {
-	bool Dead(const Step& step) noexcept {
-		const State state = step.Status();
+	bool Terminal(State state) noexcept {
 		return state == State::Stopped || state == State::Failed;
 	}
 }
@@ -58,7 +57,17 @@ Route::Route(int track,
 	m_origin(std::move(origin)),
 	m_destination(std::move(destination)) {}
 
-Route::~Route() noexcept = default;
+Route::~Route() noexcept {
+	for (auto& filter : m_filters) {
+		if (filter)
+			filter->Halt();
+	}
+
+	for (auto& look : m_looks) {
+		if (look)
+			look->Halt();
+	}
+}
 
 int Route::Track() const noexcept {
 	return m_track;
@@ -153,12 +162,12 @@ void Route::Close() noexcept {
 
 bool Route::Idle() const noexcept {
 	for (const auto& filter : m_filters) {
-		if (filter && !Dead(*filter))
+		if (filter && !Terminal(filter->Status()))
 			return false;
 	}
 
 	for (const auto& look : m_looks) {
-		if (look && !Dead(*look))
+		if (look && !Terminal(look->Status()))
 			return false;
 	}
 
