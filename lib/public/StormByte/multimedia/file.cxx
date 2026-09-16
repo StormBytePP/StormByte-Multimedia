@@ -138,10 +138,10 @@ namespace {
 		return true;
 	}
 
-	std::optional<std::chrono::nanoseconds> TicksToNs(std::int64_t ticks, AVRational timeBase) noexcept {
+	std::optional<std::chrono::nanoseconds> TicksToNs(std::int64_t ticks, Property::AVRational timeBase) noexcept {
 		if (ticks < 0 || timeBase.den <= 0)
 			return std::nullopt;
-		const std::int64_t ns = av_rescale_q(ticks, timeBase, AVRational{1, 1000000000});
+		const std::int64_t ns = timeBase.Rescale(ticks, Property::AVRational{1, 1000000000});
 		if (ns < 0)
 			return std::nullopt;
 		return std::chrono::nanoseconds{ns};
@@ -347,7 +347,7 @@ void File::ResolveDuration() const noexcept {
 	FFmpeg::AVFormatContext& ctx = opened.value();
 	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(ctx);
 	std::unordered_map<int, std::size_t> byIndex;
-	std::vector<AVRational> timeBase;
+	std::vector<Property::AVRational> timeBase;
 	std::vector<std::int64_t> endTick;
 	std::size_t i = 0;
 	for (const auto& stream : ctx.Streams()) {
