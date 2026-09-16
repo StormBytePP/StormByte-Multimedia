@@ -41,6 +41,7 @@
 #include <cstring>
 
 extern "C" {
+	#include <libavcodec/packet.h>
 	#include <libavutil/avutil.h>
 }
 
