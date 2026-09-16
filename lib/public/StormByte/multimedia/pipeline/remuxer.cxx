@@ -59,9 +59,7 @@ Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 	Launch();
 }
 
-Remuxer::~Remuxer() noexcept {
-	Halt();
-}
+Remuxer::~Remuxer() noexcept = default;
 
 void Remuxer::Look(ItemSink& sink) noexcept {
 	m_lookOut.Bind(m_index, sink);
