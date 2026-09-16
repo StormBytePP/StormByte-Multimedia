@@ -100,9 +100,7 @@ Decoder::Decoder(std::shared_ptr<StormByte::Logger::Log> log,
 	Launch();
 }
 
-Decoder::~Decoder() noexcept {
-	Halt();
-}
+Decoder::~Decoder() noexcept = default;
 
 Decoder::operator bool() const noexcept {
 	return !Failed() && Ready() && m_backend && m_backend->IsOpen();
