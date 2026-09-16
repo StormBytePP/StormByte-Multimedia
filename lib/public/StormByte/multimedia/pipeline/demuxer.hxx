@@ -153,7 +153,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Demuxer(Demuxer&& other) noexcept = delete;
 
 			/**
-			 * @brief Destructor.
+			 * @brief Destructor. @ref Step::Join Halt s before backends die.
 			 */
 			~Demuxer() noexcept override;
 
@@ -273,5 +273,6 @@ namespace StormByte::Multimedia::Pipeline {
 			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
 			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1
 			std::unordered_map<int, std::uint64_t> m_nextSerial;	///< Next lineage id per origin track
+			Join m_join{*this};									///< Halt before other members die
 	};
 }
