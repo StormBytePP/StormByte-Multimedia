@@ -133,7 +133,7 @@ class FFmpeg::Surface final: public StormByte::Multimedia::Backend::Pipeline::Ho
 		}
 
 		void CloseOutput() noexcept override {
-			m_owner.pipe().Out().Eof();
+			m_owner.pipe().Close();
 		}
 
 		void BecameReady() noexcept override {

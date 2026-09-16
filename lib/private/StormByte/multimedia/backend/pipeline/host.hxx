@@ -137,9 +137,9 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			virtual bool InputEof() const noexcept = 0;
 
 			/**
-			 * @brief Eof on the output hopper after Pump returns.
+			 * @brief Eof on Out and CloneTo forks after Pump returns.
 			 *
-			 * Does not Eof the analytics tap.
+			 * Forks must close or look / analytics Wait forever.
 			 */
 			virtual void CloseOutput() noexcept = 0;
 

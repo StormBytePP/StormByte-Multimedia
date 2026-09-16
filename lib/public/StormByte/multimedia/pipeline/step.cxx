@@ -96,7 +96,7 @@ class Step::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host
 		}
 
 		void CloseOutput() noexcept override {
-			m_step.pipe().Out().Eof();
+			m_step.pipe().Close();
 		}
 
 		void BecameReady() noexcept override {

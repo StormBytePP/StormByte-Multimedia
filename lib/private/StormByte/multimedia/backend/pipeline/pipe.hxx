@@ -131,7 +131,10 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			void Listen() noexcept;
 
 			/**
-			 * @brief Eof on In, Out and every clone hopper.
+			 * @brief Eof on In, Out and every CloneTo hopper.
+			 *
+			 * CloseOutput uses this so analytics looks see Eof
+			 * when the producer finishes (not only on Halt).
 			 */
 			void Close() noexcept;
 
