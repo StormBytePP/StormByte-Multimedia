@@ -110,8 +110,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * plateau; peak ~20.5 GiB at init). RSS is the same
 	 * order. A second video track opens another context of
 	 * that size. Pass a smaller thread count in the
-	 * constructor to cap it. Notice logs park depth every
-	 * 64 scored pairs.
+	 * constructor to cap it. Park depth is LowLevel; the
+	 * module logger throttles it.
 	 *
 	 * A failed @c vmaf_read_pictures still belongs to us:
 	 * Score unrefs both pictures.
@@ -292,13 +292,6 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			unsigned Threads() const noexcept;
 
 			/**
-			 * @brief Notice park depth every @ref ParkLogEvery scored pairs.
-			 * @param lane Track context.
-			 * @param track Origin track index.
-			 */
-			void LogPark(const Lane& lane, int track) noexcept;
-
-			/**
 			 * @brief Drops parked RAII clones of @p lane.
 			 * @param lane Track context.
 			 */
@@ -310,7 +303,6 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			void DropAll() noexcept;
 
 			static constexpr std::size_t Ceiling = 512;		///< Analytics hopper
-			static constexpr unsigned ParkLogEvery = 64;	///< Notice park depth
 			std::string m_modelName;						///< libvmaf built-in version
 			std::optional<unsigned short> m_threads;		///< Empty: all cores
 			std::map<int, Lane> m_lanes;					///< One context per Frame::Track

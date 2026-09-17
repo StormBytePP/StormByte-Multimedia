@@ -305,8 +305,7 @@ void Watermark::Clean() noexcept {
 }
 
 void Watermark::DisableLogo(std::string_view why) noexcept {
-	Log(StormByte::Logger::Level::Warning,
-		std::format("Video/watermark disabled: {}", why));
+	Log(StormByte::Logger::Level::Warning, std::format("disabled: {}", why));
 	m_opacity = 0;
 	m_bytes.clear();
 	m_rgba.clear();

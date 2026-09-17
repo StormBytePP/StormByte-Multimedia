@@ -36,11 +36,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/logger/manipulators.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/backend/pipeline/pumper.hxx>
 #include <StormByte/multimedia/backend/pipeline/worker.hxx>
+#include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 
 #include <format>
@@ -119,7 +119,7 @@ class Step::Surface final: public StormByte::Multimedia::Backend::Pipeline::Host
 Step::Step(std::shared_ptr<StormByte::Logger::Log> log,
 	enum Producer name,
 	Kinds receives, Kinds produces) noexcept
-:	m_log(std::move(log)),
+:	m_log(StormByte::Multimedia::UseLog(std::move(log), ToString(name))),
 	m_name(name),
 	m_receives(receives),
 	m_produces(produces),
@@ -225,9 +225,7 @@ std::string Step::Label() const noexcept {
 void Step::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
 	if (!m_log)
 		return;
-	*m_log << StormByte::Logger::component("STMM")
-		<< StormByte::Logger::group(Label())
-		<< level << std::string(message) << std::endl;
+	*m_log << level << message << std::endl;
 }
 
 void Step::RecordWork(std::int64_t microseconds) noexcept {

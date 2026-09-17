@@ -66,7 +66,7 @@ namespace {
 		Level level, std::string_view text) noexcept {
 		if (!log)
 			return;
-		*log << level << "STMM Transcoder: " << std::string(text) << std::endl;
+		*log << level << text << std::endl;
 	}
 
 	const StormByte::Multimedia::Codec* LeafCodec(
@@ -162,7 +162,7 @@ void Transcoder::WaitIfPaused() noexcept {
 }
 
 void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop_token token) noexcept {
-	NameThread("STMM:Transcoder");
+	NameThread("MM-Transcoder");
 	const auto started = std::chrono::steady_clock::now();
 	JobLog(job.Logger(), Level::Notice, "running");
 	job.OnConfigure();
@@ -219,8 +219,9 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	auto demux = std::make_shared<StormByte::Multimedia::Pipeline::Demuxer>(job.Logger());
-	auto mux = std::make_shared<StormByte::Multimedia::Pipeline::Muxer>(job.Logger(), *Container);
+	const auto& tube = job.ApplicationLog();
+	auto demux = std::make_shared<StormByte::Multimedia::Pipeline::Demuxer>(tube);
+	auto mux = std::make_shared<StormByte::Multimedia::Pipeline::Muxer>(tube, *Container);
 	*mux >> Path;
 	std::move(*built) >> *demux;
 	job.m_plan = demux->Plan();
@@ -264,7 +265,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
 			auto remux = std::make_shared<StormByte::Multimedia::Pipeline::Remuxer>(
-				job.Logger(), slot.In);
+				tube, slot.In);
 			*demux >> *remux;
 			*remux >> *mux;
 			if (mux->Failed() || remux->Failed()) {
@@ -281,9 +282,9 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 
 		else {
 			auto decoder = std::make_shared<StormByte::Multimedia::Pipeline::Decoder>(
-				job.Logger(), slot.In);
+				tube, slot.In);
 			auto encoder = std::make_shared<StormByte::Multimedia::Pipeline::Encoder>(
-				job.Logger(), muxIndex, *codec);
+				tube, muxIndex, *codec);
 			ApplyEncoder(*encoder, *slot.Config);
 			*demux >> *decoder;
 			*encoder >> *mux;

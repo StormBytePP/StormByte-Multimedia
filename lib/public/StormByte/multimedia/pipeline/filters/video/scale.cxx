@@ -39,18 +39,12 @@
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
+#include <format>
+
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
+using StormByte::Logger::Level;
 
-/*
- * Process leaf. Inherit Process, never FFmpeg.
- *
- * Construction names the node ("scale") so logs and Report dumps
- * can tell filters apart. Do not Launch or Halt from the leaf.
- *
- * Process borrows the current RAII frame, ScaleTo a new one,
- * Save(std::move). No av_*.
- */
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
 	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
 : Filter::Process(std::move(log), "scale"),
@@ -67,7 +61,9 @@ enum StormByte::Multimedia::Type Scale::Media() const noexcept {
 
 void Scale::Clean() noexcept {}
 
-void Scale::Setup() noexcept {}
+void Scale::Setup() noexcept {
+	Log(Level::Debug, std::format("target {}x{}", m_width, m_height));
+}
 
 void Scale::Process(const Pipeline::Frame&) noexcept {
 	const FFrame& src = AVFrame();
@@ -94,8 +90,13 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 		return;
 	}
 
-	if (static_cast<int>(dstW) == src.Width() && static_cast<int>(dstH) == src.Height())
+	if (static_cast<int>(dstW) == src.Width() && static_cast<int>(dstH) == src.Height()) {
+		Log(Level::LowLevel, std::format("passthrough {}x{}", src.Width(), src.Height()));
 		return;
+	}
+
+	Log(Level::LowLevel, std::format("{}x{} -> {}x{}",
+		src.Width(), src.Height(), dstW, dstH));
 
 	FFrame out;
 	if (!src.ScaleTo(out, static_cast<int>(dstW), static_cast<int>(dstH))) {

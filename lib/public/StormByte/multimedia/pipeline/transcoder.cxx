@@ -41,9 +41,8 @@
 
 #include <StormByte/expected.hxx>
 #include <StormByte/logger/log.hxx>
-#include <StormByte/logger/manipulators.hxx>
-#include <StormByte/logger/typedefs.hxx>
 #include <StormByte/multimedia/attachment.hxx>
+#include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/pipeline/config/attachment.hxx>
 #include <StormByte/multimedia/pipeline/config/audio.hxx>
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
@@ -71,23 +70,7 @@ namespace {
 		Level level, std::string_view text) noexcept {
 		if (!log)
 			return;
-		*log << StormByte::Logger::component("STMM")
-			<< StormByte::Logger::group("Transcoder")
-			<< level << std::string(text) << std::endl;
-	}
-
-	void InstallTubeLog(const std::shared_ptr<StormByte::Logger::Log>& log) noexcept {
-		if (!log)
-			return;
-		using StormByte::Logger::ThrottlePolicy;
-		using StormByte::Logger::component;
-		using StormByte::Logger::group;
-		log->Throttle(
-			component("STMM"),
-			Level::LowLevel,
-			group(""),
-			0.0, 0,
-			ThrottlePolicy::Window, 20, 500);
+		*log << level << text << std::endl;
 	}
 
 	const StormByte::Multimedia::Stream* FindStream(const File& file, int index) noexcept {
@@ -251,10 +234,9 @@ Transcoder::Track& Transcoder::Track::Title(std::string title) noexcept {
 }
 
 Transcoder::Transcoder(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept
-: m_logger(std::move(logger)), m_file(std::make_unique<File>(std::move(file))),
-	m_backend(std::make_unique<Backend::Pipeline::Transcoder>()) {
-	JobLog(m_logger, Level::LowLevel, "created");
-}
+: m_app_log(logger), m_logger(std::move(logger)),
+	m_file(std::make_unique<File>(std::move(file))),
+	m_backend(std::make_unique<Backend::Pipeline::Transcoder>()) {}
 
 Transcoder::~Transcoder() noexcept {
 	JobLog(m_logger, Level::LowLevel, "destroy");
@@ -264,6 +246,11 @@ Transcoder::~Transcoder() noexcept {
 	if (status == Status::Running || status == Status::Paused)
 		Cancel();
 	m_backend->Join();
+}
+
+void Transcoder::InstallLog() noexcept {
+	m_logger = StormByte::Multimedia::UseLog(m_app_log, "Transcoder");
+	JobLog(m_logger, Level::LowLevel, "created");
 }
 
 void Transcoder::Fail(std::string reason) noexcept {
@@ -303,14 +290,15 @@ ExpectedTranscoder Transcoder::BindLoggerAndFile(std::shared_ptr<StormByte::Logg
 	ExpectedFile opened) noexcept {
 	if (!logger)
 		return StormByte::Unexpected<TranscodeException>("logger is required");
-	InstallTubeLog(logger);
 	if (!opened) {
 		const char* text = opened.error() ? opened.error()->what() : "file open failed";
-		JobLog(logger, Level::Error, text);
+		JobLog(StormByte::Multimedia::UseLog(logger, "Transcoder"), Level::Error, text);
 		return StormByte::Unexpected<TranscodeException>(text);
 	}
 
-	return std::unique_ptr<Transcoder>(new Transcoder(std::move(logger), std::move(*opened)));
+	auto job = std::unique_ptr<Transcoder>(new Transcoder(std::move(logger), std::move(*opened)));
+	job->InstallLog();
+	return job;
 }
 
 ExpectedTranscoder Transcoder::Open(std::shared_ptr<StormByte::Logger::Log> logger,

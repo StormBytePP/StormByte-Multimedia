@@ -36,14 +36,13 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/logger/manipulators.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/filter.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
-
+#include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
@@ -171,11 +170,6 @@ FFmpeg::FFmpeg(std::shared_ptr<StormByte::Logger::Log> log,
 	m_heldFor(0) {
 	m_pumper = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Pumper::Through>(Face());
 	m_pumper->Bind(std::make_unique<StormByte::Multimedia::Backend::Pipeline::Detail::Worker::Filter>(*this));
-	if (m_log) {
-		*m_log << StormByte::Logger::component("STMM")
-			<< StormByte::Logger::group(m_name)
-			<< Level::Notice << (m_name + " created") << std::endl;
-	}
 }
 
 FFmpeg::~FFmpeg() noexcept {
@@ -215,9 +209,7 @@ std::size_t FFmpeg::InputCeiling() const noexcept {
 void FFmpeg::Log(StormByte::Logger::Level level, std::string_view message) noexcept {
 	if (!m_log)
 		return;
-	*m_log << StormByte::Logger::component("STMM")
-		<< StormByte::Logger::group(m_name)
-		<< level << std::string(message) << std::endl;
+	*m_log << level << message << std::endl;
 }
 
 void FFmpeg::Fail(std::string reason) noexcept {
@@ -245,14 +237,14 @@ void FFmpeg::Hold(std::uint8_t n) noexcept {
 
 	m_hold = n == 0 ? std::numeric_limits<std::uint8_t>::max() : n;
 	m_heldFor = 0;
-	Log(Level::Debug, std::format("{} hold n={}", Name(), static_cast<unsigned>(m_hold)));
+	Log(Level::Debug, std::format("hold n={}", static_cast<unsigned>(m_hold)));
 	Park();
 }
 
 void FFmpeg::Release() noexcept {
 	if (!Held())
 		return;
-	Log(Level::Debug, std::format("{} release held={}", Name(), static_cast<unsigned>(m_heldFor)));
+	Log(Level::Debug, std::format("release held={}", static_cast<unsigned>(m_heldFor)));
 	m_hold = 0;
 	m_heldFor = 0;
 	auto parked = std::move(m_queue);
@@ -320,9 +312,9 @@ void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept {
 		frame->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
 	frame->m_backend->Put(*frame, incoming.Detach());
 	if (!frame->m_backend->Warning().empty())
-		Log(Level::Warning, std::format("{}: {}", Name(), frame->m_backend->Warning()));
-	Log(Level::LowLevel, std::format("{} save frame t={} {}:{}",
-		Name(), frame->Track(), frame->Serial().value_or(0), frame->Part()));
+		Log(Level::Warning, frame->m_backend->Warning());
+	Log(Level::LowLevel, std::format("save frame t={} {}:{}",
+		frame->Track(), frame->Serial().value_or(0), frame->Part()));
 }
 
 void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept {
@@ -333,13 +325,14 @@ void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept {
 		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
 	packet->m_backend->Handle().Reset(incoming.Detach());
 	packet->m_backend->BindProperties(*packet);
-	Log(Level::LowLevel, std::format("{} save packet t={} {}:{}",
-		Name(), packet->Track(), packet->Serial().value_or(0), packet->Part()));
+	Log(Level::LowLevel, std::format("save packet t={} {}:{}",
+		packet->Track(), packet->Serial().value_or(0), packet->Part()));
 }
 
 void FFmpeg::Open() noexcept {
-	NameThread("STMM:FFmpeg:" + m_name);
-	Log(Level::Notice, Name() + " setup");
+	m_log = StormByte::Multimedia::UseLog(m_log, std::string("Filters/") + Name());
+	NameThread("SB/MM:" + m_name);
+	Log(Level::Notice, "setup");
 	Clean();
 	Setup();
 }
@@ -365,7 +358,7 @@ void FFmpeg::Park() noexcept {
 void FFmpeg::CallLastChance() noexcept {
 	if (!m_current)
 		return;
-	Log(Level::Debug, Name() + " last-chance");
+	Log(Level::Debug, "last-chance");
 	if (m_current->Kind() == Pipeline::Kind::Frame)
 		LastChance(static_cast<const Pipeline::Frame&>(*m_current));
 	else if (!IsAnalytics(*this))
@@ -374,8 +367,8 @@ void FFmpeg::CallLastChance() noexcept {
 
 void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 	m_current = std::move(item);
-	Log(Level::LowLevel, std::format("{} in t={} {}:{}",
-		Name(), TrackOf(*m_current), SerialOf(*m_current).value_or(0), PartOf(*m_current)));
+	Log(Level::LowLevel, std::format("in t={} {}:{}",
+		TrackOf(*m_current), SerialOf(*m_current).value_or(0), PartOf(*m_current)));
 
 	if (IsAnalytics(*this)) {
 		if (m_current->Kind() == Pipeline::Kind::Frame)
@@ -502,9 +495,13 @@ void FFmpeg::RecordWork(std::int64_t microseconds) noexcept {
 void FFmpeg::DumpWork() noexcept {
 	if (m_workN == 0)
 		return;
-	Log(Level::Debug, std::format("work n={} min={}us max={}us",
-		m_workN, m_workMin, m_workMax));
+	Log(Level::Debug, std::format("work n={} min={}us max={}us last={}us",
+		m_workN, m_workMin, m_workMax, m_lastWork));
 }
+
+void FFmpeg::Clean() noexcept {}
+
+void FFmpeg::Setup() noexcept {}
 
 Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
 : FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{Kind::Frame}) {}
@@ -516,15 +513,5 @@ Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
 : FFmpeg(std::move(log), std::move(name), Kinds{Kind::Packet}, Kinds{Kind::Packet}) {}
 
-Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
-	Kinds receives, Kinds produces) noexcept
-: FFmpeg(std::move(log), std::move(name), receives, produces) {}
-
 Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
-: FFmpeg(std::move(log), std::move(name),
-	Kinds{Kind::Frame},
-	Kinds{Kind::Frame}) {}
-
-Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
-	Kinds receives, Kinds produces) noexcept
-: FFmpeg(std::move(log), std::move(name), receives, produces) {}
+: FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{}) {}

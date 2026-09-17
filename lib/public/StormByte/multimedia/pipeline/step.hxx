@@ -100,9 +100,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * that pumper through a private Host surface. Leaves Mount a
 	 * concrete Pumper and Worker, then Launch.
 	 *
-	 * Log lines use Logger component `STMM` and group @ref Label.
-	 * Volume is a Logger throttle on that component/group, not a
-	 * per-step counter.
+	 * Log lines use Scope StormByte/Multimedia/<Producer>. UseLog
+	 * installs the module format and throttle. Volume is that
+	 * Logger throttle, not a per-step counter.
 	 *
 	 * @ref Emit writes @c item >> pipe. Analytics looks are a
 	 * @ref Backend::Pipeline::Pipe::CloneTo on that Pipe, bound
@@ -286,7 +286,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param log Shared logger. Prefer @c StormByte::Logger::ThreadedLog
 			 *        when several workers write. A plain @c Log is accepted
 			 *        for single-thread use. Empty pointer means no log.
-			 * @param name Stage name used as the default @ref Label (Logger group).
+			 * @param name Stage name. UseLog leaf and default @ref Label.
 			 * @param receives Kinds this step consumes.
 			 * @param produces Kinds this step emits.
 			 */
@@ -420,21 +420,22 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Logger group token for this step.
+			 * @brief Display name of this step.
 			 * @return @ref Producer name (`Encoder`) unless a leaf overrides
-			 *         it (`Encoder(libx265)`). Called on every @ref Log.
+			 *         it (`Encoder(libx265)`).
 			 */
 			virtual std::string Label() const noexcept;
 
 			/**
-			 * @brief Writes one log line with component @c STMM and group @ref Label.
+			 * @brief Writes one log line on the scoped module logger.
 			 * @param level StormByte::Logger::Level of this line.
 			 * @param message Already-formatted text (caller may use std::format).
 			 *        Must not include the level name; Logger prints that.
 			 *
 			 * No-op when @ref m_log is empty. Virtual so a leaf can
 			 * re-expose it to its backend (friendship is not inherited).
-			 * Throttle belongs on the shared Logger, not here.
+			 * %c is StormByte/Multimedia/<leaf>. There is no STMM
+			 * component and no Logger group.
 			 */
 			virtual void Log(StormByte::Logger::Level level, std::string_view message) noexcept;
 
@@ -442,8 +443,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @}
 			 */
 
-			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Shared logger (ThreadedLog preferred)
-			enum Producer m_name;								///< Default Label / Logger group
+			std::shared_ptr<StormByte::Logger::Log> m_log;		///< Scoped module logger (ThreadedLog preferred)
+			enum Producer m_name;								///< UseLog leaf / default Label
 			Kinds m_receives;									///< Receives
 			Kinds m_produces;									///< Produces
 

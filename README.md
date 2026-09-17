@@ -20,7 +20,7 @@ The suite is split on purpose. Base, Buffer, Config, Crypto, Database, Logger, N
 - **Two ways in** — `Transcoder` is the File→File facade (inheritable, hookable, zero hacks). The same tube can be wired by hand with `operator>>`. Anything `Transcoder` can do, a hand-built tube can do. If a user-built tube fails, `Transcoder` fails the same way.
 - **Registry** — codecs and containers that actually exist in this build. Look up `"H.265"` / `"hevc"` or `"Matroska"` / `"matroska"`. Missing name is an error, not a silent fallback.
 - **Filters** — typed leaves on decoded frames or compressed packets (`Scale`, `Watermark`, analytics / VMAF, …). A bad filter is a Warning and the job continues. A broken tube frame is a Fail.
-- **Logging** — every `Step` takes a `std::shared_ptr<StormByte::Logger::Log>` (prefer `ThreadedLog`). Line shape: `STMM <Label>: <text>`. The print floor belongs to the **application**.
+- **Logging** — every `Step` takes a `std::shared_ptr<StormByte::Logger::Log>` (prefer `ThreadedLog`). Lines use component `StormByte/Multimedia/<stage>` (`Demuxer`, `Transcoder`, `Watermark`, …) and format `[%L] %T %c`. The print floor belongs to the **application**. Module throttle: Window on LowLevel, Drop on Debug and Notice. Warning / Error / Fatal are not throttled.
 
 ## The rest of the suite
 
@@ -67,7 +67,7 @@ Every job is the same tube. You either let `Transcoder` assemble it from a fluen
 
 `Transcoder` is the facade most applications want. It opens a source, lets you name **output** tracks in mux order, attaches filters, picks a destination container and path, and runs the coordinator. The stock class is complete: you do not have to derive anything to remux, recode or filter.
 
-It is also **designed to be inherited**. Override `EmptyPlan()` / `EmptySettled()` to carry your own fields, or the hooks (`OnConfigure`, `OnStart`, `OnPlan`, `OnSettled`, `OnProgress`, `OnDone`, `OnError`, `OnAborted`) to drive a UI or a batch runner. Hooks are not an escape hatch around the tube. If a hand-wired tube cannot do it, `Transcoder` will not sneak it in.
+It is also **designed to be inherited**. Override `EmptyPlan()` / `EmptySettled()` to carry your own fields, or the hooks (`OnConfigure`, `OnStart`, `OnPlan`, `OnSettled`, `OnProgress`, `OnDone`, `OnError`, `OnAborted`) to drive a UI or a batch runner. Override `InstallLog()` so this job’s own lines use another component path; tube stages stay under `StormByte/Multimedia/<stage>`. Hooks are not an escape hatch around the tube. If a hand-wired tube cannot do it, `Transcoder` will not sneak it in.
 
 Open the source, map streams, run, poll:
 
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	auto logger = std::make_shared<ThreadedLog>(std::cout, Level::Debug, "[%L] %T");
+	auto logger = std::make_shared<ThreadedLog>(std::cout, Level::Debug, "[%L] %T %c");
 
 	auto opened = Transcoder::Open(logger, argv[1], argv[2]);
 	if (!opened) {
@@ -190,7 +190,7 @@ using StormByte::Logger::ThreadedLog;
 using StormByte::Multimedia::Registry;
 using namespace StormByte::Multimedia::Pipeline;
 
-auto logger = std::make_shared<ThreadedLog>(std::cout, Level::Notice, "[%L] %T");
+auto logger = std::make_shared<ThreadedLog>(std::cout, Level::Notice, "[%L] %T %c");
 auto& registry = Registry::Instance();
 auto hevc = registry.FindCodec("H.265");
 auto mkv  = registry.FindContainer("Matroska");
@@ -249,13 +249,17 @@ Write a new filter the same way `Scale` and `Watermark` are written. Do not add 
 
 First argument of every `Step` and filter leaf: `std::shared_ptr<StormByte::Logger::Log>`. Prefer `ThreadedLog` if more than one thread will write.
 
-Payload convention: `STMM <Label>: <text>`. The logger prints the level; do not repeat it in the payload. Default `Label()` is the producer name; leaves add codec / track (`Encoder(libx265)`, `Decoder(look t=0)`).
+The application logger is scoped at `StormByte/Multimedia/<stage>`. Format is `[%L] %T %c`. Do not put `STMM` or the level name in the payload.
+
+A `Transcoder` job can override `InstallLog` so *its* lines use another path. Tube stages always stay under `StormByte/Multimedia/<stage>`.
+
+Default `Label()` is the producer name. Leaves may still add codec / track in the payload (`Encoder(libx265)`, `Decoder(look t=0)`).
 
 | Level | What Multimedia uses it for |
 | --- | --- |
-| `LowLevel` | Per-unit wait/wake, DTS, frames. Throttled per track (20 of every 500). |
-| `Debug` | Binds, reserves, work `n/min/max`. |
-| `Notice` | Created, open, path, eof, closed. Keep this quiet. |
+| `LowLevel` | Per-unit wait/wake, DTS, frames. Module Window: 12 lines / 1 s. |
+| `Debug` | Binds, reserves, work `n/min/max`. Module Drop: 2/s, burst 4. |
+| `Notice` | Created, open, path, eof, closed. Module Drop: 4/s, burst 8. |
 | `Info` | `Transcoder` at job close only. |
 
 The application chooses the floor. `LowLevel` is a request for noise and the cost that comes with it. See the [Logger README](https://github.com/StormBytePP/StormByte-Logger) for headers, redaction and the line-lock contract.

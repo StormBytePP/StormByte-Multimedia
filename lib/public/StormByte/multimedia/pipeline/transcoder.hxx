@@ -222,6 +222,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   type derived from TrackSettled.
 	 * - Both. Derived Plan plus derived TrackSettled plus the hooks
 	 *   you care about.
+	 * - Logging. Override @ref InstallLog so this job's own lines
+	 *   use another component path and other throttle rules. Tube
+	 *   stages (Demuxer, Decoder, filters, …) keep the Multimedia
+	 *   defaults: StormByte/Multimedia/<stage>. That path is not
+	 *   overridable from a derived Transcoder.
 	 *
 	 * EmptyPlan / EmptySettled only pick the dynamic type. This class
 	 * still fills tracks from the fluent map and settled fields from
@@ -236,11 +241,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * tube reads with @ref Filter::Analytics::Report on the leaf
 	 * pointer. The Notice line from a leaf is log, not the API.
 	 *
-	 * Open installs a Logger Window throttle (20 keep / 500 period)
-	 * on component STMM and Level::LowLevel, all groups. Error and
-	 * Fatal stay unthrottled. A shared logger keeps the rule for
-	 * the process. Hand-wired tubes that skip Transcoder must
-	 * install the same rule themselves.
+	 * Open applies @ref InstallLog after the most-derived
+	 * constructor. Stock InstallLog scopes this job at
+	 * StormByte/Multimedia/Transcoder and applies the Multimedia
+	 * format (`[%L] %T %c`) and throttle (Window on LowLevel,
+	 * Drop on Debug and Notice). There is no STMM component. A
+	 * derived Open that constructs a subclass must call
+	 * @ref InstallLog itself after that constructor.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -412,8 +419,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Constructs an empty job. Only Open / derived classes.
-			 * @param logger Required logger.
+			 * @param logger Required application logger.
 			 * @param file Opened source (moved).
+			 *
+			 * Stores @p logger as-is. @ref InstallLog runs after the
+			 * most-derived constructor.
 			 */
 			Transcoder(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept;
 
@@ -468,7 +478,9 @@ namespace StormByte::Multimedia::Pipeline {
 			 *
 			 * Shorthand for File::Open plus the public constructor.
 			 * The destination container is still set with Destination
-			 * before Run.
+			 * before Run. Stock Open constructs Transcoder and calls
+			 * @ref InstallLog. A derived Open that constructs a
+			 * subclass must call @ref InstallLog after that constructor.
 			 */
 			static ExpectedTranscoder Open(std::shared_ptr<StormByte::Logger::Log> logger,
 				const std::filesystem::path& source,
@@ -493,8 +505,12 @@ namespace StormByte::Multimedia::Pipeline {
 			const File& Source() const noexcept;
 
 			/**
-			 * @brief Logger bound at Open.
-			 * @return Logger.
+			 * @brief Logger used by this job after @ref InstallLog.
+			 * @return Job facade, or empty.
+			 *
+			 * Stock path is StormByte/Multimedia/Transcoder. Do not
+			 * pass this pointer to a Step or filter; those use the
+			 * application logger and the Multimedia stage path.
 			 */
 			const std::shared_ptr<StormByte::Logger::Log>& Logger() const noexcept;
 
@@ -672,6 +688,29 @@ namespace StormByte::Multimedia::Pipeline {
 
 		protected:
 			/**
+			 * @brief Scopes this job's own logger.
+			 *
+			 * Stock path is StormByte/Multimedia/Transcoder with the
+			 * Multimedia format and throttle. Override to use another
+			 * path and other rules. Tube stages still use
+			 * StormByte/Multimedia/<stage>. Do not call from a
+			 * constructor. Open calls this after the most-derived
+			 * constructor.
+			 */
+			virtual void InstallLog() noexcept;
+
+			/**
+			 * @brief Application logger passed to Open.
+			 * @return Logger given to the constructor, not the job facade.
+			 *
+			 * Hand this to a Step or filter. Those apply the Multimedia
+			 * stage path themselves.
+			 */
+			inline const std::shared_ptr<StormByte::Logger::Log>& ApplicationLog() const noexcept {
+				return m_app_log;
+			}
+
+			/**
 			 * @brief Allocates the Plan type for this job.
 			 * @param source Origin File (moved).
 			 * @param container Destination container.
@@ -799,7 +838,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
-			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Required logger
+			std::shared_ptr<StormByte::Logger::Log> m_app_log;			///< Logger from Open; input for tube stages
+			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Job facade after InstallLog
 			std::unique_ptr<File> m_file;								///< Source until handed to the Plan
 			std::shared_ptr<class Plan> m_plan;							///< Intention; shared with the job after Run
 			std::unique_ptr<Backend::Pipeline::Transcoder> m_backend;	///< Map and coordinator thread
