@@ -45,6 +45,13 @@ using StormByte::Multimedia::Backend::Pipeline::Pipe;
 Pipe::Pipe(std::condition_variable& wake) noexcept
 :	m_wake(&wake) {}
 
+Pipe::~Pipe() noexcept {
+	m_in.Unnotify();
+	m_out.Unnotify();
+	for (auto& fork : m_forks)
+		fork.hopper.Unnotify();
+}
+
 Pipe::ItemSink& Pipe::In() noexcept {
 	return m_in;
 }

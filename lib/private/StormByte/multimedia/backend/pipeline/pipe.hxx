@@ -93,7 +93,13 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			Pipe(Pipe&& other) noexcept = delete;
 			Pipe& operator=(const Pipe& other) = delete;
 			Pipe& operator=(Pipe&& other) noexcept = delete;
-			~Pipe() noexcept = default;
+			/**
+			 * @brief Drops @c Notify on In, Out and clone hoppers.
+			 *
+			 * The owner CV is destroyed after this Pipe. A later producer
+			 * Eof must not signal it.
+			 */
+			~Pipe() noexcept;
 
 			/**
 			 * @brief Input hopper.

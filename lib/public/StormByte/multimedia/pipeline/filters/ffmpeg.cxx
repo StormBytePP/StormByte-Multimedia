@@ -216,7 +216,7 @@ void FFmpeg::Log(StormByte::Logger::Level level, std::string_view message) noexc
 	if (!m_log)
 		return;
 	*m_log << StormByte::Logger::component("STMM")
-		<< StormByte::Logger::group(Name())
+		<< StormByte::Logger::group(m_name)
 		<< level << std::string(message) << std::endl;
 }
 
