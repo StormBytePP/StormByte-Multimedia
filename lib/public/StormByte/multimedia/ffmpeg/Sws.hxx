@@ -80,14 +80,39 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit operator bool() const noexcept;
 
 			/**
+			 * @brief `SWS_BILINEAR`. Default when @ref Open / @ref Ensure get 0.
+			 */
+			static int Bilinear() noexcept;
+
+			/**
+			 * @brief `SWS_BICUBIC`.
+			 */
+			static int Bicubic() noexcept;
+
+			/**
+			 * @brief `SWS_FAST_BILINEAR`.
+			 */
+			static int FastBilinear() noexcept;
+
+			/**
+			 * @brief `SWS_POINT`.
+			 */
+			static int Point() noexcept;
+
+			/**
+			 * @brief `SWS_LANCZOS`.
+			 */
+			static int Lanczos() noexcept;
+
+			/**
 			 * @brief Opens a scaler. Empty wrapper on failure.
 			 * @param src_w Source width in pixels.
 			 * @param src_h Source height in pixels.
-			 * @param src_fmt Source `AVPixelFormat` as int.
+			 * @param src_fmt Source pixel format as int.
 			 * @param dst_w Destination width in pixels.
 			 * @param dst_h Destination height in pixels.
-			 * @param dst_fmt Destination `AVPixelFormat` as int.
-			 * @param flags libswscale flags. 0 = SWS_BILINEAR.
+			 * @param dst_fmt Destination pixel format as int.
+			 * @param flags @ref Bilinear, @ref Bicubic, … 0 = @ref Bilinear.
 			 * @return Open scaler, or empty on failure.
 			 */
 			static Sws Open(int src_w, int src_h, int src_fmt,
@@ -97,11 +122,11 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @brief Reopens if geometry, format or flags changed.
 			 * @param src_w Source width in pixels.
 			 * @param src_h Source height in pixels.
-			 * @param src_fmt Source `AVPixelFormat` as int.
+			 * @param src_fmt Source pixel format as int.
 			 * @param dst_w Destination width in pixels.
 			 * @param dst_h Destination height in pixels.
-			 * @param dst_fmt Destination `AVPixelFormat` as int.
-			 * @param flags libswscale flags. 0 = SWS_BILINEAR.
+			 * @param dst_fmt Destination pixel format as int.
+			 * @param flags @ref Bilinear, @ref Bicubic, … 0 = @ref Bilinear.
 			 * @return false if the scaler could not be (re)opened.
 			 */
 			bool Ensure(int src_w, int src_h, int src_fmt,
@@ -140,7 +165,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			int m_dstW = 0;		///< Cached destination width
 			int m_dstH = 0;		///< Cached destination height
 			int m_dstFmt = 0;	///< Cached destination format
-			int m_flags = 0;	///< Cached libswscale flags
+			int m_flags = 0;	///< Cached scaler flags
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PUBLIC AVPointer<::SwsContext>;

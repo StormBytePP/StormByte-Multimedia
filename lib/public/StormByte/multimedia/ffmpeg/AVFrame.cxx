@@ -40,6 +40,7 @@
 #include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/ffmpeg/convert.hxx>
 
+#include <algorithm>
 #include <cctype>
 #include <climits>
 #include <cstdint>
@@ -354,6 +355,23 @@ int FFmpeg::AVFrame::FormatGray8() noexcept {
 
 int FFmpeg::AVFrame::FormatRgba() noexcept {
 	return static_cast<int>(AV_PIX_FMT_RGBA);
+}
+
+FFmpeg::AVFrame::VideoLayout FFmpeg::AVFrame::Layout() const noexcept {
+	if (!m_ptr)
+		return VideoLayout::Unknown;
+	const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(m_ptr->format));
+	if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL) != 0)
+		return VideoLayout::Unknown;
+	if (desc->nb_components <= 1)
+		return VideoLayout::Gray;
+	if (desc->log2_chroma_w == 1 && desc->log2_chroma_h == 1)
+		return VideoLayout::Yuv420;
+	if (desc->log2_chroma_w == 1 && desc->log2_chroma_h == 0)
+		return VideoLayout::Yuv422;
+	if (desc->log2_chroma_w == 0 && desc->log2_chroma_h == 0)
+		return VideoLayout::Yuv444;
+	return VideoLayout::Unknown;
 }
 
 FFmpeg::AVFrame FFmpeg::AVFrame::DecodeImage(const std::uint8_t* data, std::size_t size,

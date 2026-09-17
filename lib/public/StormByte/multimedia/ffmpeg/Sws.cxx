@@ -59,10 +59,30 @@ FFmpeg::Sws::operator bool() const noexcept {
 	return m_ptr != nullptr;
 }
 
+int FFmpeg::Sws::Bilinear() noexcept {
+	return SWS_BILINEAR;
+}
+
+int FFmpeg::Sws::Bicubic() noexcept {
+	return SWS_BICUBIC;
+}
+
+int FFmpeg::Sws::FastBilinear() noexcept {
+	return SWS_FAST_BILINEAR;
+}
+
+int FFmpeg::Sws::Point() noexcept {
+	return SWS_POINT;
+}
+
+int FFmpeg::Sws::Lanczos() noexcept {
+	return SWS_LANCZOS;
+}
+
 FFmpeg::Sws FFmpeg::Sws::Open(int src_w, int src_h, int src_fmt,
 	int dst_w, int dst_h, int dst_fmt, int flags) noexcept {
 	if (flags == 0)
-		flags = SWS_BILINEAR;
+		flags = Bilinear();
 	SwsContext* ctx = sws_getContext(
 		src_w, src_h, static_cast<AVPixelFormat>(src_fmt),
 		dst_w, dst_h, static_cast<AVPixelFormat>(dst_fmt),
@@ -81,7 +101,7 @@ FFmpeg::Sws FFmpeg::Sws::Open(int src_w, int src_h, int src_fmt,
 bool FFmpeg::Sws::Ensure(int src_w, int src_h, int src_fmt,
 	int dst_w, int dst_h, int dst_fmt, int flags) noexcept {
 	if (flags == 0)
-		flags = SWS_BILINEAR;
+		flags = Bilinear();
 	if (m_ptr && m_srcW == src_w && m_srcH == src_h && m_srcFmt == src_fmt
 		&& m_dstW == dst_w && m_dstH == dst_h && m_dstFmt == dst_fmt
 		&& m_flags == flags)

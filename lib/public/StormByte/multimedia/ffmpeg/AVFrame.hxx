@@ -262,6 +262,26 @@ namespace StormByte::Multimedia::FFmpeg {
 			static int FormatRgba() noexcept;
 
 			/**
+			 * @brief Planar video family, ignoring bit depth.
+			 *
+			 * Packed RGB/YUV and hardware formats are @c Unknown.
+			 * Gray is single-component (`YUV400` for libvmaf).
+			 */
+			enum class VideoLayout: std::uint8_t {
+				Unknown,	///< Not a software planar YUV/gray frame.
+				Gray,		///< One component (GRAY8 / GRAY10 / …).
+				Yuv420,		///< 4:2:0 (8 / 10 / 12).
+				Yuv422,		///< 4:2:2 (8 / 10).
+				Yuv444		///< 4:4:4 (8 / 10).
+			};
+
+			/**
+			 * @brief Planar layout of this frame.
+			 * @return Family, or @c Unknown if empty / packed / hw.
+			 */
+			VideoLayout Layout() const noexcept;
+
+			/**
 			 * @brief Decodes one still image from a compressed buffer.
 			 * @param data File bytes (PNG / JPEG / WebP / BMP).
 			 * @param size Byte count.
