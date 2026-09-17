@@ -136,14 +136,8 @@ else()
 	# in both libswscale and libavfilter; --whole-archive pulls both
 	# and ld reports multiple definitions. One archive is rescanned by
 	# bfd, so av_md5_sum from avutil is found without WHOLE.
-	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-		if(WIN32)
-			list(APPEND FFMPEG_BM_OPTS "LINK={ws2_32;secur32;bcrypt;ncrypt;crypt32}")
-		endif()
-		if(APPLE)
-			list(APPEND FFMPEG_BM_OPTS "LINK=iconv")
-		endif()
-	endif()
+	# System libs belong on ffmpeg-pack LINK= (REPACK does not copy
+	# LINK= from member `ffmpeg` onto the meta).
 	if(CMAKE_INTERPROCEDURAL_OPTIMIZATION
 			OR (CMAKE_BUILD_TYPE STREQUAL "Release"
 				AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE))
@@ -170,7 +164,14 @@ else()
 	buildmaster_link(ffmpeg ffmpeg-plugins)
 
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-		buildmaster_meta(ffmpeg-pack "FFmpeg static pack" "REPACK")
+		set(_FF_PACK_OPTS "REPACK")
+		if(WIN32)
+			list(APPEND _FF_PACK_OPTS "LINK={ws2_32;secur32;bcrypt;ncrypt;crypt32}")
+		elseif(APPLE)
+			list(APPEND _FF_PACK_OPTS "LINK=iconv")
+		endif()
+		list(JOIN _FF_PACK_OPTS ";" _FF_PACK_OPTSTR)
+		buildmaster_meta(ffmpeg-pack "FFmpeg static pack" "${_FF_PACK_OPTSTR}")
 		buildmaster_meta_add(ffmpeg-pack ffmpeg)
 		buildmaster_link(ffmpeg-pack ffmpeg-plugins)
 		buildmaster_link(StormByte-Multimedia ffmpeg-pack)
@@ -202,10 +203,12 @@ else()
 	# Host DSO only. LINKFLAGS= on ffmpeg does not propagate (BM contract).
 	# No gc-sections / -dead_strip / /OPT:REF — they can drop live objects.
 	# -Bsymbolic: ELF. Invalid on ld64 and link.exe.
-	# /FORCE:MULTIPLE: duplicate helpers (file_open) across avcodec/avfilter.
-	# Frameworks: VideoToolbox/AudioToolbox + libass text stack. iconv via LINK=.
+	# /FORCE:MULTIPLE: duplicate helpers (file_open, vorbis_encode_*) across
+	# static archives. Does not satisfy missing system libraries.
+	# Frameworks: VideoToolbox/AudioToolbox + libass text stack.
 	# find_library: AppleClang + raw "-framework Foo" was flattened to a
 	# bare token and the linker looked for a file named AudioToolbox.
+	# iconv / bcrypt / schannel: LINK= on ffmpeg-pack above.
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
 		if(WIN32)
 			target_link_options(StormByte-Multimedia PRIVATE
