@@ -20,6 +20,7 @@ if(WITH_FFMPEG STREQUAL "SYSTEM")
 		FFmpeg::swresample
 		FFmpeg::avfilter
 	)
+	buildmaster_link(StormByte-Multimedia ffmpeg)
 else()
 	buildmaster_message(STATUS "Setting up bundled FFmpeg" 1)
 
@@ -130,8 +131,12 @@ else()
 	if(WIN32)
 		list(APPEND FFMPEG_BM_OPTS "TOOLCHAIN=msvc")
 	endif()
+	# Static bundled: merge the six Meson archives into one prefix .a
+	# (meta REPACK). Do not WHOLE the six — FFmpeg 9 ships framepool.c
+	# in both libswscale and libavfilter; --whole-archive pulls both
+	# and ld reports multiple definitions. One archive is rescanned by
+	# bfd, so av_md5_sum from avutil is found without WHOLE.
 	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
-		list(APPEND FFMPEG_BM_OPTS "WHOLE")
 		if(WIN32)
 			list(APPEND FFMPEG_BM_OPTS "LINK={ws2_32;secur32;bcrypt;ncrypt;crypt32}")
 		endif()
@@ -163,6 +168,15 @@ else()
 	)
 	buildmaster_group_add(ff-plugins ffmpeg)
 	buildmaster_link(ffmpeg ffmpeg-plugins)
+
+	if(FFMPEG_BUNDLED_TYPE STREQUAL "static")
+		buildmaster_meta(ffmpeg-pack "FFmpeg static pack" "REPACK")
+		buildmaster_meta_add(ffmpeg-pack ffmpeg)
+		buildmaster_link(ffmpeg-pack ffmpeg-plugins)
+		buildmaster_link(StormByte-Multimedia ffmpeg-pack)
+	else()
+		buildmaster_link(StormByte-Multimedia ffmpeg)
+	endif()
 
 	function(_stormbyte_ffmpeg_announce_build)
 		buildmaster_message(STATUS "Setting up FFmpeg build" 1)
@@ -214,12 +228,11 @@ else()
 		elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 			target_link_options(StormByte-Multimedia PRIVATE
 				"-Wl,-Bsymbolic"
+				"-Wl,--no-undefined"
 			)
 		endif()
 	endif()
 endif()
-
-buildmaster_link(StormByte-Multimedia ffmpeg)
 
 include(${CMAKE_SOURCE_DIR}/cmake/ffmpeg.cmake)
 export_ffmpeg_version()
