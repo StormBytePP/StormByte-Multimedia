@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/backend/pipeline/detail/worker/decode.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
@@ -105,6 +106,9 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	void Decode::Process(Item::PointerType item) noexcept {
 		if (!item) {
 			Flush();
+			if (m_owner.m_measureClosed.load(std::memory_order_acquire)
+					&& !m_owner.pipe().Ready())
+				m_owner.DrainMeasure();
 			return;
 		}
 
@@ -175,6 +179,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 				break;
 			emit(std::move(frame));
 		}
+
+		if (m_owner.m_measureClosed.load(std::memory_order_acquire)
+				&& !m_owner.pipe().Ready())
+			m_owner.DrainMeasure();
 	}
 
 	void Decode::Flush() noexcept {

@@ -122,7 +122,7 @@ struct FFmpeg::AVFormatContext::ConsumerIO {
 			return AVERROR_EOF;
 		const std::size_t want = std::min(avail, static_cast<std::size_t>(bufSize));
 		DataType chunk;
-		if (!io->consumer.Read(want, chunk) || chunk.empty())
+		if (!io->consumer.Extract(want, chunk) || chunk.empty())
 			return AVERROR_EOF;
 		std::memcpy(buf, chunk.data(), chunk.size());
 		io->position += static_cast<std::int64_t>(chunk.size());
@@ -131,24 +131,10 @@ struct FFmpeg::AVFormatContext::ConsumerIO {
 
 	static std::int64_t Seek(void* opaque, std::int64_t offset, int whence) noexcept {
 		auto* io = static_cast<ConsumerIO*>(opaque);
+		(void)offset;
 		if (whence == AVSEEK_SIZE)
 			return static_cast<std::int64_t>(io->consumer.Size());
-
-		std::int64_t target = io->position;
-		if (whence == SEEK_SET)
-			target = offset;
-		else if (whence == SEEK_CUR)
-			target = io->position + offset;
-		else if (whence == SEEK_END)
-			target = static_cast<std::int64_t>(io->consumer.Size()) + offset;
-		else
-			return AVERROR(EINVAL);
-
-		if (target < 0)
-			return AVERROR(EINVAL);
-		io->consumer.Seek(static_cast<std::ptrdiff_t>(target), Position::Absolute);
-		io->position = target;
-		return target;
+		return AVERROR(ESPIPE);
 	}
 };
 
@@ -196,7 +182,7 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer)
 	av_log_set_level(AV_LOG_ERROR);
 
 	auto io = std::make_unique<ConsumerIO>(ConsumerIO{std::move(consumer), 0});
-	io->consumer.Seek(0, Position::Absolute);
+	io->consumer.Clean();
 	io->position = 0;
 
 	constexpr int ioSize = 4096;
@@ -241,10 +227,14 @@ FFmpeg::ExpectedAVFormatContext FFmpeg::AVFormatContext::Open(Consumer consumer)
 		return Unexpected<DecoderError>("Could not find stream information: {}", ErrorToString(ret));
 	}
 
-	io->consumer.Seek(0, Position::Absolute);
+	io->consumer.Clean();
 	io->position = 0;
 	AVFormatContext ctx(fmt_ctx, std::move(io));
 	ctx.HarvestSideData();
+	if (ctx.m_io) {
+		ctx.m_io->consumer.Clean();
+		ctx.m_io->position = 0;
+	}
 	return ctx;
 }
 
@@ -308,7 +298,7 @@ void FFmpeg::AVFormatContext::HarvestSideData() noexcept {
 
 	av_seek_frame(m_ptr, -1, 0, AVSEEK_FLAG_BACKWARD);
 	if (m_io) {
-		m_io->consumer.Seek(0, Position::Absolute);
+		m_io->consumer.Clean();
 		m_io->position = 0;
 	}
 }
@@ -348,6 +338,22 @@ FFmpeg::OperationResult FFmpeg::AVFormatContext::ReadPacket(AVPacket& packet) no
 		default:
 			return OperationResult::Error;
 	}
+}
+
+FFmpeg::OperationResult FFmpeg::AVFormatContext::SeekStart() noexcept {
+	if (!m_ptr)
+		return OperationResult::Error;
+	if (m_io) {
+		m_io->consumer.Clean();
+		m_io->position = 0;
+	}
+	const int ret = av_seek_frame(m_ptr, -1, 0, AVSEEK_FLAG_BACKWARD);
+	if (ret < 0 && ret != AVERROR_EOF && ret != AVERROR(ESPIPE)) {
+		if (!m_io)
+			return OperationResult::Error;
+	}
+	avformat_flush(m_ptr);
+	return OperationResult::Success;
 }
 
 FFmpeg::Streams FFmpeg::AVFormatContext::Streams() const noexcept {

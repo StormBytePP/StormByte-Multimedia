@@ -59,6 +59,7 @@
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -186,10 +187,8 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 
 	for (;;) {
 		const auto result = m_ctx->format->ReadPacket(m_ctx->scratch);
-		if (result == FFmpeg::OperationResult::EndOfFile) {
-			owner.ReachedEof();
+		if (result == FFmpeg::OperationResult::EndOfFile)
 			return {};
-		}
 
 		if (result == FFmpeg::OperationResult::TryAgain)
 			continue;
@@ -202,6 +201,14 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 		if (!m_ctx->wanted.contains(index) || !KnownByFile(owner.OriginFile(), index)) {
 			m_ctx->scratch.Unref();
 			continue;
+		}
+
+		if (owner.Measuring()) {
+			const auto& tracks = owner.m_measureTracks;
+			if (std::find(tracks.begin(), tracks.end(), index) == tracks.end()) {
+				m_ctx->scratch.Unref();
+				continue;
+			}
 		}
 
 		FFmpeg::AVRational tb{0, 1};
@@ -235,8 +242,23 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 			std::move(holder)
 		);
 		m_ctx->scratch.Unref();
+		if (!packet)
+			continue;
 		return packet;
 	}
+}
+
+bool StormByte::Multimedia::Backend::Pipeline::Demuxer::Rewind(
+	StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept {
+	if (!m_ctx || !m_ctx->format) {
+		owner.Fail("demuxer is not open");
+		return false;
+	}
+	if (m_ctx->format->SeekStart() != FFmpeg::OperationResult::Success) {
+		owner.Fail("failed to rewind origin");
+		return false;
+	}
+	return true;
 }
 
 std::unique_ptr<StormByte::Multimedia::Backend::Pipeline::Decoder>

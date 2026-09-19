@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -56,6 +57,8 @@
  * @ingroup multimedia_pipeline
  */
 namespace StormByte::Multimedia::Pipeline {
+	class Decoder;
+	class Demuxer;
 	class Route;
 
 	/**
@@ -71,17 +74,53 @@ namespace StormByte::Multimedia::Pipeline {
 	 * matching Between (CloneTo, not N Launch). Per-stretch Add
 	 * is @ref Handle::Add. Both are allowed; there is no dedup.
 	 *
+	 * A @ref Filter::ProcessTwoPasses leaf on a stretch puts that
+	 * track on Demuxer::Measure when @ref Close runs. Remux plus
+	 * that leaf is Fail on @ref Handle::Add. Demuxer measure EoF
+	 * calls @ref CloseMeasureSource. Each measure-track Decoder
+	 * drains on its worker, then @ref OnMeasureDrained. Each
+	 * ProcessTwoPasses leaf drains on its worker, then
+	 * @ref OnMeasureFilterDrained. @ref FinishMeasure runs only
+	 * when both sets are drained: LeaveMeasure, Rewind, Apply.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Filters {
+		friend class Decoder;
+		friend class Demuxer;
+		friend class Filter::ProcessTwoPasses;
+
 		public:
 			class Handle;
 
+			/**
+			 * @brief Empty facade. No stretches, no leaves.
+			 */
 			Filters() noexcept;
+
+			/**
+			 * @brief Copy is not allowed. The tube owns the facade.
+			 */
 			Filters(const Filters&) = delete;
+
+			/**
+			 * @brief Move is not allowed. The tube owns the facade.
+			 */
 			Filters(Filters&&) noexcept = delete;
+
+			/**
+			 * @brief Drops stretches and attached leaves. Does not Halt Steps.
+			 */
 			~Filters() noexcept;
+
+			/**
+			 * @brief Copy assignment is not allowed.
+			 */
 			Filters& operator=(const Filters&) = delete;
+
+			/**
+			 * @brief Move assignment is not allowed.
+			 */
 			Filters& operator=(Filters&&) noexcept = delete;
 
 			/**
@@ -98,19 +137,49 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Global analytics. One node, every matching stretch.
+			 * @param filter Leaf to attach. Must be Analytics.
+			 * @return This facade.
 			 *
-			 * Process / Packet leaves Fail: they go on @ref Handle::Add.
+			 * Process / Packet / ProcessTwoPasses leaves Fail: they
+			 * go on @ref Handle::Add.
 			 */
 			Filters& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
+			/**
+			 * @brief Constructs a global analytics leaf and attaches it.
+			 * @tparam T Analytics type.
+			 * @tparam Args Constructor arguments after the implicit new.
+			 * @param args Forwarded to T.
+			 * @return This facade.
+			 */
 			template<typename T, typename... Args>
 			Filters& Add(Args&&... args) noexcept {
 				return Add(std::shared_ptr<Filter::FFmpeg>(
 					std::make_shared<T>(std::forward<Args>(args)...)));
 			}
 
+			/**
+			 * @brief Wires every stretch.
+			 *
+			 * Process chain, CloneTo, dest look. If any stretch has a
+			 * @ref Filter::ProcessTwoPasses leaf, calls EnterMeasure
+			 * on those leaves and Demuxer::Measure with their tracks.
+			 * Hoppers stay open. Demuxer measure EoF then
+			 * CloseMeasureSource; decode and two-pass workers drain;
+			 * FinishMeasure starts the apply read.
+			 */
 			void Close() noexcept;
+
+			/**
+			 * @brief Whether every mounted leaf is idle.
+			 * @return true when no leaf is still working.
+			 */
 			bool Idle() const noexcept;
+
+			/**
+			 * @brief Reports from attached leaves, in mount order.
+			 * @return Name / report pairs. Empty reports are omitted.
+			 */
 			std::vector<std::pair<std::string, Filter::Report>> Reports() const noexcept;
 
 			/**
@@ -119,8 +188,22 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			class STORMBYTE_MULTIMEDIA_PUBLIC Handle {
 				public:
+					/**
+					 * @brief Mounts a leaf on this stretch only.
+					 * @param filter Process, ProcessTwoPasses, Packet or Analytics.
+					 * @return This handle.
+					 *
+					 * ProcessTwoPasses on a remux destination Fails the dest.
+					 */
 					Handle& Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
+					/**
+					 * @brief Constructs a leaf and mounts it on this stretch.
+					 * @tparam T Filter type.
+					 * @tparam Args Constructor arguments after the implicit new.
+					 * @param args Forwarded to T.
+					 * @return This handle.
+					 */
 					template<typename T, typename... Args>
 					Handle& Add(Args&&... args) noexcept {
 						return Add(std::shared_ptr<Filter::FFmpeg>(
@@ -129,27 +212,89 @@ namespace StormByte::Multimedia::Pipeline {
 
 				private:
 					friend class Filters;
+
+					/**
+					 * @brief Bound to @p owner stretch @p index.
+					 * @param owner Facade that created this handle.
+					 * @param index Index into m_stretches.
+					 */
 					Handle(Filters& owner, std::size_t index) noexcept;
-					Filters* m_owner;
-					std::size_t m_index;
+
+					Filters* m_owner;		///< Facade
+					std::size_t m_index;	///< Stretch index
 			};
 
 		private:
+			/**
+			 * @brief Whether a measure pass started by @ref Close is active.
+			 * @return true until FinishMeasure, otherwise false.
+			 */
+			bool Measuring() const noexcept;
+
+			/**
+			 * @brief Measure origin EoF. Friend: Demuxer::ReachedEof.
+			 *
+			 * Calls Decoder::MeasureSourceClosed on each measure-track
+			 * decoder and ProcessTwoPasses::MeasureSourceClosed on each
+			 * two-pass leaf. Does not LeaveMeasure.
+			 */
+			void CloseMeasureSource() noexcept;
+
+			/**
+			 * @brief One measure-track decoder finished DrainMeasure.
+			 * @param track Origin index of that decoder.
+			 *
+			 * Friend: Decoder. Does not FinishMeasure by itself.
+			 */
+			void OnMeasureDrained(int track) noexcept;
+
+			/**
+			 * @brief One ProcessTwoPasses leaf finished its measure hopper.
+			 *
+			 * Friend: ProcessTwoPasses. Does not FinishMeasure by itself.
+			 */
+			void OnMeasureFilterDrained() noexcept;
+
+			/**
+			 * @brief FinishMeasure when decoders and two-pass leaves are drained.
+			 */
+			void MaybeFinishMeasure() noexcept;
+
+			/**
+			 * @brief Ends the measure pass and starts the second read.
+			 *
+			 * LeaveMeasure on each ProcessTwoPasses leaf (Eof then
+			 * Measured), Demuxer::Rewind and Demuxer::Apply.
+			 * Decoder reset already ran on the decode worker.
+			 */
+			void FinishMeasure() noexcept;
+
+			/**
+			 * @brief One origin / destination pair and its Route.
+			 */
 			struct Stretch {
-				std::shared_ptr<Step> Origin;
-				std::shared_ptr<Step> Destination;
-				int Track = -1;
-				std::unique_ptr<Route> Lane;
-				std::optional<int> Scope;
+				std::shared_ptr<Step> Origin;			///< Decoder / Demuxer / Encoder
+				std::shared_ptr<Step> Destination;		///< Encoder / Remuxer / Muxer
+				int Track = -1;							///< Hopper key
+				std::unique_ptr<Route> Lane;			///< Wired chain
+				std::optional<int> Scope;				///< Optional track scope
 			};
 
+			/**
+			 * @brief A mounted leaf and the track it applies to.
+			 */
 			struct Attached {
-				std::shared_ptr<Filter::FFmpeg> Filter;
-				std::optional<int> Track;
+				std::shared_ptr<Filter::FFmpeg> Filter;	///< Leaf
+				std::optional<int> Track;				///< Stretch track, or none if global
 			};
 
-			std::vector<Stretch> m_stretches;
-			std::vector<Attached> m_globals;
-			std::vector<Attached> m_reports;
+			std::vector<Stretch> m_stretches;			///< Between() order
+			std::vector<Attached> m_globals;			///< Global analytics
+			std::vector<Attached> m_reports;			///< Leaves that may Report()
+			std::vector<int> m_measureTracks;			///< Tracks given to Demuxer::Measure
+			std::vector<int> m_measureDrained;			///< Tracks that finished DrainMeasure
+			std::size_t m_measureFilterCount = 0;		///< ProcessTwoPasses leaves in this pass
+			std::size_t m_measureFiltersDrained = 0;	///< Those leaves that finished Measure
+			bool m_measuring = false;					///< After Close, before FinishMeasure
 	};
 }

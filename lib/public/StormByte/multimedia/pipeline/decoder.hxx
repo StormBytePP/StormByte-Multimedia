@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -74,6 +75,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
+	class Filters;
 	class Frame;
 	class Packet;
 	class Route;
@@ -136,12 +138,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * decoders have no Demuxer: they open from the first Packet's
 	 * codec parameters. The public ctor never enters look mode.
 	 *
+	 * After measure origin EoF, Filters calls
+	 * @ref MeasureSourceClosed. The decode worker then
+	 * @ref DrainMeasure (Flush + @ref ResetAfterMeasure) from
+	 * @ref AfterWait or after the last measure packet. Look
+	 * decoders ignore that path.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Decoder final: public Step {
 		friend class Backend::Pipeline::Decoder;
 		friend class Backend::Pipeline::Detail::Worker::Decode;
 		friend class Demuxer;
+		friend class Filters;
 		friend class Route;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
@@ -403,6 +412,33 @@ namespace StormByte::Multimedia::Pipeline {
 			void AttachOrigin(Demuxer& demuxer) noexcept;
 
 			/**
+			 * @brief Measure origin will not push more packets.
+			 *
+			 * Friend: Filters. Sets @ref m_measureClosed and wakes
+			 * the decode worker. Does not drain. Drain is the
+			 * decode worker (@ref AfterWait or after the last packet).
+			 */
+			void MeasureSourceClosed() noexcept;
+
+			/**
+			 * @brief Flush leftover codec frames, ResetAfterMeasure,
+			 *        tell Filters this track is drained.
+			 *
+			 * Once, via @ref m_measureDrained. Decode worker only.
+			 * Does not clear @ref m_measureClosed.
+			 */
+			void DrainMeasure() noexcept;
+
+			/**
+			 * @brief Drain the codec and open it again. Same hopper.
+			 * @return false if the backend could not reset (Fail already ran).
+			 *
+			 * Friend-only. Origin-mode Decoder only. Look decoders
+			 * return true and do nothing. Does not Stop the Step.
+			 */
+			bool ResetAfterMeasure() noexcept;
+
+			/**
 			 * @brief Binds a decoded handle and copies stream tags onto @p frame.
 			 * @param frame Public unit.
 			 * @param backend Holder of the FFmpeg frame. May be empty.
@@ -439,6 +475,16 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void StampLook(Frame& frame) noexcept;
 
+			/**
+			 * @brief Wake Wait when measure origin is closed and In is empty.
+			 */
+			bool WakeNow() const noexcept override;
+
+			/**
+			 * @brief Drain measure on the decode worker after Wait.
+			 */
+			void AfterWait() noexcept override;
+
 			static constexpr std::size_t Ceiling = 32;				///< Input hopper ceiling
 			int m_index;											///< Origin stream index
 			DecoderFlags m_flags;									///< Heuristic bits
@@ -454,6 +500,8 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Duration> m_inDts;				///< Dts of last packet
 			bool m_look = false;									///< Opens from Packet codecpar
 			std::optional<Producer> m_lookStamp;					///< Dest-look Producer, or empty
+			std::atomic<bool> m_measureClosed{false};				///< Origin will not send more measure packets
+			std::atomic<bool> m_measureDrained{false};				///< OnMeasureDrained already ran
 			Join m_join{*this};										///< Halt before other members die
 	};
 }

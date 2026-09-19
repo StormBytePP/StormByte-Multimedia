@@ -98,9 +98,19 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @brief Reads one compressed packet.
 			 * @param owner Public demuxer.
 			 * @return Packet, or empty at EOF / after Fail.
+			 *
+			 * During Measure, packets whose track is not in
+			 * owner.m_measureTracks are skipped (not treated as EOF).
 			 */
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Packet> Read(
 				StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept;
+
+			/**
+			 * @brief Seeks the origin to the start. Hoppers stay open.
+			 * @param owner Public demuxer.
+			 * @return false if owner.Fail() was called.
+			 */
+			bool Rewind(StormByte::Multimedia::Pipeline::Demuxer& owner) noexcept;
 
 			/**
 			 * @brief Opens a decode backend for @p decoder.Index().

@@ -140,9 +140,16 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 			 */
 			void Flush(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
 
+			/**
+			 * @brief Drain leftover frames, then clear codec state.
+			 * @param owner Public decoder.
+			 * @return false if owner.Fail() was called.
+			 */
+			bool Reset(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept override;
+
 		private:
-			StormByte::Multimedia::FFmpeg::AVDecoder m_decoder;	///< Opened decoder
-			StormByte::Multimedia::FFmpeg::AVFrame m_scratch;		///< Receive scratch
+			StormByte::Multimedia::FFmpeg::AVDecoder m_decoder;				///< Opened decoder
+			StormByte::Multimedia::FFmpeg::AVFrame m_scratch;				///< Receive scratch
 			std::optional<StormByte::Multimedia::Property::Video> m_video;	///< Stream video properties
 			AVRational m_timeBase;											///< Stream time base
 			bool m_flushed;													///< EOF already signalled

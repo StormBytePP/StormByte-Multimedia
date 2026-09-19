@@ -88,11 +88,22 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 		if (Stopping())
 			return;
 
+		const bool measure = m_owner.Measuring();
 		Packet::PointerType packet = m_owner.m_backend->Read(m_owner);
 		if (m_owner.Failed())
 			return;
 		if (!packet) {
-			m_owner.ReachedEof();
+			if (measure) {
+				if (!m_owner.Eof())
+					m_owner.ReachedEof();
+				if (m_owner.Measuring())
+					Wait();
+				return;
+			}
+			if (!m_owner.Eof())
+				m_owner.ReachedEof();
+			if (!m_owner.Eof())
+				return;
 			Ended();
 			return;
 		}

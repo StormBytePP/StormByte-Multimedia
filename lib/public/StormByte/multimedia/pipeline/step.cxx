@@ -205,10 +205,17 @@ void Step::Wait() noexcept {
 	Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Stopping() || m_pipe->Ready();
+		return Stopping() || m_pipe->Ready() || WakeNow();
 	});
 	Log(Level::LowLevel, "wake");
+	AfterWait();
 }
+
+bool Step::WakeNow() const noexcept {
+	return false;
+}
+
+void Step::AfterWait() noexcept {}
 
 void Step::Emit(Item::PointerType item) noexcept {
 	item >> *m_pipe;

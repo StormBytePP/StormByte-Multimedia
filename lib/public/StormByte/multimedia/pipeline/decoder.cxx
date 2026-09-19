@@ -46,8 +46,10 @@
 #include <StormByte/multimedia/backend/pipeline/detail/worker/decode.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
+#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -159,6 +161,64 @@ void Decoder::Stamp(std::optional<std::string> language, std::optional<std::stri
 void Decoder::AttachOrigin(Demuxer& demuxer) noexcept {
 	m_origin = &demuxer;
 	Wake().notify_all();
+}
+
+void Decoder::MeasureSourceClosed() noexcept {
+	if (m_look)
+		return;
+	m_measureClosed.store(true, std::memory_order_release);
+	Wake().notify_all();
+}
+
+void Decoder::DrainMeasure() noexcept {
+	if (m_look)
+		return;
+	if (!m_measureClosed.load(std::memory_order_acquire))
+		return;
+	bool expected = false;
+	if (!m_measureDrained.compare_exchange_strong(expected, true,
+			std::memory_order_acq_rel, std::memory_order_acquire))
+		return;
+	if (Failed())
+		return;
+	if (m_backend)
+		m_backend->Flush(*this);
+	if (!ResetAfterMeasure())
+		return;
+	if (m_origin && m_origin->m_filters)
+		m_origin->m_filters->OnMeasureDrained(m_index);
+}
+
+bool Decoder::WakeNow() const noexcept {
+	if (m_look)
+		return false;
+	return m_measureClosed.load(std::memory_order_acquire)
+		&& !m_measureDrained.load(std::memory_order_acquire)
+		&& !pipe().Ready();
+}
+
+void Decoder::AfterWait() noexcept {
+	if (m_look)
+		return;
+	if (m_measureClosed.load(std::memory_order_acquire) && !pipe().Ready())
+		DrainMeasure();
+}
+
+bool Decoder::ResetAfterMeasure() noexcept {
+	if (Failed())
+		return false;
+	if (m_look)
+		return true;
+	if (!m_backend)
+		return true;
+	if (!m_backend->Reset(*this))
+		return false;
+
+	m_serial.reset();
+	m_part = 0;
+	m_inDts.reset();
+	Log(Level::Debug, std::format("reset after measure t={}", m_index));
+	return true;
 }
 
 bool Decoder::OpenLook(const Packet& packet) noexcept {

@@ -222,4 +222,16 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 	void Subtitle::Flush(StormByte::Multimedia::Pipeline::Decoder&) noexcept {
 		m_flushed = true;
 	}
+
+	bool Subtitle::Reset(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
+		if (owner.Failed())
+			return false;
+		m_decoder.Flush();
+		m_pendingSub.reset();
+		m_heldSubtitle.reset();
+		m_packetPts.reset();
+		m_packetDuration.reset();
+		m_flushed = false;
+		return true;
+	}
 }

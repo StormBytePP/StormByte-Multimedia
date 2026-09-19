@@ -49,6 +49,10 @@
 #include <optional>
 #include <unordered_set>
 
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Demuxer;
+}
+
 /**
  * @namespace StormByte::Multimedia::FFmpeg
  * @brief Private RAII wrappers over libav*.
@@ -64,6 +68,8 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @brief RAII input format context (demuxer).
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVFormatContext: public AVPointer<::AVFormatContext> {
+		friend class StormByte::Multimedia::Backend::Pipeline::Demuxer;
+
 		public:
 			/**
 			 * @brief Copy constructor (deleted).
@@ -179,6 +185,15 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @brief Copies HDR side data from early decoded frames onto codecpar.
 			 */
 			void HarvestSideData() noexcept;
+
+			/**
+			 * @brief Seeks the origin to timestamp zero without closing the context.
+			 * @return Operation result.
+			 *
+			 * Friend: Backend::Pipeline::Demuxer::Rewind. Used after a
+			 * ProcessTwoPasses measure pass. Also rewinds Consumer I/O.
+			 */
+			OperationResult SeekStart() noexcept;
 
 			/**
 			 * @brief Closes input and custom AVIO.

@@ -56,8 +56,9 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	 * @class Demux
 	 * @brief Reads interleaved packets from the Plan origin.
 	 *
-	 * Source pumper. Each Process is one Read. Empty Read calls
-	 * Ended. Flush is unused: source EoF is Ended, not a hopper EoF.
+	 * Source pumper. Each Process is one Read. Empty Read is source
+	 * EoF: @ref Ended only when not measuring. A measure EoF parks
+	 * until Rewind/Apply. Flush is unused.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */

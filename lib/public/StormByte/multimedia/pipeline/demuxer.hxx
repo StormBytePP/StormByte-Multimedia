@@ -54,6 +54,7 @@
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline
@@ -87,6 +88,7 @@ namespace StormByte::Multimedia {
 namespace StormByte::Multimedia::Pipeline {
 	class Decoder;
 	class Demuxer;
+	class Filters;
 	class Muxer;
 	class Packet;
 	class Plan;
@@ -107,10 +109,22 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Only tracks listed in the bound Plan enter the tube. An origin
 	 * stream omitted from Plan::add is never pushed.
 	 *
-	 * Notice: origin path at Setup, eof once. Debug: bind to a decoder
-	 * and Process min/max at source EoF. LowLevel unit lines always;
-	 * the shared logger throttles. Each Read+Emit is timed by the
-	 * Source pumper.
+	 * A @ref Filter::ProcessTwoPasses leaf tells @ref Filters to call
+	 * @ref Measure before the first read. During that pass only the
+	 * listed tracks are emitted and hoppers stay open at EoF.
+	 * @ref ReachedEof then asks Filters to CloseMeasureSource.
+	 * Decode workers drain and Reset; Filters then LeaveMeasure,
+	 * Rewind and Apply. The same Demuxer instance reads the apply
+	 * pass. Transcoder is not involved.
+	 *
+	 * After measure EoF the demux worker @ref Wait s until
+	 * @ref Apply. That wake is @ref WakeNow (`!Measuring()`), not
+	 * hopper Ready.
+	 *
+	 * Notice: origin path at Setup, eof once (apply pass). Debug: bind
+	 * to a decoder and Process min/max at source EoF. LowLevel unit
+	 * lines always; the shared logger throttles. Each Read+Emit is
+	 * timed by the Source pumper.
 	 *
 	 * Wrap assigns the next @ref Packet::Serial for that origin
 	 * track and Part zero. That id is pipe lineage, not an FFmpeg
@@ -122,6 +136,7 @@ namespace StormByte::Multimedia::Pipeline {
 		friend class Backend::Pipeline::Demuxer;
 		friend class Backend::Pipeline::Detail::Worker::Demux;
 		friend class Decoder;
+		friend class Filters;
 		friend class Muxer;
 		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
@@ -188,7 +203,10 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether the last read hit EOF.
-			 * @return true at end of source.
+			 * @return true at end of source of the apply pass.
+			 *
+			 * Measure EoF does not stick. @ref FinishMeasure clears it
+			 * before Rewind.
 			 */
 			bool Eof() const noexcept;
 
@@ -212,8 +230,48 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Marks end of source. Called by the backend on EOF.
+			 *
+			 * If @ref Measuring, asks Filters::CloseMeasureSource and
+			 * does not close hoppers. Apply-pass EoF is permanent.
 			 */
 			void ReachedEof() noexcept;
+
+			/**
+			 * @brief Restricts the next read to @p tracks and keeps hoppers open.
+			 * @param tracks Origin indexes that feed ProcessTwoPasses.
+			 *
+			 * Friend: @ref Filters::Close. Empty @p tracks is a no-op.
+			 */
+			void Measure(std::vector<int> tracks) noexcept;
+
+			/**
+			 * @brief Whether @ref Measure is active.
+			 * @return true until @ref Apply.
+			 */
+			bool Measuring() const noexcept;
+
+			/**
+			 * @brief Wake the measure-EoF Wait when @ref Apply has run.
+			 * @return true iff not @ref Measuring.
+			 *
+			 * Demux worker office. That Wait is not hopper Ready.
+			 */
+			bool WakeNow() const noexcept override;
+
+			/**
+			 * @brief Seeks the origin to the start without closing hoppers.
+			 * @return false after Fail.
+			 *
+			 * Friend: @ref Filters::FinishMeasure.
+			 */
+			bool Rewind() noexcept;
+
+			/**
+			 * @brief Leaves measure. Later reads follow the bound Plan.
+			 *
+			 * Friend: @ref Filters::FinishMeasure.
+			 */
+			void Apply() noexcept;
 
 			/**
 			 * @brief Origin snapshot owned by the bound Plan.
@@ -268,11 +326,14 @@ namespace StormByte::Multimedia::Pipeline {
 				std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
 
 			std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;	///< Format backend
-			bool m_eof;												///< End of source
+			bool m_eof;												///< End of apply-pass source
 			std::mutex m_planMutex;									///< Guards Plan wait
 			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
 			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1
 			std::unordered_map<int, std::uint64_t> m_nextSerial;	///< Next lineage id per origin track
-			Join m_join{*this};									///< Halt before other members die
+			std::vector<int> m_measureTracks;						///< Tracks visible during measure
+			bool m_measuring = false;								///< Measure pass active
+			Filters* m_filters = nullptr;							///< Facade that started measure
+			Join m_join{*this};										///< Halt before other members die
 	};
 }

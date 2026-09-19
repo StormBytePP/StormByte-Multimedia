@@ -107,6 +107,15 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 			virtual void Flush(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept = 0;
 
+			/**
+			 * @brief Drain, then return the codec to a clean open state.
+			 * @param owner Public decoder.
+			 * @return false if owner.Fail() was called.
+			 *
+			 * Same backend object. Used between Measure and Apply.
+			 */
+			virtual bool Reset(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept = 0;
+
 		protected:
 			/**
 			 * @brief Default constructor.

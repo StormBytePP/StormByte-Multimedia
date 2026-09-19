@@ -46,12 +46,14 @@
 #include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
+#include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <algorithm>
 #include <chrono>
 #include <format>
 #include <utility>
@@ -112,9 +114,47 @@ void Demuxer::WaitForPlan() noexcept {
 }
 
 void Demuxer::ReachedEof() noexcept {
+	if (m_measuring && m_filters) {
+		Log(Level::Debug, "measure eof");
+		m_eof = false;
+		m_filters->CloseMeasureSource();
+		return;
+	}
+
 	if (!m_eof)
 		Log(Level::Notice, "eof");
 	m_eof = true;
+}
+
+void Demuxer::Measure(std::vector<int> tracks) noexcept {
+	m_measureTracks = std::move(tracks);
+	m_measuring = !m_measureTracks.empty();
+	m_eof = false;
+}
+
+bool Demuxer::Measuring() const noexcept {
+	return m_measuring;
+}
+
+bool Demuxer::WakeNow() const noexcept {
+	return !m_measuring;
+}
+
+bool Demuxer::Rewind() noexcept {
+	if (!m_backend || !m_backend->Rewind(*this))
+		return false;
+	m_eof = false;
+	m_positionNs.store(-1, std::memory_order_release);
+	m_nextSerial.clear();
+	m_planPresent.notify_all();
+	return true;
+}
+
+void Demuxer::Apply() noexcept {
+	m_measuring = false;
+	m_measureTracks.clear();
+	Wake().notify_all();
+	m_planPresent.notify_all();
 }
 
 const File& Demuxer::OriginFile() const noexcept {
@@ -143,6 +183,12 @@ Packet::PointerType Demuxer::Wrap(
 	std::optional<Property::Duration> duration,
 	bool keyframe,
 	std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept {
+	if (m_measuring) {
+		const auto& tracks = m_measureTracks;
+		if (std::find(tracks.begin(), tracks.end(), track) == tracks.end())
+			return {};
+	}
+
 	const std::uint64_t serial = m_nextSerial[track]++;
 	Log(Level::LowLevel, std::format("t={} {} {}:0 pts={} dts={} dur={} key={} bytes={}",
 		track, ToString(type), serial, Ns(pts), Ns(dts), Ns(duration),

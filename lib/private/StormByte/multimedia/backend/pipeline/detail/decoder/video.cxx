@@ -322,4 +322,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Decoder {
 
 		m_flushed = true;
 	}
+
+	bool Video::Reset(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept {
+		if (owner.Failed())
+			return false;
+		m_decoder.Flush();
+		m_scratch.Unref();
+		m_flushed = false;
+		return true;
+	}
 }

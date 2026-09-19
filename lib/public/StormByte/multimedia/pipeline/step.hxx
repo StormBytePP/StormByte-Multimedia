@@ -324,9 +324,28 @@ namespace StormByte::Multimedia::Pipeline {
 			Item::PointerType CloneItem(const Item& item) const noexcept;
 
 			/**
-			 * @brief Sleeps on Wake until hopper Ready, Failed or Stopping.
+			 * @brief Sleeps on Wake until hopper Ready, Failed, Stopping
+			 *        or @ref WakeNow.
+			 *
+			 * After the CV unblocks, runs @ref AfterWait on this
+			 * worker. Step does not interpret @ref WakeNow.
 			 */
-			void Wait() noexcept;
+			virtual void Wait() noexcept;
+
+			/**
+			 * @brief Extra reason to leave @ref Wait.
+			 * @return true to wake without hopper Ready. Default false.
+			 *
+			 * Leaf office. Step does not know why the leaf wakes.
+			 */
+			virtual bool WakeNow() const noexcept;
+
+			/**
+			 * @brief Work on the waiting worker after @ref Wait unblocks.
+			 *
+			 * Default no-op. Leaf office.
+			 */
+			virtual void AfterWait() noexcept;
 
 			/**
 			 * @brief Starts the pumper: Setup, Ready, Pump.
@@ -473,15 +492,15 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void CloseHoppers() noexcept;
 
-			std::unique_ptr<Surface> m_surface;					///< Host for Pumper and Worker
+			std::unique_ptr<Surface> m_surface;						///< Host for Pumper and Worker
 			std::unique_ptr<Backend::Pipeline::Pumper> m_pumper;	///< Thread and State
-			std::shared_ptr<class Plan> m_plan;					///< Current plan
-			std::mutex m_wait;									///< Mutex for m_wake
-			std::optional<std::string> m_error;					///< Fail message
-			bool m_exhausted;									///< Source Ended()
-			std::uint64_t m_workN;								///< Timed Process calls
-			std::int64_t m_workMin;								///< Fastest Process, us
-			std::int64_t m_workMax;								///< Slowest Process, us
-			std::int64_t m_lastWork;							///< Last Process, us
+			std::shared_ptr<class Plan> m_plan;						///< Current plan
+			std::mutex m_wait;										///< Mutex for m_wake
+			std::optional<std::string> m_error;						///< Fail message
+			bool m_exhausted;										///< Source Ended()
+			std::uint64_t m_workN;									///< Timed Process calls
+			std::int64_t m_workMin;									///< Fastest Process, us
+			std::int64_t m_workMax;									///< Slowest Process, us
+			std::int64_t m_lastWork;								///< Last Process, us
 	};
 }

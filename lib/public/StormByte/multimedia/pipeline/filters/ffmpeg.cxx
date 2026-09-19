@@ -44,11 +44,13 @@
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
+#include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <algorithm>
 #include <format>
 #include <limits>
 #include <utility>
@@ -57,6 +59,7 @@ using StormByte::Multimedia::Pipeline::Filter::Analytics;
 using StormByte::Multimedia::Pipeline::Filter::FFmpeg;
 using StormByte::Multimedia::Pipeline::Filter::Packet;
 using StormByte::Multimedia::Pipeline::Filter::Process;
+using StormByte::Multimedia::Pipeline::Filter::ProcessTwoPasses;
 using StormByte::Multimedia::Pipeline::Item;
 using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::Kinds;
@@ -248,7 +251,6 @@ void FFmpeg::Release() noexcept {
 	m_hold = 0;
 	m_heldFor = 0;
 	auto parked = std::move(m_queue);
-	// Process() may call Release() before Work() parks the current unit.
 	if (m_current) {
 		const bool queued = !parked.empty() &&
 			std::find(parked.begin(), parked.end(), m_current) != parked.end();
@@ -262,12 +264,21 @@ void FFmpeg::Release() noexcept {
 			continue;
 		}
 
-		if (m_current->Kind() == Pipeline::Kind::Frame)
-			Process(static_cast<const Pipeline::Frame&>(*m_current));
+		if (m_current->Kind() == Pipeline::Kind::Frame) {
+			if (MeasuringTwoPass())
+				static_cast<ProcessTwoPasses*>(this)->Measure(
+					static_cast<const Pipeline::Frame&>(*m_current));
+			else
+				Process(static_cast<const Pipeline::Frame&>(*m_current));
+		}
 		else
 			Process(static_cast<const Pipeline::Packet&>(*m_current));
 		if (Failed())
 			return;
+		if (MeasuringTwoPass()) {
+			m_current.reset();
+			continue;
+		}
 		if (m_current)
 			Emit(std::move(m_current));
 	}
@@ -311,7 +322,17 @@ const StormByte::Multimedia::FFmpeg::AVPacket& FFmpeg::AVPacket() const noexcept
 	return packet->m_backend->Handle();
 }
 
+bool FFmpeg::MeasuringTwoPass() const noexcept {
+	auto* two = dynamic_cast<const ProcessTwoPasses*>(this);
+	return two && two->m_measuring;
+}
+
 void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept {
+	if (MeasuringTwoPass()) {
+		(void)incoming;
+		Log(Level::Warning, "Save during measure is a no-op");
+		return;
+	}
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
 	if (!frame)
 		return;
@@ -325,6 +346,11 @@ void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept {
 }
 
 void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept {
+	if (MeasuringTwoPass()) {
+		(void)incoming;
+		Log(Level::Warning, "Save during measure is a no-op");
+		return;
+	}
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
 	if (!packet)
 		return;
@@ -387,12 +413,24 @@ void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 		return;
 	}
 
-	if (m_current->Kind() == Pipeline::Kind::Frame)
-		Process(static_cast<const Pipeline::Frame&>(*m_current));
+	if (m_current->Kind() == Pipeline::Kind::Frame) {
+		if (MeasuringTwoPass())
+			static_cast<ProcessTwoPasses*>(this)->Measure(
+				static_cast<const Pipeline::Frame&>(*m_current));
+		else
+			Process(static_cast<const Pipeline::Frame&>(*m_current));
+	}
 	else
 		Process(static_cast<const Pipeline::Packet&>(*m_current));
 	if (Failed())
 		return;
+	if (MeasuringTwoPass()) {
+		auto* two = static_cast<ProcessTwoPasses*>(this);
+		m_current.reset();
+		if (two->m_measureClosed.load(std::memory_order_acquire) && !pipe().Ready())
+			two->DrainMeasure();
+		return;
+	}
 	if (Held()) {
 		if (m_heldFor >= m_hold) {
 			CallLastChance();
@@ -433,9 +471,21 @@ void FFmpeg::Wait() noexcept {
 	Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Stopping() || m_pipe->Ready();
+		if (Stopping() || m_pipe->Ready())
+			return true;
+		if (!MeasuringTwoPass())
+			return false;
+		auto* two = static_cast<const ProcessTwoPasses*>(this);
+		return two->m_measureClosed.load(std::memory_order_acquire)
+			&& !two->m_measureDrained.load(std::memory_order_acquire)
+			&& !m_pipe->Ready();
 	});
 	Log(Level::LowLevel, "wake");
+	if (MeasuringTwoPass()) {
+		auto* two = static_cast<ProcessTwoPasses*>(this);
+		if (two->m_measureClosed.load(std::memory_order_acquire) && !pipe().Ready())
+			two->DrainMeasure();
+	}
 }
 
 void FFmpeg::Launch() noexcept {
@@ -517,8 +567,63 @@ Process::Process(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
 	Kinds receives, Kinds produces) noexcept
 : FFmpeg(std::move(log), std::move(name), receives, produces) {}
 
+ProcessTwoPasses::ProcessTwoPasses(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
+: StormByte::Multimedia::Pipeline::Filter::Process(std::move(log), std::move(name)) {}
+
+ProcessTwoPasses::ProcessTwoPasses(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: StormByte::Multimedia::Pipeline::Filter::Process(std::move(log), std::move(name), receives, produces) {}
+
+bool ProcessTwoPasses::Measuring() const noexcept {
+	return m_measuring;
+}
+
+void ProcessTwoPasses::Measured() noexcept {}
+
+void ProcessTwoPasses::EnterMeasure() noexcept {
+	m_measuring = true;
+	m_measureClosed.store(false, std::memory_order_release);
+	m_measureDrained.store(false, std::memory_order_release);
+}
+
+void ProcessTwoPasses::LeaveMeasure() noexcept {
+	Eof();
+	m_measuring = false;
+	m_measureClosed.store(false, std::memory_order_release);
+	m_measureDrained.store(false, std::memory_order_release);
+	Measured();
+}
+
+void ProcessTwoPasses::BindMeasure(StormByte::Multimedia::Pipeline::Filters* owner) noexcept {
+	m_measureOwner = owner;
+}
+
+void ProcessTwoPasses::MeasureSourceClosed() noexcept {
+	m_measureClosed.store(true, std::memory_order_release);
+	Wake().notify_all();
+}
+
+void ProcessTwoPasses::DrainMeasure() noexcept {
+	if (!m_measureClosed.load(std::memory_order_acquire))
+		return;
+	bool expected = false;
+	if (!m_measureDrained.compare_exchange_strong(expected, true,
+			std::memory_order_acq_rel, std::memory_order_acquire))
+		return;
+	if (m_measureOwner)
+		m_measureOwner->OnMeasureFilterDrained();
+}
+
 Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
 : FFmpeg(std::move(log), std::move(name), Kinds{Kind::Packet}, Kinds{Kind::Packet}) {}
 
+Packet::Packet(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(log), std::move(name), receives, produces) {}
+
 Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name) noexcept
 : FFmpeg(std::move(log), std::move(name), Kinds{Kind::Frame}, Kinds{}) {}
+
+Analytics::Analytics(std::shared_ptr<StormByte::Logger::Log> log, std::string name,
+	Kinds receives, Kinds produces) noexcept
+: FFmpeg(std::move(log), std::move(name), receives, produces) {}

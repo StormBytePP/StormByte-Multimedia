@@ -37,6 +37,7 @@
  */
 
 #include <StormByte/multimedia/pipeline/decoder.hxx>
+#include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
@@ -47,6 +48,7 @@
 #include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <algorithm>
 #include <map>
 #include <string>
 
@@ -118,6 +120,19 @@ Filters::Handle& Filters::Handle::Add(std::shared_ptr<Filter::FFmpeg> filter) no
 	auto& stretch = m_owner->m_stretches[m_index];
 	if (!stretch.Lane)
 		return *this;
+
+	if (dynamic_cast<Filter::ProcessTwoPasses*>(filter.get())) {
+		if (dynamic_cast<Remuxer*>(stretch.Destination.get())) {
+			stretch.Destination->Fail("ProcessTwoPasses cannot remux");
+			return *this;
+		}
+		if (stretch.Track >= 0) {
+			auto& tracks = m_owner->m_measureTracks;
+			if (std::find(tracks.begin(), tracks.end(), stretch.Track) == tracks.end())
+				tracks.push_back(stretch.Track);
+		}
+	}
+
 	m_owner->m_reports.push_back({filter, stretch.Scope});
 	stretch.Lane->Add(std::move(filter));
 	return *this;
@@ -174,6 +189,117 @@ void Filters::Close() noexcept {
 
 		stretch.Lane->Close();
 	}
+
+	if (m_measureTracks.empty())
+		return;
+
+	Demuxer* demuxer = nullptr;
+	for (auto& stretch : m_stretches) {
+		if (!stretch.Origin)
+			continue;
+		if (auto* decoder = dynamic_cast<Decoder*>(stretch.Origin.get())) {
+			demuxer = decoder->m_origin;
+			if (demuxer)
+				break;
+		}
+		else if (auto* found = dynamic_cast<Demuxer*>(stretch.Origin.get())) {
+			demuxer = found;
+			break;
+		}
+	}
+	if (!demuxer)
+		return;
+
+	m_measureFilterCount = 0;
+	m_measureFiltersDrained = 0;
+	for (auto& item : m_reports) {
+		if (auto* two = dynamic_cast<Filter::ProcessTwoPasses*>(item.Filter.get())) {
+			two->EnterMeasure();
+			two->BindMeasure(this);
+			++m_measureFilterCount;
+		}
+	}
+
+	demuxer->Measure(m_measureTracks);
+	demuxer->m_filters = this;
+	m_measuring = true;
+	m_measureDrained.clear();
+}
+
+bool Filters::Measuring() const noexcept {
+	return m_measuring;
+}
+
+void Filters::CloseMeasureSource() noexcept {
+	for (auto& stretch : m_stretches) {
+		if (!stretch.Origin)
+			continue;
+		auto* decoder = dynamic_cast<Decoder*>(stretch.Origin.get());
+		if (!decoder)
+			continue;
+		if (std::find(m_measureTracks.begin(), m_measureTracks.end(),
+				decoder->Index()) == m_measureTracks.end())
+			continue;
+		decoder->MeasureSourceClosed();
+	}
+
+	for (auto& item : m_reports) {
+		if (auto* two = dynamic_cast<Filter::ProcessTwoPasses*>(item.Filter.get()))
+			two->MeasureSourceClosed();
+	}
+}
+
+void Filters::OnMeasureDrained(int track) noexcept {
+	if (std::find(m_measureDrained.begin(), m_measureDrained.end(), track)
+			== m_measureDrained.end())
+		m_measureDrained.push_back(track);
+	MaybeFinishMeasure();
+}
+
+void Filters::OnMeasureFilterDrained() noexcept {
+	++m_measureFiltersDrained;
+	MaybeFinishMeasure();
+}
+
+void Filters::MaybeFinishMeasure() noexcept {
+	if (m_measureDrained.size() < m_measureTracks.size())
+		return;
+	if (m_measureFiltersDrained < m_measureFilterCount)
+		return;
+	FinishMeasure();
+}
+
+void Filters::FinishMeasure() noexcept {
+	if (!m_measuring)
+		return;
+
+	for (auto& item : m_reports) {
+		if (auto* two = dynamic_cast<Filter::ProcessTwoPasses*>(item.Filter.get()))
+			two->LeaveMeasure();
+	}
+
+	Demuxer* demuxer = nullptr;
+	for (auto& stretch : m_stretches) {
+		if (!stretch.Origin)
+			continue;
+		if (auto* decoder = dynamic_cast<Decoder*>(stretch.Origin.get())) {
+			demuxer = decoder->m_origin;
+			if (demuxer)
+				break;
+		}
+		else if (auto* found = dynamic_cast<Demuxer*>(stretch.Origin.get())) {
+			demuxer = found;
+			break;
+		}
+	}
+	if (!demuxer)
+		return;
+	if (!demuxer->Rewind())
+		return;
+	demuxer->Apply();
+	m_measuring = false;
+	m_measureDrained.clear();
+	m_measureFiltersDrained = 0;
 }
 
 bool Filters::Idle() const noexcept {
