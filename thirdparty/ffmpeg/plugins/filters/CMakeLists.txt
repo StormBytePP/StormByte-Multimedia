@@ -13,6 +13,5 @@ add_subdirectory(ssim)
 add_subdirectory(vidstab)
 add_subdirectory(xpsnr)
 add_subdirectory(yadif)
-add_subdirectory(zimg)
 
 set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

@@ -50,7 +50,7 @@
 	path = thirdparty/ffmpeg/plugins/compressors/bzip2/cmake-port/src
 	url = https://fuchsia.googlesource.com/third_party/bzip2
 [submodule "zimg"]
-	path = thirdparty/ffmpeg/plugins/filters/zimg/cmake-port/src
+	path = thirdparty/zimg/cmake-wrapper/src
 	url = https://github.com/sekrit-twc/zimg.git
 [submodule "vidstab"]
 	path = thirdparty/ffmpeg/plugins/filters/vidstab/src
