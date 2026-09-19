@@ -36,18 +36,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/pipeline/filters/analytics/psnr.hxx>
-#include <StormByte/multimedia/pipeline/item.hxx>
-#include <StormByte/multimedia/pipeline/typedefs.hxx>
-#include <StormByte/multimedia/type.hxx>
 
 #include <cmath>
-#include <cstdint>
 #include <format>
-#include <map>
-#include <string>
 #include <string_view>
 #include <utility>
 
@@ -56,7 +48,6 @@ using StormByte::Multimedia::Type;
 using StormByte::Multimedia::Pipeline::Producer;
 using StormByte::Multimedia::Pipeline::Filter::Video::PSNR;
 using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
-using FSws = StormByte::Multimedia::FFmpeg::Sws;
 
 namespace {
 	constexpr double kCap = 100.0;
@@ -190,7 +181,7 @@ void PSNR::Score(Lane& lane, const FFrame& ref, const FFrame& dist) noexcept {
 	const FFrame* d = &dist;
 	FFrame scaled;
 	if (dist.Width() != lane.width || dist.Height() != lane.height) {
-		if (!dist.ScaleTo(scaled, lane.width, lane.height, FSws::Bicubic()) || !scaled) {
+		if (!dist.ScaleTo(scaled, lane.width, lane.height, FFrame::Resample::Bicubic) || !scaled) {
 			Log(Level::Warning, "ScaleTo failed, skip pair");
 			return;
 		}

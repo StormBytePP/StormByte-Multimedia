@@ -51,6 +51,9 @@ using namespace StormByte::Multimedia;
 FFmpeg::Sws::Sws(::SwsContext* ctx) noexcept
 : AVPointer(ctx) {}
 
+FFmpeg::Sws::Sws() noexcept
+: AVPointer(nullptr) {}
+
 FFmpeg::Sws::~Sws() noexcept {
 	Free();
 }
@@ -135,5 +138,7 @@ void FFmpeg::Sws::Free() noexcept {
 		m_ptr = nullptr;
 	}
 }
+
+thread_local FFmpeg::Sws FFmpeg::Sws::s_slot;
 
 template class StormByte::Multimedia::FFmpeg::AVPointer<::SwsContext>;

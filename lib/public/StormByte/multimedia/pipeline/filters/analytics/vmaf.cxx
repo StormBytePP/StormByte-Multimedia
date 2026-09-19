@@ -36,17 +36,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
-#include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/pipeline/filters/analytics/vmaf.hxx>
-#include <StormByte/multimedia/pipeline/item.hxx>
-#include <StormByte/multimedia/pipeline/typedefs.hxx>
-#include <StormByte/multimedia/type.hxx>
 
 #include <algorithm>
 #include <cstring>
 #include <format>
-#include <map>
 #include <thread>
 #include <utility>
 
@@ -62,7 +56,6 @@ using StormByte::Multimedia::Pipeline::ToString;
 using StormByte::Multimedia::Type;
 using StormByte::Logger::Level;
 using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
-using FSws = StormByte::Multimedia::FFmpeg::Sws;
 
 namespace {
 	enum VmafPixelFormat Pix(const FFrame& raw) noexcept {
@@ -193,7 +186,7 @@ bool VMAF::Fill(const FFrame& raw, int tw, int th, void* out) noexcept {
 	const FFrame* src = &raw;
 	FFrame scaled;
 	if (raw.Width() != tw || raw.Height() != th) {
-		if (!raw.ScaleTo(scaled, tw, th, FSws::Bicubic()) || !scaled) {
+		if (!raw.ScaleTo(scaled, tw, th, FFrame::Resample::Bicubic) || !scaled) {
 			vmaf_picture_unref(pic);
 			return false;
 		}

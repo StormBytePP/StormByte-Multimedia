@@ -54,6 +54,8 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @brief RAII `SwsContext` for video scale / convert.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Sws: public AVPointer<::SwsContext> {
+		friend class AVFrame;
+
 		public:
 			/**
 			 * @brief Move constructor. Transfers the scaler.
@@ -148,9 +150,9 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit Sws(::SwsContext* ctx) noexcept;
 
 			/**
-			 * @brief Deleted. Use @ref Open; an empty scaler is not useful.
+			 * @brief Empty scaler. Used by @ref s_slot.
 			 */
-			Sws() = delete;
+			Sws() noexcept;
 
 			/**
 			 * @brief Frees the scaler (`sws_freeContext`).
@@ -158,6 +160,8 @@ namespace StormByte::Multimedia::FFmpeg {
 			void Free() noexcept override;
 
 			using AVPointer<::SwsContext>::Get;
+
+			static thread_local Sws s_slot;	///< Per-thread context for ScaleTo
 
 			int m_srcW = 0;		///< Cached source width
 			int m_srcH = 0;		///< Cached source height

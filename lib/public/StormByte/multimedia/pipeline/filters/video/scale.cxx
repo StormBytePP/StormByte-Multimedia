@@ -36,7 +36,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/video/scale.hxx>
 
 #include <format>
@@ -46,14 +45,20 @@ using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
 using StormByte::Logger::Level;
 
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
-	const StormByte::Multimedia::Property::Resolution& resolution) noexcept
-: Filter::Process(std::move(log), "scale"),
-	m_width(resolution.Width()), m_height(resolution.Height()) {}
+	const StormByte::Multimedia::Property::Resolution& resolution,
+	std::optional<FFrame::Resample> filter,
+	std::optional<FFrame::Scaler> scaler) noexcept
+	: Filter::Process(std::move(log), "scale"),
+	m_width(resolution.Width()), m_height(resolution.Height()),
+	m_filter(filter), m_scaler(scaler) {}
 
 Scale::Scale(std::shared_ptr<StormByte::Logger::Log> log,
-	std::uint32_t width, std::uint32_t height) noexcept
-: Filter::Process(std::move(log), "scale"),
-	m_width(width), m_height(height) {}
+	std::uint32_t width, std::uint32_t height,
+	std::optional<FFrame::Resample> filter,
+	std::optional<FFrame::Scaler> scaler) noexcept
+	: Filter::Process(std::move(log), "scale"),
+	m_width(width), m_height(height),
+	m_filter(filter), m_scaler(scaler) {}
 
 enum StormByte::Multimedia::Type Scale::Media() const noexcept {
 	return StormByte::Multimedia::Type::Video;
@@ -98,9 +103,12 @@ void Scale::Process(const Pipeline::Frame&) noexcept {
 	Log(Level::LowLevel, std::format("{}x{} -> {}x{}",
 		src.Width(), src.Height(), dstW, dstH));
 
+	const auto filter = m_filter.value_or(FFrame::Resample::Default);
+	const auto scaler = m_scaler.value_or(FFrame::Scaler::Zimg);
+
 	FFrame out;
-	if (!src.ScaleTo(out, static_cast<int>(dstW), static_cast<int>(dstH))) {
-		Fail("swscale failed");
+	if (!src.ScaleTo(out, static_cast<int>(dstW), static_cast<int>(dstH), filter, scaler)) {
+		Fail("scale failed");
 		return;
 	}
 

@@ -39,6 +39,7 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/property/resolution.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -46,70 +47,71 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
  *
  * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in, out).Filter<Scale>(log, w, h).
+ * Attach with @c job.Video(in).Filter<Scale>(log, w, h).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Scale
-	 * @brief Scales a decoded video frame.
+	 * @brief Scales a decoded video frame. Process leaf.
 	 *
-	 * Minimal Process filter: @ref Media is Video, @ref Clean and
-	 * @ref Setup are empty. @ref Process borrows
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame, writes a
-	 * destination wrapper with
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo and
-	 * commits it with
-	 * @ref Filter::FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&&).
+	 * @par Engine
+	 * Empty @p filter / @p scaler use
+	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo
+	 * defaults (@c Resample::Default, @c Scaler::Zimg).
+	 * Any value the caller sets is passed as-is. Packed RGB
+	 * is not a zimg layout; pass @c Scaler::Sws for that
+	 * conversion.
 	 *
-	 * Width or height 0 keeps the source aspect ratio. Both 0 fails
-	 * on the first video frame. Same size as the source is a no-op
-	 * (no Save). Destination pixel format matches the source.
-	 *
-	 * The first constructor argument is the shared logger of the tube.
-	 * See @ref Filter::FFmpeg logging notes.
+	 * @par Geometry
+	 * Width or height 0 keeps the source aspect ratio. Both 0
+	 * fails on the first video frame. Same size as the source
+	 * is a no-op (no Save). Destination pixel format matches
+	 * the source.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
-	 * @see StormByte::Multimedia::FFmpeg::AVFrame
+	 * @see StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Scale: public Filter::Process {
 		public:
 			/**
-			 * @name Lifecycle
-			 * @{
-			 */
-
-			/**
 			 * @brief Exact destination size.
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param resolution Target resolution.
+			 * @param filter Resample kernel. Empty → ScaleTo default.
+			 * @param scaler Backend. Empty → ScaleTo default.
 			 */
 			Scale(std::shared_ptr<StormByte::Logger::Log> log,
-				const StormByte::Multimedia::Property::Resolution& resolution) noexcept;
+				const StormByte::Multimedia::Property::Resolution& resolution,
+				std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Resample> filter = {},
+				std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Scaler> scaler = {}) noexcept;
 
 			/**
 			 * @brief Destination size. 0 on one axis keeps aspect ratio.
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param width Target width, or 0.
 			 * @param height Target height, or 0.
+			 * @param filter Resample kernel. Empty → ScaleTo default.
+			 * @param scaler Backend. Empty → ScaleTo default.
 			 */
 			Scale(std::shared_ptr<StormByte::Logger::Log> log,
-				std::uint32_t width, std::uint32_t height) noexcept;
+				std::uint32_t width, std::uint32_t height,
+				std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Resample> filter = {},
+				std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Scaler> scaler = {}) noexcept;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other Source filter.
+			 * @brief Copy is not allowed. The tube owns the mounted leaf.
 			 */
 			Scale(const Scale& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other Filter to take.
+			 * @brief Move is not allowed. The tube owns the mounted leaf.
 			 */
 			Scale(Scale&& other) noexcept = delete;
 
@@ -119,27 +121,14 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			~Scale() noexcept override = default;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param other Source filter.
-			 * @return *this.
+			 * @brief Copy assignment is not allowed.
 			 */
 			Scale& operator=(const Scale& other) = delete;
 
 			/**
-			 * @brief Move assignment.
-			 * @param other Filter to take.
-			 * @return *this.
+			 * @brief Move assignment is not allowed.
 			 */
 			Scale& operator=(Scale&& other) noexcept = delete;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @name Identity
-			 * @{
-			 */
 
 			/**
 			 * @brief Media this filter handles.
@@ -148,39 +137,25 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			enum StormByte::Multimedia::Type Media() const noexcept override;
 
 			/**
-			 * @}
-			 */
-
-		protected:
-			/**
-			 * @name Run
-			 * @{
-			 */
-
-			/**
 			 * @brief Nothing to drop between runs.
 			 */
 			void Clean() noexcept override;
 
 			/**
-			 * @brief Nothing to acquire beyond construction.
+			 * @brief Logs the requested target size.
 			 */
 			void Setup() noexcept override;
 
 			/**
-			 * @brief Scales the current video unit and
-			 *        @ref Filter::FFmpeg::Save.
-			 * @param frame Video unit. Borrow
-			 *        @ref Filter::FFmpeg::AVFrame for the live picture.
+			 * @brief Scales the current video unit and Save.
+			 * @param frame Video unit.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
-			/**
-			 * @}
-			 */
-
 		private:
-			std::uint32_t m_width;		///< Requested width, 0 = auto
-			std::uint32_t m_height;		///< Requested height, 0 = auto
+			std::uint32_t m_width;														///< Requested width. 0 keeps aspect ratio
+			std::uint32_t m_height;														///< Requested height. 0 keeps aspect ratio
+			std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Resample> m_filter;	///< Empty → Resample::Default
+			std::optional<StormByte::Multimedia::FFmpeg::AVFrame::Scaler> m_scaler;		///< Empty → Scaler::Zimg
 	};
 }

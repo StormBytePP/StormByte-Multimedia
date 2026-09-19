@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/zimg/zimg.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/ffmpeg/Sws.hxx>
 #include <StormByte/multimedia/ffmpeg/convert.hxx>
@@ -86,6 +87,18 @@ namespace {
 		if (ext == ".bmp" || ext == "bmp")
 			return AV_CODEC_ID_BMP;
 		return AV_CODEC_ID_MJPEG;
+	}
+
+	int ToSwsFlags(FFmpeg::AVFrame::Resample filter) noexcept {
+		switch (filter) {
+			case FFmpeg::AVFrame::Resample::Point:    return SWS_POINT;
+			case FFmpeg::AVFrame::Resample::Bilinear: return SWS_BILINEAR;
+			case FFmpeg::AVFrame::Resample::Bicubic:  return SWS_BICUBIC;
+			case FFmpeg::AVFrame::Resample::Spline:   return SWS_SPLINE;
+			case FFmpeg::AVFrame::Resample::Lanczos:  return SWS_LANCZOS;
+			case FFmpeg::AVFrame::Resample::Default:  return SWS_BILINEAR;
+		}
+		return SWS_BILINEAR;
 	}
 }
 
@@ -732,16 +745,13 @@ uint8_t* FFmpeg::AVFrame::NewSideData(int type, int size) noexcept {
 	return sd ? sd->data : nullptr;
 }
 
-bool FFmpeg::AVFrame::ScaleTo(AVFrame& dst, int dst_w, int dst_h, int flags) const noexcept {
+bool FFmpeg::AVFrame::ScaleTo(AVFrame& dst, int dst_w, int dst_h,
+	Resample filter, Scaler scaler) const noexcept {
 	if (!m_ptr || dst_w <= 0 || dst_h <= 0 || Width() <= 0 || Height() <= 0)
 		return false;
-	if (flags == 0)
-		flags = SWS_BILINEAR;
-	if (!dst.m_ptr)
-		return false;
 	const int fmt = (dst.Format() == AV_PIX_FMT_NONE) ? Format() : dst.Format();
-	if (dst.Width() != dst_w || dst.Height() != dst_h || dst.Format() != fmt
-		|| !dst.Data(0)) {
+	if (!dst.m_ptr || dst.Width() != dst_w || dst.Height() != dst_h
+		|| dst.Format() != fmt || !dst.Data(0)) {
 		if (!dst.AllocVideo(dst_w, dst_h, fmt))
 			return false;
 		(void)dst.CopyProps(*this);
@@ -749,10 +759,15 @@ bool FFmpeg::AVFrame::ScaleTo(AVFrame& dst, int dst_w, int dst_h, int flags) con
 		dst.Height(dst_h);
 		dst.Format(fmt);
 	}
-	Sws sws = Sws::Open(Width(), Height(), Format(), dst.Width(), dst.Height(), dst.Format(), flags);
-	if (!sws)
+	if (scaler == Scaler::Zimg) {
+		if (!Backend::Zimg::s_slot.Ensure(*this, dst, filter))
+			return false;
+		return Backend::Zimg::s_slot.Scale(*this, dst);
+	}
+	if (!Sws::s_slot.Ensure(Width(), Height(), Format(),
+		dst.Width(), dst.Height(), dst.Format(), ToSwsFlags(filter)))
 		return false;
-	return sws.Scale(*this, dst);
+	return Sws::s_slot.Scale(*this, dst);
 }
 
 void FFmpeg::AVFrame::Free() noexcept {

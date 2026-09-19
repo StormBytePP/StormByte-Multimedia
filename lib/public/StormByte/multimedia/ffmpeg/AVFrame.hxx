@@ -276,6 +276,33 @@ namespace StormByte::Multimedia::FFmpeg {
 			};
 
 			/**
+			 * @brief Resampling backend for @ref ScaleTo.
+			 *
+			 * @c Zimg is the default. @c Sws is libswscale and is
+			 * required for packed RGB.
+			 */
+			enum class Scaler: std::uint8_t {
+				Zimg,		///< zimg graph (default).
+				Sws			///< libswscale.
+			};
+
+			/**
+			 * @brief Resample kernel for @ref ScaleTo.
+			 *
+			 * Every value maps to both zimg and libswscale.
+			 * @c Default is the backend native default (zimg:
+			 * bicubic luma / bilinear chroma; Sws: bilinear).
+			 */
+			enum class Resample: std::uint8_t {
+				Default,	///< Backend default.
+				Point,		///< Nearest neighbour.
+				Bilinear,	///< Bilinear.
+				Bicubic,	///< Bicubic.
+				Spline,		///< Spline (zimg spline36 / SWS_SPLINE).
+				Lanczos		///< Lanczos.
+			};
+
+			/**
 			 * @brief Planar layout of this frame.
 			 * @return Family, or @c Unknown if empty / packed / hw.
 			 */
@@ -667,13 +694,18 @@ namespace StormByte::Multimedia::FFmpeg {
 
 			/**
 			 * @brief Scales this frame into @p dst (allocates @p dst if empty).
-			 * @param dst Destination. Pixel format is taken from @p dst if set, otherwise from this frame.
+			 * @param dst Destination. Pixel format is taken from @p dst if set,
+			 *        otherwise from this frame.
 			 * @param dst_w Destination width.
 			 * @param dst_h Destination height.
-			 * @param flags libswscale flags. 0 = SWS_BILINEAR.
-			 * @return false on failure.
+			 * @param filter Resample kernel. @c Default is the backend default.
+			 * @param scaler Backend. @c Zimg is the default. Packed RGB
+			 *        requires @c Sws.
+			 * @return false on failure. @c Zimg does not fall back to @c Sws.
 			 */
-			bool ScaleTo(AVFrame& dst, int dst_w, int dst_h, int flags = 0) const noexcept;
+			bool ScaleTo(AVFrame& dst, int dst_w, int dst_h,
+				Resample filter = Resample::Default,
+				Scaler scaler = Scaler::Zimg) const noexcept;
 
 			/**
 			 * @brief Adopts @p raw. Previous frame is freed.
