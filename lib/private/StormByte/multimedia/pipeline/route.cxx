@@ -65,6 +65,11 @@ namespace {
 
 		return StormByte::Multimedia::Type::Unknown;
 	}
+
+	void Cap(StormByte::Multimedia::Backend::Pipeline::Pipe& pipe, int track, std::size_t n) noexcept {
+		if (n > 0)
+			pipe.Capacity(track, n);
+	}
 }
 
 Route::Route(int track,
@@ -156,8 +161,10 @@ void Route::Close() noexcept {
 	Filter::FFmpeg* const frameFirst = m_frames.First();
 	Filter::FFmpeg* const frameLast = m_frames.Last();
 
-	if (packetLast != nullptr && frameFirst != nullptr)
+	if (packetLast != nullptr && frameFirst != nullptr) {
 		packetLast->pipe().To(m_track) >> frameFirst->pipe();
+		Cap(frameFirst->pipe(), m_track, frameFirst->InputCeiling());
+	}
 
 	Filter::FFmpeg* first = packetFirst != nullptr ? packetFirst : frameFirst;
 	Filter::FFmpeg* last = frameLast != nullptr ? frameLast : packetLast;
@@ -165,14 +172,13 @@ void Route::Close() noexcept {
 	if (first == nullptr) {
 		origin.pipe().To(m_track) >> destination.pipe();
 	}
-
 	else {
 		origin.pipe().To(m_track) >> first->pipe();
+		Cap(first->pipe(), m_track, first->InputCeiling());
 		last->pipe().To(m_track) >> destination.pipe();
 	}
 
-	if (const std::size_t cap = destination.InputCeiling(); cap > 0)
-		destination.pipe().Capacity(m_track, cap);
+	Cap(destination.pipe(), m_track, destination.InputCeiling());
 
 	for (Filter::FFmpeg* analytics : m_analytics) {
 		if (!analytics)
@@ -180,8 +186,7 @@ void Route::Close() noexcept {
 		if (analytics->Leaf() != "frames")
 			TapDecode(origin, *analytics);
 		TapEncode(destination, *analytics);
-		if (const std::size_t cap = analytics->InputCeiling(); cap > 0)
-			analytics->pipe().Capacity(m_track, cap);
+		Cap(analytics->pipe(), m_track, analytics->InputCeiling());
 		analytics->pipe().Drain();
 	}
 }
@@ -210,8 +215,10 @@ std::vector<Filter::Report> Route::Reports() const noexcept {
 
 void Route::Hook(Lane& lane, Filter::FFmpeg& filter) noexcept {
 	filter.pipe().Listen();
-	if (lane.LastProcess != nullptr)
+	if (lane.LastProcess != nullptr) {
 		lane.LastProcess->pipe().To(m_track) >> filter.pipe();
+		Cap(filter.pipe(), m_track, filter.InputCeiling());
+	}
 	if (lane.FirstProcess == nullptr)
 		lane.FirstProcess = &filter;
 	lane.LastProcess = &filter;
@@ -220,6 +227,7 @@ void Route::Hook(Lane& lane, Filter::FFmpeg& filter) noexcept {
 void Route::TapDecode(Step& origin, Filter::FFmpeg& analytics) noexcept {
 	if (origin.Produces().Has(Kind::Frame)) {
 		origin.pipe().CloneTo(m_track, analytics.pipe());
+		Cap(analytics.pipe(), m_track, analytics.InputCeiling());
 		return;
 	}
 
@@ -228,6 +236,8 @@ void Route::TapDecode(Step& origin, Filter::FFmpeg& analytics) noexcept {
 	std::unique_ptr<Decoder> look(new Decoder(origin.m_log, m_track, Decoder::SourceLook{}));
 	origin.pipe().CloneTo(m_track, look->pipe());
 	look->pipe().To(m_track) >> analytics.pipe();
+	Cap(look->pipe(), m_track, look->InputCeiling());
+	Cap(analytics.pipe(), m_track, analytics.InputCeiling());
 	m_looks.push_back(std::move(look));
 }
 
@@ -242,5 +252,7 @@ void Route::TapEncode(Step& destination, Filter::FFmpeg& analytics) noexcept {
 	look->pipe().Listen();
 	destination.pipe().CloneTo(m_track, look->pipe());
 	look->pipe().To(m_track) >> analytics.pipe();
+	Cap(look->pipe(), m_track, look->InputCeiling());
+	Cap(analytics.pipe(), m_track, analytics.InputCeiling());
 	m_looks.push_back(std::move(look));
 }

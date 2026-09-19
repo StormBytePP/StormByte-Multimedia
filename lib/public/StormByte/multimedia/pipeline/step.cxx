@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/host.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/backend/pipeline/pumper.hxx>
@@ -177,6 +178,13 @@ void Step::Stop() noexcept {
 }
 
 std::size_t Step::InputCeiling() const noexcept {
+	using StormByte::Multimedia::Backend::Pipeline::SaneInputCeiling;
+	if (m_name == Producer::Encoder && Receives().Has(Kind::Frame))
+		return SaneInputCeiling(true, 2);
+	if (Receives().Has(Kind::Frame))
+		return SaneInputCeiling(true, 1);
+	if (Receives().Has(Kind::Packet))
+		return SaneInputCeiling(false, 1);
 	return 0;
 }
 
