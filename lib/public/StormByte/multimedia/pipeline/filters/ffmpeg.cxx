@@ -248,6 +248,13 @@ void FFmpeg::Release() noexcept {
 	m_hold = 0;
 	m_heldFor = 0;
 	auto parked = std::move(m_queue);
+	// Process() may call Release() before Work() parks the current unit.
+	if (m_current) {
+		const bool queued = !parked.empty() &&
+			std::find(parked.begin(), parked.end(), m_current) != parked.end();
+		if (!queued)
+			parked.push_back(m_current);
+	}
 	for (auto& item : parked) {
 		m_current = item;
 		if (IsAnalytics(*this)) {
