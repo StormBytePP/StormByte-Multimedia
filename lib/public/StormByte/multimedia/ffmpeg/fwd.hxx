@@ -57,6 +57,8 @@ extern "C" {
 	struct AVDictionary;
 	struct AVFormatContext;
 	struct AVFrame;
+	struct AVFilterContext;
+	struct AVFilterGraph;
 	struct AVFrameSideData;
 	struct AVIOContext;
 	struct AVPacket;

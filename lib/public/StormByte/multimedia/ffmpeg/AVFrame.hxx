@@ -80,6 +80,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 namespace StormByte::Multimedia::FFmpeg {
 	class AVDecoder;
 	class AVEncoder;
+	class AVFilterGraph;
 	class Swr;
 	class Sws;
 
@@ -96,10 +97,11 @@ namespace StormByte::Multimedia::FFmpeg {
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVFrame: public AVPointer<::AVFrame> {
 		friend class AVDecoder;
 		friend class AVEncoder;
-		friend class Swr;
-		friend class Sws;
+		friend class AVFilterGraph;
 		friend class StormByte::Multimedia::Backend::Pipeline::Frame;
 		friend class StormByte::Multimedia::Pipeline::Filter::FFmpeg;
+		friend class Swr;
+		friend class Sws;
 		public:
 			/**
 			 * @brief Allocates an empty frame (av_frame_alloc).
