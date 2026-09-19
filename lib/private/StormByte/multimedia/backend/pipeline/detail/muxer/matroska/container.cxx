@@ -477,19 +477,33 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				hasVideo = true;
 		}
 
-		if (hasAudio && hasVideo) {
-			const auto cap = owner.InputCeiling();
-			const auto depth = cap == 0 ? 1 : cap;
-			m_ctx->max_interleave_delta =
-				static_cast<std::int64_t>(depth) * 2 * InterleaveSlotUs;
-		}
+		std::int64_t deltaUs = InterleaveSlotUs;
+		if (hasAudio && hasVideo)
+			deltaUs = 2 * InterleaveSlotUs;
+		const auto cap = owner.InputCeiling();
+		const auto depth = cap == 0 ? 1 : cap;
+		deltaUs *= static_cast<std::int64_t>(depth);
 
-		else if (hasAudio || hasVideo) {
-			const auto cap = owner.InputCeiling();
-			const auto depth = cap == 0 ? 1 : cap;
-			m_ctx->max_interleave_delta =
-				static_cast<std::int64_t>(depth) * InterleaveSlotUs;
+		std::int64_t minPts = -1;
+		std::int64_t maxPts = -1;
+		for (const auto& queued : m_queue) {
+			if (!queued || !queued->Pts())
+				continue;
+			const std::int64_t ns = queued->Pts()->Nanoseconds().count();
+			if (minPts < 0 || ns < minPts)
+				minPts = ns;
+			if (ns > maxPts)
+				maxPts = ns;
 		}
+		if (minPts >= 0 && maxPts > minPts) {
+			const std::int64_t spanUs = (maxPts - minPts) / 1000 + InterleaveSlotUs;
+			if (spanUs > deltaUs)
+				deltaUs = spanUs;
+		}
+		constexpr std::int64_t floorUs = 60LL * 1000 * 1000;
+		if (deltaUs < floorUs)
+			deltaUs = floorUs;
+		m_ctx->max_interleave_delta = deltaUs;
 
 		AVDictionary* opts = nullptr;
 		av_dict_set(&opts, "default_mode", "passthrough", 0);
