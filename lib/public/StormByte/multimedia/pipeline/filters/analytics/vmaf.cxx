@@ -186,7 +186,7 @@ bool VMAF::Fill(const FFrame& raw, int tw, int th, void* out) noexcept {
 	const FFrame* src = &raw;
 	FFrame scaled;
 	if (raw.Width() != tw || raw.Height() != th) {
-		if (!raw.ScaleTo(scaled, tw, th, FFrame::Resample::Bicubic) || !scaled) {
+		if (!raw.ScaleTo(scaled, tw, th, FFrame::Resample::Bicubic, FFrame::Scaler::Sws) || !scaled) {
 			vmaf_picture_unref(pic);
 			return false;
 		}
