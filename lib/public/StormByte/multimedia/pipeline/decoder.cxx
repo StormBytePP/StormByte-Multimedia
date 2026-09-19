@@ -209,8 +209,11 @@ bool Decoder::ResetAfterMeasure() noexcept {
 		return false;
 	if (m_look)
 		return true;
-	if (!m_backend)
-		return true;
+	if (!m_backend) {
+		Fail("decoder is not open");
+		return false;
+	}
+	DumpWork();
 	if (!m_backend->Reset(*this))
 		return false;
 

@@ -425,10 +425,7 @@ void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 	if (Failed())
 		return;
 	if (MeasuringTwoPass()) {
-		auto* two = static_cast<ProcessTwoPasses*>(this);
 		m_current.reset();
-		if (two->m_measureClosed.load(std::memory_order_acquire) && !pipe().Ready())
-			two->DrainMeasure();
 		return;
 	}
 	if (Held()) {
@@ -554,6 +551,10 @@ void FFmpeg::DumpWork() noexcept {
 		return;
 	Log(Level::Debug, std::format("work n={} min={}us max={}us last={}us",
 		m_workN, m_workMin, m_workMax, m_lastWork));
+	m_workN = 0;
+	m_workMin = std::numeric_limits<std::int64_t>::max();
+	m_workMax = 0;
+	m_lastWork = 0;
 }
 
 void FFmpeg::Clean() noexcept {}
@@ -588,6 +589,7 @@ void ProcessTwoPasses::EnterMeasure() noexcept {
 
 void ProcessTwoPasses::LeaveMeasure() noexcept {
 	Eof();
+	DumpWork();
 	m_measuring = false;
 	m_measureClosed.store(false, std::memory_order_release);
 	m_measureDrained.store(false, std::memory_order_release);

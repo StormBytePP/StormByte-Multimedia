@@ -177,7 +177,8 @@ void Route::Close() noexcept {
 	for (Filter::FFmpeg* analytics : m_analytics) {
 		if (!analytics)
 			continue;
-		TapDecode(origin, *analytics);
+		if (analytics->Leaf() != "frames")
+			TapDecode(origin, *analytics);
 		TapEncode(destination, *analytics);
 		if (const std::size_t cap = analytics->InputCeiling(); cap > 0)
 			analytics->pipe().Capacity(m_track, cap);

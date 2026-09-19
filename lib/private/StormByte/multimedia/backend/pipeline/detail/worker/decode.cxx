@@ -38,13 +38,13 @@
 
 #include <StormByte/multimedia/backend/pipeline/detail/worker/decode.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
-#include <StormByte/multimedia/backend/pipeline/pipe.hxx>
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <chrono>
 #include <format>
 #include <string>
 
@@ -53,6 +53,11 @@ namespace {
 		if (!value)
 			return "-";
 		return std::format("{}", value->Nanoseconds().count());
+	}
+
+	std::int64_t ElapsedUs(std::chrono::steady_clock::time_point started) noexcept {
+		return std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - started).count();
 	}
 }
 
@@ -106,9 +111,6 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	void Decode::Process(Item::PointerType item) noexcept {
 		if (!item) {
 			Flush();
-			if (m_owner.m_measureClosed.load(std::memory_order_acquire)
-					&& !m_owner.pipe().Ready())
-				m_owner.DrainMeasure();
 			return;
 		}
 
@@ -148,13 +150,17 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 			packet->Track(), *packet->Serial(), packet->Part(),
 			Ns(packet->Pts()), Ns(packet->Dts())));
 
-		auto emit = [this](Frame::PointerType frame) {
+		const auto started = std::chrono::steady_clock::now();
+		unsigned emitted = 0;
+		auto emit = [this, &started, &emitted](Frame::PointerType frame) {
 			m_owner.StampLineage(*frame);
 			m_owner.StampLook(*frame);
 			Log(Level::LowLevel, std::format("out t={} {}:{} pts={} dts={} dur={}",
 				frame->Track(), frame->Serial().value_or(0), frame->Part(),
 				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
 			Emit(std::move(frame));
+			++emitted;
+			m_owner.RecordWork(ElapsedUs(started));
 		};
 
 		while (!m_owner.m_backend->Send(m_owner, packet)) {
@@ -180,14 +186,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 			emit(std::move(frame));
 		}
 
-		if (m_owner.m_measureClosed.load(std::memory_order_acquire)
-				&& !m_owner.pipe().Ready())
-			m_owner.DrainMeasure();
+		(void)emitted;
 	}
 
 	void Decode::Flush() noexcept {
 		if (m_owner.Failed() || !m_owner.m_backend)
 			return;
+		const auto started = std::chrono::steady_clock::now();
 		m_owner.m_backend->Flush(m_owner);
 		for (;;) {
 			if (m_owner.Failed())
@@ -201,6 +206,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 				frame->Track(), frame->Serial().value_or(0), frame->Part(),
 				Ns(frame->Pts()), Ns(frame->Dts()), Ns(frame->Duration())));
 			Emit(std::move(frame));
+			m_owner.RecordWork(ElapsedUs(started));
 		}
 	}
 }

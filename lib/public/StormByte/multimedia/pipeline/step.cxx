@@ -255,6 +255,10 @@ void Step::DumpWork() noexcept {
 		return;
 	Log(Level::Debug, std::format("work n={} min={}us max={}us",
 		m_workN, m_workMin, m_workMax));
+	m_workN = 0;
+	m_workMin = std::numeric_limits<std::int64_t>::max();
+	m_workMax = 0;
+	m_lastWork = 0;
 }
 
 Backend::Pipeline::Host& Step::Face() noexcept {

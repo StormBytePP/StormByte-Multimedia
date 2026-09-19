@@ -43,6 +43,7 @@
 #include <utility>
 
 using namespace StormByte::Multimedia::Backend::Pipeline;
+using StormByte::Multimedia::Pipeline::Kind;
 using StormByte::Multimedia::Pipeline::State;
 using StormByte::Logger::Level;
 
@@ -158,13 +159,13 @@ void Pumper::PumpSource() noexcept {
 			break;
 		const auto started = std::chrono::steady_clock::now();
 		m_worker->Process({});
-		m_host.RecordWork(ElapsedUs(started));
 		if (Stopping())
 			break;
 		if (m_host.Exhausted()) {
 			m_host.DumpWork();
 			break;
 		}
+		m_host.RecordWork(ElapsedUs(started));
 	}
 }
 
@@ -182,18 +183,18 @@ void Pumper::PumpPop() noexcept {
 			}
 
 			if (!Stopping()) {
-				const auto started = std::chrono::steady_clock::now();
 				m_worker->Process({});
-				m_host.RecordWork(ElapsedUs(started));
 				m_host.DumpWork();
 			}
 
 			break;
 		}
 
+		const bool frame = item->Kind() == Kind::Frame;
 		const auto started = std::chrono::steady_clock::now();
 		m_worker->Process(std::move(item));
-		m_host.RecordWork(ElapsedUs(started));
+		if (frame)
+			m_host.RecordWork(ElapsedUs(started));
 		if (Failed())
 			break;
 	}
