@@ -158,7 +158,7 @@ Loudnorm::Loudnorm(std::shared_ptr<StormByte::Logger::Log> log,
 	m_targetTp(truePeak.value_or(DefaultTp)),
 	m_st(nullptr), m_channels(0), m_rate(0),
 	m_measuredI(0.0), m_measuredLra(0.0), m_gain(1.0),
-	m_ready(false), m_frames(0) {}
+	m_ceiling(0.0), m_limit(false), m_ready(false), m_frames(0) {}
 
 Loudnorm::~Loudnorm() noexcept {
 	Clean();
@@ -178,6 +178,8 @@ void Loudnorm::Clean() noexcept {
 	m_measuredLra = 0.0;
 	m_tp.clear();
 	m_gain = 1.0;
+	m_ceiling = 0.0;
+	m_limit = false;
 	m_ready = false;
 	m_frames = 0;
 }
@@ -268,17 +270,18 @@ void Loudnorm::CloseMeter() noexcept {
 	ebur128_destroy(&m_st);
 	m_st = nullptr;
 
-	double gainDb = m_targetI - m_measuredI;
+	const double gainDb = m_targetI - m_measuredI;
+	m_gain = std::pow(10.0, gainDb / 20.0);
+	m_ceiling = std::pow(10.0, m_targetTp / 20.0);
 	double worstTp = -std::numeric_limits<double>::infinity();
 	for (double lin : m_tp)
 		worstTp = std::max(worstTp, DbTp(lin));
-	if (std::isfinite(worstTp) && worstTp + gainDb > m_targetTp)
-		gainDb = m_targetTp - worstTp;
-	m_gain = std::pow(10.0, gainDb / 20.0);
+	m_limit = std::isfinite(worstTp) && worstTp + gainDb > m_targetTp;
 	m_ready = true;
 	Log(Level::Notice, std::format(
-		"loudnorm I={:.2f} LRA={:.2f} targetI={:.2f} targetTP={:.2f} gain={:.3f} dB frames={}",
-		m_measuredI, m_measuredLra, m_targetI, m_targetTp, gainDb, m_frames));
+		"loudnorm I={:.2f} LRA={:.2f} targetI={:.2f} targetTP={:.2f} gain={:.3f} dB limit={} frames={}",
+		m_measuredI, m_measuredLra, m_targetI, m_targetTp, gainDb,
+		m_limit ? 1 : 0, m_frames));
 }
 
 FFrame Loudnorm::Apply(const FFrame& src) const noexcept {
@@ -290,9 +293,16 @@ FFrame Loudnorm::Apply(const FFrame& src) const noexcept {
 	const int ch = src.Channels();
 	const int fmt = src.Format();
 	const float g = static_cast<float>(m_gain);
+	const float ceil = static_cast<float>(m_ceiling > 0.0 ? m_ceiling : 1.0);
 	for (int i = 0; i < n; ++i) {
+		float peak = 0.f;
 		for (int c = 0; c < ch; ++c)
-			StoreAt(out, c, i, fmt, SampleAt(src, c, i, fmt) * g);
+			peak = std::max(peak, std::fabs(SampleAt(src, c, i, fmt) * g));
+		const float linked = (m_limit && peak > ceil && peak > 0.f)
+			? ceil / peak
+			: 1.f;
+		for (int c = 0; c < ch; ++c)
+			StoreAt(out, c, i, fmt, SampleAt(src, c, i, fmt) * g * linked);
 	}
 	return out;
 }
@@ -354,6 +364,7 @@ class StormByte::Multimedia::Pipeline::Filter::Report Loudnorm::Report() const n
 	data.emplace("I_target", std::format("{:.3f}", m_targetI));
 	data.emplace("TP_target", std::format("{:.3f}", m_targetTp));
 	data.emplace("gain_db", std::format("{:.3f}", 20.0 * std::log10(std::max(m_gain, 1e-12))));
+	data.emplace("limit", m_limit ? "1" : "0");
 	data.emplace("frames", std::to_string(m_frames));
 	data.emplace("channels", std::to_string(m_channels));
 	for (std::size_t c = 0; c < m_tp.size(); ++c)

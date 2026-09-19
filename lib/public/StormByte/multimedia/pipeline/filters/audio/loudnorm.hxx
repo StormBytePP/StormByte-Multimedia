@@ -58,29 +58,25 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	/**
 	 * @class Loudnorm
-	 * @brief Two-pass EBU R128 loudness (libebur128) + linked true-peak cap.
+	 * @brief Two-pass EBU R128 loudness (libebur128).
 	 *
 	 * @par Measure
 	 * One ebur128 state for the whole layout (L/R/C/LFE/Ls/Rs map).
 	 * Integrated loudness and LRA are **program** values (BS.1770).
-	 * True peak is stored **per channel** and only used to keep the
-	 * worst channel under @p truePeak after the program gain.
-	 * Channels are never normalized independently: that would wreck
-	 * a stereo pair or a 5.1 mix. Separate @c Audio(n) tracks are
-	 * already separate programs.
-	 *
-	 * LFE is @c EBUR128_UNUSED (not in the loudness sum; still in TP).
+	 * True peak is stored **per channel**. LFE is @c EBUR128_UNUSED
+	 * in the loudness sum; it still counts for TP.
+	 * Channels are never normalized independently.
 	 *
 	 * @par Apply
-	 * Linear gain @c I_target − I_measured, then reduced if any
-	 * channel's predicted TP would exceed @p truePeak. Same gain on
-	 * every channel. No dual-pass compressor, no Hold.
+	 * Linear gain is always @c I_target − I_measured, same on every
+	 * channel. If that gain would push any channel over @p truePeak,
+	 * a linked ceiling at @p truePeak runs on the gained samples.
+	 * The program gain is not reduced. This is not FFmpeg Dynamic
+	 * (no LRA compressor).
 	 *
 	 * @par Defaults
 	 * - I = −23 LUFS (EBU R128)
 	 * - TP = −1.5 dBTP
-	 *
-	 * Any argument the caller sets is used as-is.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of a new
@@ -91,7 +87,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	class STORMBYTE_MULTIMEDIA_PUBLIC Loudnorm: public Filter::ProcessTwoPasses {
 		public:
 			/**
-			 * @brief Two-pass loudness + linked true-peak cap.
+			 * @brief Two-pass loudness + linked true-peak ceiling.
 			 * @param log Shared logger. Empty pointer means no log.
 			 * @param integrated Target integrated loudness in LUFS. Empty → −23.
 			 * @param truePeak True-peak ceiling in dBTP. Empty → −1.5.
@@ -129,7 +125,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			void Measure(const Pipeline::Frame& frame) noexcept override;
 
 			/**
-			 * @brief Second pass: apply the linked gain and Save.
+			 * @brief Second pass: program gain, linked TP ceiling, Save.
 			 * @param frame Current audio unit.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
@@ -175,7 +171,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			void CloseMeter() noexcept;
 
 			/**
-			 * @brief Applies @c m_gain to a copy of @p src.
+			 * @brief Applies @c m_gain and the linked TP ceiling.
 			 * @param src Source audio.
 			 * @return New frame, or empty on failure.
 			 */
@@ -190,7 +186,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			double m_measuredI;					///< Program integrated LUFS
 			double m_measuredLra;				///< Program LRA (LU)
 			std::vector<double> m_tp;			///< True peak per channel (linear)
-			double m_gain;						///< Linear amplitude gain
+			double m_gain;						///< Linear amplitude gain (I only)
+			double m_ceiling;					///< Linear TP ceiling
+			bool m_limit;						///< Gain would exceed TP without ceiling
 			bool m_ready;						///< Measure closed successfully
 			unsigned m_frames;					///< Audio frames seen in Measure
 	};
