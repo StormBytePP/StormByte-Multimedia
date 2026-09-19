@@ -9,7 +9,6 @@ add_subdirectory(hqdn3d)
 add_subdirectory(nlmeans)
 add_subdirectory(psnr)
 add_subdirectory(ssim)
-add_subdirectory(vidstab)
 add_subdirectory(xpsnr)
 add_subdirectory(yadif)
 
