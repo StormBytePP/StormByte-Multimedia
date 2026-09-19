@@ -1,0 +1,41 @@
+# vim: ts=2 sw=2
+# Find libebur128. Imported target: EBUR128::ebur128
+
+include(FindPackageHandleStandardArgs)
+
+if(NOT WIN32)
+	find_package(PkgConfig)
+	if(PKG_CONFIG_FOUND)
+		pkg_check_modules(PC_EBUR128 libebur128)
+	endif()
+endif()
+
+find_path(EBUR128_INCLUDE_DIRS
+	NAMES ebur128.h
+	HINTS ${PC_EBUR128_INCLUDEDIR} ${PC_EBUR128_INCLUDE_DIRS}
+)
+
+find_library(EBUR128_LIBRARIES
+	NAMES ebur128
+	HINTS ${PC_EBUR128_LIBDIR} ${PC_EBUR128_LIBRARY_DIRS}
+)
+
+if(PC_EBUR128_VERSION)
+	set(EBUR128_VERSION ${PC_EBUR128_VERSION} CACHE STRING "libebur128 version")
+endif()
+
+mark_as_advanced(EBUR128_INCLUDE_DIRS EBUR128_LIBRARIES EBUR128_VERSION)
+
+find_package_handle_standard_args(EBUR128
+	REQUIRED_VARS EBUR128_LIBRARIES EBUR128_INCLUDE_DIRS
+	VERSION_VAR EBUR128_VERSION
+)
+
+if(EBUR128_FOUND AND NOT TARGET EBUR128::ebur128)
+	list(GET EBUR128_LIBRARIES 0 _ebur_lib)
+	add_library(EBUR128::ebur128 UNKNOWN IMPORTED)
+	set_target_properties(EBUR128::ebur128 PROPERTIES
+		IMPORTED_LOCATION "${_ebur_lib}"
+		INTERFACE_INCLUDE_DIRECTORIES "${EBUR128_INCLUDE_DIRS}"
+	)
+endif()

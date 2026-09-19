@@ -115,3 +115,6 @@
 [submodule "StormByte Buffer"]
 	path = thirdparty/StormByte/buffer/src
 	url = https://github.com/StormBytePP/StormByte-Buffer.git
+[submodule "ebur128"]
+	path = thirdparty/ebur128/src
+	url = https://github.com/jiixyj/libebur128.git
