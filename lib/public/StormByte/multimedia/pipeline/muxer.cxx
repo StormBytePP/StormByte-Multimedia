@@ -48,6 +48,7 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -216,6 +217,16 @@ bool Muxer::RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept {
 		*static_cast<StormByte::Multimedia::FFmpeg::AVRational*>(timeBase));
 }
 
+void Muxer::ClockMuxDone() noexcept {
+	if (m_progress)
+		m_progress->MuxDone();
+}
+
+void Muxer::ClockPass(std::int64_t ns) noexcept {
+	if (m_progress)
+		m_progress->SetPassNs(ns);
+}
+
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = encoder.m_plan;
@@ -302,6 +313,7 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxe
 	}
 
 	muxer.m_origin = &demuxer;
+	muxer.m_progress = demuxer.m_progress;
 	muxer.m_backend->BindAttachments(muxer, demuxer.OriginFile());
 	muxer.Log(Level::Debug, "bound remux origin");
 	return muxer;

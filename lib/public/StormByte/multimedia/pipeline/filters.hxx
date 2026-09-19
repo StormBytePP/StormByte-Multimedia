@@ -40,15 +40,21 @@
 
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace StormByte::Multimedia::Backend::Pipeline {
+	class Transcoder;
+}
 
 /**
  * @namespace StormByte::Multimedia::Pipeline
@@ -80,17 +86,25 @@ namespace StormByte::Multimedia::Pipeline {
 	 * calls @ref CloseMeasureSource. Each measure-track Decoder
 	 * drains on its worker, then @ref OnMeasureDrained. Each
 	 * ProcessTwoPasses leaf drains on its worker, then
-	 * @ref OnMeasureFilterDrained. @ref FinishMeasure runs only
-	 * when both sets are drained: LeaveMeasure and Rewind. After
-	 * that the tube is ordinary Process, same as a job that
-	 * never measured.
+	 * @ref OnMeasureFilterDrained. @ref FinishMeasure runs on the
+	 * two-pass filter worker when both sets are drained:
+	 * LeaveMeasure and Rewind. After that the tube is ordinary
+	 * Process, same as a job that never measured.
+	 *
+	 * Shares the Demuxer’s @ref Progress. Analytics leaves set
+	 * HasAnalytics. Dest-look Decoders feed the analytics axis.
+	 * Measure pts is written after ProcessTwoPasses::Measure in
+	 * FFmpeg::Work, not when the Demuxer emits. Leaves never see
+	 * Progress. Idle after the job sets AnalyticsDone.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Filters {
 		friend class Decoder;
 		friend class Demuxer;
+		friend class Filter::FFmpeg;
 		friend class Filter::ProcessTwoPasses;
+		friend class StormByte::Multimedia::Backend::Pipeline::Transcoder;
 
 		public:
 			class Handle;
@@ -168,7 +182,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * on those leaves and Demuxer::Measure with their tracks.
 			 * Hoppers stay open. Demuxer measure EoF then
 			 * CloseMeasureSource; decode and two-pass workers drain;
-			 * FinishMeasure Rewind s and Process continues.
+			 * FinishMeasure Rewinds and Process continues.
 			 */
 			void Close() noexcept;
 
@@ -234,6 +248,14 @@ namespace StormByte::Multimedia::Pipeline {
 			bool Measuring() const noexcept;
 
 			/**
+			 * @brief Decoders and two-pass leaves have both drained.
+			 * @return true when FinishMeasure may run on the filter worker.
+			 *
+			 * Friend: Filter::FFmpeg::Wait. Leaves never call this.
+			 */
+			bool MeasureReadyToFinish() const noexcept;
+
+			/**
 			 * @brief Measure origin EoF. Friend: Demuxer::ReachedEof.
 			 *
 			 * Calls Decoder::MeasureSourceClosed on each measure-track
@@ -246,19 +268,24 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief One measure-track decoder finished DrainMeasure.
 			 * @param track Origin index of that decoder.
 			 *
-			 * Friend: Decoder. Does not FinishMeasure by itself.
+			 * Friend: Decoder. Records the track and wakes two-pass
+			 * leaves. Does not FinishMeasure.
 			 */
 			void OnMeasureDrained(int track) noexcept;
 
 			/**
 			 * @brief One ProcessTwoPasses leaf finished its measure hopper.
 			 *
-			 * Friend: ProcessTwoPasses. Does not FinishMeasure by itself.
+			 * Friend: ProcessTwoPasses. May FinishMeasure on this
+			 * filter worker.
 			 */
 			void OnMeasureFilterDrained() noexcept;
 
 			/**
 			 * @brief FinishMeasure when decoders and two-pass leaves are drained.
+			 *
+			 * Friend: Filter::FFmpeg::Wait. Must run on a two-pass
+			 * filter worker, not on a decoder worker.
 			 */
 			void MaybeFinishMeasure() noexcept;
 
@@ -271,6 +298,34 @@ namespace StormByte::Multimedia::Pipeline {
 			 * decode worker.
 			 */
 			void FinishMeasure() noexcept;
+
+			/**
+			 * @brief Binds the Demuxer clock if found among stretches.
+			 */
+			void BindClock() noexcept;
+
+			/**
+			 * @brief Marks analytics complete on the shared clock if Idle.
+			 *
+			 * Friend: Backend::Pipeline::Transcoder. Not a user hook.
+			 */
+			void ClockAnalytics() noexcept;
+
+			/**
+			 * @brief Dest-look pts for the analytics axis.
+			 * @param ns Presentation time of a dest-look frame.
+			 *
+			 * Friend: Decoder. Leaves never call this.
+			 */
+			void NoteAnalytics(std::int64_t ns) noexcept;
+
+			/**
+			 * @brief Pts of a frame that just ran Measure.
+			 * @param ns Presentation time of that frame.
+			 *
+			 * Friend: Filter::FFmpeg::Work. Leaves never call this.
+			 */
+			void NoteMeasure(std::int64_t ns) noexcept;
 
 			/**
 			 * @brief One origin / destination pair and its Route.
@@ -299,5 +354,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::size_t m_measureFilterCount = 0;		///< ProcessTwoPasses leaves in this pass
 			std::size_t m_measureFiltersDrained = 0;	///< Those leaves that finished Measure
 			bool m_measuring = false;					///< After Close, before FinishMeasure
+			bool m_hasAnalytics = false;				///< At least one Analytics leaf
+			std::shared_ptr<class Progress> m_progress;	///< Shared tube clock
 	};
 }

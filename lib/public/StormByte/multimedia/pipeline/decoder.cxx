@@ -131,9 +131,17 @@ void Decoder::StampLineage(Frame& frame) noexcept {
 	frame.m_dts = m_inDts;
 }
 
+void Decoder::BindAnalytics(Filters& filters) noexcept {
+	m_analytics = &filters;
+}
+
 void Decoder::StampLook(Frame& frame) noexcept {
 	if (m_lookStamp)
 		frame.m_producer = *m_lookStamp;
+	if (!m_lookStamp || !m_analytics)
+		return;
+	if (const auto& pts = frame.Pts(); pts)
+		m_analytics->NoteAnalytics(pts->Nanoseconds().count());
 }
 
 void Decoder::Bind(std::unique_ptr<Backend::Pipeline::Decoder> backend) noexcept {

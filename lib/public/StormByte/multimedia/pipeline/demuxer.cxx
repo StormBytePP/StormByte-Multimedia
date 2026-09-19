@@ -83,7 +83,8 @@ namespace {
 
 Demuxer::Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 : Step(std::move(log), Producer::Demuxer, Kinds{}, Kinds{Kind::Packet}),
-	m_eof(false), m_positionNs(-1) {
+	m_eof(false), m_positionNs(-1),
+	m_progress(std::make_shared<class Progress>()) {
 	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Source>(Face()),
 		std::make_unique<Backend::Pipeline::Detail::Worker::Demux>(*this));
 	Launch();
@@ -106,11 +107,24 @@ std::optional<Property::Duration> Demuxer::Position() const noexcept {
 	return Property::Duration{std::chrono::nanoseconds{ns}};
 }
 
+Progress::Pointer Demuxer::Progress() const noexcept {
+	return m_progress;
+}
+
 void Demuxer::WaitForPlan() noexcept {
 	std::unique_lock lock(m_planMutex);
 	m_planPresent.wait(lock, [this]() {
 		return Stopping() || static_cast<bool>(m_plan);
 	});
+	if (!Stopping() && m_plan)
+		LatchDuration();
+}
+
+void Demuxer::LatchDuration() noexcept {
+	if (!m_progress || !m_plan)
+		return;
+	if (const auto& duration = m_plan->Source().Duration(); duration)
+		m_progress->SetDurationNs(duration->Nanoseconds().count());
 }
 
 void Demuxer::ReachedEof() noexcept {
@@ -130,6 +144,8 @@ void Demuxer::Measure(std::vector<int> tracks) noexcept {
 	m_measureTracks = std::move(tracks);
 	m_measuring = !m_measureTracks.empty();
 	m_eof = false;
+	if (m_progress && m_measuring)
+		m_progress->HasMeasure(true);
 }
 
 bool Demuxer::Measuring() const noexcept {
@@ -148,6 +164,8 @@ bool Demuxer::Rewind() noexcept {
 	m_nextSerial.clear();
 	m_measuring = false;
 	m_measureTracks.clear();
+	if (m_progress)
+		m_progress->MeasureDone();
 	Wake().notify_all();
 	m_planPresent.notify_all();
 	return true;

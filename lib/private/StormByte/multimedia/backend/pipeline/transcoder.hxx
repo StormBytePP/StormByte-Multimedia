@@ -40,7 +40,9 @@
 
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/pipeline/config/base.hxx>
+#include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -74,15 +76,18 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 		public:
 			int In = -1;								///< Origin stream index
 			int Out = -1;								///< Mux destination order
-			StormByte::Multimedia::Type Kind = StormByte::Multimedia::Type::Unknown;
-			std::unique_ptr<StormByte::Multimedia::Pipeline::Config::Base> Config;
-			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Filters;
+			StormByte::Multimedia::Type Kind = StormByte::Multimedia::Type::Unknown;	///< Media kind
+			std::unique_ptr<StormByte::Multimedia::Pipeline::Config::Base> Config;	///< Track intention
+			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Filters;	///< Stretch leaves
 			bool Settled = false;						///< OnSettled already fired
 	};
 
 	/**
 	 * @class Transcoder
 	 * @brief Runs one file-to-file job for the public Transcoder facade.
+	 *
+	 * Forwards the Demuxer @ref StormByte::Multimedia::Pipeline::Progress.
+	 * Does not keep a second percent counter.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -98,9 +103,30 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 			~Transcoder() noexcept;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param other Source coordinator.
+			 */
 			Transcoder(const Transcoder& other) = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param other Source coordinator.
+			 * @return *this.
+			 */
 			Transcoder& operator=(const Transcoder& other) = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param other Coordinator to take.
+			 */
 			Transcoder(Transcoder&& other) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param other Coordinator to take.
+			 * @return *this.
+			 */
 			Transcoder& operator=(Transcoder&& other) noexcept = delete;
 
 			/**
@@ -129,17 +155,16 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::condition_variable PauseCv;			///< Pause waiters
 			std::atomic<StormByte::Multimedia::Pipeline::Status> Status {
 				StormByte::Multimedia::Pipeline::Status::Stopped
-			};
-			std::atomic<bool> Cancel { false };
-			std::atomic<bool> Paused { false };
-			std::atomic<bool> HasProgress { false };
-			std::atomic<unsigned> Progress { 0 };
-			std::optional<std::string> Error;
-			const StormByte::Multimedia::Container* Container = nullptr;
-			std::filesystem::path Path;
-			std::vector<TranscoderSlot> Mapped;
-			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Analytics;
-			std::vector<std::pair<std::string, StormByte::Multimedia::Pipeline::Filter::Report>> Reports;
+			};											///< Public job lifecycle
+			std::atomic<bool> Cancel { false };			///< Cancel requested
+			std::atomic<bool> Paused { false };			///< Coordinator is paused
+			std::shared_ptr<StormByte::Multimedia::Pipeline::Progress> Clock;	///< Demuxer clock
+			std::optional<std::string> Error;			///< Failure text
+			const StormByte::Multimedia::Container* Container = nullptr;	///< Destination container
+			std::filesystem::path Path;					///< Destination path
+			std::vector<TranscoderSlot> Mapped;			///< Fluent map, mux order
+			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Analytics;	///< Global analytics
+			std::vector<std::pair<std::string, StormByte::Multimedia::Pipeline::Filter::Report>> Reports;	///< Snapshots at Done
 
 		private:
 			/**
@@ -149,6 +174,16 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 */
 			void Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop_token token) noexcept;
 
+			/**
+			 * @brief Forwards analytics idle and fires measure / analytics / progress hooks once.
+			 * @param job Public facade.
+			 * @param graph Wired filters.
+			 */
+			void TickHooks(StormByte::Multimedia::Pipeline::Transcoder& job,
+				StormByte::Multimedia::Pipeline::Filters& graph) noexcept;
+
 			std::jthread m_worker;						///< Coordinator thread
+			bool m_measureHook = false;					///< OnMeasureDone already fired
+			bool m_analyticsHook = false;				///< OnAnalyticsDone already fired
 	};
 }

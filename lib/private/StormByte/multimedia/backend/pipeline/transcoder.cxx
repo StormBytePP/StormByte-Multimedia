@@ -47,6 +47,7 @@
 #include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -134,6 +135,9 @@ void Transcoder::Start(StormByte::Multimedia::Pipeline::Transcoder& job) noexcep
 		return;
 	Cancel.store(false, std::memory_order_release);
 	Paused.store(false, std::memory_order_release);
+	m_measureHook = false;
+	m_analyticsHook = false;
+	Clock.reset();
 	Status.store(StormByte::Multimedia::Pipeline::Status::Running, std::memory_order_release);
 	m_worker = std::jthread([this, &job](std::stop_token token) {
 		Run(job, token);
@@ -159,6 +163,22 @@ void Transcoder::WaitIfPaused() noexcept {
 		return Cancel.load(std::memory_order_acquire)
 			|| !Paused.load(std::memory_order_acquire);
 	});
+}
+
+void Transcoder::TickHooks(StormByte::Multimedia::Pipeline::Transcoder& job,
+	StormByte::Multimedia::Pipeline::Filters& graph) noexcept {
+	graph.ClockAnalytics();
+	if (!Clock)
+		return;
+	if (!m_measureHook && Clock->HasMeasure() && Clock->MeasureComplete()) {
+		m_measureHook = true;
+		job.OnMeasureDone();
+	}
+	if (!m_analyticsHook && Clock->HasAnalytics() && Clock->AnalyticsComplete()) {
+		m_analyticsHook = true;
+		job.OnAnalyticsDone();
+	}
+	job.OnProgress();
 }
 
 void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop_token token) noexcept {
@@ -226,6 +246,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	std::move(*built) >> *demux;
 	job.m_plan = demux->Plan();
 	*demux >> *mux;
+	Clock = std::const_pointer_cast<StormByte::Multimedia::Pipeline::Progress>(demux->Progress());
 
 	if (demux->Failed()) {
 		job.Fail(demux->Error().value_or("demux open failed"));
@@ -313,11 +334,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 	for (const auto& filter : Analytics)
 		graph.Add(filter);
 	graph.Close();
-
-	job.SetProgress(0);
-	const auto total = job.Source().Duration();
-	unsigned shown = 0;
-	std::int64_t maxNs = 0;
+	TickHooks(job, graph);
 
 	while (!Stopping(*this, token)) {
 		WaitIfPaused();
@@ -353,29 +370,9 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 
 		if (dead)
 			break;
+		TickHooks(job, graph);
 		if (mux->Closed())
 			break;
-		if (total) {
-			const auto den = total->Nanoseconds().count();
-			if (den > 0) {
-				if (const auto pos = mux->Position()) {
-					const auto num = pos->Nanoseconds().count();
-					if (num > maxNs)
-						maxNs = num;
-				}
-
-				unsigned pct = static_cast<unsigned>((maxNs * 100) / den);
-				if (pct > 99)
-					pct = 99;
-				if (pct < shown)
-					pct = shown;
-				if (pct != shown) {
-					shown = pct;
-					job.SetProgress(shown);
-				}
-			}
-		}
-
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	}
 
@@ -392,12 +389,14 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		return;
 	}
 
-	while (!Stopping(*this, token) && !graph.Idle())
+	while (!Stopping(*this, token) && !graph.Idle()) {
+		TickHooks(job, graph);
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
 
 	Reports = graph.Reports();
+	TickHooks(job, graph);
 
-	job.SetProgress(100);
 	Status.store(StormByte::Multimedia::Pipeline::Status::Done, std::memory_order_release);
 	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::steady_clock::now() - started).count();

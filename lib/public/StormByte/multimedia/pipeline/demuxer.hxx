@@ -42,6 +42,7 @@
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/type.hxx>
@@ -121,6 +122,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * After measure EoF the demux worker @ref Wait s until
 	 * @ref Rewind clears @ref Measuring. That wake is @ref WakeNow
 	 * (`!Measuring()`), not hopper Ready.
+	 *
+	 * The tube clock (@ref Progress) is created here because a tube
+	 * has exactly one Demuxer. Filters and the Muxer write the same
+	 * shared object. @ref Progress() returns a const handle the user
+	 * may keep after the tube dies.
 	 *
 	 * Notice: origin path at Setup, eof once (Process after measure,
 	 * or the only pass). Debug: bind to a decoder and Process min/max
@@ -217,6 +223,17 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<Property::Duration> Position() const noexcept;
 
 			/**
+			 * @brief Job clock for this tube (measure, analytics, All).
+			 *
+			 * Not Demuxer-only: Filters and the Muxer write the same
+			 * object. Shared so the user can keep it after the tube
+			 * dies. No public setters.
+			 *
+			 * @return Const shared handle. Never empty.
+			 */
+			Progress::Pointer Progress() const noexcept;
+
+			/**
 			 * @}
 			 */
 
@@ -227,6 +244,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Blocks until a Plan is bound or the stage must leave.
 			 */
 			void WaitForPlan() noexcept;
+
+			/**
+			 * @brief Copies origin File::Duration into the clock.
+			 *
+			 * Called after a Plan is bound. No extra probe.
+			 */
+			void LatchDuration() noexcept;
 
 			/**
 			 * @brief Marks end of source. Called by the backend on EOF.
@@ -328,6 +352,7 @@ namespace StormByte::Multimedia::Pipeline {
 			std::vector<int> m_measureTracks;						///< Tracks visible during measure
 			bool m_measuring = false;								///< Measure pass active
 			Filters* m_filters = nullptr;							///< Facade that started measure
+			std::shared_ptr<class Progress> m_progress;				///< Tube clock (shared)
 			Join m_join{*this};										///< Halt before other members die
 	};
 }

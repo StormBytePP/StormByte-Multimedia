@@ -41,6 +41,7 @@
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -126,7 +127,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @brief Binds @p demuxer as remux origin and forwards its attachments.
 	 *
 	 * Required when any remux track is reserved. Without it the muxer
-	 * cannot clone origin codec parameters.
+	 * cannot clone origin codec parameters. Also shares the tube
+	 * @ref Progress clock.
 	 *
 	 * @param demuxer Origin demuxer. Must outlive header write.
 	 * @param muxer Destination.
@@ -144,6 +146,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 *
 	 * Does not write the container header until @ref Armed is true.
 	 * @ref Ready is Status Ready and @ref Armed.
+	 *
+	 * Shares the Demuxer’s @ref Progress. Writes advance All via
+	 * @ref ClockPass. Trailer sets MuxDone.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -329,10 +334,22 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			std::size_t ExpectedSlots() const noexcept;
 
+			/**
+			 * @brief Marks the shared clock MuxDone. Friend: mux worker Flush.
+			 */
+			void ClockMuxDone() noexcept;
+
+			/**
+			 * @brief Advances All from a written packet. Friend: mux worker Process.
+			 * @param ns Presentation time written, nanoseconds.
+			 */
+			void ClockPass(std::int64_t ns) noexcept;
+
 			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			const Container* m_container;									///< Destination container
 			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
 			Demuxer* m_origin;												///< Set only by demuxer >> muxer. Not owned
+			std::shared_ptr<class Progress> m_progress;						///< Shared tube clock
 			std::map<int, std::string> m_language;							///< Per-output language
 			std::map<int, std::string> m_title;								///< Per-output title
 			std::atomic<bool> m_closed;										///< Set by Finish / Fail

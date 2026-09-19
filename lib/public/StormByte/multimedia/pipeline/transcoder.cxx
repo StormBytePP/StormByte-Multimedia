@@ -48,6 +48,7 @@
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/config/video.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/stream.hxx>
 
 #include <algorithm>
@@ -509,10 +510,10 @@ std::optional<std::string> Transcoder::Error() const noexcept {
 	return m_backend->Error;
 }
 
-std::optional<unsigned> Transcoder::Progress() const noexcept {
-	if (!m_backend || !m_backend->HasProgress.load(std::memory_order_acquire))
-		return std::nullopt;
-	return m_backend->Progress.load(std::memory_order_acquire);
+Progress::Pointer Transcoder::Progress() const noexcept {
+	if (!m_backend)
+		return {};
+	return m_backend->Clock;
 }
 
 std::vector<std::pair<std::string, Filter::Report>> Transcoder::Reports() const noexcept {
@@ -547,23 +548,17 @@ void Transcoder::OnSettled(const TrackSettled& row) noexcept {
 	JobLog(m_logger, Level::Debug, row.ToString());
 }
 
-void Transcoder::OnProgress(unsigned) noexcept {}
+void Transcoder::OnMeasureDone() noexcept {}
+
+void Transcoder::OnAnalyticsDone() noexcept {}
+
+void Transcoder::OnProgress() noexcept {}
 
 void Transcoder::OnDone() noexcept {}
 
 void Transcoder::OnError(const std::string&) noexcept {}
 
 void Transcoder::OnAborted() noexcept {}
-
-void Transcoder::SetProgress(unsigned percent) noexcept {
-	if (!m_backend)
-		return;
-	if (percent > 100)
-		percent = 100;
-	m_backend->Progress.store(percent, std::memory_order_release);
-	m_backend->HasProgress.store(true, std::memory_order_release);
-	OnProgress(percent);
-}
 
 void Transcoder::MarkSettled(int in, Encoder& encoder) noexcept {
 	if (!m_backend)

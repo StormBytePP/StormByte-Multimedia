@@ -236,6 +236,8 @@ bool Loudnorm::OpenMeter(int channels, int rate) noexcept {
 }
 
 bool Loudnorm::Add(const FFrame& src) noexcept {
+	if (!m_st)
+		return false;
 	const int n = src.NbSamples();
 	const int ch = src.Channels();
 	const int fmt = src.Format();
@@ -309,6 +311,8 @@ FFrame Loudnorm::Gain(const FFrame& src) const noexcept {
 }
 
 void Loudnorm::Measure(const Pipeline::Frame& frame) noexcept {
+	if (m_ready)
+		return;
 	if (frame.Type() != Type::Audio)
 		return;
 	const FFrame& src = AVFrame();
@@ -325,6 +329,8 @@ void Loudnorm::Measure(const Pipeline::Frame& frame) noexcept {
 		return;
 	}
 	if (!Add(src)) {
+		if (!m_st)
+			return;
 		Fail("loudnorm: ebur128_add_frames failed");
 		return;
 	}
@@ -353,7 +359,8 @@ void Loudnorm::Process(const Pipeline::Frame& frame) noexcept {
 }
 
 void Loudnorm::Eof() noexcept {
-	CloseMeter();
+	if (!m_ready)
+		CloseMeter();
 }
 
 class StormByte::Multimedia::Pipeline::Filter::Report Loudnorm::Report() const noexcept {

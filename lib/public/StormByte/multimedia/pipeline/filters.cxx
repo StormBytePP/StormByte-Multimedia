@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/pipeline/route.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
@@ -133,6 +134,12 @@ Filters::Handle& Filters::Handle::Add(std::shared_ptr<Filter::FFmpeg> filter) no
 		}
 	}
 
+	if (dynamic_cast<Filter::Analytics*>(filter.get())) {
+		m_owner->m_hasAnalytics = true;
+		if (m_owner->m_progress)
+			m_owner->m_progress->HasAnalytics(true);
+	}
+
 	m_owner->m_reports.push_back({filter, stretch.Scope});
 	stretch.Lane->Add(std::move(filter));
 	return *this;
@@ -171,13 +178,58 @@ Filters& Filters::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 		return *this;
 	}
 
+	m_hasAnalytics = true;
+	if (m_progress)
+		m_progress->HasAnalytics(true);
 	m_reports.push_back({filter, std::nullopt});
 	filter->Launch();
 	m_globals.push_back({std::move(filter), std::nullopt});
 	return *this;
 }
 
+void Filters::BindClock() noexcept {
+	if (m_progress)
+		return;
+	for (auto& stretch : m_stretches) {
+		if (!stretch.Origin)
+			continue;
+		if (auto* decoder = dynamic_cast<Decoder*>(stretch.Origin.get())) {
+			if (decoder->m_origin && decoder->m_origin->m_progress) {
+				m_progress = decoder->m_origin->m_progress;
+				break;
+			}
+		}
+		else if (auto* demuxer = dynamic_cast<Demuxer*>(stretch.Origin.get())) {
+			m_progress = demuxer->m_progress;
+			break;
+		}
+	}
+	if (m_progress && m_hasAnalytics)
+		m_progress->HasAnalytics(true);
+}
+
+void Filters::NoteAnalytics(std::int64_t ns) noexcept {
+	if (!m_progress)
+		return;
+	if (!m_progress->HasAnalytics())
+		m_progress->HasAnalytics(true);
+	m_progress->SetAnalyticsNs(ns);
+}
+
+void Filters::NoteMeasure(std::int64_t ns) noexcept {
+	if (m_progress)
+		m_progress->SetMeasureNs(ns);
+}
+
+void Filters::ClockAnalytics() noexcept {
+	if (!m_hasAnalytics || !m_progress)
+		return;
+	if (Idle())
+		m_progress->AnalyticsDone();
+}
+
 void Filters::Close() noexcept {
+	BindClock();
 	for (auto& stretch : m_stretches) {
 		if (!stretch.Lane || !stretch.Origin || !stretch.Destination)
 			continue;
@@ -188,6 +240,10 @@ void Filters::Close() noexcept {
 		}
 
 		stretch.Lane->Close();
+		for (auto& look : stretch.Lane->m_looks) {
+			if (look)
+				look->BindAnalytics(*this);
+		}
 	}
 
 	if (m_measureTracks.empty())
@@ -230,6 +286,16 @@ bool Filters::Measuring() const noexcept {
 	return m_measuring;
 }
 
+bool Filters::MeasureReadyToFinish() const noexcept {
+	if (!m_measuring)
+		return false;
+	if (m_measureDrained.size() < m_measureTracks.size())
+		return false;
+	if (m_measureFiltersDrained < m_measureFilterCount)
+		return false;
+	return true;
+}
+
 void Filters::CloseMeasureSource() noexcept {
 	for (auto& stretch : m_stretches) {
 		if (!stretch.Origin)
@@ -253,7 +319,10 @@ void Filters::OnMeasureDrained(int track) noexcept {
 	if (std::find(m_measureDrained.begin(), m_measureDrained.end(), track)
 			== m_measureDrained.end())
 		m_measureDrained.push_back(track);
-	MaybeFinishMeasure();
+	for (auto& item : m_reports) {
+		if (auto* two = dynamic_cast<Filter::ProcessTwoPasses*>(item.Filter.get()))
+			two->Wake().notify_all();
+	}
 }
 
 void Filters::OnMeasureFilterDrained() noexcept {

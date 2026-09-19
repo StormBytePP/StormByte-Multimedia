@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/name_thread.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/type.hxx>
 
@@ -118,16 +119,21 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 			}
 		}
 
+		const std::int64_t pos = m_owner.m_positionNs.load(std::memory_order_acquire);
+		if (pos >= 0)
+			m_owner.ClockPass(pos);
+
 		Log(Level::LowLevel, std::format("written t={} {}:{} pts={} dts={} pos={}",
 			track, packet->Serial().value_or(0), packet->Part(),
 			Ns(packet->Pts()), Ns(packet->Dts()),
-			m_owner.m_positionNs.load(std::memory_order_acquire)));
+			pos));
 	}
 
 	void Mux::Flush() noexcept {
 		if (m_owner.m_backend && !m_owner.Failed())
 			m_owner.m_backend->Flush(m_owner);
 		m_owner.m_closed.store(true, std::memory_order_release);
+		m_owner.ClockMuxDone();
 		Log(Level::Notice, "closed");
 	}
 }

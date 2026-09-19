@@ -414,9 +414,14 @@ void FFmpeg::Work(Pipeline::Item::PointerType item) noexcept {
 	}
 
 	if (m_current->Kind() == Pipeline::Kind::Frame) {
-		if (MeasuringTwoPass())
-			static_cast<ProcessTwoPasses*>(this)->Measure(
-				static_cast<const Pipeline::Frame&>(*m_current));
+		if (MeasuringTwoPass()) {
+			const auto& frame = static_cast<const Pipeline::Frame&>(*m_current);
+			static_cast<ProcessTwoPasses*>(this)->Measure(frame);
+			if (auto* two = static_cast<ProcessTwoPasses*>(this); two->m_measureOwner) {
+				if (const auto& pts = frame.Pts(); pts)
+					two->m_measureOwner->NoteMeasure(pts->Nanoseconds().count());
+			}
+		}
 		else
 			Process(static_cast<const Pipeline::Frame&>(*m_current));
 	}
@@ -473,6 +478,8 @@ void FFmpeg::Wait() noexcept {
 		if (!MeasuringTwoPass())
 			return false;
 		auto* two = static_cast<const ProcessTwoPasses*>(this);
+		if (two->m_measureOwner && two->m_measureOwner->MeasureReadyToFinish())
+			return true;
 		return two->m_measureClosed.load(std::memory_order_acquire)
 			&& !two->m_measureDrained.load(std::memory_order_acquire)
 			&& !m_pipe->Ready();
@@ -482,6 +489,8 @@ void FFmpeg::Wait() noexcept {
 		auto* two = static_cast<ProcessTwoPasses*>(this);
 		if (two->m_measureClosed.load(std::memory_order_acquire) && !pipe().Ready())
 			two->DrainMeasure();
+		if (two->m_measureOwner)
+			two->m_measureOwner->MaybeFinishMeasure();
 	}
 }
 

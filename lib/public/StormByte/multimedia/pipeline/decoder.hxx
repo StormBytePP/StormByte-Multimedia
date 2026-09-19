@@ -60,6 +60,7 @@
  */
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Decoder;
+	class Frame;
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
@@ -472,8 +473,19 @@ namespace StormByte::Multimedia::Pipeline {
 			 * Encode-look → @ref Producer::Encoder.
 			 * Remux-look → @ref Producer::Remuxer.
 			 * Source-look stays @ref Producer::Decoder.
+			 * Dest-look also reports pts to Filters for the
+			 * analytics axis.
 			 */
 			void StampLook(Frame& frame) noexcept;
+
+			/**
+			 * @brief Attaches the Filters facade that owns this dest look.
+			 * @param filters Tube facade.
+			 *
+			 * Friend: Filters::Close. Origin-mode decoders leave
+			 * this null. Leaves never call this.
+			 */
+			void BindAnalytics(Filters& filters) noexcept;
 
 			/**
 			 * @brief Wake Wait when measure origin is closed and In is empty.
@@ -494,6 +506,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Features m_require;										///< Extra required bits
 			Features m_capabilities;								///< Opened row bits
 			Demuxer* m_origin = nullptr;							///< Origin demuxer, origin mode
+			Filters* m_analytics = nullptr;							///< Dest-look clock; null on origin decode
 			std::unique_ptr<Backend::Pipeline::Decoder> m_backend;	///< Decode backend
 			std::optional<std::uint64_t> m_serial;					///< Last packet Serial
 			std::uint64_t m_part;									///< Part within Serial

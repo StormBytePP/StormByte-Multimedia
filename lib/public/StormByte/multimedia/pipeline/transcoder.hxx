@@ -47,6 +47,7 @@
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -214,8 +215,8 @@ namespace StormByte::Multimedia::Pipeline {
 	 * is required. Mix what you need:
 	 *
 	 * - Hooks only. Keep the stock Plan and override OnConfigure,
-	 *   OnStart, OnPlan, OnSettled, OnProgress, OnDone, OnError,
-	 *   OnAborted.
+	 *   OnStart, OnPlan, OnSettled, OnMeasureDone, OnAnalyticsDone,
+	 *   OnProgress, OnDone, OnError, OnAborted.
 	 * - A richer intention. Override EmptyPlan and return a type
 	 *   derived from Plan. Plan::Check is virtual on that type.
 	 * - A richer settled row. Override EmptySettled and return a
@@ -240,6 +241,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * Status::Done, @ref Reports returns the same snapshots a hand
 	 * tube reads with @ref Filter::Analytics::Report on the leaf
 	 * pointer. The Notice line from a leaf is log, not the API.
+	 *
+	 * @ref Progress forwards the Demuxer clock. The user may keep
+	 * that shared_ptr after the tube dies. There is no apply pass.
 	 *
 	 * Open applies @ref InstallLog after the most-derived
 	 * constructor. Stock InstallLog scopes this job at
@@ -656,10 +660,14 @@ namespace StormByte::Multimedia::Pipeline {
 			std::optional<std::string> Error() const noexcept;
 
 			/**
-			 * @brief Last published percent.
-			 * @return 0..100, or empty before the first tick.
+			 * @brief Shared tube clock. Forwards Demuxer::Progress().
+			 *
+			 * Empty before Run wires the Demuxer. The user may keep
+			 * the pointer after the job dies. No public setters.
+			 *
+			 * @return Const shared handle, or empty.
 			 */
-			std::optional<unsigned> Progress() const noexcept;
+			Progress::Pointer Progress() const noexcept;
 
 			/**
 			 * @brief Analytics snapshots after the job is Idle.
@@ -757,10 +765,23 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void OnSettled(const TrackSettled& track) noexcept;
 
 			/**
-			 * @brief Progress tick.
-			 * @param percent 0..100.
+			 * @brief Measure pass closed.
+			 *
+			 * Not called if this tube did not mount a measure pass.
 			 */
-			virtual void OnProgress(unsigned percent) noexcept;
+			virtual void OnMeasureDone() noexcept;
+
+			/**
+			 * @brief Analytics taps idle.
+			 *
+			 * Not called if this tube did not mount analytics.
+			 */
+			virtual void OnAnalyticsDone() noexcept;
+
+			/**
+			 * @brief Progress tick. Read @ref Progress.
+			 */
+			virtual void OnProgress() noexcept;
 
 			/**
 			 * @brief Successful flush.
@@ -811,12 +832,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @param encoder Encoder that just opened.
 			 */
 			void MarkSettled(int in, Encoder& encoder) noexcept;
-
-			/**
-			 * @brief Publishes percent to Progress() and OnProgress.
-			 * @param percent 0..100.
-			 */
-			void SetProgress(unsigned percent) noexcept;
 
 			/**
 			 * @brief Whether @p slot is a mapped track.
