@@ -58,7 +58,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	 *
 	 * Source pumper. Each Process is one Read. Empty Read is source
 	 * EoF: @ref Ended only when not measuring. A measure EoF parks
-	 * until Rewind/Apply. Flush is unused.
+	 * until Rewind. Flush is unused.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */

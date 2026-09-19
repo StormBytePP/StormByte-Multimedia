@@ -46,6 +46,7 @@
 #include <cstdint>
 #include <format>
 #include <limits>
+#include <map>
 #include <vector>
 
 extern "C" {
@@ -284,7 +285,7 @@ void Loudnorm::CloseMeter() noexcept {
 		m_limit ? 1 : 0, m_frames));
 }
 
-FFrame Loudnorm::Apply(const FFrame& src) const noexcept {
+FFrame Loudnorm::Gain(const FFrame& src) const noexcept {
 	FFrame out;
 	if (!out.AllocAudio(src.NbSamples(), src.Format(), src.ChannelLayout(), src.SampleRate())
 		|| !out.CopyProps(src))
@@ -342,12 +343,12 @@ void Loudnorm::Process(const Pipeline::Frame& frame) noexcept {
 		Log(Level::Warning, "loudnorm: frame has no audio");
 		return;
 	}
-	FFrame out = Apply(src);
+	FFrame out = Gain(src);
 	if (!out) {
 		Fail("loudnorm: AllocAudio failed");
 		return;
 	}
-	Log(Level::LowLevel, std::format("loudnorm apply pts={} gain={:.6f}", src.Pts(), m_gain));
+	Log(Level::LowLevel, std::format("loudnorm process pts={} gain={:.6f}", src.Pts(), m_gain));
 	Save(std::move(out));
 }
 

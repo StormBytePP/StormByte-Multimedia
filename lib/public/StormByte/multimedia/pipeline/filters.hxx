@@ -81,7 +81,9 @@ namespace StormByte::Multimedia::Pipeline {
 	 * drains on its worker, then @ref OnMeasureDrained. Each
 	 * ProcessTwoPasses leaf drains on its worker, then
 	 * @ref OnMeasureFilterDrained. @ref FinishMeasure runs only
-	 * when both sets are drained: LeaveMeasure, Rewind, Apply.
+	 * when both sets are drained: LeaveMeasure and Rewind. After
+	 * that the tube is ordinary Process, same as a job that
+	 * never measured.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -166,7 +168,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * on those leaves and Demuxer::Measure with their tracks.
 			 * Hoppers stay open. Demuxer measure EoF then
 			 * CloseMeasureSource; decode and two-pass workers drain;
-			 * FinishMeasure starts the apply read.
+			 * FinishMeasure Rewind s and Process continues.
 			 */
 			void Close() noexcept;
 
@@ -261,11 +263,12 @@ namespace StormByte::Multimedia::Pipeline {
 			void MaybeFinishMeasure() noexcept;
 
 			/**
-			 * @brief Ends the measure pass and starts the second read.
+			 * @brief Ends the measure pass.
 			 *
 			 * LeaveMeasure on each ProcessTwoPasses leaf (Eof then
-			 * Measured), Demuxer::Rewind and Demuxer::Apply.
-			 * Decoder reset already ran on the decode worker.
+			 * Measured) and Demuxer::Rewind. Process continues on
+			 * the same tube. Decoder reset already ran on the
+			 * decode worker.
 			 */
 			void FinishMeasure() noexcept;
 
@@ -281,7 +284,7 @@ namespace StormByte::Multimedia::Pipeline {
 			};
 
 			/**
-			 * @brief A mounted leaf and the track it applies to.
+			 * @brief A mounted leaf and the track it is bound to.
 			 */
 			struct Attached {
 				std::shared_ptr<Filter::FFmpeg> Filter;	///< Leaf

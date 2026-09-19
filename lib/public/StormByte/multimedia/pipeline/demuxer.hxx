@@ -113,18 +113,19 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref Measure before the first read. During that pass only the
 	 * listed tracks are emitted and hoppers stay open at EoF.
 	 * @ref ReachedEof then asks Filters to CloseMeasureSource.
-	 * Decode workers drain and Reset; Filters then LeaveMeasure,
-	 * Rewind and Apply. The same Demuxer instance reads the apply
-	 * pass. Transcoder is not involved.
+	 * Decode workers drain and Reset; Filters then LeaveMeasure
+	 * and Rewind. The same Demuxer instance continues with ordinary
+	 * Process (the same path as a job that never measured).
+	 * Transcoder is not involved.
 	 *
 	 * After measure EoF the demux worker @ref Wait s until
-	 * @ref Apply. That wake is @ref WakeNow (`!Measuring()`), not
-	 * hopper Ready.
+	 * @ref Rewind clears @ref Measuring. That wake is @ref WakeNow
+	 * (`!Measuring()`), not hopper Ready.
 	 *
-	 * Notice: origin path at Setup, eof once (apply pass). Debug: bind
-	 * to a decoder and Process min/max at source EoF. LowLevel unit
-	 * lines always; the shared logger throttles. Each Read+Emit is
-	 * timed by the Source pumper.
+	 * Notice: origin path at Setup, eof once (Process after measure,
+	 * or the only pass). Debug: bind to a decoder and Process min/max
+	 * at source EoF. LowLevel unit lines always; the shared logger
+	 * throttles. Each Read+Emit is timed by the Source pumper.
 	 *
 	 * Wrap assigns the next @ref Packet::Serial for that origin
 	 * track and Part zero. That id is pipe lineage, not an FFmpeg
@@ -203,10 +204,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether the last read hit EOF.
-			 * @return true at end of source of the apply pass.
+			 * @return true at end of source of the Process pass.
 			 *
-			 * Measure EoF does not stick. @ref FinishMeasure clears it
-			 * before Rewind.
+			 * Measure EoF does not stick. @ref Rewind clears it.
 			 */
 			bool Eof() const noexcept;
 
@@ -232,7 +232,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Marks end of source. Called by the backend on EOF.
 			 *
 			 * If @ref Measuring, asks Filters::CloseMeasureSource and
-			 * does not close hoppers. Apply-pass EoF is permanent.
+			 * does not close hoppers. Process-pass EoF is permanent.
 			 */
 			void ReachedEof() noexcept;
 
@@ -246,12 +246,12 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Whether @ref Measure is active.
-			 * @return true until @ref Apply.
+			 * @return true until @ref Rewind.
 			 */
 			bool Measuring() const noexcept;
 
 			/**
-			 * @brief Wake the measure-EoF Wait when @ref Apply has run.
+			 * @brief Wake the measure-EoF Wait when measure has ended.
 			 * @return true iff not @ref Measuring.
 			 *
 			 * Demux worker office. That Wait is not hopper Ready.
@@ -262,16 +262,10 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Seeks the origin to the start without closing hoppers.
 			 * @return false after Fail.
 			 *
+			 * Ends @ref Measure: later reads follow the bound Plan.
 			 * Friend: @ref Filters::FinishMeasure.
 			 */
 			bool Rewind() noexcept;
-
-			/**
-			 * @brief Leaves measure. Later reads follow the bound Plan.
-			 *
-			 * Friend: @ref Filters::FinishMeasure.
-			 */
-			void Apply() noexcept;
 
 			/**
 			 * @brief Origin snapshot owned by the bound Plan.
@@ -326,7 +320,7 @@ namespace StormByte::Multimedia::Pipeline {
 				std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
 
 			std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;	///< Format backend
-			bool m_eof;												///< End of apply-pass source
+			bool m_eof;												///< End of Process-pass source
 			std::mutex m_planMutex;									///< Guards Plan wait
 			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
 			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1

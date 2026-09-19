@@ -112,7 +112,8 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			 * @param owner Public decoder.
 			 * @return false if owner.Fail() was called.
 			 *
-			 * Same backend object. Used between Measure and Apply.
+			 * Same backend object. Used after Measure, before ordinary
+			 * Process continues on the same tube.
 			 */
 			virtual bool Reset(StormByte::Multimedia::Pipeline::Decoder& owner) noexcept = 0;
 

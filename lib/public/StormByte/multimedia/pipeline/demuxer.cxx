@@ -146,15 +146,11 @@ bool Demuxer::Rewind() noexcept {
 	m_eof = false;
 	m_positionNs.store(-1, std::memory_order_release);
 	m_nextSerial.clear();
-	m_planPresent.notify_all();
-	return true;
-}
-
-void Demuxer::Apply() noexcept {
 	m_measuring = false;
 	m_measureTracks.clear();
 	Wake().notify_all();
 	m_planPresent.notify_all();
+	return true;
 }
 
 const File& Demuxer::OriginFile() const noexcept {

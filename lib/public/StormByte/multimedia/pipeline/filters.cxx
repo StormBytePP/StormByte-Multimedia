@@ -296,7 +296,6 @@ void Filters::FinishMeasure() noexcept {
 		return;
 	if (!demuxer->Rewind())
 		return;
-	demuxer->Apply();
 	m_measuring = false;
 	m_measureDrained.clear();
 	m_measureFiltersDrained = 0;

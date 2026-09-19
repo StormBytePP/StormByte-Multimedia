@@ -67,12 +67,13 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	 * in the loudness sum; it still counts for TP.
 	 * Channels are never normalized independently.
 	 *
-	 * @par Apply
+	 * @par Process
 	 * Linear gain is always @c I_target − I_measured, same on every
 	 * channel. If that gain would push any channel over @p truePeak,
 	 * a linked ceiling at @p truePeak runs on the gained samples.
 	 * The program gain is not reduced. This is not FFmpeg Dynamic
-	 * (no LRA compressor).
+	 * (no LRA compressor). Same @ref Process as a one-pass leaf
+	 * after measure has closed.
 	 *
 	 * @par Defaults
 	 * - I = −23 LUFS (EBU R128)
@@ -125,7 +126,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			void Measure(const Pipeline::Frame& frame) noexcept override;
 
 			/**
-			 * @brief Second pass: program gain, linked TP ceiling, Save.
+			 * @brief Program gain, linked TP ceiling, Save.
 			 * @param frame Current audio unit.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
@@ -136,7 +137,7 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			void Eof() noexcept override;
 
 			/**
-			 * @brief Measured I/LRA, per-channel TP, targets and applied gain.
+			 * @brief Measured I/LRA, per-channel TP, targets and program gain.
 			 * @return Ok after a successful measure, else Failed.
 			 */
 			class Filter::Report Report() const noexcept override;
@@ -171,11 +172,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 			void CloseMeter() noexcept;
 
 			/**
-			 * @brief Applies @c m_gain and the linked TP ceiling.
+			 * @brief Scales @p src by @c m_gain and the linked TP ceiling.
 			 * @param src Source audio.
 			 * @return New frame, or empty on failure.
 			 */
-			StormByte::Multimedia::FFmpeg::AVFrame Apply(
+			StormByte::Multimedia::FFmpeg::AVFrame Gain(
 				const StormByte::Multimedia::FFmpeg::AVFrame& src) const noexcept;
 
 			double m_targetI;					///< Target integrated LUFS

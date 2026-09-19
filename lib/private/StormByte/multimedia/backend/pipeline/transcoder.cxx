@@ -80,7 +80,7 @@ namespace {
 		return nullptr;
 	}
 
-	void ApplyEncoder(StormByte::Multimedia::Pipeline::Encoder& encoder,
+	void ConfigureEncoder(StormByte::Multimedia::Pipeline::Encoder& encoder,
 		const StormByte::Multimedia::Pipeline::Config::Base& config) noexcept {
 		if (config.Implementation().Encoder)
 			encoder.Implementation(*config.Implementation().Encoder);
@@ -107,7 +107,7 @@ namespace {
 		}
 	}
 
-	void ApplyMuxTags(StormByte::Multimedia::Pipeline::Muxer& mux, int out,
+	void StampMuxTags(StormByte::Multimedia::Pipeline::Muxer& mux, int out,
 		const StormByte::Multimedia::Pipeline::Config::Base& config) noexcept {
 		if (config.Language())
 			mux.Language(out, *config.Language());
@@ -261,7 +261,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 		if (slot.Kind == StormByte::Multimedia::Type::Attachment)
 			continue;
 
-		ApplyMuxTags(*mux, muxIndex, *slot.Config);
+		StampMuxTags(*mux, muxIndex, *slot.Config);
 		const StormByte::Multimedia::Codec* codec = LeafCodec(slot.Config.get());
 		if (!codec) {
 			auto remux = std::make_shared<StormByte::Multimedia::Pipeline::Remuxer>(
@@ -285,7 +285,7 @@ void Transcoder::Run(StormByte::Multimedia::Pipeline::Transcoder& job, std::stop
 				tube, slot.In);
 			auto encoder = std::make_shared<StormByte::Multimedia::Pipeline::Encoder>(
 				tube, muxIndex, *codec);
-			ApplyEncoder(*encoder, *slot.Config);
+			ConfigureEncoder(*encoder, *slot.Config);
 			*demux >> *decoder;
 			*encoder >> *mux;
 			if (decoder->Failed() || encoder->Failed() || mux->Failed()) {
