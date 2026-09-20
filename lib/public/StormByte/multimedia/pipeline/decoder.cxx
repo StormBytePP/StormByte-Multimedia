@@ -38,6 +38,7 @@
 
 #include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVDecoder.hxx>
+#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/decoder.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
@@ -106,6 +107,14 @@ Decoder::~Decoder() noexcept = default;
 
 Decoder::operator bool() const noexcept {
 	return !Failed() && Ready() && m_backend && m_backend->IsOpen();
+}
+
+std::size_t Decoder::InputCeiling() const noexcept {
+	const auto* track = Backend::Pipeline::TrackByIn(Plan(), m_index);
+	if (!track)
+		return 0;
+	const Backend::Pipeline::Ceiling cap{Plan(), Producer::Decoder, *track};
+	return cap.Packets() != 0 ? cap.Packets() : cap.Frames();
 }
 
 void Decoder::Implementation(std::string name) noexcept {

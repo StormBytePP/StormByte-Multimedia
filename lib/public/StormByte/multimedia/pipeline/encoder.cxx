@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/encoder/video.hxx>
@@ -106,6 +107,17 @@ Encoder::operator bool() const noexcept {
 
 bool Encoder::Opened() const noexcept {
 	return !Failed() && m_backend && m_backend->IsOpen();
+}
+
+std::size_t Encoder::InputCeiling() const noexcept {
+	const auto* track = Backend::Pipeline::TrackByIn(Plan(), m_index);
+	if (!track && Plan() && m_index >= 0
+		&& static_cast<std::size_t>(m_index) < Plan()->Tracks().size())
+		track = &Plan()->Tracks()[static_cast<std::size_t>(m_index)];
+	if (!track)
+		return 0;
+	const Backend::Pipeline::Ceiling cap{Plan(), Producer::Encoder, *track};
+	return cap.Frames() != 0 ? cap.Frames() : cap.Packets();
 }
 
 std::optional<int> Encoder::AudioChannels() const noexcept {

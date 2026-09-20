@@ -39,7 +39,16 @@
 #pragma once
 
 #include <StormByte/multimedia/backend/pipeline/worker.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
+
+#include <atomic>
+#include <condition_variable>
+#include <cstddef>
+#include <deque>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
 
 namespace StormByte::Multimedia::Pipeline {
 	class Demuxer;
@@ -60,6 +69,10 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	 * EoF: @ref Ended only when not measuring. A measure EoF parks
 	 * until Rewind. Flush is unused.
 	 *
+	 * Read never Emits. A per-track feeder thread Pushes parked
+	 * packets (that call may block). Read waits only if that track's
+	 * park hits @ref ParkCeiling.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PRIVATE Demux final: public StormByte::Multimedia::Backend::Pipeline::Worker {
@@ -72,7 +85,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 
 			Demux(const Demux&) = delete;
 			Demux(Demux&&) noexcept = delete;
-			~Demux() noexcept override = default;
+			~Demux() noexcept override;
 			Demux& operator=(const Demux&) = delete;
 			Demux& operator=(Demux&&) noexcept = delete;
 
@@ -90,6 +103,36 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 		private:
 			void Flush() noexcept override;
 
+			/**
+			 * @brief Starts a feeder for @p track if missing.
+			 * @param track Origin stream index.
+			 */
+			void EnsureFeed(int track) noexcept;
+
+			/**
+			 * @brief Blocking Emit of parked packets for one track.
+			 * @param track Origin stream index.
+			 */
+			void FeedTrack(int track) noexcept;
+
+			/**
+			 * @brief Stops every feeder and joins.
+			 */
+			void StopFeed() noexcept;
+
+			/**
+			 * @brief Whether any park still holds a packet.
+			 * @return true if a feeder still has work.
+			 */
+			bool ParkPending() const noexcept;
+
+			static constexpr std::size_t ParkCeiling = 2048;	///< Per-track compressed park
+
 			StormByte::Multimedia::Pipeline::Demuxer& m_owner;	///< Public demuxer
+			std::unordered_map<int, std::deque<StormByte::Multimedia::Pipeline::Packet::PointerType>> m_park;
+			std::unordered_map<int, std::thread> m_feeds;		///< One Emit thread per track
+			mutable std::mutex m_parkMutex;					///< Guards @ref m_park
+			std::condition_variable m_parkCv;				///< Read / feeder rendezvous
+			std::atomic<bool> m_feedStop{false};			///< Feeder halt
 	};
 }

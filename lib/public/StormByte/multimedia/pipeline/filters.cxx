@@ -181,6 +181,19 @@ Filters& Filters::Add(std::shared_ptr<Filter::FFmpeg> filter) noexcept {
 	m_hasAnalytics = true;
 	if (m_progress)
 		m_progress->HasAnalytics(true);
+	for (const auto& stretch : m_stretches) {
+		std::shared_ptr<const Plan> plan;
+		if (stretch.Origin)
+			plan = stretch.Origin->Plan();
+		if (!plan && stretch.Destination)
+			plan = stretch.Destination->Plan();
+		if (!plan)
+			continue;
+		filter->m_plan = plan;
+		if (filter->m_origin < 0)
+			filter->m_origin = stretch.Track;
+		break;
+	}
 	m_reports.push_back({filter, std::nullopt});
 	filter->Launch();
 	m_globals.push_back({std::move(filter), std::nullopt});
@@ -233,6 +246,25 @@ void Filters::Close() noexcept {
 	for (auto& stretch : m_stretches) {
 		if (!stretch.Lane || !stretch.Origin || !stretch.Destination)
 			continue;
+		std::shared_ptr<const Plan> plan = stretch.Origin->Plan();
+		if (!plan)
+			plan = stretch.Destination->Plan();
+		if (plan) {
+			for (auto& item : m_reports) {
+				if (!item.Filter)
+					continue;
+				item.Filter->m_plan = plan;
+				if (item.Filter->m_origin < 0)
+					item.Filter->m_origin = stretch.Track;
+			}
+			for (auto& global : m_globals) {
+				if (!global.Filter)
+					continue;
+				global.Filter->m_plan = plan;
+				if (global.Filter->m_origin < 0)
+					global.Filter->m_origin = stretch.Track;
+			}
+		}
 		for (auto& global : m_globals) {
 			if (global.Filter && Matches(*global.Filter, *stretch.Origin,
 				stretch.Destination->m_name, stretch.Track))

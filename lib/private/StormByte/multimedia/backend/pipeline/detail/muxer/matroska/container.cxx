@@ -39,6 +39,9 @@
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/attachment.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/container.hxx>
 #include <StormByte/multimedia/container.hxx>
+#include <StormByte/multimedia/pipeline/config/audio.hxx>
+#include <StormByte/multimedia/pipeline/config/subtitle.hxx>
+#include <StormByte/multimedia/pipeline/config/video.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -68,13 +71,71 @@ extern "C" {
 	#include <libavutil/rational.h>
 }
 
-using StormByte::Multimedia::Type;
+namespace Config = StormByte::Multimedia::Pipeline::Config;
 namespace FFmpeg = StormByte::Multimedia::FFmpeg;
 
 namespace {
 	const FFmpeg::AVRational NanoTimeBase{1, 1000000000};
 	constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
 	constexpr std::int64_t InterleaveSlotUs = 40LL * 1000;
+
+	bool Encodes(const StormByte::Multimedia::Pipeline::Track& track) noexcept {
+		const auto* cfg = track.Config();
+		if (!cfg)
+			return false;
+		if (const auto* video = dynamic_cast<const Config::Video*>(cfg))
+			return video->Codec() != nullptr;
+		if (const auto* audio = dynamic_cast<const Config::Audio*>(cfg))
+			return audio->Codec() != nullptr;
+		if (const auto* sub = dynamic_cast<const Config::Subtitle*>(cfg))
+			return sub->Codec() != nullptr;
+		return false;
+	}
+
+	bool Muxable(StormByte::Multimedia::Type type) noexcept {
+		return type == StormByte::Multimedia::Type::Video
+			|| type == StormByte::Multimedia::Type::Audio
+			|| type == StormByte::Multimedia::Type::Subtitle;
+	}
+
+	// Plan-aware interleave window. Not Ceiling: hopper depth and mux
+	// reorder are different knobs. Video encode needs room for B-pyramid
+	// (~lookahead frames). Remux is cheap and must not be allowed to sit
+	// a minute ahead of that encode lane. Mixed jobs add a small extra
+	// so av_interleaved_write_frame can hold one remux burst without
+	// blocking the next video packet. Floor 250 ms, cap 2 s — never 60 s.
+	std::int64_t InterleaveDeltaUs(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
+		std::size_t remux = 0;
+		std::size_t encodeVideo = 0;
+		std::size_t encodeOther = 0;
+		const auto& plan = owner.Plan();
+		if (plan) {
+			for (const auto& held : plan->Tracks()) {
+				if (!held)
+					continue;
+				const auto& track = *held;
+				if (!Muxable(track.Type()))
+					continue;
+				if (!Encodes(track))
+					++remux;
+				else if (track.Type() == StormByte::Multimedia::Type::Video)
+					++encodeVideo;
+				else
+					++encodeOther;
+			}
+		}
+		std::int64_t us = 250000;
+		us += static_cast<std::int64_t>(encodeVideo) * 500000;
+		us += static_cast<std::int64_t>(remux) * 100000;
+		us += static_cast<std::int64_t>(encodeOther) * 80000;
+		if (encodeVideo != 0 && remux != 0)
+			us += 250000;
+		if (us < 250000)
+			us = 250000;
+		if (us > 2000000)
+			us = 2000000;
+		return us;
+	}
 
 	std::int64_t NsToTicks(std::int64_t ns, FFmpeg::AVRational time_base) noexcept {
 		if (time_base.num <= 0 || time_base.den <= 0)
@@ -465,24 +526,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 
 		av_dict_set(&m_ctx->metadata, "encoding_tool", WritingApp, 0);
 
-		bool hasAudio = false;
-		bool hasVideo = false;
-		for (unsigned i = 0; i < m_ctx->nb_streams; ++i) {
-			const auto* par = m_ctx->streams[i]->codecpar;
-			if (!par)
-				continue;
-			if (par->codec_type == AVMEDIA_TYPE_AUDIO)
-				hasAudio = true;
-			if (par->codec_type == AVMEDIA_TYPE_VIDEO)
-				hasVideo = true;
-		}
-
-		std::int64_t deltaUs = InterleaveSlotUs;
-		if (hasAudio && hasVideo)
-			deltaUs = 2 * InterleaveSlotUs;
+		std::int64_t deltaUs = InterleaveDeltaUs(owner);
 		const auto cap = owner.InputCeiling();
 		const auto depth = cap == 0 ? 1 : cap;
-		deltaUs *= static_cast<std::int64_t>(depth);
+		const std::int64_t byDepth = InterleaveSlotUs * static_cast<std::int64_t>(depth);
+		if (byDepth > deltaUs)
+			deltaUs = byDepth;
 
 		std::int64_t minPts = -1;
 		std::int64_t maxPts = -1;
@@ -500,9 +549,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (spanUs > deltaUs)
 				deltaUs = spanUs;
 		}
-		constexpr std::int64_t floorUs = 60LL * 1000 * 1000;
-		if (deltaUs < floorUs)
-			deltaUs = floorUs;
+		if (deltaUs > 2000000)
+			deltaUs = 2000000;
 		m_ctx->max_interleave_delta = deltaUs;
 
 		AVDictionary* opts = nullptr;
@@ -570,7 +618,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			raw->duration = (ticks == AV_NOPTS_VALUE || ticks < 0) ? 0 : ticks;
 		}
 
-		const bool isSub = packet.Type() == Type::Subtitle;
+		const bool isSub = packet.Type() == StormByte::Multimedia::Type::Subtitle;
 		if (isSub) {
 			if (raw->dts == AV_NOPTS_VALUE)
 				raw->dts = raw->pts;

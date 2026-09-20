@@ -38,99 +38,128 @@
 
 #pragma once
 
-#include <StormByte/multimedia/visibility.h>
+#include <StormByte/multimedia/pipeline/plan.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
+#include <StormByte/multimedia/pipeline/typedefs.hxx>
 
 #include <cstddef>
+#include <memory>
 
-#ifdef WINDOWS
-#	ifndef WIN32_LEAN_AND_MEAN
-#		define WIN32_LEAN_AND_MEAN
-#	endif
-#	include <windows.h>
-#elifdef MACOS
-#	include <mach/mach.h>
-#	include <sys/sysctl.h>
-#else
-#	include <fstream>
-#	include <string>
-#	include <unistd.h>
-#endif
-
+/**
+ * @namespace StormByte::Multimedia::Backend::Pipeline
+ * @brief Private tube machinery.
+ */
 namespace StormByte::Multimedia::Backend::Pipeline {
-	inline std::size_t AvailableRam() noexcept {
-#ifdef WINDOWS
-		MEMORYSTATUSEX st{};
-		st.dwLength = sizeof(st);
-		if (GlobalMemoryStatusEx(&st) != 0)
-			return static_cast<std::size_t>(st.ullAvailPhys);
-		return 0;
-#elifdef MACOS
-		mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-		vm_statistics64_data_t vm{};
-		if (host_statistics64(mach_host_self(), HOST_VM_INFO64,
-				reinterpret_cast<host_info64_t>(&vm), &count) == KERN_SUCCESS) {
-			const std::size_t page = static_cast<std::size_t>(vm_page_size);
-			return (static_cast<std::size_t>(vm.free_count)
-				+ static_cast<std::size_t>(vm.inactive_count)) * page;
+	/**
+	 * @brief Track of @p plan whose @ref Multimedia::Pipeline::Track::In equals @p origin.
+	 * @param plan Shared plan. May be empty.
+	 * @param origin Origin stream index.
+	 * @return Track, or `nullptr`.
+	 */
+	inline const Multimedia::Pipeline::Track* TrackByIn(
+		const std::shared_ptr<const Multimedia::Pipeline::Plan>& plan, int origin) noexcept {
+		if (!plan)
+			return nullptr;
+		for (const auto& held : plan->Tracks()) {
+			if (held && held->In() == origin)
+				return held.get();
 		}
-		std::size_t total = 0;
-		std::size_t len = sizeof(total);
-		const int mib[2] = { CTL_HW, HW_MEMSIZE };
-		if (sysctl(mib, 2, &total, &len, nullptr, 0) == 0)
-			return total / 2ull;
-		return 0;
-#else
-		std::ifstream mem("/proc/meminfo");
-		if (mem.is_open()) {
-			std::string key, unit;
-			std::size_t kb = 0;
-			while (mem >> key >> kb >> unit) {
-				if (key == "MemAvailable:")
-					return kb * 1024ull;
-			}
-		}
-		const long pages = ::sysconf(_SC_PHYS_PAGES);
-		const long page = ::sysconf(_SC_PAGE_SIZE);
-		if (pages > 0 && page > 0)
-			return static_cast<std::size_t>(pages) * static_cast<std::size_t>(page) / 2ull;
-		return 0;
-#endif
+		return nullptr;
 	}
 
 	/**
-	 * @brief Hopper cap from available RAM.
-	 * @param frames True = raw frames. False = packets.
-	 * @param bias Divider after the raw n. Encoder 2, filter 1.
-	 * @return Items. Never 0 (0 means unlimited at the call site).
+	 * @class Ceiling
+	 * @brief Hopper caps for one Step × one Plan track.
 	 *
-	 * budget = available/8, frame = 4K P010, 6 queues.
-	 * Frames clamped 2..32. Packets n*4 clamped 8..128.
+	 * Constructed at bind time. @ref Frames, @ref Packets and
+	 * @ref Park are fixed after the constructor. `0` means that
+	 * hopper does not exist on this instance; it is not an
+	 * unlimited cap.
+	 *
+	 * @p plan must be non-empty and contain at least one track.
+	 * An empty plan is a contract violation: the constructor
+	 * terminates the process.
+	 *
+	 * Weight is by @ref Multimedia::Pipeline::Producer and
+	 * @ref Multimedia::Pipeline::Track::Type (encode vs remux
+	 * via a non-null destination codec).
+	 *
+	 * Not a public API. Hidden with the rest of the backend.
+	 *
+	 * @ingroup multimedia_pipeline
 	 */
-	inline std::size_t SaneInputCeiling(bool frames, unsigned bias = 1) noexcept {
-		const std::size_t ram = AvailableRam();
-		if (ram == 0)
-			return frames ? 8u : 32u;
-		if (bias == 0)
-			bias = 1;
+	class Ceiling {
+		public:
+			/**
+			 * @brief Caps for @p producer on @p track of @p plan.
+			 * @param plan Shared job intention. Must not be empty.
+			 * @param producer Step that owns the hopper.
+			 * @param track Plan track bound to that hopper.
+			 *
+			 * Terminates if @p plan is empty or has no tracks.
+			 */
+			Ceiling(std::shared_ptr<const Multimedia::Pipeline::Plan> plan,
+				Multimedia::Pipeline::Producer producer,
+				const Multimedia::Pipeline::Track& track) noexcept;
 
-		const std::size_t budget = ram / 8ull;
-		const std::size_t bytes = 3840ull * 2160ull * 2ull;
-		std::size_t n = budget / (bytes * 6ull);
-		if (n < 2)
-			n = 2;
-		n /= bias;
-		if (n < 2)
-			n = 2;
-		if (frames) {
-			if (n > 32)
-				n = 32;
-			return n;
-		}
-		n *= 4ull;
-		if (n < 8)
-			n = 8;
-		if (n > 128)
-			n = 128;
-		return n;
-	}
+			/**
+			 * @brief Copy.
+			 * @param other Source.
+			 */
+			Ceiling(const Ceiling& other) noexcept = default;
+
+			/**
+			 * @brief Move.
+			 * @param other Source.
+			 */
+			Ceiling(Ceiling&& other) noexcept = default;
+
+			/**
+			 * @brief Copy assign.
+			 * @param other Source.
+			 * @return This.
+			 */
+			Ceiling& operator=(const Ceiling& other) noexcept = default;
+
+			/**
+			 * @brief Move assign.
+			 * @param other Source.
+			 * @return This.
+			 */
+			Ceiling& operator=(Ceiling&& other) noexcept = default;
+
+			/**
+			 * @brief Destructor.
+			 */
+			~Ceiling() noexcept = default;
+
+			/**
+			 * @brief Hardware thread count, at least `1`.
+			 * @return Cached `std::thread::hardware_concurrency()`.
+			 */
+			static unsigned MaxThreads() noexcept;
+
+			/**
+			 * @brief Raw-frame hopper cap.
+			 * @return Items, or `0` if this instance has no frame hopper.
+			 */
+			std::size_t Frames() const noexcept;
+
+			/**
+			 * @brief Packet hopper cap.
+			 * @return Items, or `0` if this instance has no packet hopper.
+			 */
+			std::size_t Packets() const noexcept;
+
+			/**
+			 * @brief Demux park cap.
+			 * @return Packets, or `0` if this instance is not a Demuxer park.
+			 */
+			std::size_t Park() const noexcept;
+
+		private:
+			std::size_t m_frames;	///< Frame hopper, or `0`
+			std::size_t m_packets;	///< Packet hopper, or `0`
+			std::size_t m_park;		///< Demux park, or `0`
+	};
 }

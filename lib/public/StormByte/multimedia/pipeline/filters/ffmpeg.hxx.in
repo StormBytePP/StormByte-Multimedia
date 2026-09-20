@@ -44,6 +44,7 @@
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/typedefs.hxx>
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/visibility.h>
@@ -412,6 +413,10 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			/**
 			 * @brief Ceiling of this filter's input hopper.
 			 * @return Max queued items. 0 means unbounded.
+			 *
+			 * Built from @ref Backend::Pipeline::Ceiling after
+			 * @ref Filters copies the job Plan onto the leaf.
+			 * An empty Plan is a contract violation.
 			 */
 			virtual std::size_t InputCeiling() const noexcept;
 
@@ -718,6 +723,8 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			std::deque<Pipeline::Item::PointerType> m_queue;		///< Thread-local Hold
 			std::uint8_t m_hold;									///< Ceiling; 0 = not Held
 			std::uint8_t m_heldFor;									///< Parked count
+			std::shared_ptr<const Pipeline::Plan> m_plan;			///< Job plan; Filters copies it
+			int m_origin;											///< Plan track In(); -1 until bound
 	};
 
 	/**

@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/remux.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
@@ -60,6 +61,14 @@ Remuxer::Remuxer(std::shared_ptr<StormByte::Logger::Log> log, int in) noexcept
 }
 
 Remuxer::~Remuxer() noexcept = default;
+
+std::size_t Remuxer::InputCeiling() const noexcept {
+	const auto* track = StormByte::Multimedia::Backend::Pipeline::TrackByIn(Plan(), m_index);
+	if (!track)
+		return 0;
+	const StormByte::Multimedia::Backend::Pipeline::Ceiling cap{Plan(), Producer::Remuxer, *track};
+	return cap.Packets();
+}
 
 void Remuxer::Emit(Packet::PointerType packet) noexcept {
 	Step::Emit(std::move(packet));

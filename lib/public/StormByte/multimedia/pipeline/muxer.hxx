@@ -260,11 +260,14 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Ceiling of the muxer input hopper.
-			 * @return Max queued packets. Never 0.
+			 *
+			 * Uses @ref Backend::Pipeline::Ceiling for the first muxable
+			 * Plan track. Aborts if there is no Plan: a muxer without a
+			 * Plan must not invent a hopper size.
+			 *
+			 * @return Max queued packets. Never 0 after a live Plan.
 			 */
-			std::size_t InputCeiling() const noexcept override {
-				return Ceiling;
-			}
+			std::size_t InputCeiling() const noexcept override;
 
 			/**
 			 * @name Stream tags
@@ -345,9 +348,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void ClockPass(std::int64_t ns) noexcept;
 
-			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			const Container* m_container;									///< Destination container
-			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
+			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;			///< Format backend
 			Demuxer* m_origin;												///< Set only by demuxer >> muxer. Not owned
 			std::shared_ptr<class Progress> m_progress;						///< Shared tube clock
 			std::map<int, std::string> m_language;							///< Per-output language

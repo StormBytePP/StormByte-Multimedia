@@ -149,11 +149,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Ceiling of the remuxer input hopper.
-			 * @return Max queued packets. Never 0.
+			 * @return Max queued packets, or `0` if this hopper does not exist.
 			 */
-			std::size_t InputCeiling() const noexcept override {
-				return Ceiling;
-			}
+			std::size_t InputCeiling() const noexcept override;
 
 		private:
 			/**
@@ -180,7 +178,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Emit(Packet::PointerType packet) noexcept;
 
-			static constexpr std::size_t Ceiling = 32;	///< Input hopper ceiling
 			int m_index;								///< Origin stream index
 			Join m_join{*this};							///< Halt before other members die
 	};

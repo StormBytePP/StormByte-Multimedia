@@ -46,6 +46,7 @@
 
 #include <format>
 #include <memory>
+#include <utility>
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	using StormByte::Multimedia::Pipeline::CheckResult;
@@ -57,6 +58,57 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	Demux::Demux(Demuxer& owner) noexcept
 	:	StormByte::Multimedia::Backend::Pipeline::Worker(owner.Face()),
 		m_owner(owner) {}
+
+	Demux::~Demux() noexcept {
+		StopFeed();
+	}
+
+	void Demux::StopFeed() noexcept {
+		m_feedStop.store(true, std::memory_order_release);
+		m_parkCv.notify_all();
+		for (auto& [track, th] : m_feeds) {
+			if (th.joinable())
+				th.join();
+		}
+		m_feeds.clear();
+	}
+
+	void Demux::EnsureFeed(int track) noexcept {
+		if (m_feeds.contains(track))
+			return;
+		m_feeds.emplace(track, std::thread([this, track]() { FeedTrack(track); }));
+	}
+
+	bool Demux::ParkPending() const noexcept {
+		for (const auto& [track, queue] : m_park) {
+			if (!queue.empty())
+				return true;
+		}
+		return false;
+	}
+
+	void Demux::FeedTrack(int track) noexcept {
+		NameThread(std::format("STMM:DmxF{}", track));
+		for (;;) {
+			Packet::PointerType packet;
+			{
+				std::unique_lock lock(m_parkMutex);
+				m_parkCv.wait(lock, [this, track]() {
+					return m_feedStop.load(std::memory_order_acquire)
+						|| !m_park[track].empty();
+				});
+				if (m_feedStop.load(std::memory_order_acquire) && m_park[track].empty())
+					return;
+				if (m_park[track].empty())
+					continue;
+				packet = std::move(m_park[track].front());
+				m_park[track].pop_front();
+			}
+			m_parkCv.notify_all();
+			if (packet)
+				Emit(std::move(packet));
+		}
+	}
 
 	void Demux::Setup() noexcept {
 		NameThread("STMM:Demuxer");
@@ -76,6 +128,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 		m_owner.m_eof = false;
 		m_owner.m_positionNs.store(-1, std::memory_order_release);
 		m_owner.m_nextSerial.clear();
+		m_feedStop.store(false, std::memory_order_release);
 		Log(Level::Notice, std::format("open {}", m_owner.OriginFile().Path().string()));
 	}
 
@@ -85,13 +138,17 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 			return;
 		}
 
-		if (Stopping())
+		if (Stopping()) {
+			StopFeed();
 			return;
+		}
 
 		const bool measure = m_owner.Measuring();
 		Packet::PointerType packet = m_owner.m_backend->Read(m_owner);
-		if (m_owner.Failed())
+		if (m_owner.Failed()) {
+			StopFeed();
 			return;
+		}
 		if (!packet) {
 			if (measure) {
 				if (!m_owner.Eof())
@@ -104,13 +161,33 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 				m_owner.ReachedEof();
 			if (!m_owner.Eof())
 				return;
+			{
+				std::unique_lock lock(m_parkMutex);
+				m_parkCv.wait(lock, [this]() {
+					return m_feedStop.load(std::memory_order_acquire) || !ParkPending();
+				});
+			}
+			StopFeed();
 			Ended();
 			return;
 		}
 
 		if (const auto& pts = packet->Pts(); pts)
 			m_owner.m_positionNs.store(pts->Nanoseconds().count(), std::memory_order_release);
-		Emit(std::move(packet));
+
+		const int track = packet->Track();
+		{
+			std::unique_lock lock(m_parkMutex);
+			EnsureFeed(track);
+			m_parkCv.wait(lock, [this, track]() {
+				return m_feedStop.load(std::memory_order_acquire)
+					|| m_park[track].size() < ParkCeiling;
+			});
+			if (m_feedStop.load(std::memory_order_acquire))
+				return;
+			m_park[track].push_back(std::move(packet));
+		}
+		m_parkCv.notify_all();
 	}
 
 	void Demux::Flush() noexcept {}

@@ -36,7 +36,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/filter.hxx>
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
@@ -207,11 +206,10 @@ const std::optional<std::string>& FFmpeg::Error() const noexcept {
 }
 
 std::size_t FFmpeg::InputCeiling() const noexcept {
-	using StormByte::Multimedia::Backend::Pipeline::SaneInputCeiling;
-	if (m_receives.Has(Kind::Frame))
-		return SaneInputCeiling(true, 1);
-	if (m_receives.Has(Kind::Packet))
-		return SaneInputCeiling(false, 1);
+	if (Media() == StormByte::Multimedia::Type::Video && m_receives.Has(Kind::Frame))
+		return 27;
+	if (m_receives.Has(Kind::Frame) || m_receives.Has(Kind::Packet))
+		return 32;
 	return 0;
 }
 

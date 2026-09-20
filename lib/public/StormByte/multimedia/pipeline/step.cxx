@@ -43,6 +43,7 @@
 #include <StormByte/multimedia/backend/pipeline/worker.hxx>
 #include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
 
 #include <format>
 #include <limits>
@@ -178,13 +179,13 @@ void Step::Stop() noexcept {
 }
 
 std::size_t Step::InputCeiling() const noexcept {
-	using StormByte::Multimedia::Backend::Pipeline::SaneInputCeiling;
-	if (m_name == Producer::Encoder && Receives().Has(Kind::Frame))
-		return SaneInputCeiling(true, 2);
-	if (Receives().Has(Kind::Frame))
-		return SaneInputCeiling(true, 1);
-	if (Receives().Has(Kind::Packet))
-		return SaneInputCeiling(false, 1);
+	if (!m_plan || m_plan->Tracks().empty())
+		return 0;
+	const Backend::Pipeline::Ceiling cap{m_plan, m_name, m_plan->Tracks()[0]};
+	if (Receives().Has(Kind::Frame) && cap.Frames() != 0)
+		return cap.Frames();
+	if (Receives().Has(Kind::Packet) && cap.Packets() != 0)
+		return cap.Packets();
 	return 0;
 }
 
@@ -299,6 +300,13 @@ Step& StormByte::Multimedia::Pipeline::operator>>(Step& from, Step& to) noexcept
 	if (!to.m_plan)
 		to.m_plan = from.m_plan;
 	from.pipe() >> to.pipe();
+	if (const std::size_t cap = to.InputCeiling(); cap > 0 && to.m_plan) {
+		const auto& tracks = to.m_plan->Tracks();
+		for (auto it = tracks.begin(); it != tracks.end(); ++it) {
+			if (*it)
+				to.pipe().Capacity((*it)->In(), cap);
+		}
+	}
 	from.Log(Level::Debug, "bound to " + std::string(ToString(to.m_name)));
 	return to;
 }

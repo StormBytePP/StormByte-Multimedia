@@ -176,11 +176,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Ceiling of the encoder input hopper.
-			 * @return Max queued frames. Never 0.
+			 * @return Max queued frames, or `0` if this hopper does not exist.
 			 */
-			std::size_t InputCeiling() const noexcept override {
-				return Ceiling;
-			}
+			std::size_t InputCeiling() const noexcept override;
 
 			/**
 			 * @brief Destination codec.
@@ -473,7 +471,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void Emit(Packet::PointerType packet) noexcept;
 
-			static constexpr std::size_t Ceiling = 64;							///< Input hopper ceiling
 			int m_index;														///< Mux destination order key
 			const Codec* m_codec;											///< Destination codec
 			std::string m_encoderTag;										///< ENCODER metadata

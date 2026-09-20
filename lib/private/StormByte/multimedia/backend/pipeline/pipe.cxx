@@ -37,10 +37,28 @@
  */
 
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
+#include <StormByte/multimedia/pipeline/packet.hxx>
 
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include <utility>
 
 using StormByte::Multimedia::Backend::Pipeline::Pipe;
+using StormByte::Multimedia::Pipeline::Packet;
+
+namespace {
+	std::optional<std::int64_t> FrontTs(const Pipe::Item::PointerType& item) noexcept {
+		auto packet = std::dynamic_pointer_cast<Packet>(item);
+		if (!packet)
+			return std::nullopt;
+		if (const auto& dts = packet->Dts(); dts)
+			return dts->Nanoseconds().count();
+		if (const auto& pts = packet->Pts(); pts)
+			return pts->Nanoseconds().count();
+		return std::nullopt;
+	}
+}
 
 Pipe::Pipe(std::condition_variable& wake) noexcept
 :	m_wake(&wake) {}
@@ -130,7 +148,30 @@ Pipe& Pipe::operator>>(Pipe& dest) noexcept {
 }
 
 Pipe& Pipe::operator>>(Item::PointerType& item) noexcept {
-	item = m_in.Pop();
+	const auto keys = m_in.Keys();
+	int chosen = 0;
+	bool found = false;
+	std::size_t best_size = 0;
+	std::int64_t best_ts = std::numeric_limits<std::int64_t>::max();
+
+	for (const int key : keys) {
+		const std::size_t n = m_in.Size(key);
+		if (n == 0)
+			continue;
+		const auto ts = FrontTs(m_in.Front(key));
+		const std::int64_t stamp = ts.value_or(std::numeric_limits<std::int64_t>::max());
+		if (!found
+			|| n > best_size
+			|| (n == best_size && stamp < best_ts)
+			|| (n == best_size && stamp == best_ts && key < chosen)) {
+			found = true;
+			chosen = key;
+			best_size = n;
+			best_ts = stamp;
+		}
+	}
+
+	item = found ? m_in.Pop(chosen) : m_in.Pop();
 	return *this;
 }
 

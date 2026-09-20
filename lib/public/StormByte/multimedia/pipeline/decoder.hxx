@@ -229,11 +229,9 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Ceiling of the decoder input hopper.
-			 * @return Max queued packets. Never 0.
+			 * @return Max queued packets, or `0` if this hopper does not exist.
 			 */
-			std::size_t InputCeiling() const noexcept override {
-				return Ceiling;
-			}
+			std::size_t InputCeiling() const noexcept override;
 
 			/**
 			 * @brief Flags.
@@ -497,7 +495,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void AfterWait() noexcept override;
 
-			static constexpr std::size_t Ceiling = 32;				///< Input hopper ceiling
 			int m_index;											///< Origin stream index
 			DecoderFlags m_flags;									///< Heuristic bits
 			std::optional<std::string> m_language;					///< Origin language tag

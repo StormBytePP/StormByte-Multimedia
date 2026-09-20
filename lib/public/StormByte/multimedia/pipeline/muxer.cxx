@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/ceiling.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/muxer/matroska/container.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/sink.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/mux.hxx>
@@ -48,12 +49,15 @@
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
+#include <StormByte/multimedia/pipeline/track.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <format>
 #include <mutex>
 #include <string_view>
@@ -168,6 +172,22 @@ bool Muxer::Ready() const noexcept {
 	return Step::Ready() && Armed();
 }
 
+std::size_t Muxer::InputCeiling() const noexcept {
+	if (!m_plan || m_plan->Tracks().empty())
+		std::abort();
+	for (const auto& held : m_plan->Tracks()) {
+		if (!held)
+			continue;
+		const Track& track = *held;
+		if (!Muxable(track.Type()))
+			continue;
+		const Backend::Pipeline::Ceiling cap{m_plan, Producer::Muxer, track};
+		const std::size_t n = cap.Packets();
+		return n > 0 ? n : 8;
+	}
+	std::abort();
+}
+
 std::optional<std::string> Muxer::Language(int output_index) const noexcept {
 	const auto it = m_language.find(output_index);
 	if (it == m_language.end() || it->second.empty())
@@ -230,6 +250,8 @@ void Muxer::ClockPass(std::int64_t ns) noexcept {
 Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = encoder.m_plan;
+	if (!encoder.m_plan)
+		encoder.m_plan = muxer.m_plan;
 	muxer.pipe().Listen();
 	if (muxer.Failed() || encoder.Failed())
 		return encoder;
@@ -252,6 +274,8 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = remuxer.m_plan;
+	if (!remuxer.m_plan)
+		remuxer.m_plan = muxer.m_plan;
 	muxer.pipe().Listen();
 	if (muxer.Failed() || remuxer.Failed())
 		return remuxer;
@@ -300,6 +324,8 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(const File& file, Muxer& muxe
 Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = demuxer.m_plan;
+	if (!demuxer.m_plan)
+		demuxer.m_plan = muxer.m_plan;
 	if (muxer.Failed())
 		return muxer;
 	if (!demuxer.Plan()) {

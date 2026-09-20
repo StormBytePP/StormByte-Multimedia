@@ -54,6 +54,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -348,8 +349,12 @@ std::optional<Encoder::Opened> Encoder::OpenCodec(StormByte::Multimedia::Pipelin
 		if (!blob.contains("wpp") && !fine.contains("wpp"))
 			blob.emplace("wpp", "1");
 		if (!blob.contains("pools") && !blob.contains("numa-pools")
-			&& !fine.contains("pools") && !fine.contains("numa-pools"))
-			blob.emplace("pools", "*");
+			&& !fine.contains("pools") && !fine.contains("numa-pools")) {
+			unsigned workers = std::thread::hardware_concurrency();
+			if (workers < 1)
+				workers = 1;
+			blob.emplace("pools", std::to_string(workers));
+		}
 	}
 
 	if (row && (std::string_view(row->name) == "libvpx" || std::string_view(row->name) == "libvpx-vp9")) {
