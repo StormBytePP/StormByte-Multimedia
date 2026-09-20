@@ -88,38 +88,21 @@ double Progress::All() const noexcept {
 		return m_all;
 	}
 
-	double sum = 0.0;
-	unsigned n = 0;
+	const double measure = !m_hasMeasure ? 0.0
+		: (m_measureDone ? 100.0 : Axis(m_measureNs, m_durationNs));
+	const double pass = m_muxDone ? 100.0 : Axis(m_passNs, m_durationNs);
+	const double analytics = !m_hasAnalytics ? 0.0
+		: (m_analyticsDone ? 100.0 : Axis(m_analyticsNs, m_durationNs));
 
-	if (m_hasMeasure) {
-		sum += m_measureDone ? 100.0 : Axis(m_measureNs, m_durationNs);
-		++n;
-	}
+	const double wMeasure = m_hasMeasure ? 0.05 : 0.0;
+	const double wAnalytics = m_hasAnalytics ? 0.10 : 0.0;
+	const double wPass = 1.0 - wMeasure - wAnalytics;
 
-	sum += m_muxDone ? 100.0 : Axis(m_passNs, m_durationNs);
-	++n;
-
-	if (m_hasAnalytics) {
-		sum += m_analyticsDone ? 100.0 : Axis(m_analyticsNs, m_durationNs);
-		++n;
-	}
-
-	double raw = n == 0 ? 0.0 : sum / static_cast<double>(n);
-
-	if (m_hasAnalytics && !m_analyticsDone) {
-		const double lag = Axis(m_analyticsNs, m_durationNs);
-		if (raw > lag)
-			raw = lag;
-	}
-
+	double raw = wMeasure * measure + wPass * pass + wAnalytics * analytics;
+	if (raw >= 100.0)
+		raw = 99.99;
 	if (raw < m_all)
 		raw = m_all;
-	if (m_hasAnalytics && !m_analyticsDone) {
-		const double lag = Axis(m_analyticsNs, m_durationNs);
-		if (raw > lag)
-			raw = lag;
-	}
-
 	m_all = raw;
 	return m_all;
 }

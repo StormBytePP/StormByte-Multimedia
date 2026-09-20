@@ -70,11 +70,13 @@ namespace StormByte::Multimedia::Pipeline {
 	 * (optional taps). Ordinary Process has no public name; its
 	 * score only enters @ref All.
 	 *
-	 * While measure is live, @ref All tracks measure. After
-	 * MeasureDone, All does not drop; mux and analytics add on
-	 * top. 100.00 only when the Muxer finished and every mounted
-	 * phase is closed. Measure pts come from frames that already
-	 * ran Measure, not from demux emission.
+	 * @ref All is a weighted sum of the mounted axes. Measure, when
+	 * present, is 5 percent. Analytics, when present, is 10 percent
+	 * and runs in parallel with Process. Process/mux takes the rest
+	 * (100, 95, 90 or 85 percent). Missing axes are not in the mix.
+	 * 100.00 only when the Muxer finished and every mounted phase
+	 * is closed. Measure pts come from frames that already ran
+	 * Measure, not from demux emission.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -164,10 +166,13 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Combined job percent.
 			 *
-			 * While measure is live this equals @ref Measure.
-			 * After that, mux and analytics continue from that
-			 * floor. 100 only when the Muxer finished and every
-			 * mounted phase is closed. Monotone.
+			 * Weighted sum of mounted axes: measure 5 percent if
+			 * the tube has a 2-pass leaf, analytics 10 percent if
+			 * dest-look taps exist, Process/mux the remainder.
+			 * Analytics stays in the sum while measure is live;
+			 * the status line only hides the analytics label then.
+			 * All is monotone and stays below 100 until the Muxer
+			 * finished and every mounted phase is closed.
 			 *
 			 * @return 0..100.
 			 */
@@ -177,7 +182,8 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief One CR-safe line: live axes plus @ref All.
 			 *
 			 * An axis is omitted when it was not mounted or already
-			 * finished. No newline.
+			 * finished. While measure is live the analytics label
+			 * is omitted even if taps exist. No newline.
 			 *
 			 * @return Single line, no trailing newline.
 			 */
