@@ -67,7 +67,8 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 *
 	 * Early frames may not leave @c buffersink (`EAGAIN`). @ref Process
 	 * then returns without @ref Filter::FFmpeg::Save. PTS comes from
-	 * the sink frame, not from the unit just pushed.
+	 * the sink frame, not from the unit just pushed. Drain remaining
+	 * frames in @ref Eof via @c AVFilterGraph::Flush.
 	 *
 	 * @par Defaults
 	 * Empty arguments use FFmpeg's: s=9, 0a/1a/2a=0.02, 0b/1b/2b=0.04.
@@ -123,6 +124,11 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 * @param frame Current pipeline unit. Non-video is ignored.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
+
+			/**
+			 * @brief Drains frames still held by the temporal window.
+			 */
+			void Eof() noexcept override;
 
 		private:
 			/**

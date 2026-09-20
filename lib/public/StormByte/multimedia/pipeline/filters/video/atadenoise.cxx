@@ -52,8 +52,10 @@ using FGraph = StormByte::Multimedia::FFmpeg::AVFilterGraph;
 
 Atadenoise::Atadenoise(std::shared_ptr<StormByte::Logger::Log> log,
 	std::optional<unsigned> frames,
-	std::optional<double> lumaA, std::optional<double> lumaB,
-	std::optional<double> chromaA, std::optional<double> chromaB) noexcept
+	std::optional<double> lumaA,
+	std::optional<double> lumaB,
+	std::optional<double> chromaA,
+	std::optional<double> chromaB) noexcept
 	: Filter::Process(std::move(log), "atadenoise"),
 	m_framesIn(frames), m_laIn(lumaA), m_lbIn(lumaB),
 	m_caIn(chromaA), m_cbIn(chromaB) {}
@@ -108,7 +110,7 @@ void Atadenoise::Process(const Pipeline::Frame& frame) noexcept {
 		Fail("atadenoise: AVFilterGraph::Filter failed");
 		return;
 	}
-	if (!out) {
+	if (out.Width() <= 0 || out.Height() <= 0 || out.Format() == FFrame::FormatNone()) {
 		Log(Level::LowLevel, std::format(
 			"atadenoise wait {}x{} pts={}",
 			src.Width(), src.Height(), src.Pts()));
@@ -119,4 +121,23 @@ void Atadenoise::Process(const Pipeline::Frame& frame) noexcept {
 		"atadenoise {}x{} pts={}",
 		out.Width(), out.Height(), out.Pts()));
 	Save(std::move(out));
+}
+
+void Atadenoise::Eof() noexcept {
+	if (!m_graph)
+		return;
+	for (;;) {
+		FFrame out;
+		if (!m_graph->Flush(out)) {
+			Fail("atadenoise: AVFilterGraph::Flush failed");
+			break;
+		}
+		if (out.Width() <= 0 || out.Height() <= 0 || out.Format() == FFrame::FormatNone())
+			break;
+		Log(Level::LowLevel, std::format(
+			"atadenoise flush {}x{} pts={}",
+			out.Width(), out.Height(), out.Pts()));
+		Save(std::move(out));
+	}
+	m_graph.reset();
 }
