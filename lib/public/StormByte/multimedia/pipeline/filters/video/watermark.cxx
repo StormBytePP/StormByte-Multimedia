@@ -47,8 +47,11 @@
 
 using namespace StormByte::Multimedia::Pipeline::Filter::Video;
 using FFrame = StormByte::Multimedia::FFmpeg::AVFrame;
+using Level = StormByte::Logger::Level;
 
 namespace {
+	constexpr int BarSlack = 16;
+
 	int SampleY8(const FFrame& src, int x, int y) noexcept {
 		if (!src.Data(0) || x < 0 || y < 0 || x >= src.Width() || y >= src.Height())
 			return 0;
@@ -198,6 +201,10 @@ namespace {
 		return (p.top > 4 && p.bottom > 4) || (p.left > 4 && p.right > 4);
 	}
 
+	bool NearBar(int found, int stored) noexcept {
+		return std::abs(found - stored) <= BarSlack;
+	}
+
 	std::pair<int, int> Place(int logoW, int logoH,
 		const std::optional<Anchor>& anchor,
 		const std::optional<StormByte::Multimedia::Property::Point>& point,
@@ -301,7 +308,7 @@ void Watermark::Clean() noexcept {
 }
 
 void Watermark::DisableLogo(std::string_view why) noexcept {
-	Log(StormByte::Logger::Level::Warning, std::format("disabled: {}", why));
+	Log(Level::Warning, std::format("disabled: {}", why));
 	m_opacity = 0;
 	m_bytes.clear();
 	m_rgba.clear();
@@ -416,11 +423,15 @@ const FFrame* Watermark::Luma(const FFrame& src) noexcept {
 }
 
 bool Watermark::ProbeBars(const FFrame& src) noexcept {
-	if (!Luma(src) || m_luma->Width() < 16 || m_luma->Height() < 16)
+	if (!Luma(src) || m_luma->Width() < 16 || m_luma->Height() < 16) {
+		Log(Level::Debug, std::format("probe skip luma={}x{}",
+			m_luma ? m_luma->Width() : 0, m_luma ? m_luma->Height() : 0));
 		return false;
+	}
 	FFrame& gray = *m_luma;
 
 	Probe found = Measure(gray);
+	const bool rawBoxed = Boxed(found);
 
 	if (!Boxed(found)) {
 		const int edge = std::min({
@@ -435,19 +446,34 @@ bool Watermark::ProbeBars(const FFrame& src) noexcept {
 		if (core > edge) {
 			ApplyLut(gray, StretchLut(edge, core));
 			found = Measure(gray);
+			Log(Level::Debug, std::format(
+				"probe stretch edge={} core={} found={},{};{},{}",
+				edge, core, found.top, found.bottom, found.left, found.right));
 		}
 	}
 
 	if (!Boxed(found)) {
 		ApplyLut(gray, GammaLut(0.45));
 		found = Measure(gray);
+		Log(Level::Debug, std::format("probe gamma found={},{};{},{}",
+			found.top, found.bottom, found.left, found.right));
 	}
 
-	if (!Boxed(found))
+	if (!Boxed(found)) {
+		Log(Level::Debug, std::format(
+			"probe unboxed raw={} found={},{};{},{} bars={},{};{},{} stable={}",
+			static_cast<int>(rawBoxed), found.top, found.bottom, found.left, found.right,
+			m_barTop, m_barBottom, m_barLeft, m_barRight, m_stable));
 		return false;
+	}
 
-	const bool same = found.top <= m_barTop && found.bottom <= m_barBottom
-		&& found.left <= m_barLeft && found.right <= m_barRight;
+	const bool seeded = m_barTop != 0 || m_barBottom != 0
+		|| m_barLeft != 0 || m_barRight != 0;
+	const bool same = seeded
+		&& NearBar(found.top, m_barTop)
+		&& NearBar(found.bottom, m_barBottom)
+		&& NearBar(found.left, m_barLeft)
+		&& NearBar(found.right, m_barRight);
 
 	if (found.top > 0 && found.bottom > 0) {
 		if (m_barTop == 0) {
@@ -475,6 +501,12 @@ bool Watermark::ProbeBars(const FFrame& src) noexcept {
 		++m_stable;
 	else
 		m_stable = 0;
+
+	Log(Level::Debug, std::format(
+		"probe same={} stable={} found={},{};{},{} bars={},{};{},{}",
+		static_cast<int>(same), m_stable,
+		found.top, found.bottom, found.left, found.right,
+		m_barTop, m_barBottom, m_barLeft, m_barRight));
 	return true;
 }
 
@@ -490,7 +522,13 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 		const bool usable = ProbeBars(src);
 		const bool boxed = (m_barTop > 4 && m_barBottom > 4)
 			|| (m_barLeft > 4 && m_barRight > 4);
+		Log(Level::Debug, std::format(
+			"hold usable={} boxed={} stable={} held={} bars={},{};{},{}",
+			static_cast<int>(usable), static_cast<int>(boxed), m_stable,
+			static_cast<unsigned>(HeldFor()),
+			m_barTop, m_barBottom, m_barLeft, m_barRight));
 		if (usable && boxed && m_stable >= 8) {
+			Log(Level::Debug, "stable release");
 			m_released = true;
 			Release();
 			return;
@@ -505,6 +543,9 @@ void Watermark::Process(const Pipeline::Frame&) noexcept {
 }
 
 void Watermark::LastChance(const Pipeline::Frame&) noexcept {
+	Log(Level::Debug, std::format(
+		"last-chance stable={} bars={},{};{},{}",
+		m_stable, m_barTop, m_barBottom, m_barLeft, m_barRight));
 	m_released = true;
 	Release();
 }
