@@ -51,7 +51,10 @@ FFmpeg::AVPacket::AVPacket() noexcept:
 AVPointer(av_packet_alloc()) {}
 
 FFmpeg::AVPacket::AVPacket(const AVPacket& other) noexcept:
-AVPointer(other.m_ptr ? av_packet_clone(other.m_ptr) : av_packet_alloc()) {}
+AVPointer(av_packet_alloc()) {
+	if (m_ptr && other.m_ptr)
+		av_packet_ref(m_ptr, other.m_ptr);
+}
 
 FFmpeg::AVPacket::~AVPacket() noexcept {
 	Free();
@@ -61,7 +64,9 @@ FFmpeg::AVPacket& FFmpeg::AVPacket::operator=(const AVPacket& other) noexcept {
 	if (this == &other)
 		return *this;
 	Free();
-	m_ptr = other.m_ptr ? av_packet_clone(other.m_ptr) : av_packet_alloc();
+	m_ptr = av_packet_alloc();
+	if (m_ptr && other.m_ptr)
+		av_packet_ref(m_ptr, other.m_ptr);
 	return *this;
 }
 

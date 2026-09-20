@@ -106,7 +106,10 @@ FFmpeg::AVFrame::AVFrame() noexcept:
 AVPointer(av_frame_alloc()) {}
 
 FFmpeg::AVFrame::AVFrame(const AVFrame& other) noexcept:
-AVPointer(other.m_ptr ? av_frame_clone(other.m_ptr) : av_frame_alloc()) {}
+AVPointer(av_frame_alloc()) {
+	if (m_ptr && other.m_ptr)
+		av_frame_ref(m_ptr, other.m_ptr);
+}
 
 FFmpeg::AVFrame::~AVFrame() noexcept {
 	Free();
@@ -116,7 +119,9 @@ FFmpeg::AVFrame& FFmpeg::AVFrame::operator=(const AVFrame& other) noexcept {
 	if (this == &other)
 		return *this;
 	Free();
-	m_ptr = other.m_ptr ? av_frame_clone(other.m_ptr) : av_frame_alloc();
+	m_ptr = av_frame_alloc();
+	if (m_ptr && other.m_ptr)
+		av_frame_ref(m_ptr, other.m_ptr);
 	return *this;
 }
 
@@ -291,14 +296,6 @@ bool FFmpeg::AVFrame::CopyProps(const AVFrame& other) noexcept {
 
 bool FFmpeg::AVFrame::GetBuffer(int align) noexcept {
 	return m_ptr && av_frame_get_buffer(m_ptr, align) >= 0;
-}
-
-bool FFmpeg::AVFrame::MakeWritable() noexcept {
-	return m_ptr && av_frame_make_writable(m_ptr) >= 0;
-}
-
-bool FFmpeg::AVFrame::Writable() const noexcept {
-	return m_ptr && av_frame_is_writable(m_ptr);
 }
 
 bool FFmpeg::AVFrame::AllocVideo(int width, int height, int format, int align) noexcept {

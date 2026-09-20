@@ -137,10 +137,13 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * (`StormByte/multimedia/ffmpeg/AVFrame.hxx`,
 	 * `StormByte/multimedia/ffmpeg/AVPacket.hxx`).
 	 * Those wrappers should expose everything a filter needs.
-	 * The getters on this class borrow the current unit;
-	 * @ref Save takes a wrapper by rvalue and replaces the
-	 * current unit. Do not free a resource that still belongs
-	 * to a wrapper or that @ref Save has already taken.
+	 * The getters on this class borrow the current unit.
+	 * Copy and @c Clone of a getter share plane / packet
+	 * buffers (`av_frame_ref` / `av_packet_ref`); they are not
+	 * a deep copy. @ref Save takes a distinct wrapper by
+	 * rvalue and replaces the current unit. Do not @ref Save
+	 * the getter's handle. Do not free a resource that still
+	 * belongs to a wrapper or that @ref Save has already taken.
 	 *
 	 * StormByte-Multimedia does not install or export libav /
 	 * libsw headers. Include those headers of the FFmpeg build
@@ -221,18 +224,28 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 	 * @par Mutation
 	 * Effect of a mutation is @ref Save. @ref Analytics deletes
 	 * @ref Save: an analytics leaf must not rewrite units.
-	 * @ref Save takes the incoming RAII wrapper by rvalue and
-	 * replaces the current unit's media. Serial, Part and timing
-	 * stay on the StormByte Frame / Packet. The filter does not
-	 * pass a geometry hint.
+	 * Paint a new @ref StormByte::Multimedia::FFmpeg::AVFrame
+	 * or @ref StormByte::Multimedia::FFmpeg::AVPacket (graph
+	 * output, @c AllocVideo / @c AllocAudio, or @c Copy plus
+	 * @c CopyProps). Then @ref Save that wrapper by rvalue.
+	 * Serial, Part and timing stay on the StormByte Frame /
+	 * Packet. The packed @c Payload FIFO is cleared. The filter
+	 * does not pass a geometry hint.
+	 *
+	 * The getters borrow the current unit. @ref Save of that
+	 * same raw handle is @ref Fail. Copy / @c Clone of a getter
+	 * shares buffers; writing those planes writes the look.
 	 *
 	 * On @ref ProcessTwoPasses during the measure pass @ref Save
 	 * is a no-op and the unit is not forwarded.
 	 *
 	 * Coupled extras that would lie after the new card (HDR10+
-	 * windows, audio downmix) may be dropped. That is not
-	 * @ref Fail. @ref Log writes @c Level::Warning with the
-	 * holder's reason.
+	 * windows, audio downmix) may be dropped or remapped by
+	 * @c Backend::Pipeline::Detail::Content::Video::Put. That is
+	 * not @ref Fail. @ref Log writes @c Level::Warning with the
+	 * holder's reason. HDR10 static metadata is not rebuilt
+	 * here; it rides on the incoming frame if @c CopyProps /
+	 * @c WriteHdr10 copied it.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -520,6 +533,9 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * free the resource: the wrapper owns it. Prefer methods
 			 * on the RAII type. If one is missing, the C API of the
 			 * linked FFmpeg build is an escape only — open an issue.
+			 *
+			 * This is not the argument of @ref Save. Copy and @c Clone
+			 * share plane buffers with the current unit.
 			 */
 			const StormByte::Multimedia::FFmpeg::AVFrame& AVFrame() const noexcept;
 
@@ -533,17 +549,25 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 			 * free the resource: the wrapper owns it. Prefer methods
 			 * on the RAII type. If one is missing, the C API of the
 			 * linked FFmpeg build is an escape only — open an issue.
+			 *
+			 * This is not the argument of @ref Save. Copy and @c Clone
+			 * share compressed buffers with the current unit.
 			 */
 			const StormByte::Multimedia::FFmpeg::AVPacket& AVPacket() const noexcept;
 
 			/**
 			 * @brief Replaces the media of the current frame.
-			 * @param incoming RAII frame taken by rvalue.
+			 * @param incoming Distinct RAII frame taken by rvalue.
 			 *
 			 * Serial, Part and timing stay on the StormByte Frame.
-			 * The filter does not pass a geometry hint. Coupled extras
-			 * that would lie after the new card may be dropped; that
-			 * is not @ref Fail. @ref Log writes @c Level::Warning with
+			 * Clears the packed Payload FIFO. The filter does not
+			 * pass a geometry hint. @p incoming must not be the
+			 * getter's handle; that is @ref Fail. An empty wrapper
+			 * is a Warning and a return.
+			 *
+			 * Coupled extras that would lie after the new card may
+			 * be dropped or remapped by Video::Put; that is not
+			 * @ref Fail. @ref Log writes @c Level::Warning with
 			 * the holder's reason.
 			 *
 			 * On @ref ProcessTwoPasses during the measure pass this
@@ -553,7 +577,11 @@ namespace StormByte::Multimedia::Pipeline::Filter {
 
 			/**
 			 * @brief Replaces the media of the current packet.
-			 * @param incoming RAII packet taken by rvalue.
+			 * @param incoming Distinct RAII packet taken by rvalue.
+			 *
+			 * Clears the packed Payload FIFO. @p incoming must not
+			 * be the getter's handle; that is @ref Fail. An empty
+			 * wrapper is a Warning and a return.
 			 *
 			 * On @ref ProcessTwoPasses during the measure pass this
 			 * is a no-op and the unit is not forwarded.

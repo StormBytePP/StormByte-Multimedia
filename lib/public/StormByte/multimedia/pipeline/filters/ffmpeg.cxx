@@ -342,8 +342,18 @@ void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVFrame&& incoming) noexcept {
 	auto frame = std::dynamic_pointer_cast<Pipeline::Frame>(m_current);
 	if (!frame)
 		return;
+	if (!incoming) {
+		Log(Level::Warning, "Save of empty frame");
+		return;
+	}
+	if (frame->m_backend && frame->m_backend->Handle().Get()
+		&& incoming.Get() == frame->m_backend->Handle().Get()) {
+		Fail("Save of the current frame; paint a new AVFrame");
+		return;
+	}
 	if (!frame->m_backend)
 		frame->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Frame>();
+	frame->m_payload = StormByte::Buffer::FIFO{};
 	frame->m_backend->Put(*frame, incoming.Detach());
 	if (!frame->m_backend->Warning().empty())
 		Log(Level::Warning, frame->m_backend->Warning());
@@ -360,8 +370,18 @@ void FFmpeg::Save(StormByte::Multimedia::FFmpeg::AVPacket&& incoming) noexcept {
 	auto packet = std::dynamic_pointer_cast<Pipeline::Packet>(m_current);
 	if (!packet)
 		return;
+	if (!incoming) {
+		Log(Level::Warning, "Save of empty packet");
+		return;
+	}
+	if (packet->m_backend && packet->m_backend->Handle().Get()
+		&& incoming.Get() == packet->m_backend->Handle().Get()) {
+		Fail("Save of the current packet; emit a new AVPacket");
+		return;
+	}
 	if (!packet->m_backend)
 		packet->m_backend = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
+	packet->m_payload = StormByte::Buffer::FIFO{};
 	packet->m_backend->Handle().Reset(incoming.Detach());
 	packet->m_backend->BindProperties(*packet);
 	Log(Level::LowLevel, std::format("save packet t={} {}:{}",

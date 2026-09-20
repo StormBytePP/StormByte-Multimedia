@@ -68,6 +68,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * analytics filters, and @ref Encoder, see — pixels or samples,
 	 * timestamps and the stream tags the decoder copied across.
 	 *
+	 * Copy and @ref Clone reference libav plane buffers
+	 * (`av_frame_ref`). They are not a deep copy of planes.
+	 * @ref Filter::FFmpeg::Save emits a new frame when a filter
+	 * paints.
+	 *
 	 * @see Item
 	 * @see Packet
 	 *
@@ -125,12 +130,23 @@ namespace StormByte::Multimedia::Pipeline {
 				std::uint64_t part) noexcept;
 
 			/**
+			 * @brief Copy. Metadata and FIFO handle are copied; the
+			 *        libav frame is referenced (`av_frame_ref`).
+			 * @param other Source frame.
+			 *
+			 * Not a deep copy of planes. @ref Clone uses this
+			 * constructor. @ref Filter::FFmpeg::Save still emits a
+			 * new frame when a filter paints.
+			 */
+			Frame(const Frame& other) noexcept;
+
+			/**
 			 * @brief Move constructor.
 			 * @param other Frame to take.
 			 *
 			 * Container-safe: @p other becomes the empty sentinel
 			 * (@ref Item::Type Unknown, track -1, no backend). @c ~Frame
-			 * on a moved-from object is a no-op. Copy stays private.
+			 * on a moved-from object is a no-op.
 			 */
 			Frame(Frame&& other) noexcept;
 
@@ -138,6 +154,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Destructor.
 			 */
 			~Frame() noexcept override;
+
+			/**
+			 * @brief Copy assignment. Same as the copy constructor.
+			 * @param other Source frame.
+			 * @return *this.
+			 */
+			Frame& operator=(const Frame& other) noexcept;
 
 			/**
 			 * @brief Move assignment.
@@ -301,36 +324,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
-			 * @name Construction
-			 * @{
-			 */
-
-			/**
-			 * @brief Deep copy (metadata, FIFO and cloned @c AVFrame).
-			 * @param other Source frame.
-			 *
-			 * Private on purpose: a public copy of a decoded unit
-			 * would silently duplicate every plane. Only
-			 * @ref Filter::FFmpeg and the codec friends may clone.
-			 * There is no public @c Clone().
-			 */
-			Frame(const Frame& other) noexcept;
-
-			/**
-			 * @brief Deep copy assignment (metadata, FIFO and cloned @c AVFrame).
-			 * @param other Source frame.
-			 * @return *this.
-			 *
-			 * Same restriction as the copy constructor: private so the
-			 * expensive clone cannot be invoked from pipeline user code.
-			 */
-			Frame& operator=(const Frame& other) noexcept;
-
-			/**
-			 * @}
-			 */
-
-			/**
 			 * @brief Adopts a backend frame for lazy @ref Payload().
 			 * @param backend Backend holder.
 			 */
@@ -345,10 +338,11 @@ namespace StormByte::Multimedia::Pipeline {
 			void BecomeEmpty() noexcept;
 
 			/**
-			 * @brief Deep copy for @ref Step::Emit (analytics tap).
-			 * @return New unit; Serial, Part, timing and backend are copied.
+			 * @brief Fork for hopper taps (`Clonable::Clone`).
+			 * @return New unit sharing libav plane buffers (`av_frame_ref`).
 			 *
-			 * Not a public API. Uses the private copy constructor.
+			 * Not a public API. Uses the copy constructor. Not a
+			 * deep copy of planes.
 			 */
 			Item::PointerType Clone() const override;
 
@@ -356,7 +350,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Moves this unit into a new owning pointer.
 			 * @return Pointer to the relocated unit; *this becomes the empty sentinel.
 			 *
-			 * Not a public API. Uses the private move constructor.
+			 * Not a public API. Uses the move constructor.
 			 * @ref Step::Emit does not call this.
 			 */
 			Item::PointerType Move() override;

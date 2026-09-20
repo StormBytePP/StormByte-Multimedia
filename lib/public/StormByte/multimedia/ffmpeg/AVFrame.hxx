@@ -89,8 +89,9 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @brief RAII owner of a libav AVFrame.
 	 *
 	 * Filter authors: clone, scale, planes, props, side data,
-	 * still-image decode. Do not call av_*. @c Get() and
-	 * @c Detach() are not public.
+	 * still-image decode. Do not call av_*. Copy and @ref Clone
+	 * share plane buffers (`av_frame_ref`); they are not a deep
+	 * copy of planes. @c Get() and @c Detach() are not public.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -109,6 +110,14 @@ namespace StormByte::Multimedia::FFmpeg {
 			AVFrame() noexcept;
 
 			/**
+			 * @brief Copy. New struct; plane buffers are referenced (`av_frame_ref`).
+			 * @param other Source frame.
+			 *
+			 * Not a deep copy of planes.
+			 */
+			AVFrame(const AVFrame& other) noexcept;
+
+			/**
 			 * @brief Move constructor. Transfers the libav pointer.
 			 * @param other Source frame; left empty.
 			 */
@@ -118,6 +127,13 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @brief Destructor. Unreferences buffers and frees the struct.
 			 */
 			~AVFrame() noexcept override;
+
+			/**
+			 * @brief Copy assignment. Same as the copy constructor.
+			 * @param other Source frame.
+			 * @return *this.
+			 */
+			AVFrame& operator=(const AVFrame& other) noexcept;
 
 			/**
 			 * @brief Move assignment. Frees *this, then takes @p other.
@@ -133,8 +149,10 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief Independent clone (`av_frame_clone`).
-			 * @return New frame with copied buffers, or empty on failure.
+			 * @brief New frame referencing the same planes (`av_frame_ref`).
+			 * @return Referenced frame.
+			 *
+			 * Same as the copy constructor. Not a deep copy of planes.
 			 */
 			AVFrame Clone() const noexcept;
 
@@ -165,18 +183,6 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @return false on failure.
 			 */
 			bool GetBuffer(int align = 0) noexcept;
-
-			/**
-			 * @brief Ensures unique buffers (`av_frame_make_writable`).
-			 * @return false on failure.
-			 */
-			bool MakeWritable() noexcept;
-
-			/**
-			 * @brief Whether plane buffers are uniquely owned.
-			 * @return true if a write will not alias another frame.
-			 */
-			bool Writable() const noexcept;
 
 			/**
 			 * @brief Sets video geometry and format, then allocates planes.
@@ -717,20 +723,7 @@ namespace StormByte::Multimedia::FFmpeg {
 
 		private:
 			/**
-			 * @brief Deep copy via av_frame_clone.
-			 * @param other Source frame.
-			 */
-			AVFrame(const AVFrame& other) noexcept;
-
-			/**
-			 * @brief Deep copy assignment via av_frame_clone.
-			 * @param other Source frame.
-			 * @return *this.
-			 */
-			AVFrame& operator=(const AVFrame& other) noexcept;
-
-			/**
-			 * @brief Frees the frame (av_frame_free).
+			 * @brief Frees the frame (`av_frame_free`).
 			 */
 			void Free() noexcept override;
 

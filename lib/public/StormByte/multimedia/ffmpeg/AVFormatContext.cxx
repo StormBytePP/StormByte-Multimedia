@@ -83,15 +83,19 @@ namespace {
 	}
 
 	void PromotePacket(const FFmpeg::AVPacket& pkt, ::AVCodecParameters* par) noexcept {
-		size_t size = 0;
-		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &size))
-			AddParSideData(par, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, data, size);
-		size = 0;
-		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &size))
-			AddParSideData(par, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, data, size);
-		size = 0;
-		if (const uint8_t* data = av_packet_get_side_data(pkt.Get(), AV_PKT_DATA_DYNAMIC_HDR10_PLUS, &size))
-			AddParSideData(par, AV_PKT_DATA_DYNAMIC_HDR10_PLUS, data, size);
+		const int n = pkt.SideDataCount();
+		for (int i = 0; i < n; ++i) {
+			int size = 0;
+			const std::uint8_t* data = pkt.SideData(i, size);
+			if (!data || size <= 0)
+				continue;
+			const int type = pkt.SideDataType(i);
+			if (type == AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+				|| type == AV_PKT_DATA_CONTENT_LIGHT_LEVEL
+				|| type == AV_PKT_DATA_DYNAMIC_HDR10_PLUS)
+				AddParSideData(par, static_cast<AVPacketSideDataType>(type),
+					data, static_cast<std::size_t>(size));
+		}
 	}
 
 	void PromoteFrame(const FFmpeg::AVFrame& frame, ::AVCodecParameters* par) noexcept {

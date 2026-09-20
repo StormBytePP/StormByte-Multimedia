@@ -73,6 +73,11 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @class AVPacket
 	 * @brief RAII owner of a libav AVPacket.
 	 *
+	 * Copy and @ref Ref share compressed buffers (`av_packet_ref`).
+	 * They are not a deep copy of payload. Each wrapper still owns
+	 * its own @c AVPacket struct. @c Get() and @c Detach() are not
+	 * public.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVPacket: public AVPointer<::AVPacket> {
@@ -89,6 +94,14 @@ namespace StormByte::Multimedia::FFmpeg {
 			AVPacket() noexcept;
 
 			/**
+			 * @brief Copy. New struct; payload buffers are referenced (`av_packet_ref`).
+			 * @param other Source packet.
+			 *
+			 * Not a deep copy of compressed bytes.
+			 */
+			AVPacket(const AVPacket& other) noexcept;
+
+			/**
 			 * @brief Move constructor. Transfers the libav pointer.
 			 * @param other Source packet; left empty.
 			 */
@@ -100,6 +113,13 @@ namespace StormByte::Multimedia::FFmpeg {
 			~AVPacket() noexcept override;
 
 			/**
+			 * @brief Copy assignment. Same as the copy constructor.
+			 * @param other Source packet.
+			 * @return *this.
+			 */
+			AVPacket& operator=(const AVPacket& other) noexcept;
+
+			/**
 			 * @brief Move assignment. Frees *this, then takes @p other.
 			 * @param other Source packet; left empty.
 			 * @return *this.
@@ -107,13 +127,15 @@ namespace StormByte::Multimedia::FFmpeg {
 			AVPacket& operator=(AVPacket&& other) noexcept = default;
 
 			/**
-			 * @brief New packet referencing the same data (av_packet_ref).
+			 * @brief New packet referencing the same data (`av_packet_ref`).
 			 * @return Referenced packet.
+			 *
+			 * Same as the copy constructor.
 			 */
 			FFmpeg::AVPacket Ref() const noexcept;
 
 			/**
-			 * @brief Unreferences packet data (av_packet_unref).
+			 * @brief Unreferences packet data (`av_packet_unref`).
 			 */
 			void Unref() noexcept;
 
@@ -210,8 +232,6 @@ namespace StormByte::Multimedia::FFmpeg {
 			 */
 			void Reset(::AVPacket* raw) noexcept;
 
-			using AVPointer<::AVPacket>::Get;
-
 		private:
 			/**
 			 * @brief Yields the raw pointer and leaves this wrapper empty.
@@ -220,22 +240,12 @@ namespace StormByte::Multimedia::FFmpeg {
 			::AVPacket* Detach() noexcept;
 
 			/**
-			 * @brief Deep copy via av_packet_clone.
-			 * @param other Source packet.
-			 */
-			AVPacket(const AVPacket& other) noexcept;
-
-			/**
-			 * @brief Deep copy assignment via av_packet_clone.
-			 * @param other Source packet.
-			 * @return *this.
-			 */
-			AVPacket& operator=(const AVPacket& other) noexcept;
-
-			/**
-			 * @brief Frees the packet (av_packet_free).
+			 * @brief Frees the packet (`av_packet_free`).
 			 */
 			void Free() noexcept override;
+
+			using AVPointer<::AVPacket>::Get;
+			using AVPointer<::AVPacket>::Detach;
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PUBLIC AVPointer<::AVPacket>;

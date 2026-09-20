@@ -54,7 +54,7 @@
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Frame;	///< Decoded-AU holder behind @ref StormByte::Multimedia::Pipeline::Frame.
 	class Packet;	///< Compressed-AU holder behind @ref StormByte::Multimedia::Pipeline::Packet.
-	class Pipe;		///< In / out hoppers; CloneTo clones through Item::Clone.
+	class Pipe;		///< In / out hoppers; CloneTo forks through Item::Clone.
 }
 
 /**
@@ -86,6 +86,11 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @class Item
 	 * @brief Facade shared by Frame and Packet.
 	 *
+	 * @ref Clone (via @c Clonable) returns a new @c shared_ptr and
+	 * references libav media buffers (`av_frame_ref` /
+	 * `av_packet_ref`). It is not a deep copy of planes or packet
+	 * payload. @ref Move relocates the unit.
+	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Item: protected Clonable<Item, std::shared_ptr<Item>> {
@@ -103,7 +108,7 @@ namespace StormByte::Multimedia::Pipeline {
 
 		public:
 			using StormByte::Clonable<Item, std::shared_ptr<Item>>::PointerType;
-			
+
 			/**
 			 * @name Lifecycle
 			 * @{
@@ -166,7 +171,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Copy constructor.
+			 * @brief Copy constructor. Identity fields only; media lives on Frame / Packet.
 			 * @param other Source item.
 			 */
 			Item(const Item& other) noexcept = default;
@@ -178,7 +183,7 @@ namespace StormByte::Multimedia::Pipeline {
 			Item(Item&& other) noexcept = default;
 
 			/**
-			 * @brief Copy assignment.
+			 * @brief Copy assignment. Identity fields only; media lives on Frame / Packet.
 			 * @param other Source item.
 			 * @return *this.
 			 */

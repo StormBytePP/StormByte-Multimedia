@@ -68,6 +68,10 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @ref StormByte::Multimedia::Codec of that AU. The Packet does
 	 * not open a codec.
 	 *
+	 * Copy and @ref Clone reference libav packet buffers
+	 * (`av_packet_ref`). They are not a deep copy of compressed
+	 * bytes.
+	 *
 	 * @see Item
 	 * @see Frame
 	 *
@@ -124,6 +128,16 @@ namespace StormByte::Multimedia::Pipeline {
 				std::uint64_t part) noexcept;
 
 			/**
+			 * @brief Copy. Metadata and FIFO handle are copied; the
+			 *        libav packet is referenced (`av_packet_ref`).
+			 * @param other Source packet.
+			 *
+			 * Not a deep copy of compressed bytes. @ref Clone uses
+			 * this constructor.
+			 */
+			Packet(const Packet& other) noexcept;
+
+			/**
 			 * @brief Move constructor.
 			 * @param other Packet to take.
 			 *
@@ -135,6 +149,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Destructor.
 			 */
 			~Packet() noexcept override;
+
+			/**
+			 * @brief Copy assignment. Same as the copy constructor.
+			 * @param other Source packet.
+			 * @return *this.
+			 */
+			Packet& operator=(const Packet& other) noexcept;
 
 			/**
 			 * @brief Move assignment.
@@ -282,31 +303,6 @@ namespace StormByte::Multimedia::Pipeline {
 
 		private:
 			/**
-			 * @name Construction
-			 * @{
-			 */
-
-			/**
-			 * @brief Deep copy (metadata, FIFO and cloned @c AVPacket).
-			 * @param other Source packet.
-			 *
-			 * Private: a public copy would duplicate the compressed AU.
-			 * Only @ref Filter::FFmpeg and the producing steps may clone.
-			 */
-			Packet(const Packet& other) noexcept;
-
-			/**
-			 * @brief Deep copy assignment.
-			 * @param other Source packet.
-			 * @return *this.
-			 */
-			Packet& operator=(const Packet& other) noexcept;
-
-			/**
-			 * @}
-			 */
-
-			/**
 			 * @brief Adopts a backend packet.
 			 * @param backend Backend holder.
 			 */
@@ -318,10 +314,11 @@ namespace StormByte::Multimedia::Pipeline {
 			void BecomeEmpty() noexcept;
 
 			/**
-			 * @brief Deep copy for @ref Step::Emit (analytics tap).
-			 * @return New unit; Serial, Part, timing and backend are copied.
+			 * @brief Fork for hopper taps (`Clonable::Clone`).
+			 * @return New unit sharing libav packet buffers (`av_packet_ref`).
 			 *
-			 * Not a public API. Uses the private copy constructor.
+			 * Not a public API. Uses the copy constructor. Not a
+			 * deep copy of payload.
 			 */
 			Item::PointerType Clone() const override;
 
@@ -329,7 +326,7 @@ namespace StormByte::Multimedia::Pipeline {
 			 * @brief Moves this unit into a new owning pointer.
 			 * @return Pointer to the relocated unit; *this becomes the empty sentinel.
 			 *
-			 * Not a public API. Uses the private move constructor.
+			 * Not a public API. Uses the move constructor.
 			 * @ref Step::Emit does not call this.
 			 */
 			Item::PointerType Move() override;
