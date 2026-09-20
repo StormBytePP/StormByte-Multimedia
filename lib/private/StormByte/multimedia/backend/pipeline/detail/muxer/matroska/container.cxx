@@ -78,6 +78,15 @@ namespace {
 	const FFmpeg::AVRational NanoTimeBase{1, 1000000000};
 	constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
 	constexpr std::int64_t InterleaveSlotUs = 40LL * 1000;
+	constexpr std::int64_t InterleaveFloorUs = 250000;
+	// Mixed encode+remux MUST keep this at 60 s.
+	// av_interleaved_write_frame flushes a stream when its DTS is this far
+	// ahead of the others. A 4K x265 lane lags remuxed AC3/DTS by tens of
+	// seconds. Caps of 2 s and 10 s wrote audio-only Matroska clusters;
+	// video seeked, audio stayed mute until ~+15 s. 1f6fc4e documented the
+	// same failure and floored at 60 s. Do not lower this to "save RAM":
+	// hoppers (6bbb90a) already cap the queue; this knob is cluster layout.
+	constexpr std::int64_t InterleaveMixedUs = 60LL * 1000 * 1000;
 
 	bool Encodes(const StormByte::Multimedia::Pipeline::Track& track) noexcept {
 		const auto* cfg = track.Config();
@@ -98,12 +107,8 @@ namespace {
 			|| type == StormByte::Multimedia::Type::Subtitle;
 	}
 
-	// Plan-aware interleave window. Not Ceiling: hopper depth and mux
-	// reorder are different knobs. Video encode needs room for B-pyramid
-	// (~lookahead frames). Remux is cheap and must not be allowed to sit
-	// a minute ahead of that encode lane. Mixed jobs add a small extra
-	// so av_interleaved_write_frame can hold one remux burst without
-	// blocking the next video packet. Floor 250 ms, cap 2 s — never 60 s.
+	// Remux-only stays near the 250 ms floor (no encode lag).
+	// Encode video + remux audio uses InterleaveMixedUs and nothing smaller.
 	std::int64_t InterleaveDeltaUs(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 		std::size_t remux = 0;
 		std::size_t encodeVideo = 0;
@@ -124,16 +129,17 @@ namespace {
 					++encodeOther;
 			}
 		}
-		std::int64_t us = 250000;
+		if (encodeVideo != 0 && remux != 0)
+			return InterleaveMixedUs;
+
+		std::int64_t us = InterleaveFloorUs;
 		us += static_cast<std::int64_t>(encodeVideo) * 500000;
 		us += static_cast<std::int64_t>(remux) * 100000;
 		us += static_cast<std::int64_t>(encodeOther) * 80000;
-		if (encodeVideo != 0 && remux != 0)
-			us += 250000;
-		if (us < 250000)
-			us = 250000;
-		if (us > 2000000)
-			us = 2000000;
+		if (us < InterleaveFloorUs)
+			us = InterleaveFloorUs;
+		if (us > InterleaveMixedUs)
+			us = InterleaveMixedUs;
 		return us;
 	}
 
@@ -526,6 +532,8 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 
 		av_dict_set(&m_ctx->metadata, "encoding_tool", WritingApp, 0);
 
+		// Do not recap this with hopper depth or a 2 s/10 s clamp.
+		// Span-of-queue can raise the window; it must never lower MixedUs.
 		std::int64_t deltaUs = InterleaveDeltaUs(owner);
 		const auto cap = owner.InputCeiling();
 		const auto depth = cap == 0 ? 1 : cap;
@@ -549,8 +557,6 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			if (spanUs > deltaUs)
 				deltaUs = spanUs;
 		}
-		if (deltaUs > 2000000)
-			deltaUs = 2000000;
 		m_ctx->max_interleave_delta = deltaUs;
 
 		AVDictionary* opts = nullptr;
