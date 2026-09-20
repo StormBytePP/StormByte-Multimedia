@@ -40,8 +40,11 @@
 #include <StormByte/multimedia/backend/pipeline/frame.hxx>
 #include <StormByte/multimedia/pipeline/frame.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
+#include <StormByte/multimedia/property/channel_layout.hxx>
 #include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/type.hxx>
+
+#include <cstdint>
 
 extern "C" {
 	#include <libavutil/channel_layout.h>
@@ -50,6 +53,53 @@ extern "C" {
 
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Backend::Pipeline;
+
+namespace {
+	Property::ChannelLayout LayoutFromHandle(
+		const StormByte::Multimedia::FFmpeg::AVFrame& handle,
+		Property::ChannelLayout previous) noexcept {
+		const std::uint64_t mask = handle.ChannelLayout().Mask();
+		if (mask == AV_CH_LAYOUT_MONO)
+			return Property::ChannelLayout::Mono;
+		if (mask == AV_CH_LAYOUT_STEREO || mask == AV_CH_LAYOUT_STEREO_DOWNMIX)
+			return Property::ChannelLayout::Stereo;
+		if (mask == AV_CH_LAYOUT_2POINT1)
+			return Property::ChannelLayout::TwoPointOne;
+		if (mask == AV_CH_LAYOUT_SURROUND)
+			return Property::ChannelLayout::ThreePointZero;
+		if (mask == AV_CH_LAYOUT_4POINT0)
+			return Property::ChannelLayout::FourPointZero;
+		if (mask == AV_CH_LAYOUT_QUAD || mask == AV_CH_LAYOUT_2_2)
+			return Property::ChannelLayout::Quad;
+		if (mask == AV_CH_LAYOUT_5POINT0 || mask == AV_CH_LAYOUT_5POINT0_BACK)
+			return Property::ChannelLayout::FivePointZero;
+		if (mask == AV_CH_LAYOUT_5POINT1 || mask == AV_CH_LAYOUT_5POINT1_BACK)
+			return Property::ChannelLayout::FivePointOne;
+		if (mask == AV_CH_LAYOUT_6POINT1 || mask == AV_CH_LAYOUT_6POINT1_BACK
+			|| mask == AV_CH_LAYOUT_6POINT1_FRONT)
+			return Property::ChannelLayout::SixPointOne;
+		if (mask == AV_CH_LAYOUT_7POINT1)
+			return Property::ChannelLayout::SevenPointOne;
+		if (mask == AV_CH_LAYOUT_7POINT1_WIDE || mask == AV_CH_LAYOUT_7POINT1_WIDE_BACK)
+			return Property::ChannelLayout::SevenPointOneW;
+		if (mask == AV_CH_LAYOUT_OCTAGONAL)
+			return Property::ChannelLayout::Octagonal;
+		if (mask == AV_CH_LAYOUT_22POINT2)
+			return Property::ChannelLayout::TwentyTwoPointTwo;
+
+		switch (handle.Channels()) {
+			case 1: return Property::ChannelLayout::Mono;
+			case 2: return Property::ChannelLayout::Stereo;
+			case 6: return Property::ChannelLayout::FivePointOne;
+			case 8: return Property::ChannelLayout::SevenPointOne;
+			default: break;
+		}
+
+		if (Property::ChannelCount(previous) == static_cast<unsigned>(handle.Channels()))
+			return previous;
+		return Property::ChannelLayout::Unknown;
+	}
+}
 
 Frame::Frame(const Frame& other) noexcept
 : m_handle(other.m_handle), m_payloadReady(other.m_payloadReady) {}
@@ -91,7 +141,7 @@ void Frame::BindProperties(StormByte::Multimedia::Pipeline::Frame& frame) noexce
 			if (m_handle.SampleRate() <= 0 || m_handle.Channels() <= 0)
 				return;
 			frame.m_audio = Property::Audio(
-				frame.m_audio->Layout(),
+				LayoutFromHandle(m_handle, frame.m_audio->Layout()),
 				static_cast<std::uint32_t>(m_handle.SampleRate()),
 				static_cast<std::uint8_t>(m_handle.Channels()),
 				frame.m_audio->BitRate(),
