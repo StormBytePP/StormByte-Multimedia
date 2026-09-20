@@ -48,6 +48,7 @@ extern "C" {
 	#include <libavfilter/avfilter.h>
 	#include <libavfilter/buffersink.h>
 	#include <libavfilter/buffersrc.h>
+	#include <libavutil/error.h>
 	#include <libavutil/opt.h>
 	#include <libavutil/pixfmt.h>
 }
@@ -200,7 +201,10 @@ bool FFmpeg::AVFilterGraph::Filter(const AVFrame& src, AVFrame& dst) const noexc
 			AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
 		return false;
 	av_frame_unref(dst.Get());
-	return av_buffersink_get_frame(m_sink, dst.Get()) >= 0;
+	const int rc = av_buffersink_get_frame(m_sink, dst.Get());
+	if (rc == AVERROR(EAGAIN) || rc == AVERROR_EOF)
+		return true;
+	return rc >= 0;
 }
 
 void FFmpeg::AVFilterGraph::Free() noexcept {
