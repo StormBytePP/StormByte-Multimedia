@@ -38,114 +38,130 @@
 
 #include <StormByte/multimedia/ffmpeg/AVChannelLayout.hxx>
 
+#include <string>
+#include <vector>
+
 extern "C" {
 	#include <libavutil/channel_layout.h>
 	#include <libavutil/mem.h>
 }
 
 namespace StormByte::Multimedia::FFmpeg {
+	AVChannelLayout::AVChannelLayout() noexcept = default;
 
-AVChannelLayout::AVChannelLayout() noexcept = default;
-
-AVChannelLayout::AVChannelLayout(int channels) noexcept {
-	if (channels > 0) {
-		Ensure();
-		if (m_raw)
-			av_channel_layout_default(m_raw, channels);
+	AVChannelLayout::AVChannelLayout(int channels) noexcept {
+		if (channels > 0) {
+			Ensure();
+			if (m_raw)
+				av_channel_layout_default(m_raw, channels);
+		}
 	}
-}
 
-AVChannelLayout::AVChannelLayout(const AVChannelLayout& other) noexcept {
-	if (other.m_raw) {
+	AVChannelLayout::AVChannelLayout(const AVChannelLayout& other) noexcept {
+		if (other.m_raw) {
+			Ensure();
+			if (m_raw && av_channel_layout_copy(m_raw, other.m_raw) < 0)
+				Free();
+		}
+	}
+
+	AVChannelLayout::AVChannelLayout(AVChannelLayout&& other) noexcept
+	: m_raw(other.m_raw) {
+		other.m_raw = nullptr;
+	}
+
+	AVChannelLayout::~AVChannelLayout() noexcept {
+		Free();
+	}
+
+	AVChannelLayout& AVChannelLayout::operator=(const AVChannelLayout& other) noexcept {
+		if (this == &other)
+			return *this;
+		if (!other.m_raw) {
+			Free();
+			return *this;
+		}
 		Ensure();
 		if (m_raw && av_channel_layout_copy(m_raw, other.m_raw) < 0)
 			Free();
-	}
-}
-
-AVChannelLayout::AVChannelLayout(AVChannelLayout&& other) noexcept
-: m_raw(other.m_raw) {
-	other.m_raw = nullptr;
-}
-
-AVChannelLayout::~AVChannelLayout() noexcept {
-	Free();
-}
-
-AVChannelLayout& AVChannelLayout::operator=(const AVChannelLayout& other) noexcept {
-	if (this == &other)
-		return *this;
-	if (!other.m_raw) {
-		Free();
 		return *this;
 	}
-	Ensure();
-	if (m_raw && av_channel_layout_copy(m_raw, other.m_raw) < 0)
+
+	AVChannelLayout& AVChannelLayout::operator=(AVChannelLayout&& other) noexcept {
+		if (this == &other)
+			return *this;
 		Free();
-	return *this;
-}
-
-AVChannelLayout& AVChannelLayout::operator=(AVChannelLayout&& other) noexcept {
-	if (this == &other)
+		m_raw = other.m_raw;
+		other.m_raw = nullptr;
 		return *this;
-	Free();
-	m_raw = other.m_raw;
-	other.m_raw = nullptr;
-	return *this;
-}
+	}
 
-AVChannelLayout AVChannelLayout::Default(int channels) noexcept {
-	return AVChannelLayout(channels);
-}
+	AVChannelLayout AVChannelLayout::Default(int channels) noexcept {
+		return AVChannelLayout(channels);
+	}
 
-AVChannelLayout::operator bool() const noexcept {
-	return m_raw != nullptr && m_raw->nb_channels > 0;
-}
+	AVChannelLayout::operator bool() const noexcept {
+		return m_raw != nullptr && m_raw->nb_channels > 0;
+	}
 
-int AVChannelLayout::NbChannels() const noexcept {
-	return m_raw ? m_raw->nb_channels : 0;
-}
+	int AVChannelLayout::NbChannels() const noexcept {
+		return m_raw ? m_raw->nb_channels : 0;
+	}
 
-std::uint64_t AVChannelLayout::Mask() const noexcept {
-	if (!m_raw || m_raw->order != AV_CHANNEL_ORDER_NATIVE)
-		return 0;
-	return m_raw->u.mask;
-}
+	std::uint64_t AVChannelLayout::Mask() const noexcept {
+		if (!m_raw || m_raw->order != AV_CHANNEL_ORDER_NATIVE)
+			return 0;
+		return m_raw->u.mask;
+	}
 
-int AVChannelLayout::Order() const noexcept {
-	return m_raw ? static_cast<int>(m_raw->order) : 0;
-}
+	int AVChannelLayout::Order() const noexcept {
+		return m_raw ? static_cast<int>(m_raw->order) : 0;
+	}
 
-bool AVChannelLayout::operator==(const AVChannelLayout& other) const noexcept {
-	if (!m_raw || !other.m_raw)
-		return m_raw == other.m_raw;
-	return av_channel_layout_compare(m_raw, other.m_raw) == 0;
-}
+	std::string AVChannelLayout::Describe() const noexcept {
+		if (!m_raw || m_raw->nb_channels <= 0)
+			return {};
+		char small[64];
+		const int n = av_channel_layout_describe(m_raw, small, sizeof(small));
+		if (n < 0)
+			return {};
+		if (n < static_cast<int>(sizeof(small)))
+			return std::string(small);
+		std::vector<char> big(static_cast<std::size_t>(n) + 1u);
+		if (av_channel_layout_describe(m_raw, big.data(), big.size()) < 0)
+			return {};
+		return std::string(big.data());
+	}
 
-bool AVChannelLayout::operator!=(const AVChannelLayout& other) const noexcept {
-	return !(*this == other);
-}
+	bool AVChannelLayout::operator==(const AVChannelLayout& other) const noexcept {
+		if (!m_raw || !other.m_raw)
+			return m_raw == other.m_raw;
+		return av_channel_layout_compare(m_raw, other.m_raw) == 0;
+	}
 
-void AVChannelLayout::Ensure() noexcept {
-	if (m_raw)
-		return;
-	m_raw = static_cast<::AVChannelLayout*>(av_mallocz(sizeof(::AVChannelLayout)));
-}
+	bool AVChannelLayout::operator!=(const AVChannelLayout& other) const noexcept {
+		return !(*this == other);
+	}
 
-void AVChannelLayout::Free() noexcept {
-	if (!m_raw)
-		return;
-	av_channel_layout_uninit(m_raw);
-	av_free(m_raw);
-	m_raw = nullptr;
-}
+	void AVChannelLayout::Ensure() noexcept {
+		if (m_raw)
+			return;
+		m_raw = static_cast<::AVChannelLayout*>(av_mallocz(sizeof(::AVChannelLayout)));
+	}
 
-const ::AVChannelLayout* AVChannelLayout::Get() const noexcept {
-	return m_raw;
-}
+	void AVChannelLayout::Free() noexcept {
+		if (!m_raw)
+			return;
+		av_channel_layout_uninit(m_raw);
+		av_free(m_raw);
+		m_raw = nullptr;
+	}
 
-::AVChannelLayout* AVChannelLayout::Get() noexcept {
-	return m_raw;
-}
+	const ::AVChannelLayout* AVChannelLayout::Get() const noexcept {
+		return m_raw;
+	}
 
+	::AVChannelLayout* AVChannelLayout::Get() noexcept {
+		return m_raw;
+	}
 }

@@ -54,15 +54,18 @@ namespace StormByte::Multimedia::FFmpeg {
 
 	/**
 	 * @class AVFilterGraph
-	 * @brief RAII `AVFilterGraph` with a single video in/out.
+	 * @brief RAII `AVFilterGraph` with a single in/out (video or audio).
 	 *
-	 * Builds `buffer → <graph> → buffersink`. @p graph is an
-	 * avfilter filterchain (e.g. @c "bm3d=sigma=3:estim=basic").
-	 * One input pad only; filters that need a @c ref pad fail
-	 * @ref Open.
+	 * Video builds `buffer → <graph> → buffersink`.
+	 * Audio builds `abuffer → <graph> → abuffersink`.
+	 * @p graph is an avfilter filterchain
+	 * (e.g. @c "bm3d=sigma=3:estim=basic" or @c "rubberband=tempo=1").
+	 * The kind is taken from @p src: width/height → video,
+	 * sample rate and channels → audio. One input pad only;
+	 * filters that need a @c ref pad fail @ref Open.
 	 *
-	 * Reuse the same wrapper across frames of the same size,
-	 * format and chain via @ref Ensure. Do not call av_*.
+	 * Reuse the same wrapper across units of the same geometry,
+	 * format, layout and chain via @ref Ensure. Do not call av_*.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVFilterGraph: public AVPointer<::AVFilterGraph> {
 		public:
@@ -94,15 +97,17 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief Builds a graph for @p src's geometry. Empty wrapper on failure.
-			 * @param src Model frame (size, format, SAR). Planes may be empty.
-			 * @param graph Filterchain after @c buffer, before @c buffersink.
+			 * @brief Builds a graph for @p src. Empty wrapper on failure.
+			 * @param src Model frame. Video uses size, format and SAR.
+			 *        Audio uses rate, sample format and channel layout.
+			 *        Planes may be empty.
+			 * @param graph Filterchain after the source filter, before the sink.
 			 * @return Open graph, or empty on failure.
 			 */
 			static AVFilterGraph Open(const AVFrame& src, std::string_view graph) noexcept;
 
 			/**
-			 * @brief Rebuilds if size, format or chain changed.
+			 * @brief Rebuilds if geometry, format, layout or chain changed.
 			 * @param src Model frame.
 			 * @param graph Filterchain.
 			 * @return false if the graph could not be (re)opened.
@@ -112,8 +117,9 @@ namespace StormByte::Multimedia::FFmpeg {
 			/**
 			 * @brief Pushes @p src and pulls into @p dst (`KEEP_REF` on the source).
 			 * @param src Source frame with buffers.
-			 * @param dst Destination; unreferenced then filled by buffersink.
-			 * @return false on failure.
+			 * @param dst Destination; unreferenced then filled by the sink.
+			 *        `EAGAIN` / `EOF` leave @p dst empty and return true.
+			 * @return false on a hard failure.
 			 */
 			bool Filter(const AVFrame& src, AVFrame& dst) const noexcept;
 
@@ -136,11 +142,15 @@ namespace StormByte::Multimedia::FFmpeg {
 
 			using AVPointer<::AVFilterGraph>::Get;
 
-			::AVFilterContext* m_src = nullptr;	///< buffer (owned by the graph)
-			::AVFilterContext* m_sink = nullptr;	///< buffersink (owned by the graph)
-			int m_w = 0;							///< Cached source width
-			int m_h = 0;							///< Cached source height
-			int m_fmt = 0;							///< Cached source format
+			::AVFilterContext* m_src = nullptr;	///< buffer / abuffer (owned by the graph)
+			::AVFilterContext* m_sink = nullptr;	///< buffersink / abuffersink (owned by the graph)
+			bool m_audio = false;					///< true if the graph is audio
+			int m_w = 0;							///< Cached source width (video)
+			int m_h = 0;							///< Cached source height (video)
+			int m_rate = 0;							///< Cached sample rate (audio)
+			int m_ch = 0;							///< Cached channel count (audio)
+			int m_fmt = 0;							///< Cached pixel or sample format
+			std::string m_layout;					///< Cached channel layout name (audio)
 			std::string m_graph;					///< Cached filterchain
 	};
 

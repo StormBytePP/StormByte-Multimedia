@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
+#include <string>
 
 /**
  * @namespace StormByte::Multimedia::FFmpeg
@@ -142,6 +143,12 @@ namespace StormByte::Multimedia::FFmpeg {
 			 * @return Order, or 0.
 			 */
 			int Order() const noexcept;
+
+			/**
+			 * @brief FFmpeg layout name (`av_channel_layout_describe`).
+			 * @return Name such as @c "stereo", or empty if there is no layout.
+			 */
+			std::string Describe() const noexcept;
 
 			/**
 			 * @brief `av_channel_layout_compare` == 0.
