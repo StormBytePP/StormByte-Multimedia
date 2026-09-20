@@ -10,6 +10,5 @@ add_subdirectory(vpx)
 add_subdirectory(webp)
 add_subdirectory(x264)
 add_subdirectory(x265)
-add_subdirectory(xvidcore)
 
 set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

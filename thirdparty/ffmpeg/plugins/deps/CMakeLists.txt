@@ -1,16 +1,9 @@
 buildmaster_group(ff-deps "Dependencies")
 buildmaster_group_add(ff-plugins ff-deps)
 
-if(UNIX AND NOT APPLE)
-	add_subdirectory(expat)
-	add_subdirectory(fontconfig)
-endif()
-add_subdirectory(freetype)
-add_subdirectory(fribidi)
 if(MSVC)
 	add_subdirectory(gzip)
 endif()
-add_subdirectory(harfbuzz)
 add_subdirectory(samplerate)
 
 set(FFMPEG_PLUGIN_OPTIONS "${FFMPEG_PLUGIN_OPTIONS}" PARENT_SCOPE)

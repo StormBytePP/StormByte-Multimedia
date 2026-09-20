@@ -34,9 +34,6 @@
 [submodule "pthread-Win32"]
 	path = thirdparty/pthread-win32/src
 	url = https://github.com/GerHobbelt/pthread-win32.git
-[submodule "XVID codec"]
-	path = thirdparty/ffmpeg/plugins/codecs/video/xvidcore/cmake-port/src
-	url = https://github.com/delthas/xvid.git
 [submodule "StormByte BuildMaster"]
 	path = thirdparty/buildmaster
 	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
@@ -73,33 +70,9 @@
 [submodule "rubberband"]
 	path = thirdparty/ffmpeg/plugins/codecs/audio/rubberband/src
 	url = https://github.com/breakfastquay/rubberband.git
-[submodule "speex"]
-	path = thirdparty/ffmpeg/plugins/codecs/audio/speex/cmake-port/src
-	url = https://gitlab.xiph.org/xiph/speex.git
-[submodule "gsm"]
-	path = thirdparty/ffmpeg/plugins/codecs/audio/gsm/cmake-port/src
-	url = https://github.com/timothytylee/libgsm.git
-[submodule "ass"]
-	path = thirdparty/ffmpeg/plugins/codecs/subtitles/ass/src
-	url = https://github.com/libass/libass.git
-[submodule "freetype"]
-	path = thirdparty/ffmpeg/plugins/deps/freetype/src
-	url = https://gitlab.freedesktop.org/freetype/freetype.git
-[submodule "harfbuzz"]
-	path = thirdparty/ffmpeg/plugins/deps/harfbuzz/src
-	url = https://github.com/harfbuzz/harfbuzz.git
-[submodule "fribidi"]
-	path = thirdparty/ffmpeg/plugins/deps/fribidi/src
-	url = https://github.com/fribidi/fribidi.git
 [submodule "samplerate"]
 	path = thirdparty/ffmpeg/plugins/deps/samplerate/src
 	url = https://github.com/libsndfile/libsamplerate.git
-[submodule "expat"]
-	path = thirdparty/ffmpeg/plugins/deps/expat/src
-	url = https://github.com/libexpat/libexpat.git
-[submodule "fontconfig"]
-	path = thirdparty/ffmpeg/plugins/deps/fontconfig/src
-	url = https://gitlab.freedesktop.org/fontconfig/fontconfig.git
 [submodule "leptonica"]
 	path = thirdparty/ocr/leptonica/src
 	url = https://github.com/DanBloomberg/leptonica.git

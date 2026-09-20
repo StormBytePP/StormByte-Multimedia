@@ -220,7 +220,6 @@ else()
 				AudioToolbox
 				CoreMedia
 				CoreVideo
-				CoreText
 				CoreFoundation
 			)
 				find_library(_SB_MM_FW_${_fw} "${_fw}" REQUIRED)

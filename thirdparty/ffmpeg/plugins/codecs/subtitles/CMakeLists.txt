@@ -1,7 +1,6 @@
 buildmaster_group(ff-subtitles "Subtitles")
 buildmaster_group_add(ff-codecs ff-subtitles)
 
-add_subdirectory(ass)
 add_subdirectory(ass_text)
 add_subdirectory(dvbsub)
 add_subdirectory(dvdsub)
