@@ -41,6 +41,7 @@
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/type.hxx>
 
+#include <algorithm>
 #include <format>
 #include <utility>
 
@@ -70,10 +71,12 @@ void Fftdnoiz::Setup() noexcept {
 }
 
 std::string Fftdnoiz::Chain() const noexcept {
-	const double sigma = m_sigmaIn.value_or(1.0);
-	const unsigned prev = m_prevIn.value_or(1u);
-	const unsigned next = m_nextIn.value_or(1u);
-	return std::format("fftdnoiz=sigma={}:prev={}:next={}", sigma, prev, next);
+	const double sigma = std::clamp(m_sigmaIn.value_or(1.0), 0.0, 100.0);
+	const unsigned prev = std::min(m_prevIn.value_or(1u), 1u);
+	const unsigned next = std::min(m_nextIn.value_or(1u), 1u);
+	return std::format(
+		"fftdnoiz=sigma={}:prev={}:next={}:block=32:overlap=0.5",
+		sigma, prev, next);
 }
 
 void Fftdnoiz::Process(const Pipeline::Frame& frame) noexcept {
@@ -82,6 +85,10 @@ void Fftdnoiz::Process(const Pipeline::Frame& frame) noexcept {
 	const FFrame& src = AVFrame();
 	if (!src || src.Width() <= 0 || src.Height() <= 0) {
 		Log(Level::Warning, "fftdnoiz: frame has no picture");
+		return;
+	}
+	if (src.Hardware()) {
+		Fail("fftdnoiz: hardware frame; decode to software first");
 		return;
 	}
 
@@ -103,15 +110,41 @@ void Fftdnoiz::Process(const Pipeline::Frame& frame) noexcept {
 		Fail("fftdnoiz: AVFilterGraph::Filter failed");
 		return;
 	}
-	if (!out) {
+	if (out.Width() <= 0 || out.Height() <= 0 || out.Format() == FFrame::FormatNone()) {
 		Log(Level::LowLevel, std::format(
 			"fftdnoiz wait {}x{} pts={}",
 			src.Width(), src.Height(), src.Pts()));
 		return;
 	}
 
+	out.ColorRange(src.ColorRange());
+	out.ColorSpace(src.ColorSpace());
+	out.ColorPrimaries(src.ColorPrimaries());
+	out.ColorTransfer(src.ColorTransfer());
+	out.ChromaLocation(src.ChromaLocation());
+	out.SampleAspectRatio(src.SampleAspectRatio());
+
 	Log(Level::LowLevel, std::format(
 		"fftdnoiz {}x{} pts={}",
 		out.Width(), out.Height(), out.Pts()));
 	Save(std::move(out));
+}
+
+void Fftdnoiz::Eof() noexcept {
+	if (!m_graph)
+		return;
+	for (;;) {
+		FFrame out;
+		if (!m_graph->Flush(out)) {
+			Fail("fftdnoiz: AVFilterGraph::Flush failed");
+			break;
+		}
+		if (out.Width() <= 0 || out.Height() <= 0 || out.Format() == FFrame::FormatNone())
+			break;
+		Log(Level::LowLevel, std::format(
+			"fftdnoiz flush {}x{} pts={}",
+			out.Width(), out.Height(), out.Pts()));
+		Save(std::move(out));
+	}
+	m_graph.reset();
 }

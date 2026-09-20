@@ -57,24 +57,23 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Fftdnoiz
-	 * @brief 3-D FFT denoise via libavfilter `fftdnoiz`.
+	 * @brief 3-D FFT denoise via libavfilter `fftdnoiz` (FFmpeg >= 9.0.1).
 	 *
 	 * @par Algorithm
 	 * Frequency-domain denoise on overlapping blocks. With
 	 * @a prev / @a next > 0 the transform is temporal as well
-	 * (film grain). The graph owns the look; this leaf does
-	 * not Hold. Early frames may not leave the sink (`EAGAIN`);
-	 * @ref Process then returns without Save.
+	 * (film grain). Early frames may not leave the sink (`EAGAIN`);
+	 * @ref Process then returns without Save. @ref Eof closes
+	 * buffersrc and drains the remaining window.
 	 *
 	 * @par Cost
-	 * Heavy on 4K, especially with a temporal window. Documented
-	 * so the caller decides. Do not stack with @ref Bm3d or
-	 * @ref NlMeans on the same track.
+	 * Heavy on 4K, especially with a temporal window. Do not stack
+	 * with @ref Bm3d or @ref NlMeans on the same track.
 	 *
 	 * @par Defaults
 	 * Empty arguments: sigma=1, prev=1, next=1 (3-D). FFmpeg's
-	 * own prev/next default is 0 (spatial only); that is not
-	 * useful for grain, so empty here means 3-D.
+	 * own prev/next default is 0 (spatial only). `block` is the
+	 * FFmpeg 9 pixel size (32). `prev`/`next` are clamped to 0..1.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.
@@ -86,9 +85,9 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			/**
 			 * @brief 3-D FFT denoise (`fftdnoiz`).
 			 * @param log Shared logger. Empty pointer means no log.
-			 * @param sigma Strength. Empty → 1. Range 0–30.
-			 * @param prev Previous frames in the window. Empty → 1.
-			 * @param next Future frames in the window. Empty → 1.
+			 * @param sigma Strength. Empty → 1. Range 0–100.
+			 * @param prev Previous frames in the window. Empty → 1. Clamped to 0..1.
+			 * @param next Future frames in the window. Empty → 1. Clamped to 0..1.
 			 */
 			Fftdnoiz(std::shared_ptr<StormByte::Logger::Log> log,
 				std::optional<double> sigma = {},
@@ -123,10 +122,15 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
+			/**
+			 * @brief Closes the filter source and Saves leftover frames.
+			 */
+			void Eof() noexcept override;
+
 		private:
 			/**
 			 * @brief Builds the avfilter chain.
-			 * @return `fftdnoiz=...` for @ref FFmpeg::AVFilterGraph::Ensure.
+			 * @return `format=...,fftdnoiz=...` for @ref FFmpeg::AVFilterGraph::Ensure.
 			 */
 			std::string Chain() const noexcept;
 

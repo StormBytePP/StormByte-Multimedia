@@ -291,6 +291,21 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 		return false;
 	}
 
+	const AVCodecContext* ctx = m_encoder->Context();
+	const int ctxW = ctx ? ctx->width : 0;
+	const int ctxH = ctx ? ctx->height : 0;
+	const int ctxFmt = ctx ? static_cast<int>(ctx->pix_fmt) : -1;
+
+	if (ctx && (handle->Width() != ctxW
+			|| handle->Height() != ctxH
+			|| handle->Format() != ctxFmt)) {
+		owner.Fail(std::format(
+			"encoder frame mismatch ctx={}x{} fmt={} in={}x{} fmt={}",
+			ctxW, ctxH, ctxFmt,
+			handle->Width(), handle->Height(), handle->Format()));
+		return false;
+	}
+
 	if (frame->Video() && frame->Video()->HDR10())
 		handle->WriteHdr10(*frame->Video()->HDR10());
 	if (frame->Video() && frame->Video()->SampleAspectRatio()
@@ -317,7 +332,11 @@ bool Video::Push(StormByte::Multimedia::Pipeline::Encoder& owner,
 	if (result == StormByte::Multimedia::FFmpeg::OperationResult::TryAgain)
 		return false;
 	if (result == StormByte::Multimedia::FFmpeg::OperationResult::Error) {
-		owner.Fail("failed to send frame");
+		owner.Fail(std::format(
+			"failed to send frame ctx={}x{} fmt={} in={}x{} fmt={} pts={}",
+			ctxW, ctxH, ctxFmt,
+			handle->Width(), handle->Height(), handle->Format(),
+			handle->Pts()));
 		return false;
 	}
 
