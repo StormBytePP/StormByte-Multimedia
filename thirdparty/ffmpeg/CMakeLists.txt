@@ -205,7 +205,7 @@ else()
 	# -Bsymbolic: ELF. Invalid on ld64 and link.exe.
 	# /FORCE:MULTIPLE: duplicate helpers (file_open, vorbis_encode_*) across
 	# static archives. Does not satisfy missing system libraries.
-	# Frameworks: VideoToolbox/AudioToolbox + libass text stack.
+	# Frameworks: VideoToolbox / AudioToolbox. CoreText was libass.
 	# find_library: AppleClang + raw "-framework Foo" was flattened to a
 	# bare token and the linker looked for a file named AudioToolbox.
 	# iconv / bcrypt / schannel: LINK= on ffmpeg-pack above.
@@ -238,4 +238,10 @@ endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/ffmpeg.cmake)
 export_ffmpeg_version()
+if(WITH_FFMPEG STREQUAL "SYSTEM")
+	if(STORMBYTE_FFMPEG_VERSION VERSION_LESS "9.0.0")
+		message(FATAL_ERROR
+			"WITH_FFMPEG=SYSTEM requires FFmpeg >= 9.0.0 (found ${STORMBYTE_FFMPEG_VERSION})")
+	endif()
+endif()
 prepare_ffmpeg_filter_header()
