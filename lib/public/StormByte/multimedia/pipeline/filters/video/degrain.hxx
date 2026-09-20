@@ -45,6 +45,7 @@
 #include <StormByte/multimedia/visibility.h>
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -55,98 +56,105 @@
  * @brief Video process filters.
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
+
 	/**
 	 * @class Degrain
-	 * @brief Two-pass, per-stretch film-grain reduction. ProcessTwoPasses leaf.
+	 * @brief Two-pass, scene-aware film-grain reducer built on libavfilter
+	 *        @c fftdnoiz. ProcessTwoPasses leaf. Not a wrapper and not a
+	 *        copy of @ref Fftdnoiz.
 	 *
-	 * Attach with @c job.Video(in).Filter<Degrain>(log).
+	 * Attach with @c job.Video(in).Filter<Degrain>(log) or
+	 * @c Filter<Degrain>(log, cap) to clamp the strongest stretch.
 	 *
 	 * @par What it is for
-	 * A scan or grade where grain **comes and goes**: a dark
-	 * interior is dirty, a bright exterior is almost clean.
-	 * Degrain reads the clip once, splits it into stretches at
-	 * luma jumps (scene cuts), votes a sigma **per stretch**,
-	 * then reads it again and runs libavfilter `fftdnoiz` only
-	 * where that vote is stable. A quiet stretch can stay
-	 * untouched while a heavy one is hit harder.
+	 * Hollywood film grain that survived the remaster (roughly pre-2015:
+	 * Harry Potter, similar 35 mm scans). One pass of @ref Fftdnoiz at
+	 * a fixed sigma either leaves grain on walls / night or plastics
+	 * faces. Degrain walks the picture once, scores every frame, splits
+	 * the timeline into stretches, and only then picks a sigma per
+	 * stretch. The second pass runs @c fftdnoiz with that map.
 	 *
-	 * @par Versus @ref Fftdnoiz
-	 * @ref Fftdnoiz is the one-pass Process leaf: **you** pick
-	 * one sigma (and prev/next) for the whole tube. Degrain is
-	 * not a copy of that class, not a subclass, and not a thin
-	 * wrapper that forwards to `Filter<Fftdnoiz>`. It is a
-	 * different contract (`ProcessTwoPasses`): this leaf
-	 * **computes** the sigma list. The second pass happens to
-	 * use the same avfilter string (`fftdnoiz=sigma=:prev=1:next=1:…`)
-	 * because that is the engine, not because the two leaves
-	 * are the same filter.
-	 *
-	 * Use @ref Fftdnoiz when the sigma is already known and
-	 * uniform. Use Degrain when the grain level has to be
-	 * discovered and may change mid-clip.
+	 * Use it when you can see grain in mid-tones and crushed night, and
+	 * you are willing to spend a full decode before encode. It is not
+	 * a live filter and not a substitute for @ref Afftdn (audio) or
+	 * @ref Deband (contouring).
 	 *
 	 * @par What it is not
-	 * Not @ref StormByte::Multimedia::Pipeline::Filter::Audio::Denoise
-	 * (room tone). Not Atadenoise / Bm3d / NlMeans.
+	 * Not @ref Fftdnoiz with a different name. @ref Fftdnoiz is one
+	 * sigma, one graph, every frame. Degrain owns the measure, the
+	 * stretch vote and the skip path; @c fftdnoiz is only the engine
+	 * on stretches that survived the vote. Do not document or sell
+	 * this leaf as “fftdnoiz defaults”.
 	 *
-	 * @par Measure
-	 * Each frame is ScaleTo gray8. Flat 3×3 patches (low local
-	 * contrast) contribute a residual RMS, mapped to an
-	 * `fftdnoiz` sigma. A jump in mean luma closes the current
-	 * stretch and opens the next. Stretches with too few flats
-	 * or an unstable cluster stay marked skip.
-	 *
-	 * @par Process
-	 * Lookup by PTS. Skip stretch → no Save. Otherwise
-	 * `fftdnoiz` with that stretch’s sigma. Ensure rebuilds
-	 * the graph when sigma changes. Hardware Fail.
-	 *
-	 * @par Cost
-	 * Expensive because `fftdnoiz` is a 3-D FFT, not because
-	 * there are two passes. The extra pass is a cheap luma
-	 * probe.
+	 * @par When to attach
+	 * After decode, before @ref Cas / @ref Scale / @ref Deband.
+	 * After @ref Fieldmatch / @ref Decimate if the source was
+	 * telecined. Do not put it on animation, screen content, or a
+	 * master that is already clean — the night floor will still fire
+	 * on dark flats.
 	 *
 	 * @par Do not stack
-	 * Degrain **or** @ref Fftdnoiz / Bm3d / NlMeans /
-	 * Atadenoise, not both. Cas may follow.
+	 * Exclusive with @ref Fftdnoiz, @ref Bm3d, @ref NlMeans,
+	 * @ref VagueDenoiser, @ref Hqdn3d and a temporal
+	 * @ref Atadenoise. Two grain leaves on the same video is how
+	 * faces turn to clay. @ref Deband after Degrain is fine
+	 * (bands, not grain).
 	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::ProcessTwoPasses
+	 * @par Two passes
+	 * @ref Measure copies a bounded YUV420P ring (5+1+5), scores the
+	 * centre when neighbours exist, and stores one @ref Row per
+	 * picture. @ref Eof of the measure pass calls @ref Decide, which
+	 * cuts on mean/raw jumps and votes one @ref Segment per stretch.
+	 * @ref Process of the encode pass looks the PTS up, builds or
+	 * reuses an @ref FFmpeg::AVFilterGraph at that sigma, and
+	 * @ref Filter::FFmpeg::Save. A stretch with @c skip or a
+	 * failed vote is a no-op (no graph, no Save). Hardware frames
+	 * are not converted here; ScaleTo failure drops that sample.
+	 *
+	 * @par Vote (contract)
+	 * Night (@c mean ≤ NightMean) never skips and is at least
+	 * SigmaNight — crushed blacks still hold grain. Flat walls with
+	 * no live/skin signal follow raw, capped at SigmaWall. Motion
+	 * or a close “alive” plane uses SigmaClose. Mixed alive+flat
+	 * uses SigmaMix. Clean mid/bright with raw below CleanSigma
+	 * skips. The caller @a cap is an extra ceiling, not a floor.
+	 *
+	 * @par Detectors
+	 * @c fLive is a cheap band-pass + temporal hold, not a face
+	 * network. @c fSkin is a Y/U/V box on 4:2:0 chroma. Both are
+	 * auxiliary: a miss must not skip a night stretch. A future
+	 * face library can replace those two numbers; the vote stays.
+	 *
+	 * @par Cost
+	 * Measure is a full decode plus a small ring of YUV420P frames
+	 * (max 11). The second pass is @c fftdnoiz with prev=next=1 —
+	 * expensive on 4K because of the FFT, not because of two
+	 * passes. RAM of the row table is a handful of doubles per
+	 * frame; do not keep pictures after Decide.
+	 *
+	 * @par Failure
+	 * No stable stretch → Warning and passthrough. Graph Ensure /
+	 * Filter errors Fail the leaf. Uncertainty in auto detect is
+	 * a skip, never a blind sigma.
+	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Video::Fftdnoiz
+	 * @see StormByte::Multimedia::Pipeline::Filter::ProcessTwoPasses
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Degrain: public Filter::ProcessTwoPasses {
 		public:
 			/**
-			 * @brief Automatic per-stretch film-grain `fftdnoiz`.
+			 * @brief Scene-aware grain reduce.
 			 * @param log Shared logger. Empty pointer means no log.
-			 * @param sigmaCap Upper clamp for every voted sigma. Empty → 8.
-			 *        Clamped to 0–100 (FFmpeg `fftdnoiz` range).
+			 * @param sigmaCap Optional hard ceiling for every stretch.
+			 *        Empty uses SigmaWall from the implementation.
 			 */
 			Degrain(std::shared_ptr<StormByte::Logger::Log> log,
 				std::optional<double> sigmaCap = {}) noexcept;
 
-			/**
-			 * @brief Copy is not allowed. The graph is bound to one tube.
-			 */
 			Degrain(const Degrain& other) = delete;
-
-			/**
-			 * @brief Move is not allowed. The tube owns the mounted leaf.
-			 */
 			Degrain(Degrain&& other) noexcept = delete;
-
-			/**
-			 * @brief Drops the luma probe and the cached graph.
-			 */
 			~Degrain() noexcept override = default;
-
-			/**
-			 * @brief Copy assignment is not allowed.
-			 */
 			Degrain& operator=(const Degrain& other) = delete;
-
-			/**
-			 * @brief Move assignment is not allowed.
-			 */
 			Degrain& operator=(Degrain&& other) noexcept = delete;
 
 			/**
@@ -156,102 +164,136 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 			enum StormByte::Multimedia::Type Media() const noexcept override;
 
 			/**
-			 * @brief Drops stretches, vote, luma probe and graph.
+			 * @brief Drops ring, rows, segments and the avfilter graph.
 			 */
 			void Clean() noexcept override;
 
 			/**
-			 * @brief Resets the graph before a pass. Keeps the vote.
+			 * @brief Resets the graph before a pass starts.
 			 */
 			void Setup() noexcept override;
 
 			/**
-			 * @brief First pass: split stretches and collect sigmas. No Save.
+			 * @brief First pass: push the picture into the ring and score.
 			 * @param frame Current pipeline unit. Non-video is ignored.
 			 */
 			void Measure(const Pipeline::Frame& frame) noexcept override;
 
 			/**
-			 * @brief Second pass: `fftdnoiz` for the stretch under @p frame, or no-op.
+			 * @brief Second pass: @c fftdnoiz at the voted sigma, or no-op.
 			 * @param frame Current pipeline unit. Non-video is ignored.
-			 *
-			 * @par No-op
-			 * Stretch marked skip, or no stretch for this PTS:
-			 * returns without Save so the tube keeps the picture.
 			 */
 			void Process(const Pipeline::Frame& frame) noexcept override;
 
 			/**
-			 * @brief Closes the last stretch vote (measure) or flushes the graph (process).
+			 * @brief Measure: flush ring and Decide. Encode: drain the graph.
 			 */
 			void Eof() noexcept override;
 
 			/**
-			 * @brief How many stretches ran, skipped, and the last sigma.
-			 * @return Ok after measure (including all-skip), else Failed.
+			 * @brief Stretch map after Decide: status, frames, ran/skip, sigma.
 			 */
 			class Filter::Report Report() const noexcept override;
 
 		private:
 			/**
-			 * @brief One scene stretch: PTS span + sigma vote.
+			 * @struct Slot
+			 * @brief One picture in the temporal ring.
+			 *
+			 * Only the ring holds pixels, and only ≤ RingMax of them.
+			 * @c mean is a cheap Y average used to reject a neighbour
+			 * whose lighting already changed (cut / flash).
 			 */
-			struct Segment {
-				int64_t firstPts = 0;	///< First PTS in this stretch
-				int64_t lastPts = 0;	///< Last PTS seen in Measure
-				std::vector<double> cand;	///< Flat-residual sigmas
-				double sigma = 0.0;	///< Voted sigma after VoteSeg
-				int matches = 0;	///< Neighbours of the winner
-				bool skip = true;	///< Process is a no-op here
+			struct Slot {
+				std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFrame> pic; ///< YUV420P copy
+				int64_t pts = 0;   ///< Source PTS
+				double mean = 0.0; ///< Full-frame luma mean
 			};
 
 			/**
-			 * @brief Scores one frame’s flat residual into the current stretch.
-			 * @param src Current software video frame.
+			 * @struct Row
+			 * @brief Per-frame numbers kept after the pixels are gone.
+			 *
+			 * This is what Decide votes on. Adding a column is cheap;
+			 * adding another picture is not.
 			 */
-			void Emit(const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
+			struct Row {
+				int64_t pts = 0;    ///< Source PTS
+				double mean = 0.0;  ///< Luma mean
+				double p10 = 0.0;   ///< 10th percentile luma (reserved)
+				double p90 = 0.0;   ///< 90th percentile luma (reserved)
+				double mid = 0.0;   ///< RMS residual in the mid band
+				double dark = 0.0;  ///< RMS residual in the dark band
+				double fLive = 0.0; ///< Fraction of samples that look “structured”
+				double fSkin = 0.0; ///< Fraction of samples in the UV skin box
+				double fFlat = 0.0; ///< Fraction of low-bandpass samples
+				double mot = 0.0;   ///< Fraction that found no stable neighbour
+				double raw = 0.0;   ///< Weighted dark+mid residual → sigma hint
+				bool flash = false; ///< Isolated mean spike vs local median
+			};
 
 			/**
-			 * @brief Opens a new stretch when mean luma jumps.
-			 * @param pts Current frame PTS.
-			 * @param mean Mean luma of the gray8 probe.
+			 * @struct Segment
+			 * @brief One voted stretch of the timeline.
+			 *
+			 * @c skip defaults true so a half-built segment cannot
+			 * leak a graph. @ref Decide sets it false before the vote.
 			 */
-			void MaybeCut(int64_t pts, double mean) noexcept;
+			struct Segment {
+				int64_t firstPts = 0; ///< Inclusive
+				int64_t lastPts = 0;  ///< Inclusive
+				double sigma = 0.0;   ///< fftdnoiz sigma, 0 if skip
+				bool skip = true;     ///< No-op this stretch
+			};
 
 			/**
-			 * @brief Votes every stretch. Unstable ones stay skip.
+			 * @brief Scale @p src to YUV420P, push the ring, score the centre.
+			 * @param src Live decoder frame. ScaleTo failure drops the sample.
 			 */
-			void Vote() noexcept;
+			void PushFrame(const StormByte::Multimedia::FFmpeg::AVFrame& src) noexcept;
 
 			/**
-			 * @brief Votes one stretch in place.
-			 * @param seg Stretch to close.
+			 * @brief Fill one @ref Row from ring slot @p idx using ±RingSpan neighbours.
+			 * @param idx Index in @ref m_ring. No-op if already scored or tiny.
 			 */
-			void VoteSeg(Segment& seg) noexcept;
+			void ScoreCenter(std::size_t idx) noexcept;
 
 			/**
-			 * @brief Stretch that owns @p pts, or null.
-			 * @param pts Process-pass PTS.
+			 * @brief Score every remaining slot so the last 5 frames are not silent.
+			 */
+			void FlushRing() noexcept;
+
+			/**
+			 * @brief Cut the row list into stretches and pick sigma / skip.
+			 *
+			 * Called once from measure @ref Eof. After it returns,
+			 * pictures are gone and only @ref m_seg remains.
+			 */
+			void Decide() noexcept;
+
+			/**
+			 * @brief Stretch that owns @p pts, or nullptr.
 			 */
 			const Segment* Find(int64_t pts) const noexcept;
 
 			/**
-			 * @brief Builds the avfilter chain for @ref m_sigma.
-			 * @return `fftdnoiz=sigma=:prev=1:next=1:block=32:overlap=0.5`
-			 *         for @ref FFmpeg::AVFilterGraph::Ensure.
+			 * @brief avfilter chain for the current @ref m_sigma.
+			 * @return @c fftdnoiz=sigma=…:prev=1:next=1
 			 */
 			std::string Chain() const noexcept;
 
-			std::optional<double> m_capIn;	///< Caller sigma cap, or empty → 8
-			std::vector<Segment> m_seg;	///< Stretches in PTS order
-			double m_lastMean;	///< Mean luma of the previous Measure frame
-			bool m_haveMean;	///< m_lastMean is valid
-			unsigned m_frames;	///< Video units seen in Measure
-			bool m_voted;	///< Vote() has run
-			double m_sigma;	///< Sigma currently loaded in m_graph
-			int m_ran;	///< Stretches that will Process
-			int m_skipped;	///< Stretches left untouched
-			std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFrame> m_luma;	///< Reused gray8 probe
-			std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFilterGraph> m_graph;	///< Reused process graph
+			std::optional<double> m_capIn; ///< Caller ceiling, or empty
+			std::deque<Slot> m_ring;       ///< ≤ RingMax YUV420P pictures
+			std::vector<Row> m_row;        ///< One row per scored frame
+			std::vector<Segment> m_seg;    ///< Voted map
+			unsigned m_frames;             ///< Pictures seen in Measure
+			bool m_voted;                  ///< Decide already ran
+			double m_sigma;                ///< Graph currently open at
+			double m_sigmaMin;             ///< Report
+			double m_sigmaP50;             ///< Report
+			double m_sigmaMax;             ///< Report
+			int m_ran;                     ///< Stretches that will filter
+			int m_skipped;                 ///< Stretches left untouched
+			std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFilterGraph> m_graph; ///< Second-pass graph
 	};
 }
