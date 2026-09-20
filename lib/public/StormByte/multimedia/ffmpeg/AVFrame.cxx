@@ -367,6 +367,10 @@ int FFmpeg::AVFrame::FormatRgba() noexcept {
 	return static_cast<int>(AV_PIX_FMT_RGBA);
 }
 
+int FFmpeg::AVFrame::FormatYUV420P() noexcept {
+	return static_cast<int>(AV_PIX_FMT_YUV420P);
+}
+
 FFmpeg::AVFrame::VideoLayout FFmpeg::AVFrame::Layout() const noexcept {
 	if (!m_ptr)
 		return VideoLayout::Unknown;

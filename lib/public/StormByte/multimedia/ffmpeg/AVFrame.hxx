@@ -270,6 +270,12 @@ namespace StormByte::Multimedia::FFmpeg {
 			static int FormatRgba() noexcept;
 
 			/**
+			 * @brief `AV_PIX_FMT_YUV420P` as int.
+			 * @return Format token.
+			 */
+			static int FormatYUV420P() noexcept;
+
+			/**
 			 * @brief Planar video family, ignoring bit depth.
 			 *
 			 * Packed RGB/YUV and hardware formats are @c Unknown.
