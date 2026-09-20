@@ -145,6 +145,10 @@ endif()
 
 add_library(zimg ${ZIMG_CORE_SOURCES} ${ZIMG_SIMD_SOURCES})
 
+if(MSVC)
+	target_compile_options(zimg PRIVATE /EHsc)
+endif()
+
 set_target_properties(zimg PROPERTIES
 	OUTPUT_NAME zimg
 	VERSION 2.0.0
