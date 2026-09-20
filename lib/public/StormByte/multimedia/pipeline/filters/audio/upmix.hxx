@@ -55,48 +55,30 @@
 namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	/**
 	 * @class Upmix
-	 * @brief Widen channel count via libavfilter `surround`, then `aformat`, then `pan`. Process leaf.
+	 * @brief Raise channel count toward a target layout. Process leaf.
 	 *
 	 * Attach with @c job.Audio(in).Filter<Upmix>(log, layout).
 	 *
+	 * @par What it is for
+	 * Source narrower than the delivery (stereo→5.1,
+	 * 5.1→7.1). Best-effort surround, especially LFE:
+	 * `surround` extracts a low band when the target has
+	 * LFE; it is **not** a studio 5.1 that was mixed that
+	 * way. Same count = no-op. More source channels than
+	 * wanted = Fail (that is @ref Downmix).
+	 *
+	 * @par Do not stack
+	 * Not with @ref Downmix on the same stretch. Before
+	 * @ref Loudnorm. After @ref Resample is fine.
+	 *
 	 * @par Algorithm
-	 * Compare @ref Property::ChannelCount of the constructor
-	 * target with @ref FFmpeg::AVFrame::Channels of the source:
-	 * fewer source channels than wanted opens a graph; equal
-	 * count is a no-op (no graph, no @ref Filter::FFmpeg::Save);
-	 * more source channels than wanted is @ref Filter::FFmpeg::Fail
-	 * — that job belongs to @ref Downmix. Stereo→5.1 is a valid
-	 * upmix. Hardware does not apply to audio.
-	 *
-	 * @par Quality
-	 * This is not a 1:1 5.1 / 7.1 room recording. The first
-	 * graph is libavfilter @c surround with LFE enabled when
-	 * the target has an LFE speaker (`lfe=1:lfe_mode=add`,
-	 * 128–256 Hz band). That extracts a real sub band from
-	 * the source instead of leaving LFE silent. If `surround`
-	 * cannot open for this pair of layouts, @c aformat copies
-	 * what swr can map. Last fallback is @c pan: fronts kept,
-	 * LFE = @c 0.5*FL+0.5*FR so the sub is never empty when
-	 * the target has LFE. Bass is best-effort, not a remixer
-	 * with extra pads.
-	 *
-	 * @par Names
-	 * FFmpeg tokens: mono, stereo, 2.1, 3.0, 4.0, quad, 5.0,
-	 * 5.1, 6.1, 7.1, 7.1(wide), octagonal, 22.2.
-	 * @ref Property::ChannelLayout::Unknown has no token and Fails.
-	 * Input layout name comes from
-	 * @ref FFmpeg::AVChannelLayout::Describe, not @c Get().
+	 * Try `surround` (chl_in from
+	 * @ref FFmpeg::AVChannelLayout::Describe, LFE band
+	 * when the target has LFE), then `aformat`, then
+	 * `pan` with a folded LFE. Hardware N/A.
 	 *
 	 * @par Mutation
-	 * @ref Filter::FFmpeg::Save of the abuffersink frame.
-	 * @ref Backend::Pipeline::Frame::Put then
-	 * @ref Backend::Pipeline::Frame::BindProperties rewrites
-	 * @ref Pipeline::Frame::Audio from the handle. Empty sink
-	 * with a successful Filter is EAGAIN: log wait and return.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
-	 * @see StormByte::Multimedia::Pipeline::Filter::Audio::Downmix
-	 * @see StormByte::Multimedia::FFmpeg::AVFilterGraph
+	 * Save + BindProperties. EAGAIN = wait. @ref Eof flushes.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Upmix: public Filter::Process {
 		public:

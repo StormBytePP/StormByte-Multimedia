@@ -51,29 +51,36 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Audio
  * @brief Audio process filters.
- *
- * Inherit @ref Filter::ProcessTwoPasses. Attach with
- * @c job.Audio(in).Filter<Loudnorm>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	/**
 	 * @class Loudnorm
-	 * @brief Two-pass EBU R128 loudness (libebur128).
+	 * @brief Two-pass EBU R128 loudness (libebur128). ProcessTwoPasses leaf.
+	 *
+	 * Attach with @c job.Audio(in).Filter<Loudnorm>(log).
+	 *
+	 * @par What it is for
+	 * Bring a finished mix to a delivery loudness (broadcast,
+	 * VOD, disc) without changing the mix balance. Program
+	 * integrated loudness is aimed at @a integrated LUFS;
+	 * a linked true-peak ceiling stops inter-sample overs.
+	 * It is not a compressor and not FFmpeg Dynamic: LRA is
+	 * measured, not squeezed. Do not use it to “fix” a
+	 * dialogue/music imbalance.
 	 *
 	 * @par Measure
-	 * One ebur128 state for the whole layout (L/R/C/LFE/Ls/Rs map).
-	 * Integrated loudness and LRA are **program** values (BS.1770).
-	 * True peak is stored **per channel**. LFE is @c EBUR128_UNUSED
-	 * in the loudness sum; it still counts for TP.
-	 * Channels are never normalized independently.
+	 * One ebur128 state for the whole layout (L/R/C/LFE/Ls/Rs
+	 * map). Integrated loudness and LRA are **program** values
+	 * (BS.1770). True peak is stored **per channel**. LFE is
+	 * @c EBUR128_UNUSED in the loudness sum; it still counts
+	 * for TP. Channels are never normalized independently.
 	 *
 	 * @par Process
-	 * Linear gain is always @c I_target − I_measured, same on every
-	 * channel. If that gain would push any channel over @p truePeak,
-	 * a linked ceiling at @p truePeak runs on the gained samples.
-	 * The program gain is not reduced. This is not FFmpeg Dynamic
-	 * (no LRA compressor). Same @ref Process as a one-pass leaf
-	 * after measure has closed.
+	 * Linear gain is always @c I_target − I_measured, same on
+	 * every channel. If that gain would push any channel over
+	 * @p truePeak, a linked ceiling at @p truePeak runs on the
+	 * gained samples. The program gain is not reduced. Same
+	 * @ref Process as a one-pass leaf after measure has closed.
 	 *
 	 * @par Defaults
 	 * - I = −23 LUFS (EBU R128)

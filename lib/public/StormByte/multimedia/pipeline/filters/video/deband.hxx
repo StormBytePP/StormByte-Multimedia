@@ -48,30 +48,35 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Deband>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Deband
 	 * @brief Spatial deband + deterministic grain. Process leaf.
 	 *
+	 * Attach with @c job.Video(in).Filter<Deband>(log).
+	 *
+	 * @par What it is for
+	 * Contouring on gradients (sky, walls, 8-bit or
+	 * crushed 10-bit masters). It is not a denoise: grain
+	 * here is only dither so the flatten does not re-band
+	 * in the next encode. Run **after** denoise, **before**
+	 * @ref Cas and @ref Scale.
+	 *
+	 * @par Do not stack
+	 * Do not run two Deband leaves. Do not use it as a
+	 * substitute for @ref Hqdn3d / @ref Bm3d. Heavy grain
+	 * on a clean master just adds noise.
+	 *
 	 * @par Algorithm
-	 * One frame. For each sample, the four neighbours at
-	 * @ref m_range are averaged when every |delta| is below
-	 * @ref m_threshold (scaled to the plane peak). A
-	 * position+PTS hash adds @ref m_grain so the same pixel
-	 * on the same picture always gets the same dither.
-	 * There is no temporal pass and no Hold.
+	 * One frame. Neighbours at @ref m_range are averaged
+	 * when every |delta| is below @ref m_threshold. A
+	 * position+PTS hash adds @ref m_grain. No Hold.
+	 * No avfilter `deband`.
 	 *
 	 * @par Mutation
-	 * Writes a new
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame and
-	 * @ref Filter::FFmpeg::Save. Uses @c Data / @c Linesize /
-	 * @c PlaneWidth / @c PlaneHeight / @c BitsPerComponent /
-	 * @c AllocVideo / @c CopyProps / @c Pts. No avfilter
-	 * `deband`.
+	 * Writes a new @ref StormByte::Multimedia::FFmpeg::AVFrame
+	 * and @ref Filter::FFmpeg::Save.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */

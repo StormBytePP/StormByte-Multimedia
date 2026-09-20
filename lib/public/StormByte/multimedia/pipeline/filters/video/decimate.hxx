@@ -50,38 +50,39 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Fieldmatch>(log).Filter<Decimate>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Decimate
 	 * @brief Cycle decimator via libavfilter `decimate`. Process leaf.
 	 *
+	 * Attach with @c job.Video(in).Filter<Fieldmatch>(log).Filter<Decimate>(log).
+	 *
+	 * @par What it is for
+	 * Second half of IVTC: after @ref Fieldmatch has rebuilt
+	 * progressive frames from a 3:2 telecine, this leaf drops
+	 * the leftover duplicate (cycle 5: 29.97 → 23.976). Alone
+	 * it only throws away the most similar frame of each
+	 * cycle; it does not unweave fields. Native 24p must not
+	 * use it. It is not a general frame-rate converter.
+	 *
 	 * @par Algorithm
-	 * Drops one frame in every @a cycle as the most-duplicate of
-	 * that window (3:2 IVTC → cycle 5, 29.97 → 23.976). Metrics
-	 * use @a dupthresh / @a scthresh. The graph owns the cycle;
-	 * this leaf does not Hold.
+	 * Drops one frame in every @a cycle as the most-duplicate
+	 * of that window. Metrics use @a dupthresh / @a scthresh.
+	 * The graph owns the cycle; this leaf does not Hold.
 	 *
 	 * Early frames may not leave @c buffersink (`EAGAIN`).
 	 * @ref Process then returns without @ref Filter::FFmpeg::Save.
 	 * Drain the last cycle in @ref Eof via @c AVFilterGraph::Flush.
 	 *
-	 * @par Pairing
-	 * Second half of IVTC after @ref Fieldmatch. Alone it only
-	 * drops the most similar frame of each cycle; it does not
-	 * unweave fields. Native 24p must not use it.
-	 *
 	 * @par HDR
 	 * Kept frames are copies as far as colour is concerned.
-	 * Primaries, transfer, range, chroma siting and SAR of the
-	 * source are copied onto the sink frame.
+	 * Primaries, transfer, range, chroma siting and SAR of
+	 * the source are copied onto the sink frame.
 	 *
 	 * @par Defaults
-	 * Empty arguments: @c cycle=5, @c dupthresh=1.1, @c scthresh=15.
-	 * Same as FFmpeg.
+	 * Empty arguments: @c cycle=5, @c dupthresh=1.1,
+	 * @c scthresh=15. Same as FFmpeg.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.

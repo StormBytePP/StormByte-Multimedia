@@ -50,20 +50,32 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Bm3d>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Bm3d
-	 * @brief Spatial BM3D denoise via libavfilter `bm3d` (`estim=basic`).
+	 * @brief Spatial BM3D denoise via libavfilter `bm3d` (`estim=basic`). Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<Bm3d>(log).
+	 *
+	 * @par What it is for
+	 * Heavy spatial grain when quality matters more than
+	 * runtime: stills, 1080p film, a master you will encode
+	 * once. Patch-matching keeps structure that a blur would
+	 * melt. It is not a temporal filter and will not fix
+	 * flicker. Prefer @ref Hqdn3d or @ref Atadenoise on a
+	 * long, mildly noisy encode.
+	 *
+	 * @par Do not stack
+	 * Exclusive with @ref NlMeans, @ref Fftdnoiz,
+	 * @ref VagueDenoiser and @ref Hqdn3d. Two spatial
+	 * denoisers smear detail and pay the cost twice.
+	 * @c estim=final is not available (second input pad).
 	 *
 	 * @par Algorithm
-	 * One frame. libavfilter groups similar 2-D patches, hard-thresholds
-	 * in the 3-D transform domain and aggregates. No temporal
-	 * references, no Hold, no off-by-one. @c estim=final is not used:
-	 * that mode needs a second input pad this wrapper does not expose.
+	 * One frame. libavfilter groups similar 2-D patches,
+	 * hard-thresholds in the 3-D transform domain and
+	 * aggregates. No temporal references, no Hold.
 	 *
 	 * @par Defaults
 	 * Empty arguments pick a profile from the first video frame:
@@ -71,21 +83,12 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 *   sigma=2, group=8, range=9, bstep=4
 	 * - below that (1080p class):
 	 *   sigma=3, group=16, range=9, bstep=4
-	 *
-	 * Patch log2 size is always 4 (16×16), FFmpeg's default.
-	 * Any argument the caller sets is used as-is. There is no later
-	 * clamp or “sane override”.
+	 * Patch log2 size is always 4 (16×16). Caller values are
+	 * used as-is.
 	 *
 	 * @par Cost
-	 * CPU-heavy and RAM-heavy. Work is roughly
-	 * O((W/bstep)×(H/bstep)×(range/mstep)²×block²×group) per plane,
-	 * plus several float planes the size of the frame. 4K with the
-	 * 1080 profile is a bad idea; the UHD profile exists so a 4K
-	 * job stays usable. Slice-threaded inside libavfilter.
-	 *
-	 * @par Do not stack
-	 * Exclusive with @ref NlMeans and @ref Hqdn3d. Two spatial
-	 * denoisers on the same track smear detail and pay the cost twice.
+	 * CPU- and RAM-heavy. 4K with the 1080 profile is a bad
+	 * idea; the UHD profile exists so a 4K job stays usable.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.

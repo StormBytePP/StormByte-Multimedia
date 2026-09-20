@@ -50,25 +50,32 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Audio
  * @brief Audio process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Audio(in).Filter<Rubberband>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	/**
 	 * @class Rubberband
-	 * @brief Time-stretch and pitch-shift via libavfilter `rubberband`.
+	 * @brief Time-stretch and pitch-shift via libavfilter `rubberband`. Process leaf.
+	 *
+	 * Attach with @c job.Audio(in).Filter<Rubberband>(log).
+	 *
+	 * @par What it is for
+	 * Change duration without changing pitch, or pitch without
+	 * changing duration (or both). Typical jobs: fit a track
+	 * to a picture cut, retune a source a few cents, slow
+	 * speech a notch without the chipmunk effect. It is not
+	 * @ref Resample: sample rate stays put; only tempo/pitch
+	 * move. Hardware does not apply to audio.
 	 *
 	 * @par Algorithm
 	 * librubberband through @ref FFmpeg::AVFilterGraph
-	 * (`abuffer → rubberband → abuffersink`). Tempo scales duration
-	 * without resampling the rate. Pitch scales frequency. Both
-	 * default to 1 (identity). The graph owns the look-ahead;
-	 * this leaf does not Hold.
+	 * (`abuffer → rubberband → abuffersink`). Tempo scales
+	 * duration. Pitch scales frequency. Both default to 1
+	 * (identity). The graph owns the look-ahead; this leaf
+	 * does not Hold.
 	 *
-	 * Early units may not leave the sink (`EAGAIN`). @ref Process
-	 * then returns without @ref Filter::FFmpeg::Save. PTS comes
-	 * from the sink frame.
+	 * Early units may not leave the sink (`EAGAIN`).
+	 * @ref Process then returns without @ref Filter::FFmpeg::Save.
+	 * PTS comes from the sink frame.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the sink frame.

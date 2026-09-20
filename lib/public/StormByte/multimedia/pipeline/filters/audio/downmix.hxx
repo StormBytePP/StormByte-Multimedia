@@ -59,40 +59,33 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	 *
 	 * Attach with @c job.Audio(in).Filter<Downmix>(log, layout).
 	 *
-	 * @par Algorithm
-	 * Compare @ref Property::ChannelCount of the constructor
-	 * target with @ref FFmpeg::AVFrame::Channels of the source:
-	 * more source channels than wanted opens
-	 * @c aformat=channel_layouts=&lt;ffmpeg name&gt;; equal count
-	 * is a no-op (no graph, no @ref Filter::FFmpeg::Save);
-	 * fewer source channels than wanted is @ref Filter::FFmpeg::Fail
-	 * (this leaf does not invent speakers). 7.1→5.1 is a valid
-	 * downmix. Hardware does not apply to audio.
+	 * @par What it is for
+	 * Delivery that has fewer speakers than the source
+	 * (7.1→5.1, 5.1→stereo). Target is any
+	 * @ref Property::ChannelLayout, not a fixed stereo.
+	 * Same channel **count** is a no-op (layout rename is
+	 * not this leaf). Fewer source channels than wanted
+	 * is @ref Filter::FFmpeg::Fail — use @ref Upmix.
+	 *
+	 * @par Do not stack
+	 * Not with @ref Upmix on the same stretch. After
+	 * @ref Resample is fine; before @ref Loudnorm so the
+	 * meter sees the delivered layout.
 	 *
 	 * @par LFE
-	 * `aformat` is tried first so a standard layout keeps its
-	 * LFE when the target has one. If that graph cannot open,
-	 * a second graph @c pan=&lt;name&gt;|FL=FL+0.707*LFE|FR=FR+0.707*LFE
-	 * folds LFE into the front pair. That fallback is not a
-	 * 5.1 / 7.1 room mix: surrounds stay as `aformat`/`pan`
-	 * map them; LFE energy is only the best effort fold into
-	 * FL/FR. Same-count input is still a no-op.
+	 * `aformat` first so a standard layout keeps LFE when
+	 * the target has one. Fallback
+	 * `pan=…|FL=FL+0.707*LFE|FR=FR+0.707*LFE` folds LFE
+	 * into the front pair. That is not a cinema 5.1 mix.
 	 *
 	 * @par Names
-	 * FFmpeg `aformat` tokens: mono, stereo, 2.1, 3.0, 4.0,
-	 * quad, 5.0, 5.1, 6.1, 7.1, 7.1(wide), octagonal, 22.2.
-	 * @ref Property::ChannelLayout::Unknown has no token and Fails.
+	 * mono, stereo, 2.1, 3.0, 4.0, quad, 5.0, 5.1, 6.1,
+	 * 7.1, 7.1(wide), octagonal, 22.2.
+	 * @ref Property::ChannelLayout::Unknown Fails.
 	 *
 	 * @par Mutation
-	 * @ref Filter::FFmpeg::Save of the abuffersink frame.
-	 * @ref Backend::Pipeline::Frame::Put then
-	 * @ref Backend::Pipeline::Frame::BindProperties rewrites
-	 * @ref Pipeline::Frame::Audio (rate, channels, layout)
-	 * from the handle mask. Empty sink with a successful
-	 * Filter is EAGAIN: log wait and return.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
-	 * @see StormByte::Multimedia::FFmpeg::AVFilterGraph
+	 * @ref Filter::FFmpeg::Save; BindProperties rewrites
+	 * Frame::Audio. EAGAIN = wait. @ref Eof flushes.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Downmix: public Filter::Process {
 		public:

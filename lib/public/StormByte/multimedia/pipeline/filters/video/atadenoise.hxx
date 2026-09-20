@@ -50,28 +50,41 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Atadenoise>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Atadenoise
-	 * @brief Adaptive temporal average denoise via libavfilter `atadenoise`.
+	 * @brief Adaptive temporal average denoise via libavfilter `atadenoise`. Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<Atadenoise>(log).
+	 *
+	 * @par What it is for
+	 * Random temporal grain (film, analog tape, cheap CMOS).
+	 * It averages neighbours in time when the jump is small,
+	 * so static grain dies and edges survive. It is the first
+	 * denoise on a noisy master, not the last look. Good before
+	 * @ref VagueDenoiser or @ref Cas. Skip it on a clean digital
+	 * source; a wide window on a fade or a pan will smear.
+	 *
+	 * @par Do not stack
+	 * Not with another temporal denoise (@ref Hqdn3d,
+	 * @ref Fftdnoiz with prev/next). One temporal window is
+	 * enough. After a deinterlace (@ref Bwdif) is fine; before
+	 * Fieldmatch is not (it blurs field relationships).
 	 *
 	 * @par Algorithm
-	 * libavfilter averages the current sample with neighbours in a
-	 * temporal window when |delta| to the centre is below @a a and
-	 * the step to the previous neighbour is below @a b. The graph
-	 * owns the look; this leaf does not Hold.
+	 * libavfilter averages the current sample with neighbours
+	 * in a temporal window when |delta| to the centre is below
+	 * @a a and the step to the previous neighbour is below @a b.
+	 * The graph owns the look; this leaf does not Hold.
 	 *
-	 * Early frames may not leave @c buffersink (`EAGAIN`). @ref Process
-	 * then returns without @ref Filter::FFmpeg::Save. PTS comes from
-	 * the sink frame, not from the unit just pushed. Drain remaining
-	 * frames in @ref Eof via @c AVFilterGraph::Flush.
+	 * Early frames may not leave @c buffersink (`EAGAIN`).
+	 * @ref Process then returns without @ref Filter::FFmpeg::Save.
+	 * Drain remaining frames in @ref Eof via @c AVFilterGraph::Flush.
 	 *
 	 * @par Defaults
-	 * Empty arguments use FFmpeg's: s=9, 0a/1a/2a=0.02, 0b/1b/2b=0.04.
+	 * Empty arguments use FFmpeg's: s=9, 0a/1a/2a=0.02,
+	 * 0b/1b/2b=0.04.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.

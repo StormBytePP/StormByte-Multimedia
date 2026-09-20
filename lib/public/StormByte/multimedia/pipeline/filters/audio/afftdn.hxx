@@ -58,22 +58,23 @@ namespace StormByte::Multimedia::Pipeline::Filter::Audio {
 	 *
 	 * Attach with @c job.Audio(in).Filter<Afftdn>(log).
 	 *
+	 * @par What it is for
+	 * Steady hiss / air / tape floor on dialogue and
+	 * music. Not a click repair, not a reverb killer, not
+	 * @ref Loudnorm. If the noise floor moves, pass
+	 * `trackNoise=true`. Too much `nr` hollows the top.
+	 *
+	 * @par Do not stack
+	 * One Afftdn. No custom `bn` profile and no
+	 * `sample_noise` window in this leaf. Fine before
+	 * Downmix/Upmix and before Loudnorm.
+	 *
 	 * @par Algorithm
-	 * Graph is @c afftdn=nr=:nf=:tn=:nt=w:om=o. Empty @a nr is
-	 * 12 dB (FFmpeg default, range 0.01–97). Empty @a nf is
-	 * −50 dB (range −80…−20). Empty @a trackNoise is off
-	 * (FFmpeg default). Noise type stays white; there is no
-	 * custom @c bn profile and no @c sample_noise command
-	 * window. Hardware does not apply to audio. This leaf
-	 * does not Hold; the graph owns FFT overlap.
+	 * `afftdn=nr=:nf=:tn=:nt=w:om=o`. Empty nr=12 dB,
+	 * nf=−50 dB, tn off. Graph owns FFT overlap; no Hold.
 	 *
 	 * @par Mutation
-	 * @ref Filter::FFmpeg::Save of the abuffersink frame.
-	 * Empty sink with a successful Filter is EAGAIN: log
-	 * wait and return. @ref Eof flushes.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
-	 * @see StormByte::Multimedia::FFmpeg::AVFilterGraph
+	 * Save. EAGAIN = wait. @ref Eof flushes.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Afftdn: public Filter::Process {
 		public:

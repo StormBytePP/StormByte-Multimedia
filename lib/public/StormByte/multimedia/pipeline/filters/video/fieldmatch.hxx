@@ -50,41 +50,46 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Fieldmatch>(log).Filter<Decimate>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Fieldmatch
 	 * @brief Inverse-telecine field matcher via libavfilter `fieldmatch`. Process leaf.
 	 *
-	 * @par Algorithm
-	 * Reconstructs progressive frames from a 3:2 telecine by matching
-	 * fields across neighbouring pictures (p/c/n, optional u/b). It
-	 * does **not** drop the duplicate. A complete IVTC is this leaf
-	 * followed by @ref Decimate on the same stretch.
+	 * Attach with @c job.Video(in).Filter<Fieldmatch>(log).Filter<Decimate>(log).
 	 *
-	 * The graph owns the look-ahead; this leaf does not Hold. Early
-	 * frames may not leave @c buffersink (`EAGAIN`). @ref Process
-	 * then returns without @ref Filter::FFmpeg::Save. Drain the tail
-	 * in @ref Eof via @c AVFilterGraph::Flush.
+	 * @par What it is for
+	 * Hard 3:2 telecine (film at 24p stuffed into 29.97i/p).
+	 * Rebuilds the original progressive frames by pairing
+	 * fields. It does **not** drop the leftover duplicate:
+	 * that is @ref Decimate on the same stretch. Native
+	 * 23.976/24 progressive film must not use this pair.
+	 * Soft/hybrid cadence is a worse fit than a clean 3:2.
 	 *
 	 * @par What it is not
-	 * Not a deinterlacer. Do not stack @ref Bwdif or @ref Yadif
-	 * *before* this leaf on a hard telecine: they destroy the field
-	 * relationship fieldmatch needs. A residual comb after match
-	 * can go through Yadif @c onlyInterlaced, then Decimate.
+	 * Not a deinterlacer. Do not stack @ref Bwdif *before*
+	 * this leaf on a hard telecine: that destroys the field
+	 * relationship fieldmatch needs. Residual comb after
+	 * the match can go through a deinterlacer in
+	 * interlaced-only mode, then Decimate.
 	 *
-	 * Native 23.976/24 progressive film must not use this pair.
+	 * @par Algorithm
+	 * Matches fields across neighbouring pictures (p/c/n,
+	 * optional u/b). The graph owns the look-ahead; this
+	 * leaf does not Hold. Early frames may not leave
+	 * @c buffersink (`EAGAIN`). @ref Process then returns
+	 * without @ref Filter::FFmpeg::Save. Drain the tail in
+	 * @ref Eof via @c AVFilterGraph::Flush.
 	 *
 	 * @par HDR
-	 * Geometry is unchanged. Primaries, transfer, range, chroma
-	 * siting and SAR of the source are copied onto the sink frame.
+	 * Geometry is unchanged. Primaries, transfer, range,
+	 * chroma siting and SAR of the source are copied onto
+	 * the sink frame.
 	 *
 	 * @par Defaults
-	 * Empty arguments: @c order=auto, @c mode=pc_n, @c combmatch=sc.
-	 * Same as FFmpeg. Dirty edits: pass @c combmatch=full.
+	 * Empty arguments: @c order=auto, @c mode=pc_n,
+	 * @c combmatch=sc. Same as FFmpeg. Dirty edits: pass
+	 * @c combmatch=full.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.

@@ -50,14 +50,21 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Cas>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Cas
 	 * @brief Contrast Adaptive Sharpen via libavfilter `cas`. Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<Cas>(log).
+	 *
+	 * @par What it is for
+	 * Last-mile acutance after denoise, before the encode. Film,
+	 * tape and web masters that look soft once grain is gone;
+	 * not a restorer of detail that was never there. Put it
+	 * after @ref Atadenoise / @ref Bm3d / @ref Fftdnoiz, not
+	 * instead of them. Do not stack `unsharp` on the same
+	 * stretch. Skip it on an already over-sharpened master.
 	 *
 	 * @par Algorithm
 	 * AMD FidelityFX CAS. Each sample is sharpened against its
@@ -65,12 +72,6 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * grain is almost untouched, edges pick up acutance. One
 	 * frame in, one frame out. The graph owns the look; this
 	 * leaf does not Hold.
-	 *
-	 * @par Where it sits
-	 * After a denoise leaf (@ref Fftdnoiz, @ref Atadenoise,
-	 * @ref Bm3d, …), not instead of one. Denoise removes grain;
-	 * CAS puts back edge contrast the encode will otherwise
-	 * soften. Do not stack @c unsharp on the same stretch.
 	 *
 	 * @par HDR
 	 * Spatial only. Primaries, transfer, range, chroma siting

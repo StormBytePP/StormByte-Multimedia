@@ -50,30 +50,38 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Fftdnoiz>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Fftdnoiz
-	 * @brief 3-D FFT denoise via libavfilter `fftdnoiz` (FFmpeg >= 9.0.1).
+	 * @brief 3-D FFT denoise via libavfilter `fftdnoiz` (FFmpeg ≥ 9.0.1). Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<Fftdnoiz>(log).
+	 *
+	 * @par What it is for
+	 * Film-like grain that lives in both space and time.
+	 * With prev/next it is the “expensive grain” leaf;
+	 * spatial-only (prev=next=0) is a milder FFT denoise.
+	 * Prefer this over stacking Atadenoise+Bm3d.
+	 *
+	 * @par Do not stack
+	 * Exclusive with @ref Bm3d, @ref NlMeans,
+	 * @ref VagueDenoiser and @ref Hqdn3d. Do not also run
+	 * @ref Atadenoise when prev/next are non-zero.
 	 *
 	 * @par Algorithm
-	 * Frequency-domain denoise on overlapping blocks. With
-	 * @a prev / @a next > 0 the transform is temporal as well
-	 * (film grain). Early frames may not leave the sink (`EAGAIN`);
-	 * @ref Process then returns without Save. @ref Eof closes
-	 * buffersrc and drains the remaining window.
-	 *
-	 * @par Cost
-	 * Heavy on 4K, especially with a temporal window. Do not stack
-	 * with @ref Bm3d or @ref NlMeans on the same track.
+	 * Frequency-domain denoise on overlapping blocks.
+	 * Early frames may not leave the sink (`EAGAIN`);
+	 * @ref Process then returns without Save. @ref Eof
+	 * drains the window.
 	 *
 	 * @par Defaults
-	 * Empty arguments: sigma=1, prev=1, next=1 (3-D). FFmpeg's
-	 * own prev/next default is 0 (spatial only). `block` is the
-	 * FFmpeg 9 pixel size (32). `prev`/`next` are clamped to 0..1.
+	 * Empty arguments: sigma=1, prev=1, next=1 (3-D).
+	 * FFmpeg’s own prev/next default is 0. `block` is the
+	 * FFmpeg 9 size (32). prev/next clamped to 0..1.
+	 *
+	 * @par Cost
+	 * Heavy on 4K, especially with a temporal window.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of the buffersink frame.

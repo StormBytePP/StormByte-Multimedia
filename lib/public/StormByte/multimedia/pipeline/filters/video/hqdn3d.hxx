@@ -48,30 +48,39 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Hqdn3d>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Hqdn3d
 	 * @brief High-quality 3D denoise. Process leaf.
 	 *
+	 * Attach with @c job.Video(in).Filter<Hqdn3d>(log).
+	 *
+	 * @par What it is for
+	 * Everyday denoise: light analog grain, DVD/broadcast
+	 * hiss, web rips. Fast, one output per input. Default
+	 * pick when you do not want BM3D/FFT cost. Too strong
+	 * and it melts texture into plastic.
+	 *
+	 * @par Do not stack
+	 * Exclusive with @ref Bm3d, @ref NlMeans,
+	 * @ref Fftdnoiz, @ref VagueDenoiser and @ref Atadenoise
+	 * (it already has a temporal term). Fine before
+	 * @ref Deband and @ref Cas.
+	 *
 	 * @par Memory
-	 * Keeps the last **filtered** picture (@ref m_prev). The
-	 * current unit is always Saved in the same Process: spatial
-	 * on the first frame, spatial + temporal after that. Frame
-	 * count stays N. Not Hold.
+	 * Keeps the last **filtered** picture. Spatial on the
+	 * first frame, spatial + temporal after that. Not Hold.
+	 * No avfilter `hqdn3d`.
 	 *
 	 * @par Strength
-	 * Four coefficients in 8-bit units, same layout as FFmpeg
-	 * hqdn3d: luma spatial, chroma spatial, luma temporal,
-	 * chroma temporal. 0 on a slot uses the built-in default.
+	 * Four coefficients in 8-bit units, same layout as
+	 * FFmpeg hqdn3d. 0 on a slot uses the built-in default
+	 * (4 / 3 / 6 / 4.5).
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of a new
 	 * @ref StormByte::Multimedia::FFmpeg::AVFrame.
-	 * No avfilter `hqdn3d`.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */

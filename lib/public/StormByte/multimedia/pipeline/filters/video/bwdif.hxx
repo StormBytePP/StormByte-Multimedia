@@ -48,45 +48,37 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Bwdif>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Bwdif
-	 * @brief Bob Weaver deinterlace. Process leaf.
+	 * @brief Bob Weaver deinterlace. Process leaf. Preferred deinterlace.
+	 *
+	 * Attach with @c job.Video(in).Filter<Bwdif>(log).
+	 *
+	 * @par What it is for
+	 * True interlaced video (50i / 59.94i cameras, broadcast).
+	 * Same frame rate out (one progressive per interlaced
+	 * input). This is the StormByte deinterlace; @ref Yadif
+	 * exists as the older interpolator.
+	 *
+	 * @par What it is not
+	 * Not IVTC. Hard 3:2 telecine wants
+	 * @ref Fieldmatch + @ref Decimate, not this leaf.
+	 * Do not run Bwdif **before** Fieldmatch.
 	 *
 	 * @par Versus Yadif
 	 * Same job, different interpolator (cubic spatial +
 	 * temporal fallback). Do not stack @ref Yadif and
-	 * @ref Bwdif on the same tube: the first already emits
-	 * progressive frames, and with @c onlyInterlaced the
-	 * second is a no-op. Pick one.
+	 * @ref Bwdif: pick one. With @c onlyInterlaced the
+	 * second would be a no-op anyway.
 	 *
 	 * @par Delay, not Hold
-	 * Temporal bwdif needs the previous and next picture
-	 * for the whole stream. @ref Hold is a one-shot window.
-	 * This leaf keeps two RAII clones (@ref m_prev,
-	 * @ref m_cur) and does not call Hold. The first unit
+	 * Two RAII clones (@ref m_prev, @ref m_cur). First unit
 	 * waits for a neighbour; @ref Eof weaves the tail.
-	 * N in, N @ref Filter::FFmpeg::Save.
+	 * Progressive input is a no-op when @c onlyInterlaced
+	 * is set. No avfilter `bwdif`.
 	 *
-	 * @par Mode
-	 * One output frame per input frame (same rate).
-	 *
-	 * @par Mutation
-	 * Builds a progressive
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame from the
-	 * three looks and Save. Progressive input is a no-op
-	 * (no Save) when @c onlyInterlaced is set.
-	 *
-	 * Uses @c Data / @c Linesize / @c PlaneWidth /
-	 * @c PlaneHeight / @c BitsPerComponent / @c Clone /
-	 * @c AllocVideo / @c CopyProps / @c Interlaced /
-	 * @c TopFieldFirst. No avfilter `bwdif`.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 * @see StormByte::Multimedia::Pipeline::Filter::Video::Yadif
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Bwdif: public Filter::Process {

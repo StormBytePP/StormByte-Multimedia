@@ -56,11 +56,6 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process. Attach with
- * @c job.Video(in, out).Filter<Watermark>(log, path, Anchor::BottomRight).
- * The first argument is the shared logger of the tube. See
- * @ref Filter::FFmpeg logging notes.
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
@@ -86,49 +81,35 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * @class Watermark
 	 * @brief Overlays a still image on decoded video. Real Hold example.
 	 *
-	 * Opacity 0 is a no-op. A missing, empty, undecodable or oversized
-	 * logo does not @ref FFmpeg::Fail the job: the filter logs a Warning,
-	 * sets opacity to 0 and becomes a passthrough. @ref FFmpeg::Fail is
-	 * reserved for a broken video unit from the tube.
+	 * Attach with
+	 * @c job.Video(in, out).Filter<Watermark>(log, path, Anchor::BottomRight).
+	 *
+	 * @par What it is for
+	 * Station / disc / review logo on the **finished**
+	 * picture. Last video leaf: after denoise, deband,
+	 * CAS and Scale (unless the PNG is authored for the
+	 * pre-scale size). Opacity 0 is a no-op. A missing or
+	 * broken logo logs a Warning and becomes passthrough;
+	 * it does not Fail the job.
+	 *
+	 * @par Do not stack
+	 * One Watermark. Do not Hold-probe twice. Absolute
+	 * @ref Property::Point skips Hold (frame pixels).
+	 * Anchor placement Holds to find letterbox bars.
 	 *
 	 * @par Hold (anchor placement only)
-	 * Movies often show a black slate before letterbox bars appear.
-	 * An @ref Anchor therefore opens @ref FFmpeg::Hold(@ref ProbeMax)
-	 * on the first video unit. Parked units are not forwarded.
-	 * @ref Process only probes; it returns while @ref FFmpeg::Held
-	 * is true so @ref Paint does not run on the live unit.
+	 * Opens @ref FFmpeg::Hold(@ref ProbeMax) on the first
+	 * video unit. @ref Process only probes while Held.
+	 * @ref FFmpeg::Release replays parked units into
+	 * @ref Paint so the logo is on from frame one.
+	 * Release early when bars are stable (`m_stable >= 8`).
+	 * @ref LastChance must Release or the job Fails.
 	 *
-	 * @ref FFmpeg::Release replays every parked unit through
-	 * @ref Process again. After @ref m_released is set those
-	 * replays fall through to @ref Paint, so the logo appears
-	 * from the first frame, not after the probe window.
+	 * Bars are measured on a GRAY8 plane from ScaleTo, not
+	 * on plane 0 of HDR. Overlay is RGBA then back to the
+	 * source format.
 	 *
-	 * Release early when a letterbox pair is stable
-	 * (@c m_stable >= 8). If the ceiling is hit first,
-	 * @ref LastChance keeps the bars that were found or
-	 * zeros them (full-frame BottomRight) and Releases.
-	 * Returning from LastChance without Release fails the job.
-	 *
-	 * An absolute @ref StormByte::Multimedia::Property::Point
-	 * does not Hold: coordinates are already in frame pixels.
-	 *
-	 * Bars are measured on a GRAY8 plane from
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo,
-	 * not on plane 0 of HDR sources. Overlay is RGBA then back
-	 * to the source format. Talks to libav only through
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame and
-	 * @ref Filter::FFmpeg::Save.
-	 *
-	 * The first constructor argument is the shared logger of the
-	 * tube. The leaf may call protected @ref FFmpeg::Log. That is
-	 * not @ref Fail and is not a bar measurement.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Hold
-	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::LastChance
-	 * @see StormByte::Multimedia::Pipeline::Filter::FFmpeg::Log
-	 * @see StormByte::Multimedia::FFmpeg::AVFrame
-	 * @see StormByte::Multimedia::FFmpeg::Sws
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Watermark: public Process {
 		public:

@@ -52,30 +52,33 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Scale>(log, w, h).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Scale
 	 * @brief Scales a decoded video frame. Process leaf.
 	 *
+	 * Attach with @c job.Video(in).Filter<Scale>(log, w, h).
+	 *
+	 * @par What it is for
+	 * Change geometry once, usually last among picture
+	 * filters (after denoise / deband / CAS, before
+	 * @ref Watermark if the logo is sized for the
+	 * **output**). Upscale does not invent detail; CAS
+	 * belongs on the source size, not after a 2× blow-up,
+	 * unless you know why.
+	 *
+	 * @par Do not stack
+	 * One Scale per tube. Same size as the source is a
+	 * no-op (no Save). Both axes 0 Fail.
+	 *
 	 * @par Engine
-	 * Empty @p filter / @p scaler use
+	 * Empty filter/scaler use
 	 * @ref StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo
-	 * defaults (@c Resample::Default, @c Scaler::Zimg).
-	 * Any value the caller sets is passed as-is. Packed RGB
-	 * is not a zimg layout; pass @c Scaler::Sws for that
-	 * conversion.
+	 * defaults (`Resample::Default`, `Scaler::Zimg`).
+	 * Packed RGB is not a zimg layout; pass `Scaler::Sws`.
+	 * Width or height 0 keeps aspect ratio.
 	 *
-	 * @par Geometry
-	 * Width or height 0 keeps the source aspect ratio. Both 0
-	 * fails on the first video frame. Same size as the source
-	 * is a no-op (no Save). Destination pixel format matches
-	 * the source.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 * @see StormByte::Multimedia::FFmpeg::AVFrame::ScaleTo
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Scale: public Filter::Process {

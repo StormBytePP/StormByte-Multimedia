@@ -50,14 +50,21 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Deflicker>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Deflicker
 	 * @brief Temporal luminance smoother via libavfilter `deflicker`. Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<Deflicker>(log).
+	 *
+	 * @par What it is for
+	 * Lamp flicker on film scans, exposure pumping, and some
+	 * compressed masters whose mean luma jumps frame to frame.
+	 * It is not a denoise and not a deband. On a stable digital
+	 * master it does almost nothing useful and can flatten
+	 * intended fades if @a size is large. Use it when the
+	 * brightness itself is the defect, not the grain.
 	 *
 	 * @par Algorithm
 	 * Measures mean luma of each picture and scales the whole
@@ -70,13 +77,6 @@ namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	 * Early frames may not leave @c buffersink (`EAGAIN`).
 	 * @ref Process then returns without @ref Filter::FFmpeg::Save.
 	 * Drain the tail in @ref Eof via @c AVFilterGraph::Flush.
-	 *
-	 * @par What it is for
-	 * Lamp flicker on film scans, exposure pumping, some
-	 * compressed masters whose DC luma jumps frame to frame.
-	 * It is not a denoise and not a deband. On a stable
-	 * digital master it does almost nothing useful and can
-	 * flatten intended fades if @a size is large.
 	 *
 	 * @par HDR
 	 * A global luma gain. Primaries, transfer, range, chroma

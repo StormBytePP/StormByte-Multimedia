@@ -50,20 +50,27 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<VagueDenoiser>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class VagueDenoiser
-	 * @brief Wavelet denoise via libavfilter `vaguedenoiser`.
+	 * @brief Wavelet denoise via libavfilter `vaguedenoiser`. Process leaf.
+	 *
+	 * Attach with @c job.Video(in).Filter<VagueDenoiser>(log).
+	 *
+	 * @par What it is for
+	 * Fine residual grain after a temporal pass
+	 * (@ref Atadenoise), or a cheap spatial-only clean on
+	 * 4K where Bm3d/NlMeans/Fftdnoiz would stall. It will
+	 * not remove large blotches or mosquito.
+	 *
+	 * @par Do not stack
+	 * Exclusive with @ref Bm3d, @ref NlMeans,
+	 * @ref Fftdnoiz and @ref Hqdn3d. After Atadenoise is
+	 * the intended pairing.
 	 *
 	 * @par Algorithm
-	 * 2-D wavelet shrink. Spatial only; no temporal window and no
-	 * Hold. Cheaper than @ref Bm3d / @ref NlMeans / @ref Fftdnoiz
-	 * on 4K. Good on fine grain after @ref Atadenoise, not as a
-	 * stack with another spatial denoise.
+	 * 2-D wavelet shrink. Spatial only; no Hold.
 	 *
 	 * @par Defaults
 	 * Empty arguments use FFmpeg's: threshold=2, nsteps=6,

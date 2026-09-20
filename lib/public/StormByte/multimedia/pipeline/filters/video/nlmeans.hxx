@@ -48,36 +48,38 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<NlMeans>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class NlMeans
 	 * @brief Spatial non-local means denoise. Process leaf.
 	 *
+	 * Attach with @c job.Video(in).Filter<NlMeans>(log).
+	 *
+	 * @par What it is for
+	 * Moderate spatial grain when BM3D is too expensive and
+	 * hqdn3d is too blunt. Cartoon / anime edges survive
+	 * better than with a box blur. Still one frame, no
+	 * temporal help. Not the first choice on 4K.
+	 *
+	 * @par Do not stack
+	 * Exclusive with @ref Bm3d, @ref Fftdnoiz,
+	 * @ref VagueDenoiser and @ref Hqdn3d.
+	 *
 	 * @par Algorithm
 	 * One frame. Each sample is a similarity-weighted average
-	 * of patches inside a search window. No temporal references,
-	 * no Hold, no off-by-one.
+	 * of patches inside a search window. No Hold.
+	 * Implemented on the frame, not via avfilter `nlmeans`.
 	 *
 	 * @par Defaults
-	 * Empty @c research / @c patch / @c strength pick a profile
-	 * from the first video frame:
-	 * - 4K and above (width ≥ 3840 or height ≥ 2160):
-	 *   research=2, patch=1, strength=0.8
-	 * - below that (1080p class): research=3, patch=2, strength=1.0
-	 *
-	 * Any argument the caller sets is used as-is on every frame.
-	 * There is no later clamp or “sane override”.
-	 *
-	 * Cost is O(width × height × research² × patch²) per plane.
+	 * Empty arguments pick a profile from the first video frame:
+	 * - 4K+: research=2, patch=1, strength=0.8
+	 * - below: research=3, patch=2, strength=1.0
+	 * Caller values are used as-is.
 	 *
 	 * @par Mutation
 	 * @ref Filter::FFmpeg::Save of a new
 	 * @ref StormByte::Multimedia::FFmpeg::AVFrame.
-	 * No avfilter `nlmeans`.
 	 *
 	 * @see StormByte::Multimedia::Pipeline::Filter::Process
 	 */

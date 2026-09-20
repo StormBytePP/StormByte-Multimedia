@@ -48,41 +48,31 @@
 /**
  * @namespace StormByte::Multimedia::Pipeline::Filter::Video
  * @brief Video process filters.
- *
- * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
- * Attach with @c job.Video(in).Filter<Yadif>(log).
  */
 namespace StormByte::Multimedia::Pipeline::Filter::Video {
 	/**
 	 * @class Yadif
-	 * @brief YADIF deinterlace. Process leaf.
+	 * @brief YADIF deinterlace. Process leaf. Legacy alternative to @ref Bwdif.
+	 *
+	 * Attach with @c job.Video(in).Filter<Yadif>(log).
+	 *
+	 * @par What it is for
+	 * Same problem as @ref Bwdif: true interlaced video at
+	 * the same output rate. Prefer Bwdif on new jobs. Keep
+	 * Yadif when a pipeline was signed off on it or when
+	 * residual comb after Fieldmatch needs an interlaced-only
+	 * pass (`onlyInterlaced=true`) **after** the match, before
+	 * Decimate.
+	 *
+	 * @par Do not stack
+	 * Not with @ref Bwdif. Not before @ref Fieldmatch.
+	 * Not on native 24p.
 	 *
 	 * @par Delay, not Hold
-	 * Temporal yadif needs the previous and next picture for
-	 * the whole stream. @ref Hold parks a one-shot window and
-	 * @ref Release replays it; after that later frames would
-	 * arrive alone. This leaf keeps two RAII clones
-	 * (@ref m_prev, @ref m_cur) and does not call Hold.
-	 * The first two units wait until a neighbour exists;
-	 * @ref Eof weaves the tail. Two frames of delay do not
-	 * trip step caps.
+	 * Two RAII clones. Field-rate doubling is out of scope.
+	 * No avfilter `yadif`.
 	 *
-	 * @par Mode
-	 * One output frame per input frame (same rate). Field-rate
-	 * doubling is out of scope for this cut.
-	 *
-	 * @par Mutation
-	 * Builds a progressive
-	 * @ref StormByte::Multimedia::FFmpeg::AVFrame from the
-	 * three looks and @ref Filter::FFmpeg::Save. Progressive
-	 * input is a no-op (no Save) when @c onlyInterlaced is set.
-	 *
-	 * Uses @c Data / @c Linesize / @c PlaneWidth /
-	 * @c PlaneHeight / @c BitsPerComponent / @c Clone /
-	 * @c AllocVideo / @c CopyProps / @c Interlaced /
-	 * @c TopFieldFirst. No avfilter `yadif`.
-	 *
-	 * @see StormByte::Multimedia::Pipeline::Filter::Process
+	 * @see StormByte::Multimedia::Pipeline::Filter::Video::Bwdif
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC Yadif: public Filter::Process {
 		public:
