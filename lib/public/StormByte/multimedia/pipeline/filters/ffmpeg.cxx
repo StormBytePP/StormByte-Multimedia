@@ -261,12 +261,16 @@ void FFmpeg::Release() noexcept {
 		const bool queued = !parked.empty() &&
 			std::find(parked.begin(), parked.end(), m_current) != parked.end();
 		if (!queued)
-			parked.push_back(m_current);
+			parked.push_back(std::move(m_current));
+		else
+			m_current.reset();
 	}
 	for (auto& item : parked) {
-		m_current = item;
+		m_current = std::move(item);
+		if (!m_current)
+			continue;
 		if (IsAnalytics(*this)) {
-			Work(m_current);
+			Work(std::move(m_current));
 			continue;
 		}
 
