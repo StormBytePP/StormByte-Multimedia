@@ -1,0 +1,130 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Multimedia.
+ *
+ * StormByte-Multimedia original source is dual-licensed:
+ *
+ * 1. GNU Lesser General Public License v3.0 (or later)
+ *    You may redistribute and/or modify this file under the terms of the
+ *    GNU Lesser General Public License as published by the Free Software
+ *    Foundation, either version 3 of the License, or (at your option)
+ *    any later version.
+ *
+ * 2. Commercial license
+ *    Alternatively, this file may be used under the terms of a commercial
+ *    license agreement with the copyright holder
+ *    (David C. Manuelda <StormByte@gmail.com>).
+ *
+ * Both licenses apply only to original StormByte-Multimedia source in this
+ * file. Third-party components — including FFmpeg and embedded trained data —
+ * remain under their own licenses and are not covered by the commercial grant.
+ *
+ * Neither license grants any patent rights. Any patent licenses required
+ * to use this software or third-party components must be obtained separately
+ * from the patent holders.
+ *
+ * StormByte-Multimedia is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 3 along with StormByte-Multimedia. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
+ */
+
+#pragma once
+
+#include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/ffmpeg/AVFilterGraph.hxx>
+#include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
+#include <StormByte/multimedia/visibility.h>
+
+#include <memory>
+#include <optional>
+#include <string>
+
+/**
+ * @namespace StormByte::Multimedia::Pipeline::Filter::Audio
+ * @brief Audio process filters.
+ *
+ * Inherit @ref Filter::Process, not @ref Filter::FFmpeg.
+ * Attach with @c job.Audio(in).Filter<Rubberband>(log).
+ */
+namespace StormByte::Multimedia::Pipeline::Filter::Audio {
+	/**
+	 * @class Rubberband
+	 * @brief Time-stretch and pitch-shift via libavfilter `rubberband`.
+	 *
+	 * @par Algorithm
+	 * librubberband through @ref FFmpeg::AVFilterGraph
+	 * (`abuffer → rubberband → abuffersink`). Tempo scales duration
+	 * without resampling the rate. Pitch scales frequency. Both
+	 * default to 1 (identity). The graph owns the look-ahead;
+	 * this leaf does not Hold.
+	 *
+	 * Early units may not leave the sink (`EAGAIN`). @ref Process
+	 * then returns without @ref Filter::FFmpeg::Save. PTS comes
+	 * from the sink frame.
+	 *
+	 * @par Mutation
+	 * @ref Filter::FFmpeg::Save of the sink frame.
+	 *
+	 * @see StormByte::Multimedia::Pipeline::Filter::Process
+	 * @see StormByte::Multimedia::FFmpeg::AVFilterGraph
+	 */
+	class STORMBYTE_MULTIMEDIA_PUBLIC Rubberband: public Filter::Process {
+		public:
+			/**
+			 * @brief Rubber Band tempo / pitch (`rubberband`).
+			 * @param log Shared logger. Empty pointer means no log.
+			 * @param tempo Tempo scale. Empty → 1. Range 0.01–100.
+			 * @param pitch Pitch scale. Empty → 1. Range 0.01–100.
+			 */
+			Rubberband(std::shared_ptr<StormByte::Logger::Log> log,
+				std::optional<double> tempo = {},
+				std::optional<double> pitch = {}) noexcept;
+
+			Rubberband(const Rubberband& other) = delete;
+			Rubberband(Rubberband&& other) noexcept = delete;
+			~Rubberband() noexcept override = default;
+			Rubberband& operator=(const Rubberband& other) = delete;
+			Rubberband& operator=(Rubberband&& other) noexcept = delete;
+
+			/**
+			 * @brief Media this filter handles.
+			 * @return Audio.
+			 */
+			enum StormByte::Multimedia::Type Media() const noexcept override;
+
+			/**
+			 * @brief Drops the cached graph.
+			 */
+			void Clean() noexcept override;
+
+			/**
+			 * @brief Resets the graph before the first frame.
+			 */
+			void Setup() noexcept override;
+
+			/**
+			 * @brief Pushes one audio frame through `rubberband` and Save.
+			 * @param frame Current pipeline unit. Non-audio is ignored.
+			 */
+			void Process(const Pipeline::Frame& frame) noexcept override;
+
+		private:
+			/**
+			 * @brief Builds the avfilter chain.
+			 * @return `rubberband=...` for @ref FFmpeg::AVFilterGraph::Ensure.
+			 */
+			std::string Chain() const noexcept;
+
+			std::optional<double> m_tempoIn;	///< Caller tempo, or empty
+			std::optional<double> m_pitchIn;	///< Caller pitch, or empty
+			std::unique_ptr<StormByte::Multimedia::FFmpeg::AVFilterGraph> m_graph;	///< Reused graph
+	};
+}
