@@ -47,6 +47,7 @@
 #include <format>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	using StormByte::Multimedia::Pipeline::CheckResult;
@@ -161,12 +162,31 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 				m_owner.ReachedEof();
 			if (!m_owner.Eof())
 				return;
-			{
-				std::unique_lock lock(m_parkMutex);
-				m_parkCv.wait(lock, [this]() {
-					return m_feedStop.load(std::memory_order_acquire) || !ParkPending();
-				});
+
+			// Source EoF. Do not sit on ParkPending forever: the feeder
+			// can be blocked in Emit while the decoder already Wait()s on
+			// an empty hopper. Drain the park on this thread, then stop.
+			m_parkCv.notify_all();
+			for (;;) {
+				std::vector<Packet::PointerType> leftover;
+				{
+					std::unique_lock lock(m_parkMutex);
+					if (!ParkPending())
+						break;
+					for (auto& [track, queue] : m_park) {
+						while (!queue.empty()) {
+							leftover.push_back(std::move(queue.front()));
+							queue.pop_front();
+						}
+					}
+				}
+				m_parkCv.notify_all();
+				for (auto& item : leftover) {
+					if (item)
+						Emit(std::move(item));
+				}
 			}
+
 			StopFeed();
 			Ended();
 			return;

@@ -214,7 +214,7 @@ void Step::Wait() noexcept {
 	Log(Level::LowLevel, "wait");
 	std::unique_lock lock(m_wait);
 	m_wake.wait(lock, [this] {
-		return Stopping() || m_pipe->Ready() || WakeNow();
+		return Stopping() || m_pipe->Ready() || m_pipe->InputEof() || WakeNow();
 	});
 	Log(Level::LowLevel, "wake");
 	AfterWait();
