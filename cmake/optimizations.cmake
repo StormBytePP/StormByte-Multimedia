@@ -7,11 +7,11 @@
 # fails at link ("not a native COFF file. Recompile without /GL").
 # There is no LTO across those two triples, so IPO is off for every
 # Windows configuration. Unix keeps Release IPO.
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release" AND MSVC)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /arch:AVX2 /fp:fast /DNDEBUG")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2 /fp:fast /DNDEBUG")
-endif()
+#
+# /arch:AVX2 and /fp:fast stay on the library target. Putting them
+# in CMAKE_C_FLAGS / CMAKE_CXX_FLAGS leaks into bundled zimg, which
+# uses throw and NAN; clang-cl then fails with exceptions disabled
+# and -Wnan-infinity-disabled.
 
 if(WIN32 OR APPLE)
 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
