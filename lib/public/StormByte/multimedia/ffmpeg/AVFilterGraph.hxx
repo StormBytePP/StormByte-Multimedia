@@ -42,6 +42,7 @@
 #include <StormByte/multimedia/ffmpeg/fwd.hxx>
 #include <StormByte/multimedia/visibility.h>
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -54,15 +55,28 @@ namespace StormByte::Multimedia::FFmpeg {
 
 	/**
 	 * @class AVFilterGraph
-	 * @brief RAII `AVFilterGraph` with a single video in/out.
+	 * @brief RAII `AVFilterGraph` with a single video **or** audio in/out.
 	 *
-	 * Builds `buffer → <graph> → buffersink`. @p graph is an
-	 * avfilter filterchain (e.g. @c "bm3d=sigma=3:estim=basic").
-	 * One input pad only; filters that need a @c ref pad fail
-	 * @ref Open.
+	 * @par Video
+	 * Builds @c buffer → &lt;graph&gt; → @c buffersink. @p graph is an
+	 * avfilter filterchain (e.g. @c "cas=strength=0.4"). One input
+	 * pad only; filters that need a @c ref pad fail @ref Open.
 	 *
-	 * Reuse the same wrapper across frames of the same size,
-	 * format and chain via @ref Ensure. Do not call av_*.
+	 * @par Audio
+	 * Builds @c abuffer → &lt;graph&gt; → @c abuffersink. The model
+	 * frame must have sample rate, sample format and a channel
+	 * layout (@ref AVFrame::SampleRate, @ref AVFrame::Format,
+	 * @ref AVFrame::ChannelLayout). Same one-pad rule.
+	 *
+	 * @par Selection
+	 * @ref Open treats a frame with width and height &gt; 0 as
+	 * video. Otherwise a frame with sample rate and channel count
+	 * &gt; 0 is audio. Hardware video frames fail. Do not mix
+	 * media on a reused wrapper: @ref Ensure rebuilds.
+	 *
+	 * Reuse the same wrapper across frames of the same geometry
+	 * (video: size+format; audio: rate+format+layout) and chain
+	 * via @ref Ensure. Do not call av_*.
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVFilterGraph: public AVPointer<::AVFilterGraph> {
 		public:
@@ -84,7 +98,14 @@ namespace StormByte::Multimedia::FFmpeg {
 			 */
 			AVFilterGraph& operator=(AVFilterGraph&& other) noexcept;
 
+			/**
+			 * @brief Copy is not allowed. The graph owns libavfilter state.
+			 */
 			AVFilterGraph(const AVFilterGraph&) = delete;
+
+			/**
+			 * @brief Copy assignment is not allowed.
+			 */
 			AVFilterGraph& operator=(const AVFilterGraph&) = delete;
 
 			/**
@@ -94,15 +115,18 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit operator bool() const noexcept;
 
 			/**
-			 * @brief Builds a graph for @p src's geometry. Empty wrapper on failure.
-			 * @param src Model frame (size, format, SAR). Planes may be empty.
-			 * @param graph Filterchain after @c buffer, before @c buffersink.
+			 * @brief Builds a graph for @p src. Empty wrapper on failure.
+			 * @param src Model frame. Video: size, pixel format, SAR.
+			 *        Audio: rate, sample format, channel layout.
+			 *        Planes may be empty.
+			 * @param graph Filterchain after @c buffer/@c abuffer,
+			 *        before @c buffersink/@c abuffersink.
 			 * @return Open graph, or empty on failure.
 			 */
 			static AVFilterGraph Open(const AVFrame& src, std::string_view graph) noexcept;
 
 			/**
-			 * @brief Rebuilds if size, format or chain changed.
+			 * @brief Rebuilds if geometry, format, layout or chain changed.
 			 * @param src Model frame.
 			 * @param graph Filterchain.
 			 * @return false if the graph could not be (re)opened.
@@ -112,17 +136,17 @@ namespace StormByte::Multimedia::FFmpeg {
 			/**
 			 * @brief Pushes @p src and pulls into @p dst (`KEEP_REF` on the source).
 			 * @param src Source frame with buffers.
-			 * @param dst Destination; unreferenced then filled by buffersink.
+			 * @param dst Destination; unreferenced then filled by the sink.
 			 * @return false on failure. Empty @p dst with true is EAGAIN.
 			 */
 			bool Filter(const AVFrame& src, AVFrame& dst) const noexcept;
 
 			/**
-			 * @brief Closes buffersrc once and pulls one flushed frame into @p dst.
-			 * @param dst Destination; unreferenced then filled by buffersink.
+			 * @brief Closes the source once and pulls one flushed frame into @p dst.
+			 * @param dst Destination; unreferenced then filled by the sink.
 			 * @return false on failure. Empty @p dst with true is EAGAIN/EOF.
 			 *
-			 * Call in a loop from @ref Filter::FFmpeg::Eof until @p dst is empty.
+			 * Call in a loop from a leaf @c Eof until @p dst is empty.
 			 * The source is closed on the first call only.
 			 */
 			bool Flush(AVFrame& dst) noexcept;
@@ -146,13 +170,16 @@ namespace StormByte::Multimedia::FFmpeg {
 
 			using AVPointer<::AVFilterGraph>::Get;
 
-			::AVFilterContext* m_src = nullptr;	///< buffer (owned by the graph)
-			::AVFilterContext* m_sink = nullptr;	///< buffersink (owned by the graph)
-			int m_w = 0;							///< Cached source width
-			int m_h = 0;							///< Cached source height
-			int m_fmt = 0;							///< Cached source format
+			::AVFilterContext* m_src = nullptr;	///< buffer / abuffer (owned by the graph)
+			::AVFilterContext* m_sink = nullptr;	///< buffersink / abuffersink (owned by the graph)
+			int m_w = 0;							///< Cached video width
+			int m_h = 0;							///< Cached video height
+			int m_fmt = 0;							///< Cached pixel or sample format
+			int m_rate = 0;							///< Cached audio sample rate
+			int m_ch = 0;							///< Cached audio channel count
+			std::uint64_t m_mask = 0;				///< Cached native channel mask
 			std::string m_graph;					///< Cached filterchain
-			bool m_closed = false;					///< buffersrc already closed
+			bool m_closed = false;					///< source already closed
 	};
 
 	extern template class STORMBYTE_MULTIMEDIA_PUBLIC AVPointer<::AVFilterGraph>;

@@ -36,6 +36,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/ffmpeg/AVChannelLayout.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFilterGraph.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFrame.hxx>
 #include <StormByte/multimedia/ffmpeg/AVRational.hxx>
@@ -48,10 +49,12 @@ extern "C" {
 	#include <libavfilter/avfilter.h>
 	#include <libavfilter/buffersink.h>
 	#include <libavfilter/buffersrc.h>
+	#include <libavutil/channel_layout.h>
 	#include <libavutil/error.h>
 	#include <libavutil/frame.h>
 	#include <libavutil/opt.h>
 	#include <libavutil/pixfmt.h>
+	#include <libavutil/samplefmt.h>
 }
 
 using namespace StormByte::Multimedia;
@@ -66,6 +69,9 @@ FFmpeg::AVFilterGraph::AVFilterGraph(AVFilterGraph&& other) noexcept
 	m_w(other.m_w),
 	m_h(other.m_h),
 	m_fmt(other.m_fmt),
+	m_rate(other.m_rate),
+	m_ch(other.m_ch),
+	m_mask(other.m_mask),
 	m_graph(std::move(other.m_graph)),
 	m_closed(other.m_closed) {
 	other.m_src = nullptr;
@@ -73,6 +79,9 @@ FFmpeg::AVFilterGraph::AVFilterGraph(AVFilterGraph&& other) noexcept
 	other.m_w = 0;
 	other.m_h = 0;
 	other.m_fmt = 0;
+	other.m_rate = 0;
+	other.m_ch = 0;
+	other.m_mask = 0;
 	other.m_closed = false;
 }
 
@@ -89,6 +98,9 @@ FFmpeg::AVFilterGraph& FFmpeg::AVFilterGraph::operator=(AVFilterGraph&& other) n
 		m_w = other.m_w;
 		m_h = other.m_h;
 		m_fmt = other.m_fmt;
+		m_rate = other.m_rate;
+		m_ch = other.m_ch;
+		m_mask = other.m_mask;
 		m_graph = std::move(other.m_graph);
 		m_closed = other.m_closed;
 		other.m_src = nullptr;
@@ -96,6 +108,9 @@ FFmpeg::AVFilterGraph& FFmpeg::AVFilterGraph::operator=(AVFilterGraph&& other) n
 		other.m_w = 0;
 		other.m_h = 0;
 		other.m_fmt = 0;
+		other.m_rate = 0;
+		other.m_ch = 0;
+		other.m_mask = 0;
 		other.m_closed = false;
 	}
 	return *this;
@@ -107,13 +122,18 @@ FFmpeg::AVFilterGraph::operator bool() const noexcept {
 
 FFmpeg::AVFilterGraph FFmpeg::AVFilterGraph::Open(const AVFrame& src,
 	std::string_view graph) noexcept {
-	if (!src || src.Width() <= 0 || src.Height() <= 0 || graph.empty())
+	if (!src || graph.empty())
 		return AVFilterGraph(nullptr);
 	if (src.Hardware())
 		return AVFilterGraph(nullptr);
 
-	const AVFilter* buffersrc = avfilter_get_by_name("buffer");
-	const AVFilter* buffersink = avfilter_get_by_name("buffersink");
+	const bool video = src.Width() > 0 && src.Height() > 0;
+	const bool audio = src.SampleRate() > 0 && src.Channels() > 0;
+	if (video == audio)
+		return AVFilterGraph(nullptr);
+
+	const AVFilter* buffersrc = avfilter_get_by_name(video ? "buffer" : "abuffer");
+	const AVFilter* buffersink = avfilter_get_by_name(video ? "buffersink" : "abuffersink");
 	if (!buffersrc || !buffersink)
 		return AVFilterGraph(nullptr);
 
@@ -121,18 +141,35 @@ FFmpeg::AVFilterGraph FFmpeg::AVFilterGraph::Open(const AVFrame& src,
 	if (!raw)
 		return AVFilterGraph(nullptr);
 
-	const auto sar = src.SampleAspectRatio();
-	int sarN = sar.Valid() ? sar.num : 1;
-	int sarD = sar.Valid() ? sar.den : 1;
-	if (sarN <= 0)
-		sarN = 1;
-	if (sarD <= 0)
-		sarD = 1;
-
-	char args[256];
-	std::snprintf(args, sizeof(args),
-		"video_size=%dx%d:pix_fmt=%d:time_base=1/1:pixel_aspect=%d/%d",
-		src.Width(), src.Height(), src.Format(), sarN, sarD);
+	char args[512];
+	if (video) {
+		const auto sar = src.SampleAspectRatio();
+		int sarN = sar.Valid() ? sar.num : 1;
+		int sarD = sar.Valid() ? sar.den : 1;
+		if (sarN <= 0)
+			sarN = 1;
+		if (sarD <= 0)
+			sarD = 1;
+		std::snprintf(args, sizeof(args),
+			"video_size=%dx%d:pix_fmt=%d:time_base=1/1:pixel_aspect=%d/%d",
+			src.Width(), src.Height(), src.Format(), sarN, sarD);
+	} else {
+		const char* fmt = av_get_sample_fmt_name(static_cast<AVSampleFormat>(src.Format()));
+		if (!fmt) {
+			avfilter_graph_free(&raw);
+			return AVFilterGraph(nullptr);
+		}
+		char layout[128];
+		const std::uint64_t mask = src.ChannelLayout().Mask();
+		if (mask != 0)
+			std::snprintf(layout, sizeof(layout), "0x%llx",
+				static_cast<unsigned long long>(mask));
+		else
+			std::snprintf(layout, sizeof(layout), "%d", src.Channels());
+		std::snprintf(args, sizeof(args),
+			"time_base=1/%d:sample_rate=%d:sample_fmt=%s:channel_layout=%s",
+			src.SampleRate(), src.SampleRate(), fmt, layout);
+	}
 
 	AVFilterContext* in = nullptr;
 	AVFilterContext* out = nullptr;
@@ -178,18 +215,28 @@ FFmpeg::AVFilterGraph FFmpeg::AVFilterGraph::Open(const AVFrame& src,
 	AVFilterGraph wrap(raw);
 	wrap.m_src = in;
 	wrap.m_sink = out;
-	wrap.m_w = src.Width();
-	wrap.m_h = src.Height();
+	wrap.m_w = video ? src.Width() : 0;
+	wrap.m_h = video ? src.Height() : 0;
 	wrap.m_fmt = src.Format();
+	wrap.m_rate = audio ? src.SampleRate() : 0;
+	wrap.m_ch = audio ? src.Channels() : 0;
+	wrap.m_mask = audio ? src.ChannelLayout().Mask() : 0;
 	wrap.m_graph = chain;
 	wrap.m_closed = false;
 	return wrap;
 }
 
 bool FFmpeg::AVFilterGraph::Ensure(const AVFrame& src, std::string_view graph) noexcept {
-	if (m_ptr && m_src && m_sink && !m_closed
-		&& m_w == src.Width() && m_h == src.Height() && m_fmt == src.Format()
-		&& m_graph == graph)
+	const bool video = src.Width() > 0 && src.Height() > 0;
+	const bool same = m_ptr && m_src && m_sink && !m_closed
+		&& m_graph == graph
+		&& m_fmt == src.Format()
+		&& m_w == (video ? src.Width() : 0)
+		&& m_h == (video ? src.Height() : 0)
+		&& m_rate == (video ? 0 : src.SampleRate())
+		&& m_ch == (video ? 0 : src.Channels())
+		&& m_mask == (video ? 0ull : src.ChannelLayout().Mask());
+	if (same)
 		return true;
 	AVFilterGraph next = Open(src, graph);
 	if (!next)
@@ -232,6 +279,9 @@ void FFmpeg::AVFilterGraph::Free() noexcept {
 	m_w = 0;
 	m_h = 0;
 	m_fmt = 0;
+	m_rate = 0;
+	m_ch = 0;
+	m_mask = 0;
 	m_graph.clear();
 	m_closed = false;
 	if (m_ptr)
