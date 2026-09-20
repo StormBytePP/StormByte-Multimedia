@@ -451,6 +451,4 @@ namespace StormByte::Multimedia::Backend {
 		}
 		return std::all_of(m_jobOk.begin(), m_jobOk.end(), [](int v) { return v != 0; });
 	}
-
-	thread_local Zimg Zimg::s_slot;
 }

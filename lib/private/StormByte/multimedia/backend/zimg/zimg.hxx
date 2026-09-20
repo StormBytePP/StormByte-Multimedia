@@ -152,7 +152,8 @@ namespace StormByte::Multimedia::Backend {
 			};
 
 			/**
-			 * @brief Empty scaler. Used by @ref s_slot and @ref Open.
+			 * @brief Empty scaler. Used by @ref Open and the per-thread
+			 *        slot in @ref FFmpeg::AVFrame::ScaleTo.
 			 */
 			Zimg() noexcept;
 
@@ -206,8 +207,6 @@ namespace StormByte::Multimedia::Backend {
 				unsigned subH) noexcept;
 
 			void WorkerMain(unsigned id) const;
-
-			static thread_local Zimg s_slot;			///< Per-thread graph cache for ScaleTo
 
 			std::vector<Slot> m_slots;					///< Graphs keyed by geometry/kernel
 			Slot* m_current = nullptr;					///< Slot selected by the last Ensure

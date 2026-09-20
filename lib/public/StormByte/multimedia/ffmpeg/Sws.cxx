@@ -139,6 +139,4 @@ void FFmpeg::Sws::Free() noexcept {
 	}
 }
 
-thread_local FFmpeg::Sws FFmpeg::Sws::s_slot;
-
 template class StormByte::Multimedia::FFmpeg::AVPointer<::SwsContext>;

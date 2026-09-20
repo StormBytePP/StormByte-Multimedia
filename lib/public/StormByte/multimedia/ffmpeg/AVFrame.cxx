@@ -757,14 +757,16 @@ bool FFmpeg::AVFrame::ScaleTo(AVFrame& dst, int dst_w, int dst_h,
 		dst.Format(fmt);
 	}
 	if (scaler == Scaler::Zimg) {
-		if (!Backend::Zimg::s_slot.Ensure(*this, dst, filter))
+		thread_local Backend::Zimg zimg;
+		if (!zimg.Ensure(*this, dst, filter))
 			return false;
-		return Backend::Zimg::s_slot.Scale(*this, dst);
+		return zimg.Scale(*this, dst);
 	}
-	if (!Sws::s_slot.Ensure(Width(), Height(), Format(),
+	thread_local Sws sws;
+	if (!sws.Ensure(Width(), Height(), Format(),
 		dst.Width(), dst.Height(), dst.Format(), ToSwsFlags(filter)))
 		return false;
-	return Sws::s_slot.Scale(*this, dst);
+	return sws.Scale(*this, dst);
 }
 
 void FFmpeg::AVFrame::Free() noexcept {

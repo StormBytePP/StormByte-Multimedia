@@ -150,7 +150,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			explicit Sws(::SwsContext* ctx) noexcept;
 
 			/**
-			 * @brief Empty scaler. Used by @ref s_slot.
+			 * @brief Empty scaler. Used by the per-thread slot in @ref AVFrame::ScaleTo.
 			 */
 			Sws() noexcept;
 
@@ -160,8 +160,6 @@ namespace StormByte::Multimedia::FFmpeg {
 			void Free() noexcept override;
 
 			using AVPointer<::SwsContext>::Get;
-
-			static thread_local Sws s_slot;	///< Per-thread context for ScaleTo
 
 			int m_srcW = 0;		///< Cached source width
 			int m_srcH = 0;		///< Cached source height
