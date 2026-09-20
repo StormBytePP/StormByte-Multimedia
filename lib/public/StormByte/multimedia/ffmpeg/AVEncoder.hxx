@@ -258,4 +258,6 @@ namespace StormByte::Multimedia::FFmpeg {
 
 			using AVPointer<::AVCodecContext>::Get;
 	};
+
+	extern template class STORMBYTE_MULTIMEDIA_PUBLIC AVPointer<::AVCodecContext>;
 }
