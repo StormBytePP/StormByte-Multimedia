@@ -428,13 +428,16 @@ void Degrain::Decide() noexcept {
 			sig = SigmaClose;
 		else if (alive && f < FlatNeed)
 			sig = SigmaClose;
-		else if (!alive && f >= FlatNeed)
-			sig = std::min(cap, std::max(r, SigmaFloor));
-		else if (alive && f >= FlatNeed)
+		else if (!alive && f >= FlatNeed) {
+			if (r < 2.0)
+				s.skip = true;
+			else
+				sig = std::min(cap, std::max(r, SigmaFloor));
+		} else if (alive && f >= FlatNeed)
 			sig = SigmaMix;
 		else
 			s.skip = true;
-		if (night)
+		if (night && !s.skip)
 			sig = std::max(sig, SigmaNight);
 		if (s.skip) {
 			++m_skipped;
