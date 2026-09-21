@@ -226,18 +226,22 @@ bool Decoder::ResetAfterMeasure() noexcept {
 		return false;
 	if (m_look)
 		return true;
-	if (!m_backend) {
-		Fail("decoder is not open");
+	if (!m_origin) {
+		Fail("decoder has no origin");
 		return false;
 	}
 	DumpWork();
-	if (!m_backend->Reset(*this))
+	m_backend.reset();
+	auto opened = OpenOrigin();
+	if (!opened) {
+		Fail("reopen after measure failed");
 		return false;
-
+	}
+	Bind(std::move(opened));
 	m_serial.reset();
 	m_part = 0;
 	m_inDts.reset();
-	Log(Level::Debug, std::format("reset after measure t={}", m_index));
+	Log(Level::Debug, std::format("reopen after measure t={}", m_index));
 	return true;
 }
 
