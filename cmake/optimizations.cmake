@@ -13,7 +13,7 @@
 # M1 through current M-series). -O3 is not used; it miscompiles
 # codecs and color paths.
 
-if(WIN32)
+if(WIN32 OR APPLE)
 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE)
 else()
