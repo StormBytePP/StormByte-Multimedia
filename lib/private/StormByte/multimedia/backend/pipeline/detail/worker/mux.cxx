@@ -132,6 +132,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
 	void Mux::Flush() noexcept {
 		if (m_owner.m_backend && !m_owner.Failed())
 			m_owner.m_backend->Flush(m_owner);
+		m_owner.FlushOctets();
 		m_owner.m_closed.store(true, std::memory_order_release);
 		m_owner.ClockMuxDone();
 		Log(Level::Notice, "closed");

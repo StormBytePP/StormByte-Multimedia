@@ -76,9 +76,9 @@ namespace {
 
 	enum StormByte::Multimedia::Type StreamMedia(const Step& origin, int track) noexcept {
 		const auto& plan = origin.Plan();
-		if (!plan)
+		if (!plan || !*plan)
 			return StormByte::Multimedia::Type::Unknown;
-		for (const auto& stream : plan->Source().Streams()) {
+		for (const auto& stream : plan->Snapshot().Streams()) {
 			if (stream.Index() == track)
 				return stream.Type();
 		}

@@ -39,8 +39,8 @@
 #pragma once
 
 #include <StormByte/logger/log.hxx>
+#include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/container.hxx>
-#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -49,314 +49,348 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 
 /**
- * @namespace StormByte::Multimedia::Backend::Pipeline
- * @brief Multimedia-owned pipeline stages and unit holders.
- *
- * @ingroup multimedia_pipeline
+ * @namespace StormByte
+ * @brief Root namespace of the StormByte C++ suite.
  */
-namespace StormByte::Multimedia::Backend::Pipeline {
-	class Muxer;	///< Mux backend behind @ref StormByte::Multimedia::Pipeline::Muxer.
-}
-
-namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
-	class Mux;
-}
-
-/**
- * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
- * @brief Matroska mux leaf.
- *
- * @ingroup multimedia_pipeline
- */
-namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
-	class Container;	///< Matroska mux backend.
-}
-
-/**
- * @namespace StormByte::Multimedia::Pipeline
- * @brief Demux / decode / filter / encode / mux types.
- *
- * @ingroup multimedia_pipeline
- */
-namespace StormByte::Multimedia::Pipeline {
-	class Demuxer;
-	class Encoder;
-	class Muxer;
-	class Remuxer;
-
+namespace StormByte {
 	/**
-	 * @brief Reserves @p encoder as an output track of @p muxer.
-	 * @param encoder Live encoder.
-	 * @param muxer Destination.
-	 * @return @p encoder.
+	 * @namespace StormByte::Multimedia
+	 * @brief Multimedia module of the StormByte suite.
 	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
-
-	/**
-	 * @brief Reserves @p remuxer as an output track of @p muxer.
-	 * @param remuxer Live remuxer.
-	 * @param muxer Destination.
-	 * @return @p remuxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
-
-	/**
-	 * @brief Binds the output path of @p muxer.
-	 * @param muxer Muxer.
-	 * @param path Destination file.
-	 * @return @p muxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
-
-	/**
-	 * @brief Snapshots attachments of @p file onto @p muxer.
-	 * @param file Source file.
-	 * @param muxer Destination.
-	 * @return @p muxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
-
-	/**
-	 * @brief Binds @p demuxer as remux origin and forwards its attachments.
-	 *
-	 * Required when any remux track is reserved. Without it the muxer
-	 * cannot clone origin codec parameters. Also shares the tube
-	 * @ref Progress clock.
-	 *
-	 * @param demuxer Origin demuxer. Must outlive header write.
-	 * @param muxer Destination.
-	 * @return @p muxer.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
-
-	/**
-	 * @class Muxer
-	 * @brief Writes interleaved packets to a destination container.
-	 *
-	 * Notice: destination path when bound, closed once.
-	 * LowLevel writes always; the shared logger throttles.
-	 * Remux and encode lanes share this worker.
-	 *
-	 * Does not write the container header until @ref Armed is true.
-	 * @ref Ready is Status Ready and @ref Armed.
-	 *
-	 * Shares the Demuxer’s @ref Progress. Writes advance All via
-	 * @ref ClockPass. Trailer sets MuxDone.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
-		friend class Backend::Pipeline::Detail::Muxer::Matroska::Container;
-		friend class Backend::Pipeline::Muxer;
-		friend class Backend::Pipeline::Detail::Worker::Mux;
-		friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
-		friend Muxer& operator>>(const File& file, Muxer& muxer) noexcept;
-		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
-		friend Muxer& operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept;
-		friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
-
-		public:
+	namespace Multimedia {
+		/**
+		 * @namespace StormByte::Multimedia::Backend
+		 * @brief Private backends.
+		 */
+		namespace Backend {
 			/**
-			 * @name Lifecycle
-			 * @{
+			 * @namespace StormByte::Multimedia::Backend::Pipeline
+			 * @brief Multimedia-owned pipeline stages and unit holders.
 			 */
+			namespace Pipeline {
+				class Muxer;
+
+				namespace Detail {
+					namespace Worker {
+						class Mux;
+					}
+
+					namespace Muxer {
+						namespace Matroska {
+							class Container;
+						}
+					}
+				}
+			}
+		}
+
+		/**
+		 * @namespace StormByte::Multimedia::Pipeline
+		 * @brief Demux / decode / filter / encode / mux types.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Pipeline {
+			class Demuxer;
+			class Encoder;
+			class Muxer;
+			class Remuxer;
 
 			/**
-			 * @brief Muxer for @p container. Destination path is bound later.
-			 * @param log Shared logger. Empty pointer means no log.
-			 * @param container Writable registry container.
-			 */
-			explicit Muxer(std::shared_ptr<StormByte::Logger::Log> log,
-				const Container& container) noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 * @param other Source muxer.
-			 */
-			Muxer(const Muxer& other) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Muxer to take.
-			 */
-			Muxer(Muxer&& other) noexcept = delete;
-
-			/**
-			 * @brief Destructor. @ref Step::Join Halt s before backends die.
-			 */
-			~Muxer() noexcept override;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param other Source muxer.
-			 * @return *this.
-			 */
-			Muxer& operator=(const Muxer& other) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Muxer to take.
-			 * @return *this.
-			 */
-			Muxer& operator=(Muxer&& other) noexcept = delete;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @brief true if the destination is bound and the muxer has not failed.
-			 * @return Open and writable.
-			 */
-			explicit operator bool() const noexcept;
-
-			/**
-			 * @brief true after Finish flushed the trailer, or after Fail.
-			 * @return Muxer will not accept more packets.
-			 */
-			bool Closed() const noexcept;
-
-			/**
-			 * @brief Presentation time of the last packet written.
-			 * @return Pts of the last video packet, or of audio if no video
-			 *         has been written yet.
-			 */
-			std::optional<Property::Duration> Position() const noexcept;
-
-			/**
-			 * @brief Destination container.
-			 * @return Registry container passed to the constructor.
-			 */
-			const Container& Destination() const noexcept;
-
-			/**
-			 * @brief Whether every muxable Plan track has a reserved hopper.
+			 * @brief Reserves @p encoder as an output track of @p muxer.
+			 * @param encoder Live encoder.
+			 * @param muxer Destination.
+			 * @return @p encoder.
 			 *
-			 * Counts Video, Audio and Subtitle entries in @ref Plan::Tracks.
-			 * Attachments are written at header time and are not hoppers.
-			 * true when reserved slots equal that count. false with no Plan,
-			 * or while @c operator>> is still running.
+			 * Binds the Plan on the first reservation. Opens the Plan
+			 * writer and binds FileAvio once.
+			 */
+			STORMBYTE_MULTIMEDIA_PUBLIC Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
+
+			/**
+			 * @brief Reserves @p remuxer as an output track of @p muxer.
+			 * @param remuxer Live remuxer.
+			 * @param muxer Destination.
+			 * @return @p remuxer.
 			 *
-			 * Does not Fail. The owner of the graph (@ref Filters::Close
-			 * or Transcoder) checks this after wiring and Fails the Muxer
-			 * if it is still false.
+			 * Binds the Plan on the first reservation. Opens the Plan
+			 * writer and binds FileAvio once.
+			 */
+			STORMBYTE_MULTIMEDIA_PUBLIC Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
+
+			/**
+			 * @brief Binds @p demuxer as remux origin and forwards Plan attachments.
 			 *
-			 * @return Arming state of the output graph.
-			 */
-			bool Armed() const noexcept;
-
-			/**
-			 * @brief Open finished without Fail or Stop, and @ref Armed.
-			 * @return Step Status is Ready and every muxable Plan track is reserved.
-			 */
-			bool Ready() const noexcept override;
-
-			/**
-			 * @brief Ceiling of the muxer input hopper.
+			 * Required when any remux track is reserved. Without it the muxer
+			 * cannot clone origin codec parameters. Also shares the tube
+			 * @ref Progress clock. Opens the Plan writer and binds FileAvio
+			 * once if needed. There is no @c file >> muxer and no
+			 * @c muxer >> path.
 			 *
-			 * Uses @ref Backend::Pipeline::Ceiling for the first muxable
-			 * Plan track. Aborts if there is no Plan: a muxer without a
-			 * Plan must not invent a hopper size.
+			 * @param demuxer Origin demuxer. Must outlive header write.
+			 * @param muxer Destination.
+			 * @return @p muxer.
+			 */
+			STORMBYTE_MULTIMEDIA_PUBLIC Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+
+			/**
+			 * @class Muxer
+			 * @brief Writes interleaved packets to the Plan writer.
 			 *
-			 * @return Max queued packets. Never 0 after a live Plan.
+			 * Destination is @ref Plan::Writer. Libav writes through
+			 * @ref Backend::FileAvio on that writer (seekable). There is
+			 * no Producer, Consumer or Bridge on the output path.
+			 *
+			 * Does not write the container header until @ref Armed is true.
+			 * @ref Armed is reserved muxable tracks versus the Plan, not a
+			 * bound path. @ref Ready is Status Ready and @ref Armed.
+			 *
+			 * Container comes from the Plan writer extension. The backend
+			 * is created on the first @c operator>>.
+			 *
+			 * Shares the Demuxer’s @ref Progress. Writes advance All via
+			 * @ref ClockPass. Trailer calls @ref FlushOctets and MuxDone.
+			 *
+			 * @ingroup multimedia_pipeline
 			 */
-			std::size_t InputCeiling() const noexcept override;
+			class STORMBYTE_MULTIMEDIA_PUBLIC Muxer final: public Step {
+				friend class Backend::Pipeline::Detail::Muxer::Matroska::Container;
+				friend class Backend::Pipeline::Muxer;
+				friend class Backend::Pipeline::Detail::Worker::Mux;
+				friend Encoder& operator>>(Encoder& encoder, Muxer& muxer) noexcept;
+				friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+				friend Remuxer& operator>>(Remuxer& remuxer, Muxer& muxer) noexcept;
 
-			/**
-			 * @name Stream tags
-			 * @{
-			 */
+				public:
+					/**
+					 * @name Lifecycle
+					 * @{
+					 */
 
-			/**
-			 * @brief Language tag for mux output @p output_index.
-			 * @param output_index Mux destination order key.
-			 * @return Tag, or empty.
-			 */
-			std::optional<std::string> Language(int output_index) const noexcept;
+					/**
+					 * @brief Muxer. Destination is the Plan writer.
+					 * @param log Shared logger. Empty pointer means no log.
+					 */
+					explicit Muxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept;
 
-			/**
-			 * @brief Sets the language tag for mux output @p output_index.
-			 * @param output_index Mux destination order key.
-			 * @param language BCP-47 / ISO tag. Empty clears.
-			 */
-			void Language(int output_index, std::string language) noexcept;
+					/**
+					 * @brief Copy constructor (deleted).
+					 */
+					Muxer(const Muxer& other) = delete;
 
-			/**
-			 * @brief Title tag for mux output @p output_index.
-			 * @param output_index Mux destination order key.
-			 * @return Title, or empty.
-			 */
-			std::optional<std::string> Title(int output_index) const noexcept;
+					/**
+					 * @brief Move constructor (deleted).
+					 */
+					Muxer(Muxer&& other) noexcept = delete;
 
-			/**
-			 * @brief Sets the title tag for mux output @p output_index.
-			 * @param output_index Mux destination order key.
-			 * @param title Stream title. Empty clears.
-			 */
-			void Title(int output_index, std::string title) noexcept;
+					/**
+					 * @brief Destructor. @ref Step::Join Halts before backends die.
+					 */
+					~Muxer() noexcept override;
 
-			/**
-			 * @}
-			 */
+					/**
+					 * @brief Copy assignment (deleted).
+					 * @return *this.
+					 */
+					Muxer& operator=(const Muxer& other) = delete;
 
-		private:
-			using Step::Log;
+					/**
+					 * @brief Move assignment (deleted).
+					 * @return *this.
+					 */
+					Muxer& operator=(Muxer&& other) noexcept = delete;
 
-			/**
-			 * @brief Blocks until Armed, Failed or Stopping.
-			 */
-			void WaitArmed() noexcept;
+					/**
+					 * @}
+					 */
 
-			/**
-			 * @brief Copies an opened encoder into a libav output stream.
-			 * @param encoder Reserved encode lane.
-			 * @param avStream libav AVStream*.
-			 * @return false if the encoder has no context.
-			 */
-			bool BindEncoderStream(Encoder& encoder, void* avStream) noexcept;
+					/**
+					 * @brief true if the muxer has not failed and is Ready.
+					 * @return Open and writable.
+					 */
+					explicit operator bool() const noexcept;
 
-			/**
-			 * @brief Clones remux codecpar from the bound demuxer.
-			 * @param inIndex Origin stream index.
-			 * @param params Owned AVCodecParameters* on success.
-			 * @param timeBase AVRational*.
-			 * @return false if the origin is not ready.
-			 */
-			bool RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept;
+					/**
+					 * @brief true after Finish flushed the trailer, or after Fail.
+					 * @return Muxer will not accept more packets.
+					 */
+					bool Closed() const noexcept;
 
-			/**
-			 * @brief Video / Audio / Subtitle entries in the bound Plan.
-			 * @return 0 when there is no Plan.
-			 */
-			std::size_t ExpectedSlots() const noexcept;
+					/**
+					 * @brief Presentation time of the last packet written.
+					 * @return Pts of the last video packet, or of audio if no video
+					 *         has been written yet.
+					 */
+					std::optional<Property::Duration> Position() const noexcept;
 
-			/**
-			 * @brief Marks the shared clock MuxDone. Friend: mux worker Flush.
-			 */
-			void ClockMuxDone() noexcept;
+					/**
+					 * @brief Destination container.
+					 * @return Registry container from the bound Plan.
+					 */
+					const Container& Destination() const noexcept;
 
-			/**
-			 * @brief Advances All from a written packet. Friend: mux worker Process.
-			 * @param ns Presentation time written, nanoseconds.
-			 */
-			void ClockPass(std::int64_t ns) noexcept;
+					/**
+					 * @brief Whether every muxable Plan track has a reserved hopper.
+					 *
+					 * Counts Video, Audio and Subtitle entries in @ref Plan::Tracks.
+					 * Attachments are written at header time and are not hoppers.
+					 * true when reserved slots equal that count. false with no Plan,
+					 * or while @c operator>> is still running.
+					 *
+					 * Does not Fail. The owner of the graph (@ref Filters::Close
+					 * or Transcoder) checks this after wiring and Fails the Muxer
+					 * if it is still false.
+					 *
+					 * @return Arming state of the output graph.
+					 */
+					bool Armed() const noexcept;
 
-			const Container* m_container;									///< Destination container
-			std::unique_ptr<Backend::Pipeline::Muxer> m_backend;			///< Format backend
-			Demuxer* m_origin;												///< Set only by demuxer >> muxer. Not owned
-			std::shared_ptr<class Progress> m_progress;						///< Shared tube clock
-			std::map<int, std::string> m_language;							///< Per-output language
-			std::map<int, std::string> m_title;								///< Per-output title
-			std::atomic<bool> m_closed;										///< Set by Finish / Fail
-			std::atomic<std::size_t> m_reserved;
-			std::atomic<std::int64_t> m_positionNs;							///< Last written Pts, or -1
-			Join m_join{*this};												///< Halt before other members die
-	};
+					/**
+					 * @brief Open finished without Fail or Stop, and @ref Armed.
+					 * @return Step Status is Ready and every muxable Plan track is reserved.
+					 */
+					bool Ready() const noexcept override;
+
+					/**
+					 * @brief Ceiling of the muxer input hopper.
+					 *
+					 * Uses @ref Backend::Pipeline::Ceiling for the first muxable
+					 * Plan track. Aborts if there is no Plan: a muxer without a
+					 * Plan must not invent a hopper size.
+					 *
+					 * @return Max queued packets. Never 0 after a live Plan.
+					 */
+					std::size_t InputCeiling() const noexcept override;
+
+					/**
+					 * @name Stream tags
+					 * @{
+					 */
+
+					/**
+					 * @brief Language tag for mux output @p output_index.
+					 * @param output_index Mux destination order key.
+					 * @return Tag, or empty.
+					 */
+					std::optional<std::string> Language(int output_index) const noexcept;
+
+					/**
+					 * @brief Sets the language tag for mux output @p output_index.
+					 * @param output_index Mux destination order key.
+					 * @param language BCP-47 / ISO tag. Empty clears.
+					 */
+					void Language(int output_index, std::string language) noexcept;
+
+					/**
+					 * @brief Title tag for mux output @p output_index.
+					 * @param output_index Mux destination order key.
+					 * @return Title, or empty.
+					 */
+					std::optional<std::string> Title(int output_index) const noexcept;
+
+					/**
+					 * @brief Sets the title tag for mux output @p output_index.
+					 * @param output_index Mux destination order key.
+					 * @param title Stream title. Empty clears.
+					 */
+					void Title(int output_index, std::string title) noexcept;
+
+					/**
+					 * @}
+					 */
+
+				private:
+					using Step::Log;
+
+					/**
+					 * @brief Blocks until Armed, Failed or Stopping.
+					 */
+					void WaitArmed() noexcept;
+
+					/**
+					 * @brief Creates the container backend from the Plan extension.
+					 * @return false after Fail.
+					 */
+					bool SpawnBackend() noexcept;
+
+					/**
+					 * @brief Opens the Plan writer and binds FileAvio once.
+					 * @return false after Fail.
+					 *
+					 * Idempotent after the backend context exists.
+					 */
+					bool ArmOctets() noexcept;
+
+					/**
+					 * @brief Copies attachments from the Plan snapshot.
+					 * @return false after Fail.
+					 *
+					 * Uses @ref Plan::Snapshot. Does not Open the reader again.
+					 * Empty catalogue if the Plan has no attachment tracks.
+					 */
+					bool BindPlanAttachments() noexcept;
+
+					/**
+					 * @brief Flushes the Plan writer after the trailer.
+					 *
+					 * Called when the mux worker finishes the trailer.
+					 */
+					void FlushOctets() noexcept;
+
+					/**
+					 * @brief Copies an opened encoder into a libav output stream.
+					 * @param encoder Reserved encode lane.
+					 * @param avStream libav AVStream*.
+					 * @return false if the encoder has no context.
+					 */
+					bool BindEncoderStream(Encoder& encoder, void* avStream) noexcept;
+
+					/**
+					 * @brief Clones remux codecpar from the bound demuxer.
+					 * @param inIndex Origin stream index.
+					 * @param params Owned AVCodecParameters* on success.
+					 * @param timeBase AVRational*.
+					 * @return false if the origin is not ready.
+					 */
+					bool RemuxCodec(int inIndex, void*& params, void* timeBase) noexcept;
+
+					/**
+					 * @brief Video / Audio / Subtitle entries in the bound Plan.
+					 * @return 0 when there is no Plan.
+					 */
+					std::size_t ExpectedSlots() const noexcept;
+
+					/**
+					 * @brief Marks the shared clock MuxDone. Friend: mux worker Flush.
+					 */
+					void ClockMuxDone() noexcept;
+
+					/**
+					 * @brief Advances All from a written packet. Friend: mux worker Process.
+					 * @param ns Presentation time written, nanoseconds.
+					 */
+					void ClockPass(std::int64_t ns) noexcept;
+
+					const Container* m_container;										///< Destination container (Plan)
+					std::unique_ptr<Backend::Pipeline::Muxer> m_backend;				///< Format backend
+					Demuxer* m_origin;													///< Set only by demuxer >> muxer. Not owned
+					std::shared_ptr<class Progress> m_progress;							///< Shared tube clock
+					Attachments m_attachments;											///< Catalogue for header write
+					std::set<int> m_wired;												///< Output indices already reserved
+					std::map<int, std::string> m_language;								///< Per-output language
+					std::map<int, std::string> m_title;									///< Per-output title
+					std::atomic<bool> m_closed;											///< Set by Finish / Fail
+					std::atomic<std::size_t> m_reserved;								///< Reserved Video/Audio/Subtitle hoppers
+					std::atomic<std::int64_t> m_positionNs;								///< Last written Pts, or -1
+					Join m_join{*this};													///< Halt before other members die
+			};
+		}
+	}
 }

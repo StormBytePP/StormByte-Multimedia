@@ -142,11 +142,20 @@ struct FFmpeg::AVFormatContext::ConsumerIO {
 	}
 };
 
-FFmpeg::AVFormatContext::AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io) noexcept:
-AVPointer(ctx), m_io(std::move(io)) {}
+FFmpeg::AVFormatContext::AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io,
+	bool avioBorrowed) noexcept
+: AVPointer(ctx), m_io(std::move(io)), m_avioBorrowed(avioBorrowed) {}
 
-FFmpeg::AVFormatContext::AVFormatContext(AVFormatContext&& other) noexcept:
-AVPointer(std::move(other)), m_io(std::move(other.m_io)) {}
+FFmpeg::AVFormatContext FFmpeg::AVFormatContext::WrapBorrowed(::AVFormatContext* ctx) noexcept {
+	AVFormatContext out(ctx, nullptr, true);
+	out.HarvestSideData();
+	return out;
+}
+
+FFmpeg::AVFormatContext::AVFormatContext(AVFormatContext&& other) noexcept
+: AVPointer(std::move(other)), m_io(std::move(other.m_io)), m_avioBorrowed(other.m_avioBorrowed) {
+	other.m_avioBorrowed = false;
+}
 
 FFmpeg::AVFormatContext::~AVFormatContext() noexcept {
 	Free();
@@ -156,6 +165,8 @@ FFmpeg::AVFormatContext& FFmpeg::AVFormatContext::operator=(AVFormatContext&& ot
 	if (this != &other) {
 		AVPointer::operator=(std::move(other));
 		m_io = std::move(other.m_io);
+		m_avioBorrowed = other.m_avioBorrowed;
+		other.m_avioBorrowed = false;
 	}
 
 	return *this;
@@ -424,6 +435,9 @@ void FFmpeg::AVFormatContext::Free() noexcept {
 	if (!m_ptr)
 		return;
 
+	if (m_avioBorrowed && m_ptr->pb)
+		m_ptr->pb = nullptr;
+
 	AVIOContext* pb = m_io ? m_ptr->pb : nullptr;
 	if (m_io)
 		m_ptr->pb = nullptr;
@@ -434,6 +448,7 @@ void FFmpeg::AVFormatContext::Free() noexcept {
 	}
 
 	m_io.reset();
+	m_avioBorrowed = false;
 	m_ptr = nullptr;
 }
 

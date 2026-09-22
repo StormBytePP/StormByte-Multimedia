@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/visibility.h>
 
@@ -55,7 +55,7 @@ extern "C" {
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	/**
 	 * @class Attachment
-	 * @brief Writes File attachments as Matroska attachment streams.
+	 * @brief Writes catalogue attachments as Matroska attachment streams.
 	 *
 	 * extradata + filename/mimetype. Not a generic mux helper.
 	 *
@@ -64,13 +64,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	class STORMBYTE_MULTIMEDIA_PRIVATE Attachment {
 		public:
 			/**
-			 * @brief Writes every File attachment onto @p ctx.
+			 * @brief Writes Plan-selected attachments onto @p ctx.
 			 * @param owner Public muxer.
 			 * @param ctx Output format context.
-			 * @param file Source file.
+			 * @param attachments Catalogue collected over Plan::Reader AVIO.
 			 * @return false if owner.Fail() was called.
 			 */
 			static bool Write(StormByte::Multimedia::Pipeline::Muxer& owner,
-				AVFormatContext* ctx, const File& file) noexcept;
+				AVFormatContext* ctx, const StormByte::Multimedia::Attachments& attachments) noexcept;
 	};
 }

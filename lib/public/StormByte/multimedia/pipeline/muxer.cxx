@@ -97,29 +97,25 @@ namespace {
 			|| type == StormByte::Multimedia::Type::Audio
 			|| type == StormByte::Multimedia::Type::Subtitle;
 	}
+
+	bool PlanWantsAttachments(const Plan* plan) noexcept {
+		if (!plan)
+			return false;
+		for (const auto& track : plan->Tracks()) {
+			if (track && track->Type() == StormByte::Multimedia::Type::Attachment)
+				return true;
+		}
+		return false;
+	}
 }
 
-Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log,
-	const Container& container) noexcept
+Muxer::Muxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept
 : Step(std::move(log), Producer::Muxer, Kinds{Kind::Packet}, Kinds{}),
-	m_container(&container),
+	m_container(nullptr),
 	m_origin(nullptr),
 	m_closed(false),
 	m_reserved(0),
 	m_positionNs(-1) {
-	if (!container.HasAccess(Access{Operation::Write})) {
-		Fail("container does not allow write");
-		return;
-	}
-
-	const std::string_view name{container.Name()};
-	if (IsMatroskaFamily(name))
-		m_backend = std::make_unique<Backend::Pipeline::Detail::Muxer::Matroska::Container>();
-	else {
-		Fail("no muxer backend for destination container");
-		return;
-	}
-
 	Mount(std::make_unique<Backend::Pipeline::Detail::Pumper::Sink>(Face()),
 		std::make_unique<Backend::Pipeline::Detail::Worker::Mux>(*this));
 	Launch();
@@ -223,6 +219,77 @@ void Muxer::WaitArmed() noexcept {
 	});
 }
 
+bool Muxer::SpawnBackend() noexcept {
+	if (m_backend)
+		return true;
+	if (!m_plan) {
+		Fail("muxer has no plan");
+		return false;
+	}
+
+	m_container = &m_plan->Container();
+	if (!m_container->HasAccess(Access{Operation::Write})) {
+		Fail("container does not allow write");
+		return false;
+	}
+
+	const std::string_view name{m_container->Name()};
+	if (IsMatroskaFamily(name))
+		m_backend = std::make_unique<Backend::Pipeline::Detail::Muxer::Matroska::Container>();
+	else {
+		Fail("no muxer backend for destination container");
+		return false;
+	}
+	return true;
+}
+
+bool Muxer::ArmOctets() noexcept {
+	if (m_backend && m_backend->IsOpen())
+		return true;
+	if (!SpawnBackend())
+		return false;
+
+	auto& writer = m_plan->Writer();
+	if (!writer.IsOpen() && !writer.Open()) {
+		Fail("muxer writer open failed");
+		return false;
+	}
+
+	if (!m_backend->BindSink(*this))
+		return false;
+
+	Log(Level::Notice, std::format("writer {}", m_plan->Path().string()));
+	return true;
+}
+
+bool Muxer::BindPlanAttachments() noexcept {
+	if (!m_backend)
+		return SpawnBackend();
+	m_attachments.clear();
+	if (!PlanWantsAttachments(m_plan.get()))
+		return m_backend->BindAttachments(*this, m_attachments);
+	if (!m_plan || !*m_plan) {
+		Fail("plan snapshot is not available");
+		return false;
+	}
+
+	for (const auto& item : m_plan->Snapshot().Attachments()) {
+		m_attachments.emplace_back(
+			item.FileName(),
+			item.MimeType(),
+			StormByte::Buffer::FIFO{item.Payload()});
+	}
+	return m_backend->BindAttachments(*this, m_attachments);
+}
+
+void Muxer::FlushOctets() noexcept {
+	if (!m_plan)
+		return;
+	auto& writer = m_plan->Writer();
+	if (writer.IsOpen())
+		static_cast<void>(writer.Flush());
+}
+
 bool Muxer::BindEncoderStream(Encoder& encoder, void* avStream) noexcept {
 	return encoder.MuxBindStream(avStream);
 }
@@ -255,10 +322,15 @@ Encoder& StormByte::Multimedia::Pipeline::operator>>(Encoder& encoder, Muxer& mu
 	muxer.pipe().Listen();
 	if (muxer.Failed() || encoder.Failed())
 		return encoder;
-	if (!muxer.m_backend) {
-		muxer.Fail("muxer has no backend");
+	if (!muxer.SpawnBackend())
+		return encoder;
+	if (muxer.m_wired.contains(encoder.Index())) {
+		muxer.Fail("track already wired to muxer");
 		return encoder;
 	}
+	muxer.m_wired.insert(encoder.Index());
+	if (!muxer.ArmOctets())
+		return encoder;
 
 	muxer.m_backend->ReserveEncoder(muxer, encoder);
 	encoder.pipe().To(encoder.Index()) >> muxer.pipe();
@@ -279,10 +351,15 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 	muxer.pipe().Listen();
 	if (muxer.Failed() || remuxer.Failed())
 		return remuxer;
-	if (!muxer.m_backend) {
-		muxer.Fail("muxer has no backend");
+	if (!muxer.SpawnBackend())
+		return remuxer;
+	if (muxer.m_wired.contains(remuxer.In())) {
+		muxer.Fail("track already wired to muxer");
 		return remuxer;
 	}
+	muxer.m_wired.insert(remuxer.In());
+	if (!muxer.ArmOctets())
+		return remuxer;
 
 	if (!muxer.m_backend->ReserveRemux(muxer, remuxer.In()))
 		return remuxer;
@@ -296,31 +373,6 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Remuxer& remuxer, Muxer& mu
 	return remuxer;
 }
 
-Muxer& StormByte::Multimedia::Pipeline::operator>>(Muxer& muxer, const std::filesystem::path& path) noexcept {
-	if (muxer.Failed())
-		return muxer;
-	if (!muxer.m_backend) {
-		muxer.Fail("muxer has no backend");
-		return muxer;
-	}
-
-	muxer.m_backend->BindPath(muxer, path);
-	muxer.Log(Level::Notice, std::format("path {}", path.string()));
-	return muxer;
-}
-
-Muxer& StormByte::Multimedia::Pipeline::operator>>(const File& file, Muxer& muxer) noexcept {
-	if (muxer.Failed())
-		return muxer;
-	if (!muxer.m_backend) {
-		muxer.Fail("muxer has no backend");
-		return muxer;
-	}
-
-	muxer.m_backend->BindAttachments(muxer, file);
-	return muxer;
-}
-
 Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxer) noexcept {
 	if (!muxer.m_plan)
 		muxer.m_plan = demuxer.m_plan;
@@ -332,15 +384,15 @@ Muxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Muxer& muxe
 		muxer.Fail("demuxer has no plan");
 		return muxer;
 	}
-
-	if (!muxer.m_backend) {
-		muxer.Fail("muxer has no backend");
+	if (!muxer.SpawnBackend())
 		return muxer;
-	}
+	if (!muxer.ArmOctets())
+		return muxer;
 
 	muxer.m_origin = &demuxer;
 	muxer.m_progress = demuxer.m_progress;
-	muxer.m_backend->BindAttachments(muxer, demuxer.OriginFile());
+	if (!muxer.BindPlanAttachments())
+		return muxer;
 	muxer.Log(Level::Debug, "bound remux origin");
 	return muxer;
 }

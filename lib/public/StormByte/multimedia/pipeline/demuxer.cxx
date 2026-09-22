@@ -42,15 +42,12 @@
 #include <StormByte/multimedia/backend/pipeline/detail/worker/demux.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
-#include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/item.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/pipeline/plan.hxx>
-#include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <algorithm>
@@ -61,23 +58,13 @@
 using namespace StormByte::Multimedia;
 using namespace StormByte::Multimedia::Pipeline;
 using StormByte::Logger::Level;
+using StormByte::Buffer::IO::BufferedFileReader;
 
 namespace {
 	std::string Ns(const std::optional<Property::Duration>& value) noexcept {
 		if (!value)
 			return "-";
 		return std::format("{}", value->Nanoseconds().count());
-	}
-
-	const Codec* CodecOf(const Plan* plan, int track) noexcept {
-		if (!plan)
-			return nullptr;
-		for (const auto& stream : plan->Source().Streams()) {
-			if (stream.Index() == track)
-				return &stream.Codec();
-		}
-
-		return nullptr;
 	}
 }
 
@@ -123,8 +110,6 @@ void Demuxer::WaitForPlan() noexcept {
 void Demuxer::LatchDuration() noexcept {
 	if (!m_progress || !m_plan)
 		return;
-	if (const auto& duration = m_plan->Source().Duration(); duration)
-		m_progress->SetDurationNs(duration->Nanoseconds().count());
 }
 
 void Demuxer::ReachedEof() noexcept {
@@ -157,6 +142,14 @@ bool Demuxer::WakeNow() const noexcept {
 }
 
 bool Demuxer::Rewind() noexcept {
+	if (m_plan) {
+		auto& reader = Origin();
+		if (reader.IsOpen() && !reader.Rewind()) {
+			Fail("reader rewind failed");
+			return false;
+		}
+	}
+
 	if (!m_backend || !m_backend->Rewind(*this))
 		return false;
 	m_eof = false;
@@ -171,12 +164,12 @@ bool Demuxer::Rewind() noexcept {
 	return true;
 }
 
-const File& Demuxer::OriginFile() const noexcept {
-	return m_plan->Source();
+const BufferedFileReader& Demuxer::Origin() const noexcept {
+	return m_plan->Reader();
 }
 
-Origin& Demuxer::BoundOrigin() noexcept {
-	return *const_cast<File&>(m_plan->Source()).m_origin;
+BufferedFileReader& Demuxer::Origin() noexcept {
+	return m_plan->Reader();
 }
 
 std::unique_ptr<Backend::Pipeline::Decoder> Demuxer::OpenDecoder(Decoder& decoder) noexcept {
@@ -217,7 +210,7 @@ Packet::PointerType Demuxer::Wrap(
 		std::move(duration),
 		keyframe,
 		std::vector<SideData>{},
-		CodecOf(m_plan.get(), track),
+		nullptr,
 		serial,
 		0));
 	if (backend)
@@ -228,20 +221,11 @@ Packet::PointerType Demuxer::Wrap(
 Decoder& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Decoder& decoder) noexcept {
 	if (decoder.Failed())
 		return decoder;
-	if (!decoder.m_plan)
+	if (!decoder.Plan())
 		decoder.m_plan = demuxer.m_plan;
 	if (demuxer.Failed()) {
 		decoder.Fail(demuxer.Error().value_or("demuxer failed"));
 		return decoder;
-	}
-
-	if (demuxer.Plan()) {
-		for (const auto& stream : demuxer.Plan()->Source().Streams()) {
-			if (stream.Index() != decoder.Index())
-				continue;
-			decoder.Stamp(stream.Metadata().Language(), stream.Metadata().Title());
-			break;
-		}
 	}
 
 	decoder.AttachOrigin(demuxer);

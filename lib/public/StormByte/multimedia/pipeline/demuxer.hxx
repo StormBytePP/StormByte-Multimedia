@@ -39,9 +39,10 @@
 #pragma once
 
 #include <StormByte/buffer/fifo.hxx>
+#include <StormByte/buffer/io/buffered_file_reader.hxx>
 #include <StormByte/logger/log.hxx>
-#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/progress.hxx>
 #include <StormByte/multimedia/pipeline/step.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
@@ -58,301 +59,309 @@
 #include <vector>
 
 /**
- * @namespace StormByte::Multimedia::Backend::Pipeline
- * @brief Multimedia-owned pipeline stages and unit holders.
- *
- * @ingroup multimedia_pipeline
+ * @namespace StormByte
+ * @brief Root namespace of the StormByte C++ suite.
  */
-namespace StormByte::Multimedia::Backend::Pipeline {
-	class Decoder;	///< Decode backend behind @ref StormByte::Multimedia::Pipeline::Decoder.
-	class Demuxer;	///< Demux backend behind @ref StormByte::Multimedia::Pipeline::Demuxer.
-}
-
-namespace StormByte::Multimedia::Backend::Pipeline::Detail::Worker {
-	class Demux;
-}
-
-/**
- * @namespace StormByte::Multimedia
- * @brief Public multimedia types: codecs, containers, streams and files.
- */
-namespace StormByte::Multimedia {
-	class Origin;
-}
-
-/**
- * @namespace StormByte::Multimedia::Pipeline
- * @brief Demux / decode / filter / encode / mux types.
- *
- * @ingroup multimedia_pipeline
- */
-namespace StormByte::Multimedia::Pipeline {
-	class Decoder;
-	class Demuxer;
-	class Filters;
-	class Muxer;
-	class Packet;
-	class Plan;
-	class Remuxer;
-
+namespace StormByte {
 	/**
-	 * @brief Binds one origin track of @p demuxer to @p decoder.
-	 * @param demuxer Origin demuxer.
-	 * @param decoder Destination decoder.
-	 * @return @p decoder.
-	 */
-	STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-
-	/**
-	 * @class Demuxer
-	 * @brief Reads interleaved compressed packets from the Plan origin.
-	 *
-	 * Only tracks listed in the bound Plan enter the tube. An origin
-	 * stream omitted from Plan::add is never pushed.
-	 *
-	 * A @ref Filter::ProcessTwoPasses leaf tells @ref Filters to call
-	 * @ref Measure before the first read. During that pass only the
-	 * listed tracks are emitted and hoppers stay open at EoF.
-	 * @ref ReachedEof then asks Filters to CloseMeasureSource.
-	 * Decode workers drain and Reset; Filters then LeaveMeasure
-	 * and Rewind. The same Demuxer instance continues with ordinary
-	 * Process (the same path as a job that never measured).
-	 * Transcoder is not involved.
-	 *
-	 * After measure EoF the demux worker @ref Wait s until
-	 * @ref Rewind clears @ref Measuring. That wake is @ref WakeNow
-	 * (`!Measuring()`), not hopper Ready.
-	 *
-	 * The tube clock (@ref Progress) is created here because a tube
-	 * has exactly one Demuxer. Filters and the Muxer write the same
-	 * shared object. @ref Progress() returns a const handle the user
-	 * may keep after the tube dies.
-	 *
-	 * Notice: origin path at Setup, eof once (Process after measure,
-	 * or the only pass). Debug: bind to a decoder and Process min/max
-	 * at source EoF. LowLevel unit lines always; the shared logger
-	 * throttles. Each Read+Emit is timed by the Source pumper.
-	 *
-	 * Wrap assigns the next @ref Packet::Serial for that origin
-	 * track and Part zero. That id is pipe lineage, not an FFmpeg
-	 * frame count.
+	 * @namespace StormByte::Multimedia::Backend::Pipeline
+	 * @brief Multimedia-owned pipeline stages and unit holders.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
-		friend class Backend::Pipeline::Demuxer;
-		friend class Backend::Pipeline::Detail::Worker::Demux;
-		friend class Decoder;
-		friend class Filters;
-		friend class Muxer;
-		friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
-		friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
-		friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
-		friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
+	namespace Multimedia {
+		namespace Backend {
+			class FileAvio;
 
-		public:
-			/**
-			 * @name Lifecycle
-			 * @{
-			 */
+			namespace Pipeline {
+				class Decoder;
+				class Demuxer;
+			}
 
-			/**
-			 * @brief Demuxer. Launches; Setup waits for a Plan.
-			 * @param log Shared logger. Empty pointer means no log.
-			 */
-			explicit Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept;
+			namespace Pipeline::Detail::Worker {
+				class Demux;
+			}
+		}
 
-			/**
-			 * @brief Copy constructor.
-			 * @param other Source demuxer.
-			 */
-			Demuxer(const Demuxer& other) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param other Demuxer to take.
-			 */
-			Demuxer(Demuxer&& other) noexcept = delete;
+		/**
+		 * @namespace StormByte::Multimedia::Pipeline
+		 * @brief Demux / decode / filter / encode / mux types.
+		 *
+		 * @ingroup multimedia_pipeline
+		 */
+		namespace Pipeline {
+			class Decoder;
+			class Demuxer;
+			class Filters;
+			class Muxer;
+			class Packet;
+			class Plan;
+			class Remuxer;
 
 			/**
-			 * @brief Destructor. @ref Step::Join Halt s before backends die.
-			 */
-			~Demuxer() noexcept override;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param other Source demuxer.
-			 * @return *this.
-			 */
-			Demuxer& operator=(const Demuxer& other) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param other Demuxer to take.
-			 * @return *this.
-			 */
-			Demuxer& operator=(Demuxer&& other) noexcept = delete;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @brief true if open, not failed and not at EOF.
-			 * @return Open and readable.
-			 */
-			explicit operator bool() const noexcept;
-
-			/**
-			 * @name Source
-			 * @{
-			 */
-
-			/**
-			 * @brief Whether the last read hit EOF.
-			 * @return true at end of source of the Process pass.
-			 *
-			 * Measure EoF does not stick. @ref Rewind clears it.
-			 */
-			bool Eof() const noexcept;
-
-			/**
-			 * @brief Presentation time of the last emitted packet.
-			 * @return Pts, or empty until a packet with Pts arrives.
-			 */
-			std::optional<Property::Duration> Position() const noexcept;
-
-			/**
-			 * @brief Job clock for this tube (measure, analytics, All).
-			 *
-			 * Not Demuxer-only: Filters and the Muxer write the same
-			 * object. Shared so the user can keep it after the tube
-			 * dies. No public setters.
-			 *
-			 * @return Const shared handle. Never empty.
-			 */
-			Progress::Pointer Progress() const noexcept;
-
-			/**
-			 * @}
-			 */
-
-		private:
-			using Step::Log;
-
-			/**
-			 * @brief Blocks until a Plan is bound or the stage must leave.
-			 */
-			void WaitForPlan() noexcept;
-
-			/**
-			 * @brief Copies origin File::Duration into the clock.
-			 *
-			 * Called after a Plan is bound. No extra probe.
-			 */
-			void LatchDuration() noexcept;
-
-			/**
-			 * @brief Marks end of source. Called by the backend on EOF.
-			 *
-			 * If @ref Measuring, asks Filters::CloseMeasureSource and
-			 * does not close hoppers. Process-pass EoF is permanent.
-			 */
-			void ReachedEof() noexcept;
-
-			/**
-			 * @brief Restricts the next read to @p tracks and keeps hoppers open.
-			 * @param tracks Origin indexes that feed ProcessTwoPasses.
-			 *
-			 * Friend: @ref Filters::Close. Empty @p tracks is a no-op.
-			 */
-			void Measure(std::vector<int> tracks) noexcept;
-
-			/**
-			 * @brief Whether @ref Measure is active.
-			 * @return true until @ref Rewind.
-			 */
-			bool Measuring() const noexcept;
-
-			/**
-			 * @brief Wake the measure-EoF Wait when measure has ended.
-			 * @return true iff not @ref Measuring.
-			 *
-			 * Demux worker office. That Wait is not hopper Ready.
-			 */
-			bool WakeNow() const noexcept override;
-
-			/**
-			 * @brief Seeks the origin to the start without closing hoppers.
-			 * @return false after Fail.
-			 *
-			 * Ends @ref Measure: later reads follow the bound Plan.
-			 * Friend: @ref Filters::FinishMeasure.
-			 */
-			bool Rewind() noexcept;
-
-			/**
-			 * @brief Origin snapshot owned by the bound Plan.
-			 * @return File.
-			 */
-			const File& OriginFile() const noexcept;
-
-			/**
-			 * @brief Path or Consumer held by the origin File.
-			 * @return Origin. Valid after plan >> demuxer.
-			 */
-			Origin& BoundOrigin() noexcept;
-
-			/**
-			 * @brief Opens the decode backend for @p decoder.
+			 * @brief Binds one origin track of @p demuxer to @p decoder.
+			 * @param demuxer Origin demuxer.
 			 * @param decoder Destination decoder.
-			 * @return Backend, or empty after Fail.
+			 * @return @p decoder.
 			 */
-			std::unique_ptr<Backend::Pipeline::Decoder> OpenDecoder(Decoder& decoder) noexcept;
+			STORMBYTE_MULTIMEDIA_PUBLIC Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
 
 			/**
-			 * @brief Builds a public packet. Called from the backend.
+			 * @class Demuxer
+			 * @brief Reads interleaved compressed packets from the Plan reader.
 			 *
-			 * Assigns the next @ref Packet::Serial for @p track and
-			 * @ref Packet::Part zero. This is pipe lineage, not a
-			 * decoded-frame count. Logs the unit at LowLevel.
+			 * Only tracks listed in the bound Plan enter the tube. An origin
+			 * stream omitted from Plan::add is never pushed. A second Plan is
+			 * @ref Step::Fail. There is no @ref StormByte::Multimedia::File
+			 * in this stage.
 			 *
-			 * @p backend must carry a deep copy of the origin
-			 * @c AVCodecParameters (extradata included). Analytics
-			 * packet-looks open a decoder from that stamp. A packet
-			 * without parameters is not a look unit.
+			 * @par Octets
+			 * LibAV talks only to @ref Backend::FileAvio on the seekable
+			 * @ref StormByte::Buffer::IO::BufferedFileReader owned by the
+			 * Plan. There is no second ring and no Bridge on that reader.
 			 *
-			 * @param track Origin stream index.
-			 * @param type Media type stamped on the packet.
-			 * @param payload Compressed bytes.
-			 * @param pts Presentation time.
-			 * @param dts Decode time.
-			 * @param duration Packet duration.
-			 * @param keyframe Whether this is a keyframe.
-			 * @param backend Holder with codecpar. May be empty only
-			 *        if no look will consume this packet.
-			 * @return Public packet.
+			 * A @ref Filter::ProcessTwoPasses leaf tells @ref Filters to call
+			 * @ref Measure before the first read. During that pass only the
+			 * listed tracks are emitted and hoppers stay open at EoF.
+			 * @ref ReachedEof then asks Filters to CloseMeasureSource.
+			 * Decode workers drain and Reset; Filters then LeaveMeasure
+			 * and Rewind. The same Demuxer instance continues with ordinary
+			 * Process (the same path as a job that never measured).
+			 * Transcoder is not involved.
+			 *
+			 * After measure EoF the demux worker @ref Wait s until
+			 * @ref Rewind clears @ref Measuring. That wake is @ref WakeNow
+			 * (`!Measuring()`), not hopper Ready.
+			 *
+			 * The tube clock (@ref Progress) is created here because a tube
+			 * has exactly one Demuxer. Filters and the Muxer write the same
+			 * shared object. @ref Progress() returns a const handle the user
+			 * may keep after the tube dies.
+			 *
+			 * Wrap assigns the next @ref Packet::Serial for that origin
+			 * track and Part zero. That id is pipe lineage, not an FFmpeg
+			 * frame count.
+			 *
+			 * @ingroup multimedia_pipeline
 			 */
-			Packet::PointerType Wrap(
-				int track,
-				Type type,
-				StormByte::Buffer::FIFO payload,
-				std::optional<Property::Duration> pts,
-				std::optional<Property::Duration> dts,
-				std::optional<Property::Duration> duration,
-				bool keyframe,
-				std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
+			class STORMBYTE_MULTIMEDIA_PUBLIC Demuxer final: public Step {
+				friend class Backend::Pipeline::Demuxer;
+				friend class Backend::Pipeline::Detail::Worker::Demux;
+				friend class Decoder;
+				friend class Filters;
+				friend class Muxer;
+				friend Decoder& operator>>(Demuxer& demuxer, Decoder& decoder) noexcept;
+				friend Demuxer& operator>>(class Plan&& plan, Demuxer& demuxer) noexcept;
+				friend Muxer& operator>>(Demuxer& demuxer, Muxer& muxer) noexcept;
+				friend Remuxer& operator>>(Demuxer& demuxer, Remuxer& remuxer) noexcept;
 
-			std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;	///< Format backend
-			bool m_eof;												///< End of Process-pass source
-			std::mutex m_planMutex;									///< Guards Plan wait
-			std::condition_variable m_planPresent;					///< Woken when a Plan arrives
-			std::atomic<std::int64_t> m_positionNs;					///< Last packet Pts, or -1
-			std::unordered_map<int, std::uint64_t> m_nextSerial;	///< Next lineage id per origin track
-			std::vector<int> m_measureTracks;						///< Tracks visible during measure
-			bool m_measuring = false;								///< Measure pass active
-			Filters* m_filters = nullptr;							///< Facade that started measure
-			std::shared_ptr<class Progress> m_progress;				///< Tube clock (shared)
-			Join m_join{*this};										///< Halt before other members die
-	};
+				public:
+					/**
+					 * @name Lifecycle
+					 * @{
+					 */
+
+					/**
+					 * @brief Demuxer. Launches; Setup waits for a Plan.
+					 * @param log Shared logger. Empty pointer means no log.
+					 */
+					explicit Demuxer(std::shared_ptr<StormByte::Logger::Log> log) noexcept;
+
+					/**
+					 * @brief Copy constructor.
+					 * @param other Source demuxer.
+					 */
+					Demuxer(const Demuxer& other) = delete;
+
+					/**
+					 * @brief Move constructor.
+					 * @param other Demuxer to take.
+					 */
+					Demuxer(Demuxer&& other) noexcept = delete;
+
+					/**
+					 * @brief Destructor. @ref Step::Join Halt s before backends die.
+					 */
+					~Demuxer() noexcept override;
+
+					/**
+					 * @brief Copy assignment.
+					 * @param other Source demuxer.
+					 * @return *this.
+					 */
+					Demuxer& operator=(const Demuxer& other) = delete;
+
+					/**
+					 * @brief Move assignment.
+					 * @param other Demuxer to take.
+					 * @return *this.
+					 */
+					Demuxer& operator=(Demuxer&& other) noexcept = delete;
+
+					/**
+					 * @}
+					 */
+
+					/**
+					 * @brief true if open, not failed and not at EOF.
+					 * @return Open and readable.
+					 */
+					explicit operator bool() const noexcept;
+
+					/**
+					 * @name Source
+					 * @{
+					 */
+
+					/**
+					 * @brief Whether the last read hit EOF.
+					 * @return true at end of source of the Process pass.
+					 *
+					 * Measure EoF does not stick. @ref Rewind clears it.
+					 */
+					bool Eof() const noexcept;
+
+					/**
+					 * @brief Presentation time of the last emitted packet.
+					 * @return Pts, or empty until a packet with Pts arrives.
+					 */
+					std::optional<Property::Duration> Position() const noexcept;
+
+					/**
+					 * @brief Job clock for this tube (measure, analytics, All).
+					 *
+					 * Not Demuxer-only: Filters and the Muxer write the same
+					 * object. Shared so the user can keep it after the tube
+					 * dies. No public setters.
+					 *
+					 * @return Const shared handle. Never empty.
+					 */
+					Progress::Pointer Progress() const noexcept;
+
+					/**
+					 * @}
+					 */
+
+				private:
+					using Step::Log;
+
+					/**
+					 * @brief Blocks until a Plan is bound or the stage must leave.
+					 */
+					void WaitForPlan() noexcept;
+
+					/**
+					 * @brief Latches a known duration into the clock if available.
+					 *
+					 * Called after a Plan is bound. Does not open a path and
+					 * does not probe a File.
+					 */
+					void LatchDuration() noexcept;
+
+					/**
+					 * @brief Marks end of source. Called by the backend on EOF.
+					 *
+					 * If @ref Measuring, asks Filters::CloseMeasureSource and
+					 * does not close hoppers. Process-pass EoF is permanent.
+					 */
+					void ReachedEof() noexcept;
+
+					/**
+					 * @brief Restricts the next read to @p tracks and keeps hoppers open.
+					 * @param tracks Origin indexes that feed ProcessTwoPasses.
+					 *
+					 * Friend: @ref Filters::Close. Empty @p tracks is a no-op.
+					 */
+					void Measure(std::vector<int> tracks) noexcept;
+
+					/**
+					 * @brief Whether @ref Measure is active.
+					 * @return true until @ref Rewind.
+					 */
+					bool Measuring() const noexcept;
+
+					/**
+					 * @brief Wake the measure-EoF Wait when measure has ended.
+					 * @return true iff not @ref Measuring.
+					 *
+					 * Demux worker office. That Wait is not hopper Ready.
+					 */
+					bool WakeNow() const noexcept override;
+
+					/**
+					 * @brief Seeks the Plan reader to the start without closing hoppers.
+					 * @return false after Fail.
+					 *
+					 * Ends @ref Measure: later reads follow the bound Plan.
+					 * Friend: @ref Filters::FinishMeasure. Uses
+					 * @ref StormByte::Buffer::IO::BufferedReader::Rewind.
+					 */
+					bool Rewind() noexcept;
+
+					/**
+					 * @brief Origin reader owned by the bound Plan.
+					 * @return Seekable reader.
+					 */
+					const StormByte::Buffer::IO::BufferedFileReader& Origin() const noexcept;
+
+					/**
+					 * @brief Origin reader owned by the bound Plan.
+					 * @return Seekable reader.
+					 */
+					StormByte::Buffer::IO::BufferedFileReader& Origin() noexcept;
+
+					/**
+					 * @brief Opens the decode backend for @p decoder.
+					 * @param decoder Destination decoder.
+					 * @return Backend, or empty after Fail.
+					 */
+					std::unique_ptr<Backend::Pipeline::Decoder> OpenDecoder(Decoder& decoder) noexcept;
+
+					/**
+					 * @brief Builds a public packet. Called from the backend.
+					 *
+					 * Assigns the next @ref Packet::Serial for @p track and
+					 * @ref Packet::Part zero. This is pipe lineage, not a
+					 * decoded-frame count. Logs the unit at LowLevel.
+					 *
+					 * @p backend must carry a deep copy of the origin
+					 * @c AVCodecParameters (extradata included). Analytics
+					 * packet-looks open a decoder from that stamp. A packet
+					 * without parameters is not a look unit.
+					 *
+					 * @param track Origin stream index.
+					 * @param type Media type stamped on the packet.
+					 * @param payload Compressed bytes.
+					 * @param pts Presentation time.
+					 * @param dts Decode time.
+					 * @param duration Packet duration.
+					 * @param keyframe Whether this is a keyframe.
+					 * @param backend Holder with codecpar. May be empty only
+					 *        if no look will consume this packet.
+					 * @return Public packet.
+					 */
+					Packet::PointerType Wrap(
+						int track,
+						Type type,
+						StormByte::Buffer::FIFO payload,
+						std::optional<Property::Duration> pts,
+						std::optional<Property::Duration> dts,
+						std::optional<Property::Duration> duration,
+						bool keyframe,
+						std::unique_ptr<Backend::Pipeline::Packet> backend) noexcept;
+
+					std::unique_ptr<Backend::Pipeline::Demuxer> m_backend;				///< Format backend
+					bool m_eof;															///< End of Process-pass source
+					std::mutex m_planMutex;												///< Guards Plan wait
+					std::condition_variable m_planPresent;								///< Woken when a Plan arrives
+					std::atomic<std::int64_t> m_positionNs;								///< Last packet Pts, or -1
+					std::unordered_map<int, std::uint64_t> m_nextSerial;				///< Next lineage id per origin track
+					std::vector<int> m_measureTracks;									///< Tracks visible during measure
+					bool m_measuring = false;											///< Measure pass active
+					Filters* m_filters = nullptr;										///< Facade that started measure
+					std::shared_ptr<class Progress> m_progress;							///< Tube clock (shared)
+					Join m_join{*this};													///< Halt before other members die
+			};
+		}
+	}
 }

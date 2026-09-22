@@ -38,7 +38,6 @@
 
 #pragma once
 
-#include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/pipeline/config/base.hxx>
 #include <StormByte/multimedia/pipeline/filters.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
@@ -49,7 +48,6 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -77,6 +75,7 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			int In = -1;								///< Origin stream index
 			int Out = -1;								///< Mux destination order
 			StormByte::Multimedia::Type Kind = StormByte::Multimedia::Type::Unknown;	///< Media kind
+			const StormByte::Multimedia::Codec* Source = nullptr;	///< Origin codec from consultation
 			std::unique_ptr<StormByte::Multimedia::Pipeline::Config::Base> Config;	///< Track intention
 			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Filters;	///< Stretch leaves
 			bool Settled = false;						///< OnSettled already fired
@@ -84,10 +83,11 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 
 	/**
 	 * @class Transcoder
-	 * @brief Runs one file-to-file job for the public Transcoder facade.
+	 * @brief Runs one reader-to-writer job for the public Transcoder facade.
 	 *
 	 * Forwards the Demuxer @ref StormByte::Multimedia::Pipeline::Progress.
-	 * Does not keep a second percent counter.
+	 * Does not keep a second percent counter. Muxer is constructed with
+	 * the shared log only. Destination container comes from the Plan writer.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -160,8 +160,6 @@ namespace StormByte::Multimedia::Backend::Pipeline {
 			std::atomic<bool> Paused { false };			///< Coordinator is paused
 			std::shared_ptr<StormByte::Multimedia::Pipeline::Progress> Clock;	///< Demuxer clock
 			std::optional<std::string> Error;			///< Failure text
-			const StormByte::Multimedia::Container* Container = nullptr;	///< Destination container
-			std::filesystem::path Path;					///< Destination path
 			std::vector<TranscoderSlot> Mapped;			///< Fluent map, mux order
 			std::vector<std::shared_ptr<StormByte::Multimedia::Pipeline::Filter::FFmpeg>> Analytics;	///< Global analytics
 			std::vector<std::pair<std::string, StormByte::Multimedia::Pipeline::Filter::Report>> Reports;	///< Snapshots at Done

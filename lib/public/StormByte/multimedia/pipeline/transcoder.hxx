@@ -38,11 +38,11 @@
 
 #pragma once
 
-#include <StormByte/buffer/consumer.hxx>
+#include <StormByte/buffer/io/buffered_file_reader.hxx>
+#include <StormByte/buffer/io/buffered_file_writer.hxx>
 #include <StormByte/clonable.hxx>
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/codec.hxx>
-#include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/filters/ffmpeg.hxx>
 #include <StormByte/multimedia/pipeline/filters/report.hxx>
@@ -51,8 +51,8 @@
 #include <StormByte/multimedia/type.hxx>
 #include <StormByte/multimedia/typedefs.hxx>
 #include <StormByte/multimedia/visibility.h>
+#include <StormByte/type_traits.hxx>
 
-#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -88,14 +88,15 @@ namespace StormByte::Multimedia::Pipeline {
 	 * @enum Status
 	 * @brief Lifecycle of a Transcoder instance.
 	 *
-	 * Open leaves the job Stopped. Run starts the coordinator.
+	 * The constructor leaves the job Stopped. Run starts the coordinator.
 	 * OnStart may return Stopped / Error / Aborted to bail without
-	 * starting the job.
+	 * starting the job. A second Run fails. Pause does not require a
+	 * new instance. After Stop the job is spent.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
 	enum class Status {
-		Stopped,	///< Open succeeded; Run has not started, or OnStart declined
+		Stopped,	///< Constructed; Run has not started, or OnStart declined
 		Running,	///< Coordinator is alive and not paused
 		Paused,		///< Pause(); coordinator blocks until Resume or Cancel
 		Done,		///< Finished and flushed
@@ -204,15 +205,20 @@ namespace StormByte::Multimedia::Pipeline {
 
 	/**
 	 * @class Transcoder
-	 * @brief Facade that maps tracks and runs one file-to-file job.
+	 * @brief Facade that maps tracks and runs one reader-to-writer job.
 	 *
 	 * Connects operator>> and Filters for you. The stock class is a
-	 * complete job: open a File, choose origin streams, remux or
-	 * encode each one, write another file. You do not have to derive
-	 * anything to transcode.
+	 * complete job: own BufferedFile leaves, choose origin streams,
+	 * remux or encode each one, write through the Plan writer. You do
+	 * not have to derive anything to transcode.
 	 *
-	 * It is also the extension point. Nothing in the extra surface
-	 * is required. Mix what you need:
+	 * Four constructors. Each one always owns BufferedFile leaves
+	 * (built from a path when needed). Run moves those leaves into
+	 * EmptyPlan and the Transcoder loses them. File is only used as
+	 * a consultation snapshot and is discarded after analysis.
+	 * File::Reader is not used.
+	 *
+	 * It is also the extension point. Mix what you need:
 	 *
 	 * - Hooks only. Keep the stock Plan and override OnConfigure,
 	 *   OnStart, OnPlan, OnSettled, OnMeasureDone, OnAnalyticsDone,
@@ -221,37 +227,31 @@ namespace StormByte::Multimedia::Pipeline {
 	 *   derived from Plan. Plan::Check is virtual on that type.
 	 * - A richer settled row. Override EmptySettled and return a
 	 *   type derived from TrackSettled.
-	 * - Both. Derived Plan plus derived TrackSettled plus the hooks
-	 *   you care about.
 	 * - Logging. Override @ref InstallLog so this job's own lines
-	 *   use another component path and other throttle rules. Tube
-	 *   stages (Demuxer, Decoder, filters, …) keep the Multimedia
-	 *   defaults: StormByte/Multimedia/<stage>. That path is not
-	 *   overridable from a derived Transcoder.
+	 *   use another component path. Tube stages keep the Multimedia
+	 *   defaults.
 	 *
 	 * EmptyPlan / EmptySettled only pick the dynamic type. This class
 	 * still fills tracks from the fluent map and settled fields from
-	 * the opened Encoder. One instance is one source and one
-	 * destination; another job is another instance.
+	 * the opened Encoder. One instance is one Run. Another job is
+	 * another instance.
 	 *
 	 * Mux order is the order of Video / Audio / Subtitle / Attachments
-	 * calls. There is no output-index argument.
+	 * calls. There is no output-index argument and no Destination
+	 * setter: the container is the writer extension.
 	 *
 	 * Analytics attach with @ref Filter. After the job reaches
 	 * Status::Done, @ref Reports returns the same snapshots a hand
 	 * tube reads with @ref Filter::Analytics::Report on the leaf
-	 * pointer. The Notice line from a leaf is log, not the API.
+	 * pointer.
 	 *
 	 * @ref Progress forwards the Demuxer clock. The user may keep
-	 * that shared_ptr after the tube dies. There is no apply pass.
+	 * that shared_ptr after the tube dies.
 	 *
-	 * Open applies @ref InstallLog after the most-derived
-	 * constructor. Stock InstallLog scopes this job at
-	 * StormByte/Multimedia/Transcoder and applies the Multimedia
-	 * format (`[%L] %T %c`) and throttle (Window on LowLevel,
-	 * Drop on Debug and Notice). There is no STMM component. A
-	 * derived Open that constructs a subclass must call
-	 * @ref InstallLog itself after that constructor.
+	 * Each constructor calls @ref InstallLog after the most-derived
+	 * constructor body of this class. A derived constructor that
+	 * constructs a subclass must call @ref InstallLog itself after
+	 * that constructor.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -422,14 +422,65 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @brief Constructs an empty job. Only Open / derived classes.
-			 * @param logger Required application logger.
-			 * @param file Opened source (moved).
+			 * @brief Builds reader and writer from paths.
+			 * @param source Input path.
+			 * @param destination Output path.
+			 * @param logger Shared log for the job and the tube.
 			 *
-			 * Stores @p logger as-is. @ref InstallLog runs after the
-			 * most-derived constructor.
+			 * Stores @p logger as-is. @ref InstallLog runs at the end
+			 * of this constructor.
 			 */
-			Transcoder(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept;
+			Transcoder(const std::filesystem::path& source,
+				const std::filesystem::path& destination,
+				std::shared_ptr<StormByte::Logger::Log> logger) noexcept;
+
+			/**
+			 * @brief Builds a reader from @p source and takes @p writer.
+			 * @tparam Writer Leaf derived from BufferedFileWriter.
+			 * @param source Input path.
+			 * @param writer Output writer (moved).
+			 * @param logger Shared log for the job and the tube.
+			 */
+			template<typename Writer>
+			requires StormByte::Type::DerivedFrom<Writer, StormByte::Buffer::IO::BufferedFileWriter>
+			Transcoder(const std::filesystem::path& source, Writer&& writer,
+				std::shared_ptr<StormByte::Logger::Log> logger) noexcept
+			: Transcoder(StormByte::Buffer::IO::BufferedFileReader{source},
+				std::forward<Writer>(writer), std::move(logger)) {}
+
+			/**
+			 * @brief Takes @p reader and builds a writer on @p destination.
+			 * @tparam Reader Leaf derived from BufferedFileReader.
+			 * @param reader Input reader (moved).
+			 * @param destination Output path.
+			 * @param logger Shared log for the job and the tube.
+			 */
+			template<typename Reader>
+			requires StormByte::Type::DerivedFrom<Reader, StormByte::Buffer::IO::BufferedFileReader>
+			Transcoder(Reader&& reader, const std::filesystem::path& destination,
+				std::shared_ptr<StormByte::Logger::Log> logger) noexcept
+			: Transcoder(std::forward<Reader>(reader),
+				StormByte::Buffer::IO::BufferedFileWriter{destination},
+				std::move(logger)) {}
+
+			/**
+			 * @brief Takes both leaves. Heap-allocates the dynamic types.
+			 * @tparam Reader Leaf derived from BufferedFileReader.
+			 * @tparam Writer Leaf derived from BufferedFileWriter.
+			 * @param reader Input reader (moved).
+			 * @param writer Output writer (moved).
+			 * @param logger Shared log for the job and the tube.
+			 */
+			template<typename Reader, typename Writer>
+			requires StormByte::Type::DerivedFrom<Reader, StormByte::Buffer::IO::BufferedFileReader>
+				&& StormByte::Type::DerivedFrom<Writer, StormByte::Buffer::IO::BufferedFileWriter>
+			Transcoder(Reader&& reader, Writer&& writer,
+				std::shared_ptr<StormByte::Logger::Log> logger) noexcept
+			: Transcoder(std::unique_ptr<StormByte::Buffer::IO::BufferedFileReader>(
+					std::make_unique<std::remove_cvref_t<Reader>>(std::forward<Reader>(reader))),
+				std::unique_ptr<StormByte::Buffer::IO::BufferedFileWriter>(
+					std::make_unique<std::remove_cvref_t<Writer>>(std::forward<Writer>(writer))),
+				std::move(logger)) {}
 
 			/**
 			 * @brief Copy constructor.
@@ -467,48 +518,6 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 
 			/**
-			 * @name Open
-			 * @{
-			 */
-
-			/**
-			 * @brief Opens @p source and binds @p destination.
-			 * @param logger Required logger.
-			 * @param source Input path.
-			 * @param destination Output path.
-			 * @param duration Authoritative container duration, if known.
-			 *        Empty runs the normal probe. A value skips the packet scan.
-			 * @return Job, or unexpected.
-			 *
-			 * Shorthand for File::Open plus the public constructor.
-			 * The destination container is still set with Destination
-			 * before Run. Stock Open constructs Transcoder and calls
-			 * @ref InstallLog. A derived Open that constructs a
-			 * subclass must call @ref InstallLog after that constructor.
-			 */
-			static ExpectedTranscoder Open(std::shared_ptr<StormByte::Logger::Log> logger,
-				const std::filesystem::path& source,
-				const std::filesystem::path& destination,
-				std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
-
-			/**
-			 * @}
-			 */
-
-			/**
-			 * @name Source
-			 * @{
-			 */
-
-			/**
-			 * @brief Opened source file.
-			 * @return File snapshot.
-			 *
-			 * After Run hands the File to the Plan, this is Plan::Source().
-			 */
-			const File& Source() const noexcept;
-
-			/**
 			 * @brief Logger used by this job after @ref InstallLog.
 			 * @return Job facade, or empty.
 			 *
@@ -520,15 +529,11 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Intention built for this job, if any.
-			 * @return Plan, or empty before Destination / Run.
+			 * @return Plan, or empty before Run.
 			 */
 			inline const std::shared_ptr<class Plan>& Plan() const noexcept {
 				return m_plan;
 			}
-
-			/**
-			 * @}
-			 */
 
 			/**
 			 * @name Map
@@ -557,21 +562,21 @@ namespace StormByte::Multimedia::Pipeline {
 			Track Subtitle(int in) noexcept;
 
 			/**
-			 * @brief Keeps every attachment from the source File.
+			 * @brief Keeps every source attachment.
 			 * @return *this.
 			 *
-			 * Each source slot becomes a Plan track with
-			 * @ref Config::Attachment and the concrete MIME. Default
-			 * is drop (do not call this).
+			 * Alias of Attachments with the star-star MIME pattern.
+			 * Default is drop (do not call this).
 			 */
 			Transcoder& Attachments() noexcept;
 
 			/**
-			 * @brief Keeps source attachments whose MIME equals @p mime.
-			 * @param mime Concrete MIME (`image/jpeg`). Not a wildcard.
+			 * @brief Keeps source attachments whose MIME matches @p pattern.
+			 * @param pattern Exact type/subtype, type-star category, or
+			 *        star-star (all). Same matcher as Plan::Check.
 			 * @return *this.
 			 */
-			Transcoder& Attachments(std::string_view mime) noexcept;
+			Transcoder& Attachments(std::string_view pattern) noexcept;
 
 			/**
 			 * @brief Drops an origin stream (omit from the Plan).
@@ -598,17 +603,6 @@ namespace StormByte::Multimedia::Pipeline {
 			}
 
 			/**
-			 * @brief Sets the destination container and path.
-			 * @param container Registry destination container.
-			 * @param path Output path.
-			 * @return *this.
-			 *
-			 * Required before Run. Closes the job identity together
-			 * with the File from Open.
-			 */
-			Transcoder& Destination(const Container& container, std::filesystem::path path) noexcept;
-
-			/**
 			 * @}
 			 */
 
@@ -620,9 +614,10 @@ namespace StormByte::Multimedia::Pipeline {
 			/**
 			 * @brief Builds the Plan, starts the coordinator and returns.
 			 *
-			 * Calls OnConfigure, EmptyPlan, fills tracks from the fluent
-			 * map, OnPlan, OnStart, then plan >> demuxer. Does not block
-			 * until Done.
+			 * A second Run fails. Calls OnConfigure, EmptyPlan (moves the
+			 * BufferedFile leaves), fills tracks from the fluent map,
+			 * OnPlan, OnStart, then plan >> demuxer >> muxer. Does not
+			 * block until Done.
 			 */
 			void Run() noexcept;
 
@@ -702,13 +697,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 * Multimedia format and throttle. Override to use another
 			 * path and other rules. Tube stages still use
 			 * StormByte/Multimedia/<stage>. Do not call from a
-			 * constructor. Open calls this after the most-derived
-			 * constructor.
+			 * constructor. Each stock constructor calls this after
+			 * the most-derived constructor of this class.
 			 */
 			virtual void InstallLog() noexcept;
 
 			/**
-			 * @brief Application logger passed to Open.
+			 * @brief Application logger passed to the constructor.
 			 * @return Logger given to the constructor, not the job facade.
 			 *
 			 * Hand this to a Step or filter. Those apply the Multimedia
@@ -720,17 +715,17 @@ namespace StormByte::Multimedia::Pipeline {
 
 			/**
 			 * @brief Allocates the Plan type for this job.
-			 * @param source Origin File (moved).
-			 * @param container Destination container.
-			 * @param destination Output path.
+			 * @param reader Origin octets (moved).
+			 * @param writer Destination octets (moved).
 			 * @return Plan of the desired dynamic type, with no tracks yet.
 			 *
 			 * Override to return a type derived from Plan. Tracks are
-			 * filled from the fluent map after this returns.
+			 * filled from the fluent map after this returns. After the
+			 * call this Transcoder no longer owns the leaves.
 			 */
-			virtual std::unique_ptr<class Plan> EmptyPlan(File&& source,
-				const Container& container,
-				std::filesystem::path destination) const noexcept;
+			virtual std::unique_ptr<class Plan> EmptyPlan(
+				StormByte::Buffer::IO::BufferedFileReader&& reader,
+				StormByte::Buffer::IO::BufferedFileWriter&& writer) const noexcept;
 
 			/**
 			 * @brief Allocates the settled-row type.
@@ -747,7 +742,7 @@ namespace StormByte::Multimedia::Pipeline {
 			virtual void OnConfigure() noexcept;
 
 			/**
-			 * @brief Gate after the Plan is filled and Destination is set.
+			 * @brief Gate after the Plan is filled.
 			 * @return Running to proceed, Error / Aborted / Stopped to bail.
 			 */
 			virtual enum Status OnStart() noexcept;
@@ -804,19 +799,26 @@ namespace StormByte::Multimedia::Pipeline {
 			friend class Track;
 
 			/**
+			 * @brief Takes already heap-allocated leaves.
+			 * @param reader Owned origin.
+			 * @param writer Owned sink.
+			 * @param logger Shared log.
+			 */
+			Transcoder(std::unique_ptr<StormByte::Buffer::IO::BufferedFileReader> reader,
+				std::unique_ptr<StormByte::Buffer::IO::BufferedFileWriter> writer,
+				std::shared_ptr<StormByte::Logger::Log> logger) noexcept;
+
+			/**
 			 * @brief Marks a hard error and cancels the coordinator.
 			 * @param reason Message stored in Error().
 			 */
 			void Fail(std::string reason) noexcept;
 
 			/**
-			 * @brief Opens a File and constructs Transcoder.
-			 * @param logger Required logger.
-			 * @param opened File result.
-			 * @return Job, or unexpected.
+			 * @brief Opens a consultation File from the reader path and discards it after use.
+			 * @return false if owner.Fail() was called.
 			 */
-			static ExpectedTranscoder BindLoggerAndFile(std::shared_ptr<StormByte::Logger::Log> logger,
-				ExpectedFile opened) noexcept;
+			bool ProbeSource() noexcept;
 
 			/**
 			 * @brief Maps one origin stream. Mux slot is the next Add.
@@ -853,10 +855,13 @@ namespace StormByte::Multimedia::Pipeline {
 			 */
 			void AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcept;
 
-			std::shared_ptr<StormByte::Logger::Log> m_app_log;			///< Logger from Open; input for tube stages
+			std::shared_ptr<StormByte::Logger::Log> m_app_log;			///< Logger from the constructor; input for tube stages
 			std::shared_ptr<StormByte::Logger::Log> m_logger;			///< Job facade after InstallLog
-			std::unique_ptr<File> m_file;								///< Source until handed to the Plan
+			std::unique_ptr<StormByte::Buffer::IO::BufferedFileReader> m_reader;	///< Origin until EmptyPlan
+			std::unique_ptr<StormByte::Buffer::IO::BufferedFileWriter> m_writer;	///< Sink until EmptyPlan
+			std::unique_ptr<File> m_consult;							///< Consultation snapshot; discarded after analysis
 			std::shared_ptr<class Plan> m_plan;							///< Intention; shared with the job after Run
 			std::unique_ptr<Backend::Pipeline::Transcoder> m_backend;	///< Map and coordinator thread
+			bool m_armed;												///< EmptyPlan already consumed the leaves
 	};
 }

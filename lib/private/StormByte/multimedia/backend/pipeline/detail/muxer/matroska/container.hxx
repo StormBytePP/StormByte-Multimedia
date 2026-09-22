@@ -38,10 +38,11 @@
 
 #pragma once
 
+#include <StormByte/multimedia/attachment.hxx>
+#include <StormByte/multimedia/backend/file_avio.hxx>
+#include <StormByte/multimedia/backend/pipeline/muxer.hxx>
 #include <StormByte/multimedia/ffmpeg/AVRational.hxx>
 #include <StormByte/multimedia/ffmpeg/fwd.hxx>
-#include <StormByte/multimedia/backend/pipeline/muxer.hxx>
-#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -49,12 +50,9 @@
 
 #include <cstdint>
 #include <deque>
-#include <filesystem>
 #include <map>
-#include <memory>
 #include <optional>
 #include <string>
-
 
 /**
  * @namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska
@@ -64,13 +62,16 @@
  */
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	using FFmpeg::AVRational;
+
 	/**
 	 * @class Container
 	 * @brief Matroska / WebM mux backend.
 	 *
 	 * Owns the output AVFormatContext, reserved tracks and the
-	 * header-delay queue. Attachments are written through
-	 * Attachment just before avformat_write_header.
+	 * header-delay queue. Bytes leave through @ref Backend::FileAvio
+	 * on @ref Plan::Writer. Format is guessed from the registry
+	 * container extension. The writer AVIO is seekable so duration
+	 * and indexes can be patched.
 	 *
 	 * @ingroup multimedia_pipeline
 	 */
@@ -87,34 +88,30 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			~Container() noexcept override;
 
 			/**
-			 * @brief Copy constructor.
-			 * @param other Source backend.
+			 * @brief Copy constructor (deleted).
 			 */
 			Container(const Container& other) = delete;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param other Source backend.
+			 * @brief Copy assignment (deleted).
 			 * @return *this.
 			 */
 			Container& operator=(const Container& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other Backend to take.
+			 * @brief Move constructor (deleted).
 			 */
 			Container(Container&& other) noexcept = delete;
 
 			/**
-			 * @brief Move assignment.
-			 * @param other Backend to take.
+			 * @brief Move assignment (deleted).
 			 * @return *this.
 			 */
 			Container& operator=(Container&& other) noexcept = delete;
 
 			/**
-			 * @brief Whether a destination file is bound.
-			 * @return true after BindPath().
+			 * @brief Whether the output context exists.
+			 * @return true after BindSink().
 			 */
 			bool IsOpen() const noexcept override;
 
@@ -125,13 +122,14 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			bool HeaderWritten() const noexcept override;
 
 			/**
-			 * @brief Binds the destination path and allocates the format context.
+			 * @brief Allocates the format context and write AVIO.
 			 * @param owner Public muxer.
-			 * @param path Output file.
 			 * @return false if owner.Fail() was called.
+			 *
+			 * Format comes from @c owner.Destination().Extension().
+			 * Bytes go to @ref Plan::Writer via FileAvio. No path.
 			 */
-			bool BindPath(StormByte::Multimedia::Pipeline::Muxer& owner,
-				const std::filesystem::path& path) noexcept override;
+			bool BindSink(StormByte::Multimedia::Pipeline::Muxer& owner) noexcept override;
 
 			/**
 			 * @brief Reserves an encode track.
@@ -152,13 +150,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 				int inIndex) noexcept override;
 
 			/**
-			 * @brief Snapshots File attachments for header time.
+			 * @brief Binds a collected attachment catalogue for header time.
 			 * @param owner Public muxer.
-			 * @param file Source file.
+			 * @param attachments Catalogue. Not a File.
 			 * @return false if owner.Fail() was called.
 			 */
 			bool BindAttachments(StormByte::Multimedia::Pipeline::Muxer& owner,
-				const File& file) noexcept override;
+				const StormByte::Multimedia::Attachments& attachments) noexcept override;
 
 			/**
 			 * @brief Queues or writes one packet.
@@ -206,11 +204,7 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			int Resolve(int track) const noexcept;
 
 			/**
-			 * @brief Writes the header when @ref Muxer::Armed and every reserved encoder is open.
-			 *
-			 * Packets that arrive earlier stay in @c m_queue. Interleave
-			 * window is @c InputCeiling() * 40 ms in AV_TIME_BASE units.
-			 *
+			 * @brief Writes the header when Armed and every reserved encoder is open.
 			 * @param owner Public muxer.
 			 * @return false if owner.Fail() was called.
 			 */
@@ -231,12 +225,13 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			void FreeParams() noexcept;
 
 			::AVFormatContext* m_ctx;									///< Output format context
-			std::filesystem::path m_path;								///< Destination path
+			std::optional<StormByte::Multimedia::Backend::FileAvio> m_avio;	///< Writer AVIO
 			std::map<int, Track> m_tracks;								///< Output index → track
 			std::map<int, int> m_inToOut;								///< Source index → output index
 			std::deque<std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>> m_queue;	///< Packets waiting for header
-			const StormByte::Multimedia::File* m_file;					///< Source file (attachments + remux)
+			StormByte::Multimedia::Attachments m_attachments;			///< Header catalogue
 			bool m_header;												///< avformat_write_header done
 			bool m_trailer;												///< av_write_trailer done
+			bool m_customIo;											///< pb is FileAvio
 	};
 }

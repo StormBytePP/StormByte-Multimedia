@@ -180,6 +180,8 @@ void Registry::Add(const Tables::Container::ContainerDef& def) noexcept {
 	Container& stored = m_containers[i];
 
 	m_container_by_name.emplace(stored.Name(), i);
+	if (ext && ext[0] != '\0')
+		m_container_by_name.emplace(ext, i);
 	for (std::size_t n = 0; n < def.FfmpegIdCount(); ++n)
 		m_container_by_name.emplace(def.FfmpegId(n), i);
 
@@ -209,7 +211,7 @@ void Registry::LoadContainers() noexcept {
 	const auto& catalog = Tables::Container::Catalog::Instance();
 	const auto all = catalog.All();
 	m_containers.reserve(all.size());
-	m_container_by_name.reserve(all.size() * 2);
+	m_container_by_name.reserve(all.size() * 3);
 	for (const auto& def : all)
 		Add(def);
 }

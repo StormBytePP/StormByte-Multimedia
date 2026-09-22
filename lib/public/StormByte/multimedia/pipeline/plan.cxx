@@ -39,103 +39,159 @@
 #include <StormByte/multimedia/pipeline/plan.hxx>
 
 #include <StormByte/expected.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/cover.hxx>
+#include <StormByte/multimedia/codec.hxx>
 #include <StormByte/multimedia/pipeline/config/attachment.hxx>
 #include <StormByte/multimedia/pipeline/config/audio.hxx>
+#include <StormByte/multimedia/pipeline/config/base.hxx>
 #include <StormByte/multimedia/pipeline/config/subtitle.hxx>
 #include <StormByte/multimedia/pipeline/config/video.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/exception.hxx>
-#include <StormByte/multimedia/stream.hxx>
+#include <StormByte/multimedia/registry.hxx>
 #include <StormByte/multimedia/type.hxx>
 
-#include <mutex>
+#include <cctype>
+#include <string>
+#include <utility>
 
-using namespace StormByte::Multimedia;
+using StormByte::Buffer::IO::BufferedFileReader;
+using StormByte::Buffer::IO::BufferedFileWriter;
 using namespace StormByte::Multimedia::Pipeline;
-using StormByte::Multimedia::Type;
 
 namespace {
-	const Codec* DestinationCodec(const Config::Base* config) noexcept {
+	std::string ExtensionOf(const std::filesystem::path& path) noexcept {
+		std::string ext = path.extension().string();
+		if (ext.empty())
+			return {};
+		if (ext.front() == '.')
+			ext.erase(ext.begin());
+		for (char& ch : ext)
+			ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+		return ext;
+	}
+
+	const StormByte::Multimedia::Codec* DestinationCodec(
+		const StormByte::Multimedia::Pipeline::Config::Base* config) noexcept {
+		if (!config)
+			return nullptr;
 		if (const auto* video = dynamic_cast<const Config::Video*>(config))
 			return video->Codec();
 		if (const auto* audio = dynamic_cast<const Config::Audio*>(config))
 			return audio->Codec();
-		if (const auto* subtitle = dynamic_cast<const Config::Subtitle*>(config))
-			return subtitle->Codec();
+		if (const auto* sub = dynamic_cast<const Config::Subtitle*>(config))
+			return sub->Codec();
 		return nullptr;
 	}
 
-	bool MimeHasWildcard(const std::string& mime) noexcept {
-		return mime.find('*') != std::string::npos;
+	std::optional<std::string> AttachmentMime(
+		const StormByte::Multimedia::Pipeline::Config::Base* config) noexcept {
+		if (!config)
+			return std::nullopt;
+		if (const auto* att = dynamic_cast<const Config::Attachment*>(config))
+			return att->MimeType();
+		return std::nullopt;
 	}
 }
 
-Plan::Plan(File&& source, const class Container& container, std::filesystem::path destination) noexcept
-: m_source(std::make_unique<File>(std::move(source))),
-m_container(&container),
-m_destination(std::move(destination)) {}
+Plan::Plan(const std::filesystem::path& source,
+	const std::filesystem::path& destination) noexcept
+: Plan(BufferedFileReader{source}, BufferedFileWriter{destination}) {}
+
+Plan::Plan(std::unique_ptr<BufferedFileReader> reader,
+	std::unique_ptr<BufferedFileWriter> writer) noexcept
+: m_reader(std::move(reader)),
+	m_writer(std::move(writer)),
+	m_container(m_writer ? ContainerFromWriter(*m_writer) : nullptr) {
+	if (!m_reader)
+		return;
+	auto opened = StormByte::Multimedia::File::Open(*m_reader);
+	if (opened)
+		m_snapshot.emplace(std::move(*opened));
+}
+
+const StormByte::Multimedia::Container* Plan::ContainerFromWriter(
+	const BufferedFileWriter& writer) noexcept {
+	const auto ext = ExtensionOf(writer.Path());
+	if (ext.empty())
+		return nullptr;
+	auto found = StormByte::Multimedia::Registry::Instance().FindContainer(ext);
+	if (!found)
+		return nullptr;
+	return &found.value().get();
+}
+
+BufferedFileReader& Plan::Reader() noexcept {
+	return *m_reader;
+}
+
+const BufferedFileReader& Plan::Reader() const noexcept {
+	return *m_reader;
+}
+
+BufferedFileWriter& Plan::Writer() noexcept {
+	return *m_writer;
+}
+
+const BufferedFileWriter& Plan::Writer() const noexcept {
+	return *m_writer;
+}
+
+const StormByte::Multimedia::File& Plan::Snapshot() const noexcept {
+	return *m_snapshot;
+}
+
+Plan::operator bool() const noexcept {
+	return Check().has_value();
+}
 
 CheckResult Plan::Check() const {
-	if (!m_source)
-		return StormByte::Unexpected<PlanException>("plan has no source");
-	if (m_destination.empty())
+	if (!m_reader || !m_writer)
+		return StormByte::Unexpected<PlanException>("plan was moved-from");
+	if (!m_snapshot)
+		return StormByte::Unexpected<PlanException>("source snapshot failed");
+	if (m_writer->Path().empty())
 		return StormByte::Unexpected<PlanException>("destination path is empty");
+	if (!m_container)
+		return StormByte::Unexpected<PlanException>("destination container is unknown");
 	if (m_tracks.empty())
 		return StormByte::Unexpected<PlanException>("plan has no tracks");
 
-	const auto& streams = m_source->Streams();
-	const auto& attachments = m_source->Attachments();
+	for (const auto& held : m_tracks) {
+		if (!held)
+			return StormByte::Unexpected<PlanException>("plan holds an empty track");
+		const Track& track = *held;
+		if (track.In() < 0)
+			return StormByte::Unexpected<PlanException>("track origin index is negative");
+		if (track.Type() == StormByte::Multimedia::Type::Unknown)
+			return StormByte::Unexpected<PlanException>("track type is unknown");
 
-	for (const std::unique_ptr<Track>& item : m_tracks) {
-		const Track& track = *item;
-		const int in = track.In();
-		if (in < 0)
-			return StormByte::Unexpected<PlanException>("track origin {} is negative", in);
-
-		const Type type = track.Type();
-		if (type == Type::Unknown)
-			return StormByte::Unexpected<PlanException>("track origin {} has unknown type", in);
-
-		if (type == Type::Attachment) {
-			if (static_cast<std::size_t>(in) >= attachments.size())
-				return StormByte::Unexpected<PlanException>("attachment origin {} is not in source", in);
-			if (const auto* attachment = dynamic_cast<const Config::Attachment*>(track.Config())) {
-				if (attachment->MimeType().empty() || MimeHasWildcard(attachment->MimeType()))
-					return StormByte::Unexpected<PlanException>("attachment origin {} has invalid MIME type", in);
-			}
-
+		if (track.Type() == StormByte::Multimedia::Type::Attachment) {
+			const auto mime = AttachmentMime(track.Config());
+			if (!mime || mime->empty())
+				return StormByte::Unexpected<PlanException>("attachment MIME is empty");
+			if (!Detail::MimePatternOk(*mime))
+				return StormByte::Unexpected<PlanException>("attachment MIME is not exact, type-star or star-star");
 			continue;
 		}
 
-		const Stream* stream = nullptr;
-		for (const auto& candidate : streams) {
-			if (candidate.Index() == in) {
-				stream = &candidate;
-				break;
-			}
-		}
-
-		if (!stream)
-			return StormByte::Unexpected<PlanException>("track origin {} is not in source", in);
-		if (stream->Type() != type)
-			return StormByte::Unexpected<PlanException>("track origin {} type does not match source", in);
-
-		if (const Codec* codec = DestinationCodec(track.Config())) {
-			if (codec->Type() != stream->Type())
-				return StormByte::Unexpected<PlanException>("track origin {} codec type does not match source", in);
-		}
+		const auto* dest = DestinationCodec(track.Config());
+		if (dest && dest->Type() != track.Type())
+			return StormByte::Unexpected<PlanException>("destination codec type does not match the track");
 	}
 
-	return {};
+	return CheckResult{};
 }
 
 Demuxer& StormByte::Multimedia::Pipeline::operator>>(Plan&& plan, Demuxer& demuxer) noexcept {
-	{
-		std::lock_guard lock(demuxer.m_planMutex);
-		if (!demuxer.m_plan)
-			demuxer.m_plan = std::make_shared<Plan>(std::move(plan));
+	if (demuxer.Plan()) {
+		demuxer.Fail("demuxer already has a plan");
+		return demuxer;
 	}
 
+	Step& step = demuxer;
+	step.m_plan = std::make_shared<Plan>(std::move(plan));
 	demuxer.m_planPresent.notify_all();
+	demuxer.Wake().notify_all();
 	return demuxer;
 }

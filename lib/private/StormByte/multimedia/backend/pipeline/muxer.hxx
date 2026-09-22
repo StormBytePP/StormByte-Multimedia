@@ -38,150 +38,153 @@
 
 #pragma once
 
-#include <StormByte/multimedia/file.hxx>
+#include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/pipeline/encoder.hxx>
 #include <StormByte/multimedia/pipeline/muxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
 #include <StormByte/multimedia/visibility.h>
 
-#include <filesystem>
 #include <memory>
 
 /**
- * @namespace StormByte::Multimedia::Backend::Pipeline
- * @brief Multimedia-owned pipeline stages and unit holders.
- *
- * @ingroup multimedia_pipeline
+ * @namespace StormByte
+ * @brief Root namespace of the StormByte C++ suite.
  */
-namespace StormByte::Multimedia::Backend::Pipeline {
-	/**
-	 * @class Muxer
-	 * @brief Mux backend behind one public Muxer.
-	 *
-	 * One leaf per destination container family. BindPath, ReserveEncoder,
-	 * ReserveRemux and BindAttachments stay bool+Fail. Push uses shared_ptr.
-	 * Errors are owner.Fail(). Remux reservation is an output index plus
-	 * the origin stream index; the leaf fills codecpar from the bound File.
-	 *
-	 * @ingroup multimedia_pipeline
-	 */
-	class STORMBYTE_MULTIMEDIA_PRIVATE Muxer {
-		public:
-			/**
-			 * @brief Destructor.
-			 */
-			virtual ~Muxer() noexcept = default;
+namespace StormByte {
+	namespace Multimedia {
+		namespace Backend {
+			namespace Pipeline {
+				/**
+				 * @class Muxer
+				 * @brief Mux backend behind one public Muxer.
+				 *
+				 * One leaf per destination container family. BindSink allocates
+				 * the format context and a write @ref FileAvio on
+				 * @ref Plan::Writer. Libav must not open a path.
+				 * ReserveEncoder, ReserveRemux and BindAttachments stay
+				 * bool+Fail. Push uses shared_ptr. Errors are owner.Fail().
+				 *
+				 * @ingroup multimedia_pipeline
+				 */
+				class STORMBYTE_MULTIMEDIA_PRIVATE Muxer {
+					public:
+						/**
+						 * @brief Destructor.
+						 */
+						virtual ~Muxer() noexcept = default;
 
-			/**
-			 * @brief Copy constructor.
-			 * @param other Source backend.
-			 */
-			Muxer(const Muxer& other) = delete;
+						/**
+						 * @brief Copy constructor (deleted).
+						 */
+						Muxer(const Muxer& other) = delete;
 
-			/**
-			 * @brief Copy assignment.
-			 * @param other Source backend.
-			 * @return *this.
-			 */
-			Muxer& operator=(const Muxer& other) = delete;
+						/**
+						 * @brief Copy assignment (deleted).
+						 * @return *this.
+						 */
+						Muxer& operator=(const Muxer& other) = delete;
 
-			/**
-			 * @brief Whether a destination file is bound.
-			 * @return true after muxer >> path.
-			 */
-			virtual bool IsOpen() const noexcept = 0;
+						/**
+						 * @brief Whether the output context exists.
+						 * @return true after a successful @ref BindSink.
+						 */
+						virtual bool IsOpen() const noexcept = 0;
 
-			/**
-			 * @brief Whether avformat_write_header has run.
-			 * @return true after a successful header.
-			 */
-			virtual bool HeaderWritten() const noexcept = 0;
+						/**
+						 * @brief Whether avformat_write_header has run.
+						 * @return true after a successful header.
+						 */
+						virtual bool HeaderWritten() const noexcept = 0;
 
-			/**
-			 * @brief Binds the destination path and allocates the format context.
-			 * @param owner Public muxer (Fail, Destination).
-			 * @param path Output file.
-			 * @return false if owner.Fail() was called.
-			 */
-			virtual bool BindPath(StormByte::Multimedia::Pipeline::Muxer& owner,
-				const std::filesystem::path& path) noexcept = 0;
+						/**
+						 * @brief Allocates the format context and write AVIO.
+						 * @param owner Public muxer (Fail, Destination, Plan writer).
+						 * @return false if owner.Fail() was called.
+						 *
+						 * Format is guessed from the Plan container extension.
+						 * Bytes go to @ref Plan::Writer through FileAvio.
+						 */
+						virtual bool BindSink(StormByte::Multimedia::Pipeline::Muxer& owner) noexcept = 0;
 
-			/**
-			 * @brief Reserves an encode track at Encoder::Index().
-			 * @param owner Public muxer.
-			 * @param encoder Live encoder (must outlive the header).
-			 * @return false if owner.Fail() was called.
-			 */
-			virtual bool ReserveEncoder(StormByte::Multimedia::Pipeline::Muxer& owner,
-				StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept = 0;
+						/**
+						 * @brief Reserves an encode track at Encoder::Index().
+						 * @param owner Public muxer.
+						 * @param encoder Live encoder (must outlive the header).
+						 * @return false if owner.Fail() was called.
+						 */
+						virtual bool ReserveEncoder(StormByte::Multimedia::Pipeline::Muxer& owner,
+							StormByte::Multimedia::Pipeline::Encoder& encoder) noexcept = 0;
 
-			/**
-			 * @brief Reserves a remux output slot for origin stream @p inIndex.
-			 * @param owner Public muxer.
-			 * @param inIndex Origin stream index (Remuxer::In).
-			 * @return false if owner.Fail() was called.
-			 */
-			virtual bool ReserveRemux(StormByte::Multimedia::Pipeline::Muxer& owner,
-				int inIndex) noexcept = 0;
+						/**
+						 * @brief Reserves a remux slot for origin stream @p inIndex.
+						 * @param owner Public muxer.
+						 * @param inIndex Origin stream index.
+						 * @return false if owner.Fail() was called.
+						 */
+						virtual bool ReserveRemux(StormByte::Multimedia::Pipeline::Muxer& owner,
+							int inIndex) noexcept = 0;
 
-			/**
-			 * @brief Snapshots File attachments for header time.
-			 * @param owner Public muxer.
-			 * @param file Source file.
-			 * @return false if owner.Fail() was called.
-			 */
-			virtual bool BindAttachments(StormByte::Multimedia::Pipeline::Muxer& owner,
-				const File& file) noexcept = 0;
+						/**
+						 * @brief Binds a collected attachment catalogue.
+						 * @param owner Public muxer.
+						 * @param attachments Catalogue. Not a File.
+						 * @return false if owner.Fail() was called.
+						 */
+						virtual bool BindAttachments(StormByte::Multimedia::Pipeline::Muxer& owner,
+							const StormByte::Multimedia::Attachments& attachments) noexcept = 0;
 
-			/**
-			 * @brief Queues or writes one packet. Writes the header when ready.
-			 * @param owner Public muxer.
-			 * @param packet Encoded or remuxed packet.
-			 * @return true if the packet was accepted.
-			 */
-			virtual bool Push(StormByte::Multimedia::Pipeline::Muxer& owner,
-				const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept = 0;
+						/**
+						 * @brief Queues or writes one packet.
+						 * @param owner Public muxer.
+						 * @param packet Encoded or remuxed packet.
+						 * @return true if the packet was accepted.
+						 */
+						virtual bool Push(StormByte::Multimedia::Pipeline::Muxer& owner,
+							const std::shared_ptr<StormByte::Multimedia::Pipeline::Packet>& packet) noexcept = 0;
 
-			/**
-			 * @brief Flushes leftover packets and the trailer.
-			 * @param owner Public muxer.
-			 */
-			virtual void Flush(StormByte::Multimedia::Pipeline::Muxer& owner) noexcept = 0;
+						/**
+						 * @brief Flushes leftover packets and the trailer.
+						 * @param owner Public muxer.
+						 */
+						virtual void Flush(StormByte::Multimedia::Pipeline::Muxer& owner) noexcept = 0;
 
-			/**
-			 * @brief Writes trailer if needed and frees AVIO + context.
-			 */
-			virtual void Close() noexcept = 0;
+						/**
+						 * @brief Writes trailer if needed and frees AVIO + context.
+						 */
+						virtual void Close() noexcept = 0;
 
-		protected:
-			/**
-			 * @brief Default constructor.
-			 */
-			Muxer() noexcept = default;
+					protected:
+						/**
+						 * @brief Default constructor.
+						 */
+						Muxer() noexcept = default;
 
-			/**
-			 * @brief Move constructor.
-			 * @param other Backend to take.
-			 */
-			Muxer(Muxer&& other) noexcept = default;
+						/**
+						 * @brief Move constructor.
+						 * @param other Backend to take.
+						 */
+						Muxer(Muxer&& other) noexcept = default;
 
-			/**
-			 * @brief Move assignment.
-			 * @param other Backend to take.
-			 * @return *this.
-			 */
-			Muxer& operator=(Muxer&& other) noexcept = default;
+						/**
+						 * @brief Move assignment.
+						 * @param other Backend to take.
+						 * @return *this.
+						 */
+						Muxer& operator=(Muxer&& other) noexcept = default;
 
-			/**
-			 * @brief Asks the public Muxer to copy @p encoder into @p avStream.
-			 * @param owner Public muxer.
-			 * @param encoder Reserved encode lane.
-			 * @param avStream libav AVStream*.
-			 * @return false if the encoder has no context.
-			 */
-			bool BindEncoderStream(StormByte::Multimedia::Pipeline::Muxer& owner,
-				StormByte::Multimedia::Pipeline::Encoder& encoder, void* avStream) noexcept {
-				return owner.BindEncoderStream(encoder, avStream);
+						/**
+						 * @brief Asks the public Muxer to copy @p encoder into @p avStream.
+						 * @param owner Public muxer.
+						 * @param encoder Live encoder.
+						 * @param avStream libav AVStream*.
+						 * @return false if the encoder has no context.
+						 */
+						bool BindEncoderStream(StormByte::Multimedia::Pipeline::Muxer& owner,
+							StormByte::Multimedia::Pipeline::Encoder& encoder, void* avStream) noexcept {
+							return owner.BindEncoderStream(encoder, avStream);
+						}
+				};
 			}
-	};
+		}
+	}
 }

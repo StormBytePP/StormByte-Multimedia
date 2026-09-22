@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <StormByte/buffer/consumer.hxx>
+#include <StormByte/buffer/io/buffered_file_reader.hxx>
 #include <StormByte/multimedia/attachment.hxx>
 #include <StormByte/multimedia/container.hxx>
 #include <StormByte/multimedia/metadata/file.hxx>
@@ -48,181 +48,202 @@
 
 #include <chrono>
 #include <filesystem>
-#include <memory>
+#include <functional>
 #include <optional>
+#include <variant>
+
+namespace StormByte::Multimedia::FFmpeg {
+	class AVFormatContext;
+}
 
 /**
- * @namespace StormByte::Multimedia
- * @brief Public multimedia types: codecs, containers, streams and files.
+ * @namespace StormByte
+ * @brief Root namespace of the StormByte C++ suite.
  */
-namespace StormByte::Multimedia {
-	class Origin;
-
+namespace StormByte {
 	/**
-	 * @namespace StormByte::Multimedia::Pipeline
-	 * @brief Demux / decode / filter / encode / mux types.
-	 *
-	 * @ingroup multimedia_pipeline
+	 * @namespace StormByte::Multimedia
+	 * @brief Public multimedia types: codecs, containers, streams and files.
 	 */
-	namespace Pipeline {
+	namespace Multimedia {
 		/**
-		 * @class Demuxer
-		 * @brief Reads interleaved packets from a File origin.
+		 * @class File
+		 * @brief Read-only consultation snapshot of a media source.
+		 *
+		 * File lists path label, container, streams (HDR / HDR10+ and
+		 * other mapped properties), attachments, metadata and duration.
+		 * It has no write API and is not part of the tube. There is no
+		 * public Reader().
+		 *
+		 * Open(path) builds a temporary BufferedFileReader, probes, and
+		 * drops it so the handle is not held (Windows locking). The
+		 * snapshot keeps the path. Open(BufferedFileReader&) probes
+		 * that reader with AVIO and keeps a reference; the caller
+		 * retains ownership. Duration() uses the borrowed reader or
+		 * builds another temporary reader from the stored path and
+		 * drops it. Path() is the stored path or reader.Path().
+		 *
+		 * Open probes headers and a bounded run of video packets for
+		 * HDR10+. It does not read the whole source for Duration.
+		 *
+		 * @see StormByte::Buffer::IO::BufferedFileReader
 		 */
-		class Demuxer;
+		class STORMBYTE_MULTIMEDIA_PUBLIC File {
+			public:
+				File(const File&) = delete;
+
+				/**
+				 * @brief Move constructor.
+				 * @param other File to take.
+				 */
+				File(File&& other) noexcept;
+
+				/**
+				 * @brief Destructor.
+				 */
+				~File() noexcept;
+
+				File& operator=(const File&) = delete;
+				File& operator=(File&&) = delete;
+
+				/**
+				 * @brief Path label: stored path, or reader.Path() if borrowed.
+				 * @return Label.
+				 */
+				const std::filesystem::path& Path() const noexcept;
+
+				/**
+				 * @brief Detected container.
+				 * @return Registry container.
+				 */
+				const class Container& Container() const noexcept { return m_container; }
+
+				/**
+				 * @brief Real streams in container order. Attached pictures are omitted.
+				 * @return Immutable list.
+				 */
+				const Multimedia::Streams& Streams() const noexcept { return m_streams; }
+
+				/**
+				 * @brief Container attachments (covers, fonts). Not listed in Streams().
+				 * @return Attachments captured at Open.
+				 */
+				const Multimedia::Attachments& Attachments() const noexcept;
+
+				/**
+				 * @brief Container-level tags captured at Open.
+				 * @return Metadata snapshot.
+				 */
+				const Metadata::File& Metadata() const noexcept { return m_metadata; }
+
+				/**
+				 * @brief Container duration.
+				 * @return Duration, or empty if it cannot be determined.
+				 *
+				 * Returns the header value, the duration passed to Open, or a value
+				 * cached after the first scan. The first call may read the whole source
+				 * when Open was used without a duration: even if the container header
+				 * has a duration, streams that lack one are filled from packet
+				 * timestamps. After a successful scan the result is reused on this
+				 * instance. If Open(..., duration) was used, this is that value, there
+				 * is no extra I/O, and stream durations stay as probed.
+				 */
+				const std::optional<Property::Duration>& Duration() const noexcept;
+
+				/**
+				 * @brief Opens and probes @p path. Temporary reader is dropped.
+				 * @param path Media file.
+				 * @param duration Authoritative duration; empty means scan on first Duration().
+				 * @return Snapshot or FileOpenException.
+				 */
+				static ExpectedFile Open(const std::filesystem::path& path,
+					std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
+
+				/**
+				 * @brief Opens and probes @p reader with AVIO only.
+				 * @param reader Existing origin. Not taken. Rewound before return.
+				 * @param duration Authoritative duration; empty means scan on first Duration().
+				 * @return Snapshot or FileOpenException.
+				 */
+				static ExpectedFile Open(StormByte::Buffer::IO::BufferedFileReader& reader,
+					std::optional<std::chrono::nanoseconds> duration = std::nullopt) noexcept;
+
+			private:
+				using Origin = std::variant<
+					std::filesystem::path,
+					std::reference_wrapper<StormByte::Buffer::IO::BufferedFileReader>
+				>;
+
+				Origin m_origin;										///< Path or borrowed reader
+				const class Container& m_container;						///< Registry container
+				mutable Multimedia::Streams m_streams;					///< Probed streams
+				Multimedia::Attachments m_attachments;					///< Covers / attached files
+				Metadata::File m_metadata;								///< Container tags
+				mutable std::optional<Property::Duration> m_duration;	///< Container duration
+				mutable bool m_durationResolved;						///< Caller-supplied or scan done
+
+				/**
+				 * @brief Snapshot constructor.
+				 * @param origin Stored path or borrowed reader.
+				 * @param container Registry container.
+				 * @param streams Probed streams.
+				 * @param attachments Probed attachments.
+				 * @param metadata Container tags.
+				 * @param duration Container duration.
+				 * @param durationResolved true if Duration() must not scan.
+				 */
+				File(Origin origin, const class Container& container,
+					Multimedia::Streams streams, Multimedia::Attachments attachments,
+					Metadata::File metadata,
+					std::optional<Property::Duration> duration, bool durationResolved) noexcept;
+
+				/**
+				 * @brief Probe an already constructed reader (AVIO only).
+				 * @param reader Origin used with AVIO.
+				 * @param duration Caller-supplied duration, if any.
+				 * @param origin Path to keep, or borrowed reference.
+				 * @return Snapshot or FileOpenException.
+				 */
+				static ExpectedFile Probe(StormByte::Buffer::IO::BufferedFileReader& reader,
+					std::optional<std::chrono::nanoseconds> duration,
+					Origin origin) noexcept;
+
+				/**
+				 * @brief Packet scan for container and missing stream durations.
+				 */
+				void ResolveDuration() const noexcept;
+
+				/**
+				 * @brief Opens AVIO on @p reader and scans durations.
+				 * @param reader Origin.
+				 * @param streams Streams to update.
+				 * @param duration Container duration to fill if empty.
+				 */
+				static void ScanWithReader(StormByte::Buffer::IO::BufferedFileReader& reader,
+					Multimedia::Streams& streams,
+					std::optional<Property::Duration>& duration) noexcept;
+
+				/**
+				 * @brief Sets HDR10+ on a video stream.
+				 * @param stream Stream to update.
+				 */
+				static void MarkHdr10Plus(Stream& stream) noexcept;
+
+				/**
+				 * @brief Peeks video packets for HDR10+ side data.
+				 * @param ctx Open probe context.
+				 * @param streams Streams to mark.
+				 */
+				static void DetectHdr10Plus(FFmpeg::AVFormatContext& ctx, Multimedia::Streams& streams) noexcept;
+
+				/**
+				 * @brief Fills missing durations from packet timestamps.
+				 * @param ctx Open probe context.
+				 * @param streams Streams to update.
+				 * @param container Container duration to fill if empty.
+				 */
+				static void ScanDurations(FFmpeg::AVFormatContext& ctx, Multimedia::Streams& streams,
+					std::optional<Property::Duration>& container) noexcept;
+		};
 	}
-
-	/**
-	 * @class File
-	 * @brief Snapshot of a media source: path or Consumer, container, streams and tags.
-	 *
-	 * File is move-only. Open() probes with private FFmpeg RAII and drops the
-	 * demuxer before return. A Consumer origin is kept; its Ring is exclusive
-	 * to this File for its lifetime. avformat attached pictures
-	 * (`AV_DISPOSITION_ATTACHED_PIC`) are stored in Attachments(), not Streams().
-	 */
-	class STORMBYTE_MULTIMEDIA_PUBLIC File {
-		friend class Pipeline::Demuxer;
-
-		public:
-			/**
-			 * @brief Copy constructor (deleted).
-			 */
-			File(const File&) = delete;
-
-			/**
-			 * @brief Move constructor.
-			 */
-			File(File&&) noexcept;
-
-			/**
-			 * @brief Destructor.
-			 */
-			~File() noexcept;
-
-			/**
-			 * @brief Copy assignment (deleted).
-			 * @return *this.
-			 */
-			File& operator=(const File&) = delete;
-
-			/**
-			 * @brief Move assignment (deleted: Container is a reference).
-			 * @return *this.
-			 */
-			File& operator=(File&&) = delete;
-
-			/**
-			 * @brief Filesystem path passed to Open, or empty if the origin is a Consumer.
-			 * @return Path.
-			 */
-			const std::filesystem::path& Path() const noexcept;
-
-			/**
-			 * @brief Detected container.
-			 * @return Registry container.
-			 */
-			const class Container& Container() const noexcept { return m_container; }
-
-			/**
-			 * @brief Real streams in container order. Attached pictures are omitted.
-			 * @return Immutable list.
-			 */
-			const Multimedia::Streams& Streams() const noexcept { return m_streams; }
-
-			/**
-			 * @brief Container attachments (covers, fonts). Not listed in Streams().
-			 * @return Attachments captured at Open.
-			 */
-			const Multimedia::Attachments& Attachments() const noexcept;
-
-			/**
-			 * @brief Container-level tags captured at Open.
-			 * @return Metadata snapshot.
-			 */
-			const Metadata::File& Metadata() const noexcept { return m_metadata; }
-
-			/**
-			 * @brief Container duration.
-			 * @return Duration, or empty if it cannot be determined.
-			 *
-			 * Returns the header value, the duration passed to Open, or a value
-			 * cached after the first scan. The first call may read the whole source
-			 * when Open was used without a duration: even if the container header
-			 * has a duration, streams that lack one are filled from packet
-			 * timestamps. After a successful scan the result is reused on this
-			 * instance. If Open(..., duration) was used, this is that value, there
-			 * is no I/O, and stream durations stay as probed.
-			 */
-			const std::optional<Property::Duration>& Duration() const noexcept;
-
-			/**
-			 * @brief Opens and probes @p path.
-			 * @param path Media file.
-			 * @return Snapshot or FileOpenException.
-			 */
-			static ExpectedFile Open(const std::filesystem::path& path) noexcept;
-
-			/**
-			 * @brief Opens and probes @p path with an already known duration.
-			 * @param path Media file.
-			 * @param duration Authoritative container duration in nanoseconds.
-			 * @return Snapshot or FileOpenException.
-			 */
-			static ExpectedFile Open(const std::filesystem::path& path,
-				std::chrono::nanoseconds duration) noexcept;
-
-			/**
-			 * @brief Opens and probes a Consumer.
-			 * @param consumer Shared ring handle (copied and kept).
-			 * @return Snapshot or FileOpenException.
-			 */
-			static ExpectedFile Open(StormByte::Buffer::Consumer consumer) noexcept;
-
-			/**
-			 * @brief Opens and probes a Consumer with an already known duration.
-			 * @param consumer Shared ring handle (copied and kept).
-			 * @param duration Authoritative container duration in nanoseconds.
-			 * @return Snapshot or FileOpenException.
-			 */
-			static ExpectedFile Open(StormByte::Buffer::Consumer consumer,
-				std::chrono::nanoseconds duration) noexcept;
-
-		private:
-			std::unique_ptr<Origin> m_origin;					///< Path or Consumer
-			const class Container& m_container;					///< Registry container
-			mutable Multimedia::Streams m_streams;				///< Probed streams
-			Multimedia::Attachments m_attachments;				///< Covers / attached files
-			Metadata::File m_metadata;						///< Container tags
-			mutable std::optional<Property::Duration> m_duration;			///< Container duration
-			mutable bool m_durationResolved;					///< Caller-supplied or scan done
-
-			/**
-			 * @brief Snapshot constructor.
-			 * @param origin Path or Consumer.
-			 * @param container Registry container.
-			 * @param streams Probed streams.
-			 * @param attachments Probed attachments.
-			 * @param metadata Container tags.
-			 * @param duration Container duration.
-			 * @param durationResolved true if Duration() must not scan.
-			 */
-			File(std::unique_ptr<Origin> origin, const class Container& container,
-				Multimedia::Streams streams, Multimedia::Attachments attachments, Metadata::File metadata,
-				std::optional<Property::Duration> duration, bool durationResolved) noexcept;
-
-			/**
-			 * @brief Shared Open implementation.
-			 * @param origin Path or Consumer.
-			 * @param duration Caller-supplied duration, if any.
-			 * @return Snapshot or FileOpenException.
-			 */
-			static ExpectedFile Open(std::unique_ptr<Origin> origin,
-				std::optional<std::chrono::nanoseconds> duration) noexcept;
-
-			/**
-			 * @brief Packet scan for container and missing stream durations.
-			 */
-			void ResolveDuration() const noexcept;
-	};
 }

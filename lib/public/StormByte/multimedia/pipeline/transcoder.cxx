@@ -36,12 +36,13 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/pipeline/detail/cover.hxx>
 #include <StormByte/multimedia/backend/pipeline/transcoder.hxx>
 #include <StormByte/multimedia/pipeline/transcoder.hxx>
 
-#include <StormByte/expected.hxx>
 #include <StormByte/logger/log.hxx>
 #include <StormByte/multimedia/attachment.hxx>
+#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/log.hxx>
 #include <StormByte/multimedia/pipeline/config/attachment.hxx>
 #include <StormByte/multimedia/pipeline/config/audio.hxx>
@@ -59,9 +60,7 @@
 #include <vector>
 
 using StormByte::Logger::Level;
-using StormByte::Multimedia::ExpectedTranscoder;
 using StormByte::Multimedia::File;
-using StormByte::Multimedia::TranscodeException;
 using namespace StormByte::Multimedia::Pipeline;
 
 namespace {
@@ -79,7 +78,6 @@ namespace {
 			if (stream.Index() == index)
 				return &stream;
 		}
-
 		return nullptr;
 	}
 
@@ -105,7 +103,6 @@ namespace {
 			if (slot.In == in && slot.Kind == kind)
 				return true;
 		}
-
 		return false;
 	}
 }
@@ -234,10 +231,28 @@ Transcoder::Track& Transcoder::Track::Title(std::string title) noexcept {
 	return *this;
 }
 
-Transcoder::Transcoder(std::shared_ptr<StormByte::Logger::Log> logger, File&& file) noexcept
+Transcoder::Transcoder(const std::filesystem::path& source,
+	const std::filesystem::path& destination,
+	std::shared_ptr<StormByte::Logger::Log> logger) noexcept
+: Transcoder(std::make_unique<StormByte::Buffer::IO::BufferedFileReader>(source),
+	std::make_unique<StormByte::Buffer::IO::BufferedFileWriter>(destination),
+	std::move(logger)) {}
+
+Transcoder::Transcoder(std::unique_ptr<StormByte::Buffer::IO::BufferedFileReader> reader,
+	std::unique_ptr<StormByte::Buffer::IO::BufferedFileWriter> writer,
+	std::shared_ptr<StormByte::Logger::Log> logger) noexcept
 : m_app_log(logger), m_logger(std::move(logger)),
-	m_file(std::make_unique<File>(std::move(file))),
-	m_backend(std::make_unique<Backend::Pipeline::Transcoder>()) {}
+	m_reader(std::move(reader)), m_writer(std::move(writer)),
+	m_backend(std::make_unique<Backend::Pipeline::Transcoder>()),
+	m_armed(false) {
+	InstallLog();
+	if (!m_app_log)
+		Fail("logger is required");
+	else if (!m_reader || !m_writer)
+		Fail("reader or writer is empty");
+	else
+		static_cast<void>(ProbeSource());
+}
 
 Transcoder::~Transcoder() noexcept {
 	JobLog(m_logger, Level::LowLevel, "destroy");
@@ -283,48 +298,28 @@ void Transcoder::AttachAnalytics(std::shared_ptr<Filter::FFmpeg> filter) noexcep
 		Fail("Track Process/Packet filters attach on Track::Filter");
 		return;
 	}
-
 	m_backend->Analytics.push_back(std::move(filter));
 }
 
-ExpectedTranscoder Transcoder::BindLoggerAndFile(std::shared_ptr<StormByte::Logger::Log> logger,
-	ExpectedFile opened) noexcept {
-	if (!logger)
-		return StormByte::Unexpected<TranscodeException>("logger is required");
+bool Transcoder::ProbeSource() noexcept {
+	if (!m_reader) {
+		Fail("reader is empty");
+		return false;
+	}
+	const auto path = m_reader->Path();
+	if (path.empty()) {
+		Fail("reader path is empty");
+		return false;
+	}
+	auto opened = File::Open(path);
 	if (!opened) {
 		const char* text = opened.error() ? opened.error()->what() : "file open failed";
-		JobLog(StormByte::Multimedia::UseLog(logger, "Transcoder"), Level::Error, text);
-		return StormByte::Unexpected<TranscodeException>(text);
+		Fail(text);
+		return false;
 	}
-
-	auto job = std::unique_ptr<Transcoder>(new Transcoder(std::move(logger), std::move(*opened)));
-	job->InstallLog();
-	return job;
-}
-
-ExpectedTranscoder Transcoder::Open(std::shared_ptr<StormByte::Logger::Log> logger,
-	const std::filesystem::path& source, const std::filesystem::path& destination,
-	std::optional<std::chrono::nanoseconds> duration) noexcept {
-	if (!logger)
-		return StormByte::Unexpected<TranscodeException>("logger is required");
-	if (destination.empty())
-		return StormByte::Unexpected<TranscodeException>("destination path is empty");
-	ExpectedFile opened = duration
-		? File::Open(source, *duration)
-		: File::Open(source);
-	auto job = BindLoggerAndFile(std::move(logger), std::move(opened));
-	if (!job)
-		return job;
-	(*job)->m_backend->Path = destination;
-	JobLog((*job)->m_logger, Level::Notice,
-		"opened source " + (*job)->Source().Path().string());
-	return job;
-}
-
-const File& Transcoder::Source() const noexcept {
-	if (m_plan)
-		return m_plan->Source();
-	return *m_file;
+	m_consult = std::make_unique<File>(std::move(*opened));
+	JobLog(m_logger, Level::Notice, "probed source " + path.string());
+	return true;
 }
 
 const std::shared_ptr<StormByte::Logger::Log>& Transcoder::Logger() const noexcept {
@@ -333,27 +328,28 @@ const std::shared_ptr<StormByte::Logger::Log>& Transcoder::Logger() const noexce
 
 Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 	JobLog(m_logger, Level::LowLevel, "add-track in=" + std::to_string(in));
+	if (!m_consult && !ProbeSource())
+		return Track(*this, InvalidSlot);
 	if (in < 0) {
 		Fail("origin index is negative");
 		return Track(*this, InvalidSlot);
 	}
 
+	const Stream* stream = nullptr;
 	if (kind != Type::Attachment) {
-		const Stream* stream = FindStream(Source(), in);
+		stream = FindStream(*m_consult, in);
 		if (!stream) {
 			Fail("source stream " + std::to_string(in) + " does not exist");
 			return Track(*this, InvalidSlot);
 		}
-
 		if (stream->Type() != kind) {
 			Fail("stream " + std::to_string(in) + " is " + KindName(stream->Type())
 				+ ", " + KindName(kind) + "() requires " + KindName(kind));
 			return Track(*this, InvalidSlot);
 		}
 	}
-
 	else {
-		const auto& attachments = Source().Attachments();
+		const auto& attachments = m_consult->Attachments();
 		if (static_cast<std::size_t>(in) >= attachments.size()) {
 			Fail("attachment slot " + std::to_string(in) + " does not exist");
 			return Track(*this, InvalidSlot);
@@ -369,6 +365,8 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 	slot.In = in;
 	slot.Out = static_cast<int>(m_backend->Mapped.size());
 	slot.Kind = kind;
+	if (stream)
+		slot.Source = &stream->Codec();
 	if (kind == Type::Video)
 		slot.Config = std::make_unique<Config::Video>();
 	else if (kind == Type::Audio)
@@ -376,12 +374,11 @@ Transcoder::Track Transcoder::AddTrack(int in, Type kind) noexcept {
 	else if (kind == Type::Subtitle)
 		slot.Config = std::make_unique<Config::Subtitle>();
 	else {
-		const auto& mime = Source().Attachments()[static_cast<std::size_t>(in)].MimeType();
-		if (!mime || mime->empty() || mime->find('*') != std::string::npos) {
-			Fail("attachment slot " + std::to_string(in) + " has no concrete MIME");
+		const auto& mime = m_consult->Attachments()[static_cast<std::size_t>(in)].MimeType();
+		if (!mime || mime->empty()) {
+			Fail("attachment slot " + std::to_string(in) + " has no MIME");
 			return Track(*this, InvalidSlot);
 		}
-
 		slot.Config = std::make_unique<Config::Attachment>(*mime);
 	}
 
@@ -404,31 +401,31 @@ Transcoder::Track Transcoder::Subtitle(int in) noexcept {
 }
 
 Transcoder& Transcoder::Attachments() noexcept {
-	const auto& attachments = Source().Attachments();
-	for (int i = 0; i < static_cast<int>(attachments.size()); ++i)
-		AddTrack(i, Type::Attachment);
-	return *this;
+	return Attachments("*/*");
 }
 
-Transcoder& Transcoder::Attachments(std::string_view mime) noexcept {
-	if (mime.empty() || mime.find('*') != std::string_view::npos) {
-		Fail("attachment MIME must be concrete");
+Transcoder& Transcoder::Attachments(std::string_view pattern) noexcept {
+	if (!Detail::MimePatternOk(pattern)) {
+		Fail("attachment MIME pattern is not exact, type-star or star-star");
 		return *this;
 	}
+	if (!m_consult && !ProbeSource())
+		return *this;
 
-	const auto& attachments = Source().Attachments();
+	const auto& attachments = m_consult->Attachments();
 	for (int i = 0; i < static_cast<int>(attachments.size()); ++i) {
 		const auto& have = attachments[static_cast<std::size_t>(i)].MimeType();
-		if (have && *have == mime)
+		if (have && Detail::MimeMatches(*have, pattern))
 			AddTrack(i, Type::Attachment);
 	}
-
 	return *this;
 }
 
 Transcoder& Transcoder::Ignore(int in) noexcept {
 	JobLog(m_logger, Level::LowLevel, "ignore " + std::to_string(in));
-	if (!FindStream(Source(), in)) {
+	if (!m_consult && !ProbeSource())
+		return *this;
+	if (!FindStream(*m_consult, in)) {
 		Fail("source stream " + std::to_string(in) + " does not exist");
 		return *this;
 	}
@@ -443,28 +440,15 @@ Transcoder& Transcoder::Ignore(int in) noexcept {
 	return *this;
 }
 
-Transcoder& Transcoder::Destination(const Container& container, std::filesystem::path path) noexcept {
-	JobLog(m_logger, Level::LowLevel, "destination");
-	if (!container.HasAccess(Operation::Write)) {
-		Fail("container '" + std::string(container.Name()) + "' is not writable");
-		return *this;
-	}
-
-	if (!path.empty())
-		m_backend->Path = std::move(path);
-	if (m_backend->Path.empty()) {
-		Fail("destination path is empty");
-		return *this;
-	}
-
-	m_backend->Container = &container;
-	JobLog(m_logger, Level::Notice, "destination " + m_backend->Path.string());
-	return *this;
-}
-
 void Transcoder::Run() noexcept {
-	if (m_backend)
-		m_backend->Start(*this);
+	if (!m_backend)
+		return;
+	const auto current = m_backend->Status.load(std::memory_order_acquire);
+	if (current == Status::Running || current == Status::Paused || m_armed) {
+		Fail("Run was already called");
+		return;
+	}
+	m_backend->Start(*this);
 }
 
 void Transcoder::Cancel() noexcept {
@@ -527,9 +511,10 @@ Transcoder::operator bool() const noexcept {
 	return status != Status::Error && status != Status::Aborted;
 }
 
-std::unique_ptr<class Plan> Transcoder::EmptyPlan(File&& source, const Container& container,
-	std::filesystem::path destination) const noexcept {
-	return std::make_unique<class Plan>(std::move(source), container, std::move(destination));
+std::unique_ptr<class Plan> Transcoder::EmptyPlan(
+	StormByte::Buffer::IO::BufferedFileReader&& reader,
+	StormByte::Buffer::IO::BufferedFileWriter&& writer) const noexcept {
+	return std::make_unique<class Plan>(std::move(reader), std::move(writer));
 }
 
 std::unique_ptr<TrackSettled> Transcoder::EmptySettled() const noexcept {
@@ -549,15 +534,10 @@ void Transcoder::OnSettled(const TrackSettled& row) noexcept {
 }
 
 void Transcoder::OnMeasureDone() noexcept {}
-
 void Transcoder::OnAnalyticsDone() noexcept {}
-
 void Transcoder::OnProgress() noexcept {}
-
 void Transcoder::OnDone() noexcept {}
-
 void Transcoder::OnError(const std::string&) noexcept {}
-
 void Transcoder::OnAborted() noexcept {}
 
 void Transcoder::MarkSettled(int in, Encoder& encoder) noexcept {
@@ -571,8 +551,7 @@ void Transcoder::MarkSettled(int in, Encoder& encoder) noexcept {
 		row->In = slot.In;
 		row->Out = slot.Out;
 		row->Kind = slot.Kind;
-		if (const Stream* stream = FindStream(Source(), slot.In))
-			row->Source = &stream->Codec();
+		row->Source = slot.Source;
 		if (const auto* video = AsVideo(slot.Config.get()))
 			row->Destination = video->Codec();
 		else if (const auto* audio = AsAudio(slot.Config.get()))

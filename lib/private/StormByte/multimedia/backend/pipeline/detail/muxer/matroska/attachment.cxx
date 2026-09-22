@@ -45,7 +45,6 @@
 #include <cstdint>
 #include <cstring>
 #include <span>
-#include <unordered_set>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -73,46 +72,31 @@ namespace {
 		return AV_CODEC_ID_NONE;
 	}
 
-	std::unordered_set<int> WantedSlots(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
-		std::unordered_set<int> slots;
+	bool PlanWantsAttachments(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 		const auto& plan = owner.Plan();
 		if (!plan)
-			return slots;
+			return false;
 		for (const auto& track : plan->Tracks()) {
-			if (!track || track->Type() != StormByte::Multimedia::Type::Attachment)
-				continue;
-			slots.insert(track->In());
+			if (track && track->Type() == StormByte::Multimedia::Type::Attachment)
+				return true;
 		}
-
-		return slots;
+		return false;
 	}
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	bool Attachment::Write(StormByte::Multimedia::Pipeline::Muxer& owner,
-		AVFormatContext* ctx, const File& file) noexcept {
+		AVFormatContext* ctx, const StormByte::Multimedia::Attachments& attachments) noexcept {
 		if (!ctx)
 			return true;
-
-		const auto wanted = WantedSlots(owner);
-		if (wanted.empty())
-			return true;
-
-		const auto& attachments = file.Attachments();
-		if (attachments.empty())
+		if (!PlanWantsAttachments(owner) || attachments.empty())
 			return true;
 		if (!owner.Destination().HasAccess(Access{Operation::Attach})) {
 			owner.Fail("destination container does not support attachments");
 			return false;
 		}
 
-		for (int slot : wanted) {
-			if (slot < 0 || static_cast<std::size_t>(slot) >= attachments.size()) {
-				owner.Fail("attachment slot out of range");
-				return false;
-			}
-
-			const auto& attachment = attachments[static_cast<std::size_t>(slot)];
+		for (const auto& attachment : attachments) {
 			AVStream* stream = avformat_new_stream(ctx, nullptr);
 			if (!stream) {
 				owner.Fail("avformat_new_stream failed for attachment");

@@ -50,10 +50,6 @@
 #include <StormByte/multimedia/pipeline/track.hxx>
 #include <StormByte/multimedia/type.hxx>
 
-#ifdef WINDOWS
-#include <StormByte/string.hxx>
-#endif
-
 #include <cstdint>
 #include <cstring>
 #include <span>
@@ -64,6 +60,7 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 	#include <libavcodec/packet.h>
 	#include <libavformat/avformat.h>
+	#include <libavformat/avio.h>
 	#include <libavutil/dict.h>
 	#include <libavutil/error.h>
 	#include <libavutil/mathematics.h>
@@ -79,13 +76,6 @@ namespace {
 	constexpr const char WritingApp[] = "StormByte-Multimedia " STORMBYTE_MULTIMEDIA_VERSION;
 	constexpr std::int64_t InterleaveSlotUs = 40LL * 1000;
 	constexpr std::int64_t InterleaveFloorUs = 250000;
-	// Mixed encode+remux MUST keep this at 60 s.
-	// av_interleaved_write_frame flushes a stream when its DTS is this far
-	// ahead of the others. A 4K x265 lane lags remuxed AC3/DTS by tens of
-	// seconds. Caps of 2 s and 10 s wrote audio-only Matroska clusters;
-	// video seeked, audio stayed mute until ~+15 s. 1f6fc4e documented the
-	// same failure and floored at 60 s. Do not lower this to "save RAM":
-	// hoppers (6bbb90a) already cap the queue; this knob is cluster layout.
 	constexpr std::int64_t InterleaveMixedUs = 60LL * 1000 * 1000;
 
 	bool Encodes(const StormByte::Multimedia::Pipeline::Track& track) noexcept {
@@ -107,8 +97,6 @@ namespace {
 			|| type == StormByte::Multimedia::Type::Subtitle;
 	}
 
-	// Remux-only stays near the 250 ms floor (no encode lag).
-	// Encode video + remux audio uses InterleaveMixedUs and nothing smaller.
 	std::int64_t InterleaveDeltaUs(const StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 		std::size_t remux = 0;
 		std::size_t encodeVideo = 0;
@@ -236,11 +224,20 @@ namespace {
 
 		return false;
 	}
+
+	StormByte::Buffer::FIFO CopyPayload(const StormByte::Buffer::FIFO& fifo) noexcept {
+		const auto view = UnreadSpan(fifo);
+		if (view.empty())
+			return StormByte::Buffer::FIFO{};
+		StormByte::Buffer::DataType bytes(view.begin(), view.end());
+		return StormByte::Buffer::FIFO{std::move(bytes)};
+	}
 }
 
 namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	Container::Container() noexcept
-	: m_ctx(nullptr), m_file(nullptr), m_header(false), m_trailer(false) {}
+	: m_ctx(nullptr),
+	m_header(false), m_trailer(false), m_customIo(false) {}
 
 	Container::~Container() noexcept {
 		FreeParams();
@@ -273,34 +270,23 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 		return -1;
 	}
 
-	bool Container::BindPath(StormByte::Multimedia::Pipeline::Muxer& owner,
-		const std::filesystem::path& path) noexcept {
+	bool Container::BindSink(StormByte::Multimedia::Pipeline::Muxer& owner) noexcept {
 		if (m_ctx) {
 			owner.Fail("muxer destination is already bound");
 			return false;
 		}
-
-		if (path.empty()) {
-			owner.Fail("mux destination path is empty");
-			return false;
-		}
-
-		std::string url;
-		try {
-#ifdef WINDOWS
-			url = StormByte::String::UTF8Encode(path.wstring());
-#else
-			url = path.string();
-#endif
-		}
-
-		catch (...) {
-			owner.Fail("could not convert destination path to UTF-8");
+		if (!owner.Plan()) {
+			owner.Fail("muxer has no plan");
 			return false;
 		}
 
 		const auto ext = owner.Destination().Extension();
-		const std::string dummy = ext.empty() ? url : ("out." + std::string(ext));
+		if (ext.empty()) {
+			owner.Fail("destination container has no extension");
+			return false;
+		}
+
+		const std::string dummy = "out." + std::string(ext);
 		const AVOutputFormat* oformat = av_guess_format(nullptr, dummy.c_str(), nullptr);
 		if (!oformat) {
 			owner.Fail("could not guess output format from container");
@@ -308,18 +294,25 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 		}
 
 		AVFormatContext* ctx = nullptr;
-		if (avformat_alloc_output_context2(&ctx, const_cast<AVOutputFormat*>(oformat), nullptr, url.c_str()) < 0 || !ctx) {
+		if (avformat_alloc_output_context2(&ctx, const_cast<AVOutputFormat*>(oformat),
+				nullptr, nullptr) < 0 || !ctx) {
 			owner.Fail("avformat_alloc_output_context2 failed");
 			return false;
 		}
 
+		m_avio.emplace(owner.Plan()->Writer());
+		if (!m_avio->Arm() || !m_avio->Context()) {
+			owner.Fail("file AVIO alloc failed");
+			m_avio.reset();
+			avformat_free_context(ctx);
+			return false;
+		}
+
 		m_ctx = ctx;
-		m_path = path;
 		if (!(ctx->oformat->flags & AVFMT_NOFILE)) {
-			if (avio_open(&ctx->pb, url.c_str(), AVIO_FLAG_WRITE) < 0) {
-				owner.Fail("avio_open failed");
-				return false;
-			}
+			ctx->pb = m_avio->Context();
+			ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+			m_customIo = true;
 		}
 
 		return WriteHeaderIfReady(owner);
@@ -378,23 +371,30 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 	}
 
 	bool Container::BindAttachments(StormByte::Multimedia::Pipeline::Muxer& owner,
-		const File& file) noexcept {
+		const StormByte::Multimedia::Attachments& attachments) noexcept {
 		if (m_header) {
 			owner.Fail("cannot bind attachments after the header");
 			return false;
 		}
 
 		if (!PlanWantsAttachments(owner)) {
-			m_file = nullptr;
+			m_attachments.clear();
 			return true;
 		}
 
-		m_file = &file;
 		if (!owner.Destination().HasAccess(Access{Operation::Attach})) {
 			owner.Fail("destination container does not support attachments");
 			return false;
 		}
 
+		m_attachments.clear();
+		m_attachments.reserve(attachments.size());
+		for (const auto& item : attachments) {
+			m_attachments.emplace_back(
+				item.FileName(),
+				item.MimeType(),
+				CopyPayload(item.Payload()));
+		}
 		return true;
 	}
 
@@ -527,13 +527,11 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			track.timeBase = FFmpeg::AVRational{stream->time_base.num, stream->time_base.den};
 		}
 
-		if (m_file && !Attachment::Write(owner, m_ctx, *m_file))
+		if (!m_attachments.empty() && !Attachment::Write(owner, m_ctx, m_attachments))
 			return false;
 
 		av_dict_set(&m_ctx->metadata, "encoding_tool", WritingApp, 0);
 
-		// Do not recap this with hopper depth or a 2 s/10 s clamp.
-		// Span-of-queue can raise the window; it must never lower MixedUs.
 		std::int64_t deltaUs = InterleaveDeltaUs(owner);
 		const auto cap = owner.InputCeiling();
 		const auto depth = cap == 0 ? 1 : cap;
@@ -710,9 +708,12 @@ namespace StormByte::Multimedia::Backend::Pipeline::Detail::Muxer::Matroska {
 			m_trailer = true;
 		}
 
-		if (m_ctx->pb && !(m_ctx->oformat && (m_ctx->oformat->flags & AVFMT_NOFILE)))
-			avio_closep(&m_ctx->pb);
+		if (m_customIo && m_ctx->pb)
+			m_ctx->pb = nullptr;
+
 		avformat_free_context(m_ctx);
 		m_ctx = nullptr;
+		m_avio.reset();
+		m_customIo = false;
 	}
 }

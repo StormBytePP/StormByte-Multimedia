@@ -38,10 +38,14 @@
 
 #pragma once
 
+#include <StormByte/buffer/fifo.hxx>
+#include <StormByte/multimedia/attachment.hxx>
+#include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 
 #include <chrono>
+#include <string_view>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
@@ -55,9 +59,17 @@ extern "C" {
  */
 namespace StormByte::Multimedia::Detail {
 	/**
+	 * @struct CollectedAttachments
+	 * @brief Attachments taken from an open format context.
+	 */
+	struct CollectedAttachments {
+		Multimedia::Attachments items;	///< Catalogue in container order
+	};
+
+	/**
 	 * @brief Still-image codecs used as covers.
 	 * @param codecId `AVCodecID`.
-	 * @return true for MJPEG/PNG/… .
+	 * @return true for MJPEG/PNG.
 	 */
 	inline bool IsStillImageCodec(int codecId) noexcept {
 		switch (static_cast<AVCodecID>(codecId)) {
@@ -96,7 +108,8 @@ namespace StormByte::Multimedia::Detail {
 	inline bool IsContainerAttachment(const FFmpeg::AVStream& stream) noexcept {
 		if (stream.Type() == AVMEDIA_TYPE_ATTACHMENT)
 			return true;
-		return stream.CodecParameters().CodecId() == AV_CODEC_ID_NONE;
+		const FFmpeg::AVCodecParameters params = stream.CodecParameters();
+		return params.CodecId() == AV_CODEC_ID_NONE;
 	}
 
 	/**
@@ -110,7 +123,8 @@ namespace StormByte::Multimedia::Detail {
 				continue;
 			if (IsAttachedPicture(stream) || IsContainerAttachment(stream))
 				continue;
-			if (IsStillImageCodec(stream.CodecParameters().CodecId()))
+			const FFmpeg::AVCodecParameters params = stream.CodecParameters();
+			if (IsStillImageCodec(params.CodecId()))
 				continue;
 			return true;
 		}
@@ -130,7 +144,8 @@ namespace StormByte::Multimedia::Detail {
 			return false;
 		if (stream.Type() != AVMEDIA_TYPE_VIDEO)
 			return false;
-		if (!IsStillImageCodec(stream.CodecParameters().CodecId()))
+		const FFmpeg::AVCodecParameters params = stream.CodecParameters();
+		if (!IsStillImageCodec(params.CodecId()))
 			return false;
 		const auto duration = stream.Duration();
 		if (!duration.has_value() || *duration <= std::chrono::milliseconds{50})
@@ -153,4 +168,40 @@ namespace StormByte::Multimedia::Detail {
 		}
 		return false;
 	}
+
+	/**
+	 * @brief true if @p pattern is exact, type-star, or star-star.
+	 * @param pattern MIME pattern.
+	 * @return true if usable as a filter.
+	 */
+	bool MimePatternOk(std::string_view pattern) noexcept;
+
+	/**
+	 * @brief true if @p mime matches @p pattern.
+	 * @param mime Attachment MIME.
+	 * @param pattern Exact type/subtype, type-star category, or star-star (all).
+	 * @return true on match.
+	 */
+	bool MimeMatches(std::string_view mime, std::string_view pattern) noexcept;
+
+	/**
+	 * @brief Builds an attachment from a cover / attached stream.
+	 * @param stream Stream view.
+	 * @return Attachment (payload may be empty).
+	 */
+	Multimedia::Attachment MakeAttachment(const FFmpeg::AVStream& stream) noexcept;
+
+	/**
+	 * @brief Collects covers and container attachments from an open context.
+	 * @param ctx Opened format context.
+	 * @return Catalogue.
+	 */
+	CollectedAttachments CollectAttachments(const FFmpeg::AVFormatContext& ctx) noexcept;
+
+	/**
+	 * @brief Fills empty attachment payloads from packets.
+	 * @param ctx Opened format context.
+	 * @param items Catalogue from CollectAttachments.
+	 */
+	void FillEmptyAttachmentPayloads(FFmpeg::AVFormatContext& ctx, Multimedia::Attachments& items) noexcept;
 }

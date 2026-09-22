@@ -40,11 +40,13 @@
 #include <StormByte/multimedia/backend/pipeline/detail/pumper/through.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/worker/remux.hxx>
 #include <StormByte/multimedia/backend/pipeline/pipe.hxx>
-#include <StormByte/multimedia/stream.hxx>
+#include <StormByte/multimedia/file.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
+#include <StormByte/multimedia/pipeline/plan.hxx>
 #include <StormByte/multimedia/pipeline/remuxer.hxx>
 #include <StormByte/multimedia/property/duration.hxx>
+#include <StormByte/multimedia/stream.hxx>
 
 #include <format>
 #include <string>
@@ -92,8 +94,8 @@ Remuxer& StormByte::Multimedia::Pipeline::operator>>(Demuxer& demuxer, Remuxer& 
 }
 
 std::string Remuxer::Label() const noexcept {
-	if (m_plan) {
-		for (const auto& stream : m_plan->Source().Streams()) {
+	if (m_plan && *m_plan) {
+		for (const auto& stream : m_plan->Snapshot().Streams()) {
 			if (stream.Index() == m_index)
 				return "Remuxer(" + std::string(stream.Codec().Name()) + ")";
 		}

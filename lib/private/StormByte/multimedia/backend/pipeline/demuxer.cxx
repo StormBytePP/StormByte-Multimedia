@@ -42,13 +42,12 @@
 #include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/ffmpeg/property.hxx>
+#include <StormByte/multimedia/backend/file_avio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/audio.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/subtitle.hxx>
 #include <StormByte/multimedia/backend/pipeline/detail/decoder/video.hxx>
 #include <StormByte/multimedia/backend/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/backend/pipeline/packet.hxx>
-#include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/origin.hxx>
 #include <StormByte/multimedia/pipeline/decoder.hxx>
 #include <StormByte/multimedia/pipeline/demuxer.hxx>
 #include <StormByte/multimedia/pipeline/packet.hxx>
@@ -56,12 +55,12 @@
 #include <StormByte/multimedia/pipeline/track.hxx>
 #include <StormByte/multimedia/property/audio.hxx>
 #include <StormByte/multimedia/property/video.hxx>
-#include <StormByte/multimedia/stream.hxx>
 #include <StormByte/multimedia/type.hxx>
 
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -97,15 +96,6 @@ namespace {
 		return Property::Duration{std::chrono::nanoseconds{ns}};
 	}
 
-	bool KnownByFile(const File& file, int index) noexcept {
-		for (const auto& stream : file.Streams()) {
-			if (stream.Index() == index)
-				return true;
-		}
-
-		return false;
-	}
-
 	enum Type KindOf(FFmpeg::AVFormatContext& ctx, int index) noexcept {
 		for (const auto& stream : ctx.Streams()) {
 			if (stream.Index() != index)
@@ -124,6 +114,7 @@ namespace {
 
 class StormByte::Multimedia::Backend::Pipeline::Demuxer::Context {
 	public:
+		std::optional<StormByte::Multimedia::Backend::FileAvio> avio;
 		std::optional<FFmpeg::AVFormatContext> format;
 		FFmpeg::AVPacket scratch;
 		std::unordered_map<int, FFmpeg::AVRational> timeBase;
@@ -150,15 +141,51 @@ bool StormByte::Multimedia::Backend::Pipeline::Demuxer::Open(
 		return false;
 	}
 
-	auto opened = owner.BoundOrigin().Visit([](auto&& held) {
-		return FFmpeg::AVFormatContext::Open(held);
-	});
-	if (!opened.has_value()) {
-		owner.Fail(opened.error()->what());
+	auto& reader = owner.Origin();
+	if (!reader.IsOpen() && !reader.Open()) {
+		owner.Fail("reader open failed");
 		return false;
 	}
 
-	m_ctx->format = std::move(opened.value());
+	m_ctx->avio.emplace(reader);
+	if (!m_ctx->avio->Arm() || !m_ctx->avio->Context()) {
+		owner.Fail("file AVIO alloc failed");
+		m_ctx->avio.reset();
+		return false;
+	}
+
+	::AVFormatContext* raw = avformat_alloc_context();
+	if (!raw) {
+		owner.Fail("avformat_alloc_context failed");
+		m_ctx->avio.reset();
+		return false;
+	}
+
+	raw->pb = m_ctx->avio->Context();
+	raw->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+	int ret = avformat_open_input(&raw, nullptr, nullptr, nullptr);
+	if (ret < 0) {
+		if (raw) {
+			raw->pb = nullptr;
+			avformat_free_context(raw);
+		}
+		owner.Fail("avformat_open_input failed");
+		m_ctx->avio.reset();
+		return false;
+	}
+
+	ret = avformat_find_stream_info(raw, nullptr);
+	if (ret < 0) {
+		raw->pb = nullptr;
+		avformat_close_input(&raw);
+		owner.Fail("avformat_find_stream_info failed");
+		m_ctx->avio.reset();
+		return false;
+	}
+
+	m_ctx->format = FFmpeg::AVFormatContext::WrapBorrowed(raw);
+
 	m_ctx->timeBase.clear();
 	m_ctx->wanted.clear();
 	if (const auto& plan = owner.Plan(); plan) {
@@ -198,7 +225,7 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 		}
 
 		const int index = m_ctx->scratch.StreamIndex();
-		if (!m_ctx->wanted.contains(index) || !KnownByFile(owner.OriginFile(), index)) {
+		if (!m_ctx->wanted.contains(index)) {
 			m_ctx->scratch.Unref();
 			continue;
 		}
@@ -219,8 +246,8 @@ StormByte::Multimedia::Backend::Pipeline::Demuxer::Read(
 		const auto* data = m_ctx->scratch.Data();
 		const int size = m_ctx->scratch.Size();
 		if (data && size > 0) {
-			const auto* raw = reinterpret_cast<const std::byte*>(data);
-			bytes.assign(raw, raw + size);
+			const auto* rawb = reinterpret_cast<const std::byte*>(data);
+			bytes.assign(rawb, rawb + size);
 		}
 
 		auto holder = std::make_unique<StormByte::Multimedia::Backend::Pipeline::Packet>();
@@ -344,6 +371,7 @@ void StormByte::Multimedia::Backend::Pipeline::Demuxer::Close() noexcept {
 	if (!m_ctx)
 		return;
 	m_ctx->format.reset();
+	m_ctx->avio.reset();
 	m_ctx->timeBase.clear();
 	m_ctx->wanted.clear();
 }

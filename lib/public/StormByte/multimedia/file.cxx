@@ -36,43 +36,44 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/multimedia/backend/file_avio.hxx>
+#include <StormByte/multimedia/backend/pipeline/detail/cover.hxx>
+#include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/ffmpeg/AVCodecParameters.hxx>
 #include <StormByte/multimedia/ffmpeg/AVFormatContext.hxx>
 #include <StormByte/multimedia/ffmpeg/AVPacket.hxx>
 #include <StormByte/multimedia/ffmpeg/AVStream.hxx>
 #include <StormByte/multimedia/ffmpeg/property.hxx>
-#include <StormByte/multimedia/detail/cover.hxx>
-#include <StormByte/multimedia/detail/probe.hxx>
 #include <StormByte/multimedia/file.hxx>
-#include <StormByte/multimedia/origin.hxx>
+#include <StormByte/multimedia/property/hdr10.hxx>
+#include <StormByte/multimedia/property/video.hxx>
 #include <StormByte/multimedia/registry.hxx>
+#include <StormByte/multimedia/type.hxx>
 
 #include <cstdint>
-#include <fstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 extern "C" {
 	#include <libavcodec/avcodec.h>
+	#include <libavcodec/packet.h>
 	#include <libavformat/avformat.h>
 	#include <libavutil/avutil.h>
 }
 
 using namespace StormByte::Multimedia;
 namespace FFmpeg = StormByte::Multimedia::FFmpeg;
+using StormByte::Buffer::IO::BufferedFileReader;
 
 namespace {
-	const std::filesystem::path& EmptyPath() noexcept {
-		static const std::filesystem::path empty;
-		return empty;
-	}
+	constexpr int Hdr10PlusVideoPackets = 48;
 
-	ExpectedFile FailOpen(const Origin& origin, const std::string& reason) noexcept {
-		if (const auto* path = origin.Path())
-			return Unexpected(FilePathOpenException(path->string(), reason));
-		return Unexpected(FileBufferOpenException(reason));
+	ExpectedFile FailOpen(const std::filesystem::path& label, const std::string& reason) noexcept {
+		return Unexpected(FilePathOpenException(label.string(), reason));
 	}
 
 	ExpectedContainer ResolveContainer(std::string_view formatName) noexcept {
@@ -86,12 +87,10 @@ namespace {
 				if (found.has_value())
 					return found;
 			}
-
 			if (comma == std::string_view::npos)
 				break;
 			rest = rest.substr(comma + 1);
 		}
-
 		return Unexpected<ContainerNotFoundException>(std::string(formatName));
 	}
 
@@ -101,41 +100,6 @@ namespace {
 		if (!name || name[0] == '\0' || std::string_view(name) == "none")
 			return Unexpected<CodecNotFoundException>(std::string("unknown"));
 		return Registry::Instance().FindCodec(name);
-	}
-
-	bool IsReadablePath(const std::filesystem::path& path, std::string& reason) noexcept {
-		std::error_code ec;
-		if (!std::filesystem::exists(path, ec) || ec) {
-			reason = "file does not exist";
-			return false;
-		}
-
-		if (!std::filesystem::is_regular_file(path, ec) || ec) {
-			reason = "path is not a regular file";
-			return false;
-		}
-
-		std::ifstream in(path, std::ios::binary);
-		if (!in) {
-			reason = "file is not readable";
-			return false;
-		}
-
-		return true;
-	}
-
-	bool IsUsableConsumer(const StormByte::Buffer::Consumer& consumer, std::string& reason) noexcept {
-		if (consumer.HasError() || !consumer.IsReadable()) {
-			reason = "buffer is not readable";
-			return false;
-		}
-
-		if (consumer.EoF() && consumer.AvailableBytes() == 0) {
-			reason = "buffer is empty";
-			return false;
-		}
-
-		return true;
 	}
 
 	std::optional<std::chrono::nanoseconds> TicksToNs(std::int64_t ticks, Property::AVRational timeBase) noexcept {
@@ -153,12 +117,6 @@ namespace {
 		return Property::Duration{*ns};
 	}
 
-	FFmpeg::ExpectedAVFormatContext OpenOrigin(Origin& origin) {
-		return origin.Visit([](auto&& held) {
-			return FFmpeg::AVFormatContext::Open(held);
-		});
-	}
-
 	StormByte::Buffer::DataType AttachmentBytes(const FFmpeg::AVStream& stream) noexcept {
 		StormByte::Buffer::DataType bytes;
 		const ::AVStream* raw = stream.Raw();
@@ -167,12 +125,10 @@ namespace {
 			bytes.assign(p, p + raw->attached_pic.size);
 			return bytes;
 		}
-
 		if (raw && raw->codecpar && raw->codecpar->extradata_size > 0 && raw->codecpar->extradata) {
 			const auto* p = reinterpret_cast<const std::byte*>(raw->codecpar->extradata);
 			bytes.assign(p, p + raw->codecpar->extradata_size);
 		}
-
 		return bytes;
 	}
 
@@ -196,7 +152,6 @@ namespace {
 				break;
 			}
 		}
-
 		if (!missing || coverIndex.empty())
 			return;
 
@@ -222,7 +177,6 @@ namespace {
 					const auto* raw = reinterpret_cast<const std::byte*>(data);
 					bytes.assign(raw, raw + packet.Size());
 				}
-
 				attachments[n] = Attachment(
 					attachments[n].FileName(),
 					attachments[n].MimeType(),
@@ -230,15 +184,55 @@ namespace {
 				++filled;
 				break;
 			}
-
 			packet.Unref();
 			if (filled == coverIndex.size())
 				break;
 		}
 	}
+
+	bool PacketHasHdr10Plus(const FFmpeg::AVPacket& packet) noexcept {
+		const int n = packet.SideDataCount();
+		for (int i = 0; i < n; ++i) {
+			if (packet.SideDataType(i) == AV_PKT_DATA_DYNAMIC_HDR10_PLUS)
+				return true;
+		}
+		return false;
+	}
+
+	void ReleaseProbe(::AVFormatContext*& raw) noexcept {
+		if (!raw)
+			return;
+		raw->pb = nullptr;
+		avformat_free_context(raw);
+		raw = nullptr;
+	}
+
+	bool OpenAvio(BufferedFileReader& reader, ::AVFormatContext*& raw,
+		Backend::FileAvio& avio) noexcept {
+		if (!reader.IsOpen() && !reader.Open())
+			return false;
+		if (!reader.Rewind())
+			return false;
+		if (!avio.Arm() || !avio.Context())
+			return false;
+		raw = avformat_alloc_context();
+		if (!raw)
+			return false;
+		raw->pb = avio.Context();
+		raw->flags |= AVFMT_FLAG_CUSTOM_IO;
+		if (avformat_open_input(&raw, nullptr, nullptr, nullptr) < 0) {
+			ReleaseProbe(raw);
+			return false;
+		}
+		if (avformat_find_stream_info(raw, nullptr) < 0) {
+			ReleaseProbe(raw);
+			return false;
+		}
+		return true;
+	}
 }
 
-File::File(std::unique_ptr<Origin> origin, const class Container& container,
+File::File(Origin origin, const class Container& container,
 	Multimedia::Streams streams, Multimedia::Attachments attachments, Metadata::File metadata,
 	std::optional<Property::Duration> duration, bool durationResolved) noexcept
 : m_origin(std::move(origin)), m_container(container), m_streams(std::move(streams)),
@@ -248,103 +242,92 @@ m_duration(duration), m_durationResolved(durationResolved) {}
 File::File(File&&) noexcept = default;
 File::~File() noexcept = default;
 
-ExpectedFile File::Open(const std::filesystem::path& path) noexcept {
-	return Open(std::make_unique<Origin>(path), std::nullopt);
+ExpectedFile File::Open(const std::filesystem::path& path,
+	std::optional<std::chrono::nanoseconds> duration) noexcept {
+	BufferedFileReader reader{path};
+	return Probe(reader, duration, Origin{path});
 }
 
-ExpectedFile File::Open(const std::filesystem::path& path, std::chrono::nanoseconds duration) noexcept {
-	return Open(std::make_unique<Origin>(path), std::optional<std::chrono::nanoseconds>{duration});
+ExpectedFile File::Open(BufferedFileReader& reader,
+	std::optional<std::chrono::nanoseconds> duration) noexcept {
+	return Probe(reader, duration, Origin{std::ref(reader)});
 }
 
-ExpectedFile File::Open(StormByte::Buffer::Consumer consumer) noexcept {
-	return Open(std::make_unique<Origin>(std::move(consumer)), std::nullopt);
-}
-
-ExpectedFile File::Open(StormByte::Buffer::Consumer consumer, std::chrono::nanoseconds duration) noexcept {
-	return Open(std::make_unique<Origin>(std::move(consumer)), std::optional<std::chrono::nanoseconds>{duration});
-}
-
-ExpectedFile File::Open(std::unique_ptr<Origin> origin, std::optional<std::chrono::nanoseconds> knownDuration) noexcept {
-	if (const auto* path = origin->Path()) {
-		std::string reason;
-		if (!IsReadablePath(*path, reason))
-			return FailOpen(*origin, reason);
-	} else if (const auto* consumer = origin->Consumer()) {
-		std::string reason;
-		if (!IsUsableConsumer(*consumer, reason))
-			return FailOpen(*origin, reason);
+void File::ScanWithReader(BufferedFileReader& reader, Multimedia::Streams& streams,
+	std::optional<Property::Duration>& duration) noexcept {
+	Backend::FileAvio avio(reader);
+	::AVFormatContext* raw = nullptr;
+	if (!OpenAvio(reader, raw, avio)) {
+		static_cast<void>(reader.Rewind());
+		return;
 	}
+	auto wrapped = FFmpeg::AVFormatContext::WrapBorrowed(raw);
+	raw = nullptr;
+	ScanDurations(wrapped, streams, duration);
+	static_cast<void>(reader.Rewind());
+}
 
-	auto opened = OpenOrigin(*origin);
-	if (!opened.has_value())
-		return FailOpen(*origin, opened.error()->what());
-
-	FFmpeg::AVFormatContext& ctx = opened.value();
-	const char* formatName = ctx.FormatName();
-	if (!formatName)
-		return FailOpen(*origin, "unknown container format");
-
-	auto container = ResolveContainer(formatName);
-	if (!container.has_value())
-		return FailOpen(*origin, container.error()->what());
-
-	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(ctx);
-	Multimedia::Streams streams;
-	Multimedia::Attachments attachments;
-	std::vector<int> coverIndex;
-	for (const auto& stream : ctx.Streams()) {
-		if (Detail::IsContainerAttachment(stream) || Detail::IsCoverStream(stream, hasPrimaryVideo)) {
-			attachments.push_back(MakeAttachment(stream));
-			coverIndex.push_back(stream.Index());
-			continue;
-		}
-
-		auto codec = ResolveCodec(stream);
-		if (!codec.has_value())
-			return FailOpen(*origin, codec.error()->what());
-		streams.emplace_back(Stream(
-			stream.Index(),
-			codec.value(),
-			Detail::Probe::Stream(stream),
-			WrapDuration(stream.Duration()),
-			FFmpeg::MapProperties(stream)
-		));
+void File::MarkHdr10Plus(Stream& stream) noexcept {
+	auto* video = std::get_if<Property::Video>(&stream.m_properties);
+	if (!video)
+		return;
+	if (video->HDR10().has_value()) {
+		const_cast<Property::HDR10&>(*video->HDR10()).HDR10Plus(true);
+		return;
 	}
-
-	FillEmptyAttachmentPayloads(ctx, attachments, coverIndex);
-
-	if (knownDuration.has_value())
-		return File(std::move(origin), container.value(), std::move(streams), std::move(attachments),
-			Detail::Probe::File(ctx), Property::Duration{*knownDuration}, true);
-
-	return File(std::move(origin), container.value(), std::move(streams), std::move(attachments),
-		Detail::Probe::File(ctx), WrapDuration(ctx.Duration()), false);
+	stream.m_properties = Property::Video(
+		video->Color(), video->Resolution(), Property::HDR10{},
+		video->FrameRate(), video->SampleAspectRatio());
+	if (auto* updated = std::get_if<Property::Video>(&stream.m_properties)) {
+		if (updated->HDR10().has_value())
+			const_cast<Property::HDR10&>(*updated->HDR10()).HDR10Plus(true);
+	}
 }
 
-const std::filesystem::path& File::Path() const noexcept {
-	if (const auto* path = m_origin->Path())
-		return *path;
-	return EmptyPath();
-}
-
-const Multimedia::Attachments& File::Attachments() const noexcept {
-	return m_attachments;
-}
-
-const std::optional<Property::Duration>& File::Duration() const noexcept {
-	if (!m_durationResolved)
-		ResolveDuration();
-	return m_duration;
-}
-
-void File::ResolveDuration() const noexcept {
-	m_durationResolved = true;
-
-	auto opened = OpenOrigin(*m_origin);
-	if (!opened.has_value())
+void File::DetectHdr10Plus(FFmpeg::AVFormatContext& ctx, Multimedia::Streams& streams) noexcept {
+	std::unordered_set<int> video;
+	std::unordered_set<int> found;
+	for (const auto& stream : streams) {
+		if (stream.Type() == Multimedia::Type::Video)
+			video.insert(stream.Index());
+	}
+	if (video.empty())
 		return;
 
-	FFmpeg::AVFormatContext& ctx = opened.value();
+	FFmpeg::AVPacket packet;
+	int seenVideo = 0;
+	for (;;) {
+		if (found.size() == video.size())
+			break;
+		if (seenVideo >= Hdr10PlusVideoPackets)
+			break;
+		const auto result = ctx.ReadPacket(packet);
+		if (result == FFmpeg::OperationResult::EndOfFile)
+			break;
+		if (result == FFmpeg::OperationResult::TryAgain)
+			continue;
+		if (result != FFmpeg::OperationResult::Success)
+			break;
+
+		const int index = packet.StreamIndex();
+		if (!video.contains(index)) {
+			packet.Unref();
+			continue;
+		}
+		++seenVideo;
+		if (PacketHasHdr10Plus(packet))
+			found.insert(index);
+		packet.Unref();
+	}
+
+	for (auto& stream : streams) {
+		if (found.contains(stream.Index()))
+			MarkHdr10Plus(stream);
+	}
+}
+
+void File::ScanDurations(FFmpeg::AVFormatContext& ctx, Multimedia::Streams& streams,
+	std::optional<Property::Duration>& container) noexcept {
 	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(ctx);
 	std::unordered_map<int, std::size_t> byIndex;
 	std::vector<Property::AVRational> timeBase;
@@ -368,9 +351,8 @@ void File::ResolveDuration() const noexcept {
 			continue;
 		if (result != FFmpeg::OperationResult::Success)
 			break;
-
-		const auto found = byIndex.find(packet.StreamIndex());
-		if (found == byIndex.end())
+		const auto hit = byIndex.find(packet.StreamIndex());
+		if (hit == byIndex.end())
 			continue;
 		std::int64_t pts = packet.Pts();
 		if (pts == AV_NOPTS_VALUE)
@@ -378,7 +360,7 @@ void File::ResolveDuration() const noexcept {
 		const std::int64_t dur = packet.Duration();
 		if (dur > 0)
 			pts += dur;
-		std::int64_t& end = endTick[found->second];
+		std::int64_t& end = endTick[hit->second];
 		if (end == AV_NOPTS_VALUE || pts > end)
 			end = pts;
 	}
@@ -389,12 +371,112 @@ void File::ResolveDuration() const noexcept {
 		if (!ns.has_value())
 			continue;
 		const Property::Duration measured{*ns};
-		if (n < m_streams.size() && !m_streams[n].m_duration.has_value())
-			m_streams[n].m_duration = measured;
+		if (n < streams.size() && !streams[n].m_duration.has_value())
+			streams[n].m_duration = measured;
 		if (!longest.has_value() || measured.Nanoseconds() > longest->Nanoseconds())
 			longest = measured;
 	}
+	if (!container.has_value())
+		container = longest;
+}
 
-	if (!m_duration.has_value())
-		m_duration = longest;
+ExpectedFile File::Probe(BufferedFileReader& reader,
+	std::optional<std::chrono::nanoseconds> knownDuration,
+	Origin origin) noexcept {
+	const auto label = reader.Path();
+	Backend::FileAvio avio(reader);
+	::AVFormatContext* raw = nullptr;
+	if (!OpenAvio(reader, raw, avio)) {
+		static_cast<void>(reader.Rewind());
+		return FailOpen(label, "AVIO probe failed");
+	}
+
+	auto wrapped = FFmpeg::AVFormatContext::WrapBorrowed(raw);
+	raw = nullptr;
+
+	const char* formatName = wrapped.FormatName();
+	if (!formatName) {
+		static_cast<void>(reader.Rewind());
+		return FailOpen(label, "unknown container format");
+	}
+
+	auto container = ResolveContainer(formatName);
+	if (!container.has_value()) {
+		static_cast<void>(reader.Rewind());
+		return FailOpen(label, container.error()->what());
+	}
+
+	const bool hasPrimaryVideo = Detail::HasPrimaryVideo(wrapped);
+	Multimedia::Streams streams;
+	Multimedia::Attachments attachments;
+	std::vector<int> coverIndex;
+	for (const auto& stream : wrapped.Streams()) {
+		if (Detail::IsContainerAttachment(stream) || Detail::IsCoverStream(stream, hasPrimaryVideo)) {
+			attachments.push_back(MakeAttachment(stream));
+			coverIndex.push_back(stream.Index());
+			continue;
+		}
+		auto codec = ResolveCodec(stream);
+		if (!codec.has_value()) {
+			static_cast<void>(reader.Rewind());
+			return FailOpen(label, codec.error()->what());
+		}
+		streams.emplace_back(Stream(
+			stream.Index(),
+			codec.value(),
+			Detail::Probe::Stream(stream),
+			WrapDuration(stream.Duration()),
+			FFmpeg::MapProperties(stream)
+		));
+	}
+
+	FillEmptyAttachmentPayloads(wrapped, attachments, coverIndex);
+	DetectHdr10Plus(wrapped, streams);
+	auto metadata = Detail::Probe::File(wrapped);
+	std::optional<Property::Duration> duration;
+	bool resolved = false;
+	if (knownDuration.has_value()) {
+		duration = Property::Duration{*knownDuration};
+		resolved = true;
+	}
+	else {
+		duration = WrapDuration(wrapped.Duration());
+	}
+
+	if (!reader.Rewind())
+		return FailOpen(label, "reader rewind failed");
+
+	return File(std::move(origin), container.value(),
+		std::move(streams), std::move(attachments), std::move(metadata),
+		std::move(duration), resolved);
+}
+
+const std::filesystem::path& File::Path() const noexcept {
+	if (const auto* path = std::get_if<std::filesystem::path>(&m_origin))
+		return *path;
+	return std::get<std::reference_wrapper<BufferedFileReader>>(m_origin).get().Path();
+}
+
+const Multimedia::Attachments& File::Attachments() const noexcept {
+	return m_attachments;
+}
+
+const std::optional<Property::Duration>& File::Duration() const noexcept {
+	if (!m_durationResolved)
+		ResolveDuration();
+	return m_duration;
+}
+
+void File::ResolveDuration() const noexcept {
+	m_durationResolved = true;
+	std::visit([&](auto& held) {
+		using Held = std::decay_t<decltype(held)>;
+		if constexpr (std::is_same_v<Held, std::filesystem::path>) {
+			BufferedFileReader reader{held};
+			ScanWithReader(reader, m_streams, m_duration);
+		}
+		else {
+			ScanWithReader(held.get(), m_streams, m_duration);
+		}
+	}, m_origin);
 }

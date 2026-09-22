@@ -49,6 +49,10 @@
 #include <optional>
 #include <unordered_set>
 
+namespace StormByte::Multimedia {
+	class File;
+}
+
 namespace StormByte::Multimedia::Backend::Pipeline {
 	class Demuxer;
 }
@@ -68,6 +72,7 @@ namespace StormByte::Multimedia::FFmpeg {
 	 * @brief RAII input format context (demuxer).
 	 */
 	class STORMBYTE_MULTIMEDIA_PUBLIC AVFormatContext: public AVPointer<::AVFormatContext> {
+		friend class StormByte::Multimedia::File;
 		friend class StormByte::Multimedia::Backend::Pipeline::Demuxer;
 
 		public:
@@ -172,14 +177,26 @@ namespace StormByte::Multimedia::FFmpeg {
 		private:
 			struct ConsumerIO;
 
-			std::unique_ptr<ConsumerIO> m_io;	///< Custom AVIO state (buffer opens)
+			std::unique_ptr<ConsumerIO> m_io;	///< Custom AVIO state (Consumer opens)
+			bool m_avioBorrowed;				///< true: @c pb is not owned
 
 			/**
 			 * @brief Adopts a raw format context.
 			 * @param ctx Raw format context (owned).
 			 * @param io Optional Consumer AVIO state.
+			 * @param avioBorrowed true if @c pb must outlive this context.
 			 */
-			explicit AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io) noexcept;
+			explicit AVFormatContext(::AVFormatContext* ctx, std::unique_ptr<ConsumerIO> io,
+				bool avioBorrowed = false) noexcept;
+
+			/**
+			 * @brief Adopts a raw context whose @c pb is owned elsewhere.
+			 * @param ctx Raw format context (owned).
+			 * @return Wrapper. Detaches @c pb on Free.
+			 *
+			 * Defined in this TU so ConsumerIO stays incomplete at the call site.
+			 */
+			static AVFormatContext WrapBorrowed(::AVFormatContext* ctx) noexcept;
 
 			/**
 			 * @brief Copies HDR side data from early decoded frames onto codecpar.
@@ -196,7 +213,7 @@ namespace StormByte::Multimedia::FFmpeg {
 			OperationResult SeekStart() noexcept;
 
 			/**
-			 * @brief Closes input and custom AVIO.
+			 * @brief Closes input. Borrowed AVIO is detached, not freed.
 			 */
 			void Free() noexcept override;
 
