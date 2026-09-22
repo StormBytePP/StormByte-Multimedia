@@ -7,7 +7,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(TESSDATA_NAMESPACE     "tessdata")
 set(TESSDATA_FUNCTION_NAME "blob")
-set(TESSDATA_DIR           "${CMAKE_CURRENT_LIST_DIR}/src")
+
+if(WITH_OCR STREQUAL "SYSTEM")
+	find_package(Tessdata REQUIRED)
+	message(STATUS "tessdata (SYSTEM): ${TESSDATA_DIR}")
+else()
+	set(TESSDATA_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/tessdata.cmake")
 

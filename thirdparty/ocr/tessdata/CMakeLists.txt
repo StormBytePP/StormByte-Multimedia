@@ -1,8 +1,24 @@
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+set(_tessdata_opts "")
+if(WITH_OCR STREQUAL "SYSTEM")
+	find_package(Tessdata REQUIRED)
+	message(STATUS "tessdata ${TESSDATA_LANGUAGE_COUNT} languages [SYSTEM] dir=${TESSDATA_DIR}")
+	set(_tessdata_opts
+		"WITH_OCR=SYSTEM;CMAKE_MODULE_PATH=${CMAKE_SOURCE_DIR}/cmake"
+	)
+else()
+	file(GLOB _bundled
+		"${CMAKE_CURRENT_LIST_DIR}/cmake-wrapper/src/*.traineddata")
+	list(LENGTH _bundled _bundled_n)
+	message(STATUS "tessdata ${_bundled_n} languages [BUNDLED]")
+endif()
+
 buildmaster_component(
 	tessdata
 	"Tesseract traineddata"
 	"${CMAKE_CURRENT_LIST_DIR}/cmake-wrapper"
-	""
+	"${_tessdata_opts}"
 	static
 	"tessdata"
 )
